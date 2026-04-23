@@ -41,3 +41,4 @@ class Classifier(Agent[In, Out]):
         "Always return exactly one label.",
         "If the input is ambiguous, pick the most likely label rather than abstaining.",
     )
+    default_sampling = {"temperature": 0.0, "max_tokens": 128}

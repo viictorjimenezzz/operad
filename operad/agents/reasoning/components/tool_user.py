@@ -60,6 +60,7 @@ class ToolUser(Agent[ToolCall, ToolResult]):
             output=ToolResult(ok=True, result=3),
         ),
     )
+    default_sampling = {"temperature": 0.0}
 
     def __init__(
         self,

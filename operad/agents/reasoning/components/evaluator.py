@@ -45,3 +45,4 @@ class Evaluator(Agent[In, Out]):
         "If the observation is insufficient, say so in the answer rather "
         "than fabricating detail.",
     )
+    default_sampling = {"temperature": 0.2}

@@ -48,3 +48,4 @@ class Planner(Agent[In, Out]):
         "Prefer many small steps over a few large ones.",
         "Do not invent steps that aren't needed by the goal.",
     )
+    default_sampling = {"temperature": 0.4}

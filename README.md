@@ -119,6 +119,11 @@ of `Reasoner` / `Classifier` / `Extractor` sets `input`, `output`, and
 any prompt-level overrides at the class level; instantiation is
 `Leaf(config=cfg)`.
 
+**Each component ships a `default_sampling` dict.** Class-level
+opinions (e.g. `Classifier` → `temperature=0.0`) merge into the
+caller's `Configuration` at construction; user-explicit fields
+always win.
+
 **`build()` symbolically traces the architecture**, type-checking every
 parent-to-child handoff before any model is contacted. Out pops an
 `AgentGraph`.

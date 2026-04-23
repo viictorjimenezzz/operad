@@ -65,3 +65,4 @@ class Critic(Agent[Candidate, Score]):
             ),
         ),
     )
+    default_sampling = {"temperature": 0.0, "max_tokens": 512}
