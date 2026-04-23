@@ -1,9 +1,16 @@
 # ISSUES — Known risks, footguns, and gaps
 
-Catalogue of problems identified in the current codebase (operad v0.1.0
-as of 2026-04-23). Each issue carries a severity tag and a strategy
-pointer; full implementation direction lives in the per-stream briefs
-under `.conductor/`.
+Catalogue of problems identified in the codebase. Each issue carries a
+severity tag and a strategy pointer; full implementation direction
+lives in the per-stream briefs under `.conductor/`.
+
+**Status log.**
+- **2026-04-23** — Every §A, §B, §C, §D issue below was resolved in
+  the Phase-1 / Phase-2 / feature PRs merged into `main` (commits
+  `a484c49` through `f2bae35`). Kept for historical context.
+- **2026-04-23 (post-merge review)** — §E issues are the new findings
+  surfaced after the implementation landed. These are the active
+  work items; see `.conductor/feature-*.md` and `.conductor/fix-polish.md`.
 
 Severity key:
 - **High** — silent correctness risk; user sees wrong behaviour without warning.
@@ -204,11 +211,166 @@ Stream A or K.
 
 ---
 
+---
+
+## E. Post-merge review (active work)
+
+Issues surfaced after the Phase-1/2 merges landed. Each points at the
+brief that picks it up.
+
+### E-1 · Examples disagree on `Configuration` · Med
+**Where.** Every file under `examples/`.
+**Problem.** Model defaults vary (`"default"`, `"demo"`, `"offline"`,
+hard-coded `"qwen2.5-7b-instruct"`); host defaults to
+`127.0.0.1:8080` for network examples and `127.0.0.1:0` for offline
+examples. A user cannot just `uv run python examples/<any>.py`.
+**Strategy.** Ship a single canonical setup (`google/gemma-4-e4b` on
+`127.0.0.1:9000`) and a shared helper `examples/_config.py` that
+every network example imports.
+**Address in:** `.conductor/feature-examples-and-demo.md`.
+
+### E-2 · Domain schema files inconsistent · Low
+**Where.** `coding/types.py`, `memory/shapes.py`; inline schemas in
+`conversational/talker.py` and `reasoning/react.py` +
+`reasoning/components/*.py`.
+**Problem.** Three different conventions for the same job.
+**Strategy.** Standardise on `schemas.py` in every domain, with
+`DeprecationWarning` shims at the old paths for one release.
+**Address in:** `.conductor/feature-schemas-standardization.md`.
+
+### E-3 · No `structuredio` toggle · Med
+**Where.** `operad/core/agent.py::Agent.forward` always passes
+`structured_output_model` to strands; `render_input` always renders
+XML.
+**Problem.** Backends without native structured output, or users
+wanting to inspect the wire string, have no opt-out.
+**Strategy.** `Configuration.structuredio: bool = True`; when False,
+render as XML and parse the textual response. A test must assert
+field descriptions surface on both paths.
+**Address in:** `.conductor/feature-structuredio.md`.
+
+### E-4 · `timeout` / `max_retries` / `backoff_base` declared but not
+implemented · Med
+**Where.** `operad/core/config.py:38-40` declares them;
+`operad/models/params.py` threads them only to the OpenAI client.
+`Agent.forward` has no retry loop.
+**Problem.** Flaky endpoints kill real-world usage on first transient
+error.
+**Strategy.** Add `operad/runtime/retry.py` with exponential backoff;
+wrap strands calls in `Agent.forward`; surface `retries` in observer
+metadata.
+**Address in:** `.conductor/feature-retry-backoff.md`.
+
+### E-5 · `hash_config` hashes host verbatim (may carry auth) · Low
+**Where.** `operad/core/output.py:71`.
+**Problem.** Host values like `user:pass@host:port` leak credentials
+into the hash (which is stable and potentially logged).
+**Strategy.** Strip `user:pass@` prefix before hashing.
+**Address in:** `.conductor/fix-polish.md`.
+
+### E-6 · Leaf-rooted `build()` skips output validation · Low
+**Where.** `operad/core/build.py:343`.
+**Problem.** When the root is a default-forward leaf, `_trace` is
+skipped — correct for graph capture, but the output type is first
+verified only at `invoke`. Late failure.
+**Strategy.** Cheap sentinel-output check at build time.
+**Address in:** `.conductor/fix-polish.md`.
+
+### E-7 · `Metric.score_batch` dispatched via `hasattr` · Low
+**Where.** `operad/eval.py:36-41`.
+**Problem.** Not a formal Protocol member; type checkers miss it.
+**Strategy.** Promote to a `MetricBase` class with a default
+implementation; subclass from concrete metrics.
+**Address in:** `.conductor/feature-typed-dataset.md`.
+
+### E-8 · No streaming support · Med
+**Where.** `operad/core/agent.py::forward` awaits the full result;
+`AgentEvent` has no `"chunk"` kind.
+**Problem.** VISION-aligned but unshipped. TUIs can't show mid-run
+state; users waiting 30 s for a long reasoner see nothing.
+**Strategy.** `Configuration.stream: bool`; `Agent.stream(x)`
+async-iterator; new observer `"chunk"` event.
+**Address in:** `.conductor/feature-streaming.md`.
+
+### E-9 · No Markdown renderer, no chat-template awareness · Med
+**Where.** `operad/core/render.py` is XML-only.
+**Problem.** VISION §7 promises both. Some models do better with
+Markdown or their native chat template.
+**Strategy.** Split `render.py` into a package with `xml.py`,
+`markdown.py`, `chat.py`; add `Configuration.renderer` selector.
+**Address in:** `.conductor/feature-markdown-renderer.md`.
+
+### E-10 · `test_sandbox.py::test_timeout_kills_process` emits
+`RuntimeWarning` · Low
+**Where.** `tests/test_sandbox.py`.
+**Problem.** An `AsyncMock` coroutine is never awaited. Test passes
+but CI logs are noisy and the warning hides real issues.
+**Strategy.** Fix the mock plumbing so the coroutine is consumed;
+optionally enforce `-W error::RuntimeWarning` in pytest config.
+**Address in:** `.conductor/fix-polish.md`.
+
+### E-11 · Tracing is opt-in; no default visibility surface · Med
+**Where.** `operad/runtime/observers/*`, `operad/runtime/trace.py`.
+**Problem.** `TraceObserver`, `JsonlObserver`, `RichDashboardObserver`
+all exist but require manual registration. "See what my agents are
+doing" is not one line.
+**Strategy.** `operad.tracing.watch()` context manager + `OPERAD_TRACE`
+env-var auto-attach + `operad tail <trace.jsonl>` CLI subcommand.
+**Address in:** `.conductor/feature-tracing-watch.md`.
+
+### E-12 · No per-Agent default sampling config · Med
+**Where.** Every leaf in `operad/agents/reasoning/components/`.
+**Problem.** A `Classifier` and a `Reasoner` should have different
+default temperatures, but they don't. Users must re-specify sampling
+every time.
+**Strategy.** `default_sampling: ClassVar[dict]` on each leaf,
+merged into `Configuration` at `__init__` for fields the user did
+not set explicitly (`model_fields_set`).
+**Address in:** `.conductor/feature-default-sampling.md`.
+
+### E-13 · No typed `Dataset` primitive · Med
+**Where.** `operad/eval.py` accepts raw `list[tuple[In, Out]]`.
+**Problem.** Eval reports have no `hash_dataset`, so reproducibility
+is a two-of-three story (graph, input — but not dataset).
+**Strategy.** `operad/datasets.py` with `Dataset[In, Out]`, NDJSON
+I/O, and a stable `hash_dataset`. Thread into `EvalReport`.
+**Address in:** `.conductor/feature-typed-dataset.md`.
+
+### E-14 · Native Anthropic backend missing · Low
+**Where.** `operad/models/`.
+**Problem.** Every hosted provider today is OpenAI-compatible; Claude
+users go via an indirect shim.
+**Strategy.** Add `operad/models/anthropic.py` (strands' AnthropicModel),
+extend `Backend` Literal, thread `reasoning_tokens` to Anthropic's
+extended-thinking budget.
+**Address in:** `.conductor/feature-anthropic-backend.md`.
+
+### E-15 · Single-shot sandbox (~100 ms / call); no pool · Low
+**Where.** `operad/runtime/launchers/sandbox.py`.
+**Problem.** Every tool call spawns a fresh Python interpreter. A
+tool-heavy workload is dominated by cold-start overhead.
+**Strategy.** `SandboxPool` that holds long-lived workers speaking a
+JSON-lines protocol; `PooledSandboxedTool` wrapper.
+**Address in:** `.conductor/feature-process-pool-launcher.md`.
+
+### E-16 · No Trace-vs-Trace diff · Low
+**Where.** `operad/runtime/trace.py`.
+**Problem.** Two `Trace`s from the same graph have no structured
+comparison. Hunting regressions after a prompt change is manual.
+**Strategy.** `trace_diff(prev, next) -> TraceDiff` mirroring
+`Agent.diff(other)`'s shape.
+**Address in:** `.conductor/feature-trace-diff.md`.
+
+---
+
 ## How to use this file
 
 - When you open a PR, cite the issue numbers you address in the
   description.
 - If you find a new issue while working, add it here in the matching
-  section and include the update in your PR.
+  section (most likely §E or a new §F) and include the update in
+  your PR.
 - If a fix is out of scope for your stream, leave a one-line note in
   `.conductor/notes/` (create the folder if needed) and keep moving.
+- When every active issue is resolved, mark the §E entries "RESOLVED"
+  with a commit hash and append a new section for the next round.
