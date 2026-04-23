@@ -44,7 +44,7 @@ from .agents import (
     UserModel,
     UserModelExtractor,
 )
-from .algorithms import BestOfN, Candidate, Score
+from .algorithms import BestOfN, Candidate, Score, Sweep, SweepCell, SweepReport
 from .core import (
     Agent,
     AgentGraph,
@@ -145,6 +145,9 @@ __all__ = [
     "Score",
     "SlotRegistry",
     "Summary",
+    "Sweep",
+    "SweepCell",
+    "SweepReport",
     "Switch",
     "Task",
     "Thought",
