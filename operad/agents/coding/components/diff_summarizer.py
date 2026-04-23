@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ....core.agent import Agent, Example
-from ..types import DiffChunk, PRDiff, PRSummary
+from ..schemas import DiffChunk, PRDiff, PRSummary
 
 
 class DiffSummarizer(Agent[PRDiff, PRSummary]):

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 
 from ....core.agent import Agent
-from ..types import DiffChunk, PRDiff
+from ..schemas import DiffChunk, PRDiff
 
 ReadFile = Callable[[str], Awaitable[str]]
 
