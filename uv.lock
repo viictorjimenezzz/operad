@@ -544,6 +544,7 @@ source = { editable = "." }
 dependencies = [
     { name = "openai" },
     { name = "pydantic" },
+    { name = "pyyaml" },
     { name = "strands-agents" },
 ]
 
@@ -562,6 +563,7 @@ dev = [
 requires-dist = [
     { name = "openai", specifier = ">=2.30.0" },
     { name = "pydantic", specifier = ">=2.8" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", marker = "extra == 'observers'", specifier = ">=13.0" },
     { name = "strands-agents", specifier = ">=0.1.0" },
 ]

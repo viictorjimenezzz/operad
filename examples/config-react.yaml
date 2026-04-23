@@ -1,0 +1,11 @@
+agent: operad.agents.reasoning.react.ReAct
+config:
+  backend: llamacpp
+  host: 127.0.0.1:8080
+  model: qwen2.5-7b-instruct
+  temperature: 0.3
+runtime:
+  slots:
+    - backend: llamacpp
+      host: 127.0.0.1:8080
+      limit: 8
