@@ -114,6 +114,7 @@ from .metrics import (
 from .metrics.base import MetricBase
 from .models import resolve_model
 from .runtime import SlotRegistry, set_limit
+from .runtime.streaming import ChunkEvent
 from . import tracing
 from .runtime.trace import Trace, TraceObserver, TraceStep
 from .runtime.trace_diff import TraceDiff, TraceStepDelta, trace_diff
@@ -163,6 +164,7 @@ __all__ = [
     "Candidate",
     "Change",
     "Choice",
+    "ChunkEvent",
     "Classifier",
     "CodeReviewer",
     "CompoundOp",

@@ -44,6 +44,14 @@ class RichDashboardObserver:
         elif event.kind == "error":
             err = type(event.error).__name__ if event.error is not None else "error"
             run[event.agent_path] = f"error: {err}"
+        elif event.kind == "chunk":
+            piece = event.metadata.get("text", "") if event.metadata else ""
+            current = run.get(event.agent_path, "")
+            prefix = "streaming: " if not current.startswith("streaming: ") else ""
+            buf = (current[len("streaming: "):] if current.startswith("streaming: ") else "") + piece
+            if len(buf) > 80:
+                buf = "…" + buf[-79:]
+            run[event.agent_path] = prefix + buf if prefix else "streaming: " + buf
         self._rerender()
 
     def _rerender(self) -> None:

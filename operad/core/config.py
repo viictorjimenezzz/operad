@@ -43,6 +43,7 @@ class Configuration(BaseModel):
     max_retries: int = 0
     backoff_base: float = 0.5
 
+    stream: bool = False
     structuredio: bool = True
     renderer: Literal["xml", "markdown", "chat"] = "xml"
 

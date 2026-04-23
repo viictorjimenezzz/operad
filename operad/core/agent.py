@@ -11,12 +11,13 @@ instance attributes carry the live values, freely mutable before
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import html as _html
 import sys
 import time
 import uuid
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextvars import ContextVar
 from typing import Any, ClassVar, Generic, Self, TextIO, TYPE_CHECKING, TypeVar
 
@@ -25,6 +26,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ..runtime import acquire as _acquire_slot
 from ..runtime.retry import with_retry as _with_retry
+from ..runtime.streaming import ChunkEvent
 from ..utils.errors import BuildError
 from .config import Configuration
 from .diff import AgentDiff, diff_states
@@ -408,12 +410,20 @@ class Agent(strands.Agent, Generic[In, Out]):
         (see ``operad.core.build._init_strands``); here we only render
         the per-call user turn. Composite agents override this.
 
+        When ``self.config.stream`` is True, dispatches to the streaming
+        path: consumes strands' ``stream_async`` iterator, emits ``chunk``
+        observer events for each mid-run token, and parses the accumulated
+        text back to ``self.output``. The return shape is unchanged.
+
         When ``config.structuredio`` is ``False``, the call omits
         ``structured_output_model`` and parses the model's textual
         response as JSON against ``self.output``. Use this path for
         backends without native structured output or when the caller
         wants to see exactly what the model produced.
         """
+        if self.config is not None and getattr(self.config, "stream", False):
+            return await self._stream_forward(x, self._default_chunk_sink)
+
         from ..runtime.observers.base import _RETRY_META
 
         meta = _RETRY_META.get()
@@ -451,6 +461,65 @@ class Agent(strands.Agent, Generic[In, Out]):
             raise BuildError(
                 "output_mismatch",
                 f"could not parse textual response as {self.output.__name__}: {e}",  # type: ignore[union-attr]
+                agent=type(self).__name__,
+            ) from e
+
+    async def _default_chunk_sink(self, i: int, piece: str) -> None:
+        from ..runtime.observers import base as _obs
+
+        run_id = _obs._RUN_ID.get() or ""
+        entry = _obs._PATH_STACK.get()
+        path = entry[1] if entry else type(self).__name__
+        await _obs.registry.notify(
+            _obs.AgentEvent(
+                run_id, path, "chunk", None, None, None,
+                time.monotonic(), None,
+                {"chunk_index": i, "text": piece},
+            )
+        )
+
+    async def _stream_forward(
+        self,
+        x: In,
+        on_chunk: Callable[[int, str], Awaitable[None]],
+    ) -> Out:
+        """Consume strands' streaming API; deliver each token to `on_chunk`.
+
+        Parses the final structured output either from a ``result`` event
+        (if strands surfaces one) or by accumulating ``data`` pieces and
+        running ``self.output.model_validate_json`` as a fallback. Coordinate
+        with feature-structuredio (E-3): once that merges, this parse path
+        should defer to the shared parser.
+        """
+        accumulated: list[str] = []
+        idx = 0
+        structured: Any = None
+        async with _acquire_slot(self.config):  # type: ignore[arg-type]
+            async for event in super().stream_async(  # type: ignore[misc]
+                self.format_user_message(x),
+                structured_output_model=self.output,
+            ):
+                if not isinstance(event, dict):
+                    continue
+                piece = event.get("data")
+                if isinstance(piece, str) and piece:
+                    accumulated.append(piece)
+                    await on_chunk(idx, piece)
+                    idx += 1
+                result = event.get("result")
+                if result is not None:
+                    maybe = getattr(result, "structured_output", None)
+                    if maybe is not None:
+                        structured = maybe
+        if structured is not None:
+            return structured  # type: ignore[no-any-return]
+        text = "".join(accumulated)
+        try:
+            return self.output.model_validate_json(text)  # type: ignore[union-attr,return-value]
+        except Exception as e:
+            raise BuildError(
+                "output_mismatch",
+                f"streamed text did not parse as {self.output.__name__}: {e}",  # type: ignore[union-attr]
                 agent=type(self).__name__,
             ) from e
 
@@ -526,24 +595,9 @@ class Agent(strands.Agent, Generic[In, Out]):
 
             finished = time.monotonic()
             finished_wall = time.time()
-            envelope = OperadOutput[Any].model_construct(
-                response=y,
-                hash_operad_version=OPERAD_VERSION_HASH,
-                hash_python_version=PYTHON_VERSION_HASH,
-                hash_model=hash_config(self.config),
-                hash_prompt=hash_str(
-                    _system_to_str(self.format_system_message())
-                    + "\n\n"
-                    + self.format_user_message(x)
-                ),
-                hash_graph=graph_hash,
-                hash_input=hash_json(x.model_dump(mode="json")),
-                hash_output_schema=hash_schema(self.output),  # type: ignore[arg-type]
-                run_id=run_id,
-                agent_path=path,
-                started_at=started_wall,
-                finished_at=finished_wall,
-                latency_ms=(finished - started) * 1000.0,
+            envelope = self._build_envelope(
+                x, y, run_id, path, graph_hash,
+                started, started_wall, finished, finished_wall,
             )
             end_meta: dict[str, Any] = {}
             if is_root:
@@ -574,6 +628,185 @@ class Agent(strands.Agent, Generic[In, Out]):
 
     async def __call__(self, x: In) -> OperadOutput[Out]:  # type: ignore[override]
         return await self.invoke(x)
+
+    def _build_envelope(
+        self,
+        x: In,
+        y: Out,
+        run_id: str,
+        path: str,
+        graph_hash: str | None,
+        started: float,
+        started_wall: float,
+        finished: float,
+        finished_wall: float,
+    ) -> OperadOutput[Out]:
+        return OperadOutput[Any].model_construct(
+            response=y,
+            hash_operad_version=OPERAD_VERSION_HASH,
+            hash_python_version=PYTHON_VERSION_HASH,
+            hash_model=hash_config(self.config),
+            hash_prompt=hash_str(
+                _system_to_str(self.format_system_message())
+                + "\n\n"
+                + self.format_user_message(x)
+            ),
+            hash_graph=graph_hash,
+            hash_input=hash_json(x.model_dump(mode="json")),
+            hash_output_schema=hash_schema(self.output),  # type: ignore[arg-type]
+            run_id=run_id,
+            agent_path=path,
+            started_at=started_wall,
+            finished_at=finished_wall,
+            latency_ms=(finished - started) * 1000.0,
+        )
+
+    # --- streaming ---------------------------------------------------------
+    async def stream(
+        self, x: In
+    ) -> AsyncIterator[ChunkEvent | OperadOutput[Out]]:
+        """Yield ``ChunkEvent``s while the model generates; terminate with the full ``OperadOutput``.
+
+        Equivalent to ``await self.invoke(x)`` when ``config.stream`` is
+        False or the backend does not support streaming — in which case
+        exactly one ``OperadOutput`` is yielded and no ``ChunkEvent``s.
+
+        Retry interaction: if a retry fires mid-stream, v1 re-emits the
+        whole stream under a new ``run_id``. Downstream consumers must
+        key on ``run_id``.
+        """
+        if self.config is None or not getattr(self.config, "stream", False):
+            yield await self.invoke(x)
+            return
+
+        from ..runtime.observers import base as _obs
+
+        parent_entry = _obs._PATH_STACK.get()
+        if parent_entry is None:
+            path = type(self).__name__
+        else:
+            parent_agent, parent_path = parent_entry
+            attr = _attr_name_hint(parent_agent, self) or type(self).__name__
+            path = f"{parent_path}.{attr}"
+
+        is_root = _obs._RUN_ID.get() is None
+        run_id = _obs._RUN_ID.get() or uuid.uuid4().hex
+        started_wall = time.time()
+        started = time.monotonic()
+
+        graph_hash = _RUN_GRAPH_HASH.get()
+        tok_g = None
+        if is_root:
+            graph_hash = _compute_graph_hash(self)
+            tok_g = _RUN_GRAPH_HASH.set(graph_hash)
+        tok_r = _obs._RUN_ID.set(run_id)
+        tok_p = _obs._PATH_STACK.set((self, path))
+        start_meta: dict[str, Any] = {}
+        if is_root:
+            start_meta["graph"] = _graph_json_or_none(self)
+            start_meta["is_root"] = True
+
+        queue: asyncio.Queue[Any] = asyncio.Queue()
+        _SENTINEL_DONE = object()
+
+        try:
+            await _obs.registry.notify(
+                _obs.AgentEvent(
+                    run_id, path, "start", x, None, None, started, None, start_meta
+                )
+            )
+
+            if not self._built:
+                raise BuildError(
+                    "not_built",
+                    "call .build() before .stream()",
+                    agent=type(self).__name__,
+                )
+
+            if not isinstance(x, self.input):  # type: ignore[arg-type]
+                raise BuildError(
+                    "input_mismatch",
+                    f"expected {self.input.__name__}, got {type(x).__name__}",  # type: ignore[union-attr]
+                    agent=type(self).__name__,
+                )
+
+            async def on_chunk(i: int, piece: str) -> None:
+                await queue.put(ChunkEvent(piece, i, path, run_id))
+                await _obs.registry.notify(
+                    _obs.AgentEvent(
+                        run_id, path, "chunk", None, None, None,
+                        time.monotonic(), None,
+                        {"chunk_index": i, "text": piece},
+                    )
+                )
+
+            async def driver() -> None:
+                try:
+                    y = await self._stream_forward(x, on_chunk)
+                    if not isinstance(y, self.output):  # type: ignore[arg-type]
+                        raise BuildError(
+                            "output_mismatch",
+                            f"forward returned {type(y).__name__}, expected {self.output.__name__}",  # type: ignore[union-attr]
+                            agent=type(self).__name__,
+                        )
+                    finished = time.monotonic()
+                    finished_wall = time.time()
+                    envelope = self._build_envelope(
+                        x, y, run_id, path, graph_hash,
+                        started, started_wall, finished, finished_wall,
+                    )
+                    await queue.put(envelope)
+                except BaseException as e:  # noqa: BLE001
+                    await queue.put(e)
+                finally:
+                    await queue.put(_SENTINEL_DONE)
+
+            task = asyncio.create_task(driver())
+            final_envelope: OperadOutput[Any] | None = None
+            final_error: BaseException | None = None
+            try:
+                while True:
+                    item = await queue.get()
+                    if item is _SENTINEL_DONE:
+                        break
+                    if isinstance(item, BaseException):
+                        final_error = item
+                        continue
+                    if isinstance(item, ChunkEvent):
+                        yield item
+                    else:
+                        final_envelope = item
+                        yield item
+            finally:
+                await task
+
+            if final_error is not None:
+                raise final_error
+
+            end_meta: dict[str, Any] = {}
+            if is_root:
+                end_meta["is_root"] = True
+                end_meta["output_type"] = _qualified(self.output)  # type: ignore[arg-type]
+            finished = time.monotonic()
+            await _obs.registry.notify(
+                _obs.AgentEvent(
+                    run_id, path, "end", x, final_envelope, None,
+                    started, finished, end_meta,
+                )
+            )
+        except BaseException as e:
+            err_meta: dict[str, Any] = {"is_root": True} if is_root else {}
+            await _obs.registry.notify(
+                _obs.AgentEvent(
+                    run_id, path, "error", x, None, e, started, time.monotonic(), err_meta
+                )
+            )
+            raise
+        finally:
+            _obs._RUN_ID.reset(tok_r)
+            _obs._PATH_STACK.reset(tok_p)
+            if tok_g is not None:
+                _RUN_GRAPH_HASH.reset(tok_g)
 
     # --- build --------------------------------------------------------------
     def build(self) -> Self:
