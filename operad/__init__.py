@@ -59,7 +59,18 @@ from .core import (
     to_json,
     to_mermaid,
 )
-from .metrics import ExactMatch, JsonValid, Latency, Metric
+from .eval import EvalReport, evaluate
+from .metrics import (
+    Contains,
+    CostTracker,
+    ExactMatch,
+    JsonValid,
+    Latency,
+    Metric,
+    RegexMatch,
+    Rouge1,
+    RubricCritic,
+)
 from .models import resolve_model
 from .runtime import SlotRegistry, set_limit
 from .runtime.observers import (
@@ -92,10 +103,13 @@ __all__ = [
     "Choice",
     "Classifier",
     "Configuration",
+    "Contains",
     "Conversation",
+    "CostTracker",
     "Critic",
     "Edge",
     "EpisodicSummarizer",
+    "EvalReport",
     "Evaluator",
     "ExactMatch",
     "Example",
@@ -121,10 +135,13 @@ __all__ = [
     "Reflection",
     "ReflectionInput",
     "Reflector",
+    "RegexMatch",
     "Retriever",
     "RichDashboardObserver",
+    "Rouge1",
     "RouteInput",
     "Router",
+    "RubricCritic",
     "Score",
     "SlotRegistry",
     "Summary",
@@ -140,6 +157,7 @@ __all__ = [
     "UserModelExtractor",
     "abuild_agent",
     "build_agent",
+    "evaluate",
     "observers",
     "resolve_model",
     "set_limit",
