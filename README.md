@@ -285,6 +285,26 @@ OPERAD_INTEGRATION=lmstudio \
 uv run pytest tests/integration/test_lmstudio.py -v
 ```
 
+## Structured vs. textual I/O
+
+Leaves default to native structured output: the `Out` class is passed
+to strands as `structured_output_model`, and the provider parses the
+response. Flip `structuredio=False` on the `Configuration` to send the
+rendered XML as a plain user message and parse the model's textual
+JSON response against `Out` yourself. A parse failure raises
+`BuildError("output_mismatch", ...)`.
+
+```python
+cfg = Configuration(
+    backend="llamacpp", host="127.0.0.1:8080", model="your-model",
+    structuredio=False,
+)
+```
+
+Both modes feed the model the same per-field `Field(description=...)`
+metadata and the `<output_schema>` block, so prompts are identical; the
+difference is only whether strands or your leaf does the parse.
+
 ## Tracing
 
 ```python
