@@ -11,6 +11,9 @@ dependencies = [
     "openai>=2.30.0",
 ]
 
+[project.optional-dependencies]
+observers = ["rich>=13.0"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",
