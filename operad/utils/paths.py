@@ -1,15 +1,23 @@
-"""Dotted-path attribute helpers.
+"""Dotted-path helpers over an Agent tree.
 
-Shared by algorithms that need to address nested fields on an Agent
-tree — e.g. ``"reasoner.config.temperature"``. Kept deliberately small:
-plain attribute access, no Pydantic-aware deep replacement. Composite
-children, leaf instance attributes, and ``Configuration`` fields are all
-regular Python attributes, so ``setattr`` is sufficient.
+Two flavours coexist:
+
+- ``resolve_parent`` / ``set_path`` walk plain Python attribute access,
+  used by ``Sweep`` to address nested fields like
+  ``"reasoner.config.temperature"``.
+- ``_resolve`` walks an Agent's ``_children`` dict by attribute name,
+  used by the mutation ops in ``operad.utils.ops``. An empty path
+  returns the root; a missing child raises ``BuildError``.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+from .errors import BuildError
+
+if TYPE_CHECKING:
+    from ..core.agent import Agent
 
 
 def resolve_parent(root: Any, path: str) -> tuple[Any, str]:
@@ -38,3 +46,24 @@ def set_path(root: Any, path: str, value: Any) -> None:
     """Assign `value` at `path` on `root` via attribute access."""
     parent, attr = resolve_parent(root, path)
     setattr(parent, attr, value)
+
+
+def _resolve(agent: "Agent[Any, Any]", path: str) -> "Agent[Any, Any]":
+    """Return the descendant of `agent` at the given dotted path.
+
+    ``""`` returns `agent` itself. Segments are looked up in ``_children``
+    by attribute name; a missing segment raises ``BuildError``.
+    """
+    if path == "":
+        return agent
+    current: Any = agent
+    for segment in path.split("."):
+        children = getattr(current, "_children", None)
+        if not children or segment not in children:
+            raise BuildError(
+                "prompt_incomplete",
+                f"no child named {segment!r} at path {path!r}",
+                agent=type(agent).__name__,
+            )
+        current = children[segment]
+    return current
