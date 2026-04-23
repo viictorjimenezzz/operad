@@ -256,15 +256,6 @@ Where: demo.py at repo root.
 # BACKEND & LAUNCHER COVERAGE
 # ─────────────────────────────────────────────────────────────────────
 
-TODO_NATIVE_ANTHROPIC_BACKEND = """
-Every hosted provider today is OpenAI-compatible. Add a native Anthropic
-adapter (via strands.models.AnthropicModel) so users can target Claude
-directly.
-
-Where: operad/models/anthropic.py, operad/core/config.py Backend
-literal, operad/models/__init__.py dispatch.
-"""
-
 TODO_PROCESS_POOL_LAUNCHER = """
 `SandboxedTool` spawns a fresh Python interpreter per call (~100 ms).
 A process pool reusing workers drops that to <5 ms. Needed for any
