@@ -112,4 +112,4 @@ def test_unknown_backend_is_prevented_by_configuration() -> None:
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
-        Configuration(backend="anthropic", model="claude-3")  # type: ignore[arg-type]
+        Configuration(backend="cohere", model="command-r")  # type: ignore[arg-type]

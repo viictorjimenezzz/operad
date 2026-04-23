@@ -80,7 +80,7 @@ Foundations + runtime + first components (iterations 1–3):
   agents with metric feedback; their API shape is whatever the
   algorithm needs.
 - `operad.models` — per-backend resolvers: `llamacpp`, `lmstudio`,
-  `ollama`, `openai`, `bedrock`.
+  `ollama`, `openai`, `bedrock`, `anthropic`.
 - `operad.runtime.slots` — per-endpoint concurrency limits.
 - `operad.metrics` — `Metric` protocol, `ExactMatch`, `JsonValid`,
   `Latency`.
@@ -205,6 +205,7 @@ backend at a time — each test skips unless its specific value is set.
 | openai   | `openai`             | `OPENAI_API_KEY` | `OPERAD_OPENAI_MODEL` (`gpt-4o-mini`)                               |
 | ollama   | `ollama`             | —              | `OPERAD_OLLAMA_HOST` (`127.0.0.1:11434`), `OPERAD_OLLAMA_MODEL` (`llama3.2`)      |
 | lmstudio | `lmstudio`           | —              | `OPERAD_LMSTUDIO_HOST` (`127.0.0.1:1234`), `OPERAD_LMSTUDIO_MODEL` (`default`)    |
+| anthropic| `anthropic`          | `ANTHROPIC_API_KEY` | `OPERAD_ANTHROPIC_MODEL` (`claude-haiku-4-5`)                    |
 
 ```bash
 OPERAD_INTEGRATION=llamacpp \
