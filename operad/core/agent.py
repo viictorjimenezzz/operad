@@ -57,6 +57,16 @@ class Example(BaseModel, Generic[In, Out]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
+def _system_to_str(rendered: str | list[dict[str, str]] | None) -> str:
+    if rendered is None:
+        return ""
+    if isinstance(rendered, list):
+        return "\n\n".join(
+            m.get("content", "") for m in rendered if m.get("role") == "system"
+        )
+    return rendered
+
+
 # Per-task tracer. When set, `Agent.invoke` short-circuits into the tracer
 # instead of validating and running `forward`. This is how `build()` performs
 # symbolic tracing without touching an LLM.
@@ -95,6 +105,7 @@ class Agent(strands.Agent, Generic[In, Out]):
     task: ClassVar[str] = ""
     rules: ClassVar[Sequence[str]] = ()
     examples: ClassVar[Sequence[Example[Any, Any]]] = ()
+    renderer: ClassVar[str | None] = None
 
     # --- instance state (populated by __init__ / build) ---------------------
     config: Configuration | None
@@ -272,14 +283,25 @@ class Agent(strands.Agent, Generic[In, Out]):
         return new
 
     # --- message formatting (overridable) -----------------------------------
-    def format_system_message(self) -> str:
-        """Render the agent's static contract into a system-message string.
+    def format_system_message(self) -> str | list[dict[str, str]]:
+        """Render the agent's static contract into a system message.
 
         Default: XML-tagged sections (``<role>``, ``<task>``, ``<rules>``,
-        ``<examples>``, ``<output_schema>``). Override for a different
-        wire format.
+        ``<examples>``, ``<output_schema>``). The renderer is selected by
+        the class-level ``renderer`` override, falling back to
+        ``config.renderer`` (``"xml"``, ``"markdown"``, or ``"chat"``).
+        The ``"chat"`` renderer returns a list of ``{"role","content"}``
+        messages; the others return a single string. Override this
+        method for a fully custom wire format.
         """
-        return render.render_system(self)
+        mode = type(self).renderer or (
+            self.config.renderer if self.config is not None else "xml"
+        )
+        if mode == "markdown":
+            return render.markdown.render_system(self)
+        if mode == "chat":
+            return render.chat.render_system(self)
+        return render.xml.render_system(self)
 
     def format_user_message(self, x: In) -> str:
         """Render a per-call input into the user-message string.
@@ -314,13 +336,15 @@ class Agent(strands.Agent, Generic[In, Out]):
             print(f"=== {path} ===", file=out)
             print(prompt, file=out)
 
-    def operad_dump(self) -> dict[str, str]:
+    def operad_dump(self) -> dict[str, str | list[dict[str, str]]]:
         """Return `{qualified_path: rendered_system_prompt}` for every leaf.
 
         Machine-readable sibling of `operad()`. Same skip rules: only
-        default-forward leaves appear.
+        default-forward leaves appear. Values are whatever
+        `format_system_message()` returns (``str`` for xml/markdown,
+        ``list[dict]`` for the chat renderer).
         """
-        result: dict[str, str] = {}
+        result: dict[str, str | list[dict[str, str]]] = {}
         for path, node in _labelled_tree(self):
             if node._children:
                 continue
@@ -443,7 +467,7 @@ class Agent(strands.Agent, Generic[In, Out]):
                 hash_python_version=PYTHON_VERSION_HASH,
                 hash_model=hash_config(self.config),
                 hash_prompt=hash_str(
-                    (self.format_system_message() or "")
+                    _system_to_str(self.format_system_message())
                     + "\n\n"
                     + self.format_user_message(x)
                 ),

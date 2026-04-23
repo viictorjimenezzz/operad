@@ -39,6 +39,8 @@ class Configuration(BaseModel):
     max_retries: int = 0
     backoff_base: float = 0.5
 
+    renderer: Literal["xml", "markdown", "chat"] = "xml"
+
     extra: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(extra="forbid")
