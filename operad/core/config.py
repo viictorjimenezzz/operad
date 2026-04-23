@@ -39,6 +39,8 @@ class Configuration(BaseModel):
     max_retries: int = 0
     backoff_base: float = 0.5
 
+    structuredio: bool = True
+
     extra: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(extra="forbid")
