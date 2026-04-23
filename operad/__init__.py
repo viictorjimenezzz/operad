@@ -34,7 +34,18 @@ from .core import (
     to_json,
     to_mermaid,
 )
-from .metrics import ExactMatch, JsonValid, Latency, Metric
+from .eval import EvalReport, evaluate
+from .metrics import (
+    Contains,
+    CostTracker,
+    ExactMatch,
+    JsonValid,
+    Latency,
+    Metric,
+    RegexMatch,
+    Rouge1,
+    RubricCritic,
+)
 from .models import resolve_model
 from .runtime import SlotRegistry, set_limit
 from .utils.errors import BuildError, BuildReason
@@ -53,8 +64,11 @@ __all__ = [
     "Candidate",
     "Classifier",
     "Configuration",
+    "Contains",
+    "CostTracker",
     "Critic",
     "Edge",
+    "EvalReport",
     "Evaluator",
     "ExactMatch",
     "Example",
@@ -69,12 +83,16 @@ __all__ = [
     "Planner",
     "ReAct",
     "Reasoner",
+    "RegexMatch",
+    "Rouge1",
+    "RubricCritic",
     "Score",
     "SlotRegistry",
     "Task",
     "Thought",
     "abuild_agent",
     "build_agent",
+    "evaluate",
     "resolve_model",
     "set_limit",
     "to_json",
