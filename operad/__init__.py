@@ -56,9 +56,11 @@ from .agents import (
 from .algorithms import BestOfN, Candidate, Score, Sweep, SweepCell, SweepReport
 from .core import (
     Agent,
+    AgentDiff,
     AgentGraph,
     AgentState,
     Backend,
+    Change,
     Configuration,
     Edge,
     Example,
@@ -97,6 +99,7 @@ __all__ = [
     "Action",
     "Actor",
     "Agent",
+    "AgentDiff",
     "AgentEvent",
     "AgentGraph",
     "AgentState",
@@ -109,6 +112,7 @@ __all__ = [
     "BuildError",
     "BuildReason",
     "Candidate",
+    "Change",
     "Choice",
     "Classifier",
     "Configuration",

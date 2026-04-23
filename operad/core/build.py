@@ -92,6 +92,20 @@ class AgentGraph:
     nodes: list[Node] = field(default_factory=list)
     edges: list[Edge] = field(default_factory=list)
 
+    def _repr_html_(self) -> str:
+        """Render the graph as a `<pre class="mermaid">` block.
+
+        Compatible with JupyterLab's Mermaid extension, VS Code's
+        built-in Mermaid preview, and marimo. No outbound network
+        request — the Mermaid source is embedded verbatim and left for
+        a front-end renderer to transform.
+        """
+        import html as _html
+
+        from .graph import to_mermaid
+
+        return f'<pre class="mermaid">{_html.escape(to_mermaid(self))}</pre>'
+
 
 def _node_kind(a: Agent[Any, Any]) -> NodeKind:
     return "composite" if a._children else "leaf"
