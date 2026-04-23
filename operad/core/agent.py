@@ -11,6 +11,7 @@ instance attributes carry the live values, freely mutable before
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Sequence
 from contextvars import ContextVar
 from typing import Any, ClassVar, Generic, Self, TYPE_CHECKING, TypeVar
@@ -21,6 +22,7 @@ from pydantic import BaseModel, ConfigDict
 from ..runtime import acquire as _acquire_slot
 from ..utils.errors import BuildError
 from .config import Configuration
+from .state import AgentState
 from . import render
 
 if TYPE_CHECKING:
@@ -127,6 +129,132 @@ class Agent(strands.Agent, Generic[In, Out]):
                 children = self.__dict__["_children"]
             children[name] = value
         object.__setattr__(self, name, value)
+
+    def __repr__(self) -> str:
+        in_name = self.input.__name__ if self.input is not None else "?"
+        out_name = self.output.__name__ if self.output is not None else "?"
+        return (
+            f"{type(self).__name__}("
+            f"input={in_name}, "
+            f"output={out_name}, "
+            f"children={list(self._children)})"
+        )
+
+    # --- state / clone ------------------------------------------------------
+    def state(self) -> AgentState:
+        """Snapshot declared state (role, task, rules, examples, config, tree).
+
+        Does not capture strands internals or the computation graph; those
+        are rebuilt by `build()`. Children are walked recursively and keyed
+        by the attribute name under which they were attached.
+        """
+        return AgentState(
+            class_name=type(self).__name__,
+            role=self.role,
+            task=self.task,
+            rules=list(self.rules),
+            examples=[e.model_dump(mode="json") for e in self.examples],
+            config=(
+                self.config.model_copy(deep=True) if self.config is not None else None
+            ),
+            input_type_name=self.input.__name__,  # type: ignore[union-attr]
+            output_type_name=self.output.__name__,  # type: ignore[union-attr]
+            children={
+                name: child.state() for name, child in self._children.items()
+            },
+        )
+
+    def load_state(self, s: AgentState) -> None:
+        """Overwrite declared state in place from an `AgentState` snapshot.
+
+        Structural fields (`input`/`output` types) are not modified — they
+        are part of the contract, not state; construct a new agent if you
+        want to change them. Resets `_built` and `_graph`; the caller must
+        `build()` again before `invoke`.
+        """
+        if set(s.children.keys()) != set(self._children.keys()):
+            raise BuildError(
+                "prompt_incomplete",
+                (
+                    "load_state shape mismatch: expected children "
+                    f"{sorted(self._children)}, got {sorted(s.children)}"
+                ),
+                agent=type(self).__name__,
+            )
+
+        self.role = s.role
+        self.task = s.task
+        self.rules = list(s.rules)
+        self.examples = [
+            Example(
+                input=self.input.model_validate(e["input"]),  # type: ignore[union-attr]
+                output=self.output.model_validate(e["output"]),  # type: ignore[union-attr]
+            )
+            for e in s.examples
+        ]
+        self.config = (
+            s.config.model_copy(deep=True) if s.config is not None else None
+        )
+
+        for name, child_state in s.children.items():
+            self._children[name].load_state(child_state)
+
+        object.__setattr__(self, "_built", False)
+        object.__setattr__(self, "_graph", None)
+
+    def clone(self) -> Self:
+        """Return a fresh, unbuilt deep copy of this agent.
+
+        Preserves declared Agent state (role, task, rules, examples, config,
+        input/output types) and the composite routing structure. Composite
+        subclasses' extra attributes (e.g. `Pipeline._stages`,
+        `Parallel._keys`/`_combine`) are deep-copied with cloned children
+        substituted for their originals. Default-forward leaves skip the
+        strands-owned internals written by `build()`; the caller rebuilds.
+
+        Shared children (the same Agent attached under multiple attribute
+        names) are cloned once and reattached under each name, preserving
+        the parent's sharing topology.
+        """
+        new = type(self).__new__(type(self))
+        object.__setattr__(new, "_children", {})
+        object.__setattr__(new, "_built", False)
+        object.__setattr__(new, "_graph", None)
+
+        new.role = self.role
+        new.task = self.task
+        new.rules = list(self.rules)
+        new.examples = [e.model_copy(deep=True) for e in self.examples]
+        new.config = (
+            self.config.model_copy(deep=True) if self.config is not None else None
+        )
+        new.input = self.input
+        new.output = self.output
+
+        memo: dict[int, Any] = {}
+        for name, child in self._children.items():
+            cloned = memo.get(id(child))
+            if cloned is None:
+                cloned = child.clone()
+                memo[id(child)] = cloned
+            setattr(new, name, cloned)
+
+        # Composite subclasses may hold non-Agent routing state
+        # (Pipeline._stages, Parallel._keys, Parallel._combine, etc.) that
+        # references children. Deep-copy it with the clone memo so those
+        # references point at the new clones. Default-forward leaves skip
+        # this to avoid copying strands internals from `_init_strands`.
+        if type(self).forward is not Agent.forward:
+            _known = {
+                "role", "task", "rules", "examples", "config", "input", "output",
+                "_children", "_built", "_graph",
+            }
+            for name, value in self.__dict__.items():
+                if name in _known or isinstance(value, Agent):
+                    continue
+                object.__setattr__(new, name, copy.deepcopy(value, memo))
+
+        return new
 
     # --- message formatting (overridable) -----------------------------------
     def format_system_message(self) -> str:
