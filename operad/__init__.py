@@ -53,7 +53,7 @@ from .agents import (
     UserModelExtractor,
     Utterance,
 )
-from .algorithms import BestOfN, Candidate, Score
+from .algorithms import BestOfN, Candidate, Score, Sweep, SweepCell, SweepReport
 from .core import (
     Agent,
     AgentGraph,
@@ -159,6 +159,9 @@ __all__ = [
     "SlotRegistry",
     "StyledUtterance",
     "Summary",
+    "Sweep",
+    "SweepCell",
+    "SweepReport",
     "Switch",
     "Talker",
     "Task",
