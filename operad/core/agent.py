@@ -24,6 +24,7 @@ import strands
 from pydantic import BaseModel, ConfigDict
 
 from ..runtime import acquire as _acquire_slot
+from ..runtime.retry import with_retry as _with_retry
 from ..utils.errors import BuildError
 from .config import Configuration
 from .diff import AgentDiff, diff_states
@@ -394,10 +395,28 @@ class Agent(strands.Agent, Generic[In, Out]):
         (see ``operad.core.build._init_strands``); here we only render
         the per-call user turn. Composite agents override this.
         """
+        from ..runtime.observers.base import _RETRY_META
+
+        meta = _RETRY_META.get()
+
+        def _record(attempt: int, last: BaseException | None) -> None:
+            if meta is not None:
+                meta["retries"] = attempt - 1
+                meta["last_error"] = None if last is None else repr(last)
+
         async with _acquire_slot(self.config):  # type: ignore[arg-type]
-            result = await super().invoke_async(  # type: ignore[misc]
-                self.format_user_message(x),
-                structured_output_model=self.output,
+            async def _call() -> Any:
+                return await super(Agent, self).invoke_async(  # type: ignore[misc]
+                    self.format_user_message(x),
+                    structured_output_model=self.output,
+                )
+
+            result = await _with_retry(
+                _call,
+                max_retries=self.config.max_retries,
+                backoff_base=self.config.backoff_base,
+                timeout=self.config.timeout,
+                on_attempt=_record,
             )
         return result.structured_output  # type: ignore[return-value,no-any-return]
 
@@ -435,6 +454,8 @@ class Agent(strands.Agent, Generic[In, Out]):
             tok_g = _RUN_GRAPH_HASH.set(graph_hash)
         tok_r = _obs._RUN_ID.set(run_id)
         tok_p = _obs._PATH_STACK.set((self, path))
+        retry_meta: dict[str, Any] = {}
+        tok_m = _obs._RETRY_META.set(retry_meta)
         start_meta: dict[str, Any] = {}
         if is_root:
             start_meta["graph"] = _graph_json_or_none(self)
@@ -494,6 +515,7 @@ class Agent(strands.Agent, Generic[In, Out]):
             if is_root:
                 end_meta["is_root"] = True
                 end_meta["output_type"] = _qualified(self.output)  # type: ignore[arg-type]
+            end_meta.update(retry_meta)
             await _obs.registry.notify(
                 _obs.AgentEvent(
                     run_id, path, "end", x, envelope, None, started, finished, end_meta
@@ -502,6 +524,7 @@ class Agent(strands.Agent, Generic[In, Out]):
             return envelope
         except BaseException as e:
             err_meta: dict[str, Any] = {"is_root": True} if is_root else {}
+            err_meta.update(retry_meta)
             await _obs.registry.notify(
                 _obs.AgentEvent(
                     run_id, path, "error", x, None, e, started, time.monotonic(), err_meta
@@ -509,6 +532,7 @@ class Agent(strands.Agent, Generic[In, Out]):
             )
             raise
         finally:
+            _obs._RETRY_META.reset(tok_m)
             _obs._RUN_ID.reset(tok_r)
             _obs._PATH_STACK.reset(tok_p)
             if tok_g is not None:

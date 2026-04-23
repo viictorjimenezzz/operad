@@ -137,6 +137,28 @@ and closes a loop over their outputs.
 judge is a `Critic`, which is an `Agent[Candidate[In, Out], Score]` —
 the same `build()` story applies.
 
+## Configuration
+
+Every leaf carries a `Configuration` describing its backend, model, and
+sampling. Three fields control runtime resilience against flaky
+endpoints:
+
+- `timeout: float | None = None` — per-attempt wall-clock budget, in
+  seconds. `None` disables the timeout.
+- `max_retries: int = 0` — number of retries after the initial attempt.
+  `max_retries=N` permits up to `N+1` total attempts.
+- `backoff_base: float = 0.5` — base delay, in seconds. The delay
+  before retry `i` (1-indexed) is `backoff_base * 2**(i-1)` plus a
+  uniform jitter in `[0, backoff_base)` to avoid synchronized retry
+  storms across sibling agents.
+
+Retries wrap the provider call inside `Agent.forward` and do NOT retry
+contract errors (`BuildError`, `pydantic.ValidationError`) or
+cancellation (`asyncio.CancelledError`). Each invocation's terminal
+event records `metadata["retries"]` (count) and `metadata["last_error"]`
+(the final exception's `repr`, or `None`), so a `TraceObserver` surfaces
+retry activity in every saved run.
+
 ## Run the demo
 
 ```bash
