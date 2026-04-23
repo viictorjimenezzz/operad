@@ -12,9 +12,13 @@ instance attributes carry the live values, freely mutable before
 from __future__ import annotations
 
 import copy
+import html as _html
+import sys
+import time
+import uuid
 from collections.abc import Sequence
 from contextvars import ContextVar
-from typing import Any, ClassVar, Generic, Self, TYPE_CHECKING, TypeVar
+from typing import Any, ClassVar, Generic, Self, TextIO, TYPE_CHECKING, TypeVar
 
 import strands
 from pydantic import BaseModel, ConfigDict
@@ -22,6 +26,7 @@ from pydantic import BaseModel, ConfigDict
 from ..runtime import acquire as _acquire_slot
 from ..utils.errors import BuildError
 from .config import Configuration
+from .diff import AgentDiff, diff_states
 from .state import AgentState
 from . import render
 
@@ -275,6 +280,68 @@ class Agent(strands.Agent, Generic[In, Out]):
         """
         return render.render_input(x)
 
+    # --- introspection ------------------------------------------------------
+    def operad(self, *, file: TextIO | None = None) -> None:
+        """Print every default-forward leaf's rendered system prompt.
+
+        Walks the agent tree and prints, for each leaf that delegates to
+        the default `Agent.forward`, the full system message produced by
+        `format_system_message()` — role, task, rules, examples, and
+        output schema. Composites and custom-forward leaves are skipped:
+        neither surfaces a prompt the model will see.
+
+        Zero tokens are generated; no observer events are emitted. Use
+        as a sanity check before `abuild()` and before any billable call.
+        """
+        out = sys.stdout if file is None else file
+        rendered = self.operad_dump()
+        if not rendered:
+            print("(no default-forward leaves)", file=out)
+            return
+        for i, (path, prompt) in enumerate(rendered.items()):
+            if i > 0:
+                print("", file=out)
+            print(f"=== {path} ===", file=out)
+            print(prompt, file=out)
+
+    def operad_dump(self) -> dict[str, str]:
+        """Return `{qualified_path: rendered_system_prompt}` for every leaf.
+
+        Machine-readable sibling of `operad()`. Same skip rules: only
+        default-forward leaves appear.
+        """
+        result: dict[str, str] = {}
+        for path, node in _labelled_tree(self):
+            if node._children:
+                continue
+            if type(node).forward is not Agent.forward:
+                continue
+            result[path] = node.format_system_message()
+        return result
+
+    def diff(self, other: "Agent[Any, Any]") -> AgentDiff:
+        """Compare another agent to this one; `self` is the reference ("before").
+
+        Returns an `AgentDiff` covering role/task (string-level),
+        rules (line-level), examples (list add/remove), config
+        (field-level), and structural changes (child added / removed).
+        Neither agent is mutated; the comparison runs over `state()`
+        snapshots.
+        """
+        return diff_states(self.state(), other.state())
+
+    def _repr_html_(self) -> str:
+        """Rich HTML rendering for Jupyter / marimo / VS Code notebooks.
+
+        Delegates to `AgentGraph._repr_html_` when the agent has been
+        built; otherwise falls back to an escaped `<pre>` summary. Plain
+        text environments continue to use `__repr__`.
+        """
+        graph = self.__dict__.get("_graph")
+        if self._built and graph is not None and hasattr(graph, "_repr_html_"):
+            return graph._repr_html_()  # type: ignore[no-any-return]
+        return f"<pre>{_html.escape(repr(self))}</pre>"
+
     # --- default leaf forward ------------------------------------------------
     async def forward(self, x: In) -> Out:
         """Default leaf behavior: single Strands call with structured output.
@@ -301,30 +368,64 @@ class Agent(strands.Agent, Generic[In, Out]):
         if tracer is not None:
             return await tracer.record(self, x)  # type: ignore[return-value,no-any-return]
 
-        if not self._built:
-            raise BuildError(
-                "not_built",
-                "call .build() before .invoke()",
-                agent=type(self).__name__,
+        from ..runtime.observers import base as _obs
+
+        parent_entry = _obs._PATH_STACK.get()
+        if parent_entry is None:
+            path = type(self).__name__
+        else:
+            parent_agent, parent_path = parent_entry
+            attr = _attr_name_hint(parent_agent, self) or type(self).__name__
+            path = f"{parent_path}.{attr}"
+
+        run_id = _obs._RUN_ID.get() or uuid.uuid4().hex
+        started = time.monotonic()
+        tok_r = _obs._RUN_ID.set(run_id)
+        tok_p = _obs._PATH_STACK.set((self, path))
+        try:
+            await _obs.registry.notify(
+                _obs.AgentEvent(run_id, path, "start", x, None, None, started, None, {})
             )
 
-        if not isinstance(x, self.input):  # type: ignore[arg-type]
-            raise BuildError(
-                "input_mismatch",
-                f"expected {self.input.__name__}, got {type(x).__name__}",  # type: ignore[union-attr]
-                agent=type(self).__name__,
+            if not self._built:
+                raise BuildError(
+                    "not_built",
+                    "call .build() before .invoke()",
+                    agent=type(self).__name__,
+                )
+
+            if not isinstance(x, self.input):  # type: ignore[arg-type]
+                raise BuildError(
+                    "input_mismatch",
+                    f"expected {self.input.__name__}, got {type(x).__name__}",  # type: ignore[union-attr]
+                    agent=type(self).__name__,
+                )
+
+            y = await self.forward(x)
+
+            if not isinstance(y, self.output):  # type: ignore[arg-type]
+                raise BuildError(
+                    "output_mismatch",
+                    f"forward returned {type(y).__name__}, expected {self.output.__name__}",  # type: ignore[union-attr]
+                    agent=type(self).__name__,
+                )
+
+            await _obs.registry.notify(
+                _obs.AgentEvent(
+                    run_id, path, "end", x, y, None, started, time.monotonic(), {}
+                )
             )
-
-        y = await self.forward(x)
-
-        if not isinstance(y, self.output):  # type: ignore[arg-type]
-            raise BuildError(
-                "output_mismatch",
-                f"forward returned {type(y).__name__}, expected {self.output.__name__}",  # type: ignore[union-attr]
-                agent=type(self).__name__,
+            return y
+        except BaseException as e:
+            await _obs.registry.notify(
+                _obs.AgentEvent(
+                    run_id, path, "error", x, None, e, started, time.monotonic(), {}
+                )
             )
-
-        return y
+            raise
+        finally:
+            _obs._RUN_ID.reset(tok_r)
+            _obs._PATH_STACK.reset(tok_p)
 
     async def __call__(self, x: In) -> Out:  # type: ignore[override]
         return await self.invoke(x)
@@ -345,3 +446,35 @@ class Agent(strands.Agent, Generic[In, Out]):
         from .build import abuild_agent
 
         return await abuild_agent(self)
+
+
+def _attr_name_hint(parent: "Agent[Any, Any]", child: "Agent[Any, Any]") -> str | None:
+    for name, value in parent._children.items():
+        if value is child:
+            return name
+    return None
+
+
+def _labelled_tree(
+    root: "Agent[Any, Any]",
+) -> list[tuple[str, "Agent[Any, Any]"]]:
+    """Yield `(qualified_path, agent)` for `root` and every descendant.
+
+    Breadth-first with `id()` de-duplication, matching the walk pattern in
+    `operad.core.build._tree`. The root's path is its class name; each
+    descendant's path appends the attribute it was attached under.
+    """
+    root_name = type(root).__name__
+    out: list[tuple[str, "Agent[Any, Any]"]] = [(root_name, root)]
+    seen: set[int] = {id(root)}
+    queue: list[tuple[str, "Agent[Any, Any]"]] = [(root_name, root)]
+    while queue:
+        parent_path, parent = queue.pop(0)
+        for attr, child in parent._children.items():
+            if id(child) in seen:
+                continue
+            seen.add(id(child))
+            child_path = f"{parent_path}.{attr}"
+            out.append((child_path, child))
+            queue.append((child_path, child))
+    return out

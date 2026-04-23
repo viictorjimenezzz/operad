@@ -1,31 +1,44 @@
-"""Dataset-level evaluation: run an agent over (input, expected) pairs.
+"""Dataset-level evaluation harness.
 
-Minimal harness consumed by `Evolutionary`. Full Stream D will widen the
-`Metric` protocol with `score_batch` and ship the scorer catalogue
-(`Contains`, `RegexMatch`, `Rouge1`, `RubricCritic`, cost aggregation).
-Nothing here pre-empts that: `evaluate` just uses today's `Metric.score`.
+Runs a built `Agent[In, Out]` over a list of `(In, Out)` pairs, scores
+the predictions with one or more `Metric` implementations, and returns
+an `EvalReport` with per-row scores and per-metric means.
+
+The harness is intentionally small:
+- Does NOT auto-build the agent. Build is a caller responsibility.
+- Bounds per-input concurrency with a local `asyncio.Semaphore`; the
+  slot registry separately bounds the backend.
+- Uses a metric's `score_batch` when present, otherwise loops over
+  `score`. This keeps the `Metric` protocol single-method while letting
+  LLM-judge metrics like `RubricCritic` fan out with `asyncio.gather`.
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import Any, TypeVar
+import math
+from typing import Any
 
 from pydantic import BaseModel
 
-from .core.agent import Agent
+from .core.agent import Agent, In, Out
 from .metrics.base import Metric
 from .utils.errors import BuildError
 
-In = TypeVar("In", bound=BaseModel)
-Out = TypeVar("Out", bound=BaseModel)
-
 
 class EvalReport(BaseModel):
-    """Per-row predictions with scores, plus a per-metric summary mean."""
+    """Per-row scores + per-metric summary means."""
 
     rows: list[dict[str, Any]]
     summary: dict[str, float]
+
+
+async def _score_batch(
+    metric: Metric, pairs: list[tuple[BaseModel, BaseModel]]
+) -> list[float]:
+    if hasattr(metric, "score_batch"):
+        return list(await metric.score_batch(pairs))  # type: ignore[attr-defined]
+    return [await metric.score(p, e) for p, e in pairs]
 
 
 async def evaluate(
@@ -35,13 +48,10 @@ async def evaluate(
     *,
     concurrency: int = 4,
 ) -> EvalReport:
-    """Run `agent` over `dataset`, score each row with every metric.
+    """Evaluate `agent` on `dataset` with `metrics`.
 
-    The agent must already be built (`agent._built`); we do not silently
-    auto-build. Per-row fan-out is bounded by a local
-    `asyncio.Semaphore(concurrency)` — this is orthogonal to the slot
-    registry, which bounds the backend endpoint rather than the eval
-    harness.
+    Raises `BuildError("not_built", ...)` if the agent has not been
+    built — the harness will never auto-build.
     """
     if not agent._built:
         raise BuildError(
@@ -49,41 +59,33 @@ async def evaluate(
             "call .build() before evaluate()",
             agent=type(agent).__name__,
         )
-    if concurrency < 1:
-        raise ValueError(f"concurrency must be >= 1, got {concurrency}")
 
     sem = asyncio.Semaphore(concurrency)
 
-    async def _predict(x: In) -> Out:
+    async def _one(x: In) -> Out:
         async with sem:
             return await agent(x)
 
-    predictions: list[Out] = await asyncio.gather(
-        *(_predict(x) for x, _ in dataset)
-    )
+    predicted = await asyncio.gather(*(_one(inp) for inp, _ in dataset))
+    expected = [exp for _, exp in dataset]
+    inputs = [inp for inp, _ in dataset]
 
-    rows: list[dict[str, Any]] = []
-    per_metric: dict[str, list[float]] = {m.name: [] for m in metrics}
-    for (x, expected), predicted in zip(dataset, predictions):
-        row: dict[str, Any] = {
-            "input": x.model_dump(mode="json"),
-            "expected": expected.model_dump(mode="json"),
-            "predicted": predicted.model_dump(mode="json"),
+    rows: list[dict[str, Any]] = [
+        {
+            "input": inp.model_dump(mode="json"),
+            "expected": exp.model_dump(mode="json"),
+            "predicted": pred.model_dump(mode="json"),
         }
-        for m in metrics:
-            s = await m.score(predicted, expected)
-            row[m.name] = s
-            per_metric[m.name].append(s)
-        rows.append(row)
+        for inp, exp, pred in zip(inputs, expected, predicted)
+    ]
 
     summary: dict[str, float] = {}
-    for name, scores in per_metric.items():
-        if scores:
-            summary[name] = sum(scores) / len(scores)
-        else:
-            summary[name] = 0.0
+    pairs = list(zip(predicted, expected))
+    for metric in metrics:
+        scores = await _score_batch(metric, pairs)
+        for row, s in zip(rows, scores):
+            row[metric.name] = s
+        valid = [s for s in scores if not math.isnan(s)]
+        summary[metric.name] = sum(valid) / len(valid) if valid else float("nan")
 
     return EvalReport(rows=rows, summary=summary)
-
-
-__all__ = ["EvalReport", "evaluate"]

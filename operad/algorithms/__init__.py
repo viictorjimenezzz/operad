@@ -12,7 +12,8 @@ from .best_of_n import BestOfN
 from .debate import Critique, Debate, DebateRecord, DebateTurn, Proposal
 from .evolutionary import Evolutionary
 from .judge import Candidate, Score
-from .self_refine import Reflection, ReflectionInput, RefinementInput, SelfRefine
+from .self_refine import RefinementInput, SelfRefine
+from .sweep import Sweep, SweepCell, SweepReport
 from .verifier_loop import VerifierLoop
 
 __all__ = [
@@ -24,10 +25,11 @@ __all__ = [
     "DebateTurn",
     "Evolutionary",
     "Proposal",
-    "Reflection",
-    "ReflectionInput",
     "RefinementInput",
     "Score",
     "SelfRefine",
+    "Sweep",
+    "SweepCell",
+    "SweepReport",
     "VerifierLoop",
 ]
