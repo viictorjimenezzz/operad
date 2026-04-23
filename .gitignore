@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual envs
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Local overrides
+.env
+*.log
+*.tmp
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/

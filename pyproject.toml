@@ -1,0 +1,32 @@
+[project]
+name = "operad"
+version = "0.1.0"
+description = "Typed, composable agent architectures for local-first LLM servers."
+readme = "README.md"
+license = { file = "LICENSE.txt" }
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.8",
+    "strands-agents>=0.1.0",
+    "openai>=2.30.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "integration: live network test; opt-in via OPERAD_INTEGRATION env var",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["operad"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
