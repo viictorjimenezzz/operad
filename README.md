@@ -135,6 +135,36 @@ uv run python examples/parallel.py
 Set `OPERAD_LLAMACPP_HOST` and `OPERAD_LLAMACPP_MODEL` to point
 somewhere else.
 
+## Run from YAML
+
+You can run an agent end-to-end without writing Python by pointing the
+`operad` CLI at a YAML config:
+
+```yaml
+# examples/config-react.yaml
+agent: operad.agents.reasoning.react.ReAct
+config:
+  backend: llamacpp
+  host: 127.0.0.1:8080
+  model: qwen2.5-7b-instruct
+  temperature: 0.3
+runtime:
+  slots:
+    - backend: llamacpp
+      host: 127.0.0.1:8080
+      limit: 8
+```
+
+```bash
+uv run operad run   examples/config-react.yaml --input examples/task.json
+uv run operad trace examples/config-react.yaml
+uv run operad graph examples/config-react.yaml --format json
+```
+
+`run` validates the input JSON against the agent's `input` model, builds
+the graph, invokes, and prints the `Out` as JSON. `trace` prints the
+Mermaid rendering of the built graph; `graph` dumps it as JSON.
+
 ## Tests
 
 ```bash
