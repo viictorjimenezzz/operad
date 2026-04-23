@@ -13,6 +13,24 @@ class Reasoner(Agent[In, Out]):
     specialize; the output class is expected to include both a
     ``reasoning``-like field and a final answer field so the model
     commits to its thought process before answering.
+
+    A canonical few-shot on a ``Task -> Thought``-shaped specialization::
+
+        from operad import Example
+        from operad.agents.reasoning.react import Task, Thought
+
+        examples = (
+            Example[Task, Thought](
+                input=Task(goal="What is 2 + 2?"),
+                output=Thought(
+                    reasoning="Addition: 2 + 2 sums to 4.",
+                    next_action="return the answer 4",
+                ),
+            ),
+        )
+
+    Pass ``examples=...`` to the constructor (or set it on your
+    subclass) whenever your ``input``/``output`` schemas are concrete.
     """
 
     role = "You are a careful, methodical reasoner."

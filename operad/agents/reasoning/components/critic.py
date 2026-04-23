@@ -7,8 +7,18 @@ request together with a candidate answer — and its output is ``Score``.
 
 from __future__ import annotations
 
+from pydantic import BaseModel, Field
+
 from ....algorithms import Candidate, Score
-from ....core.agent import Agent
+from ....core.agent import Agent, Example
+
+
+class _CriticRequest(BaseModel):
+    text: str = Field(default="", description="The original request.")
+
+
+class _CriticAnswer(BaseModel):
+    text: str = Field(default="", description="The candidate answer.")
 
 
 class Critic(Agent[Candidate, Score]):
@@ -32,4 +42,26 @@ class Critic(Agent[Candidate, Score]):
         "do not reward verbosity or style absent of substance.",
         "Reserve scores near 1.0 for unambiguously correct, complete answers.",
         "Keep the rationale under three sentences.",
+    )
+    examples = (
+        Example[Candidate, Score](
+            input=Candidate(
+                input=_CriticRequest(text="What is the capital of France?"),
+                output=_CriticAnswer(text="Paris."),
+            ),
+            output=Score(
+                score=1.0,
+                rationale="Directly and correctly answers the question.",
+            ),
+        ),
+        Example[Candidate, Score](
+            input=Candidate(
+                input=_CriticRequest(text="What is the capital of France?"),
+                output=_CriticAnswer(text="It is a European city."),
+            ),
+            output=Score(
+                score=0.1,
+                rationale="Vague; avoids naming the specific capital.",
+            ),
+        ),
     )
