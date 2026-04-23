@@ -1,32 +1,32 @@
 """Two-branch Switch demo: a Router leaf picks a branch by typed Choice.
 
+Requires a local llama-server serving google/gemma-4-e4b on 127.0.0.1:9000.
+Override via OPERAD_LLAMACPP_HOST and OPERAD_LLAMACPP_MODEL.
+
 The Router classifies the incoming query as ``"greet"`` or ``"factoid"``;
 the Switch dispatches to the matching Reasoner branch. Every edge is
 typed; ``abuild()`` verifies that the Router's narrow ``Choice`` label
 set covers every branch.
 
     uv run python examples/router_switch.py
-
-Set ``OPERAD_LLAMACPP_HOST`` and ``OPERAD_LLAMACPP_MODEL`` to point at a
-different llama-server endpoint or model.
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from operad import (
     Choice,
-    Configuration,
     Reasoner,
     RouteInput,
     Router,
     Switch,
 )
+
+from _config import local_config
 
 
 class Reply(BaseModel):
@@ -37,19 +37,8 @@ class Label(Choice[Literal["greet", "factoid"]]):
     pass
 
 
-def _cfg(model: str) -> Configuration:
-    return Configuration(
-        backend="llamacpp",
-        host=os.environ.get("OPERAD_LLAMACPP_HOST", "127.0.0.1:8080"),
-        model=model,
-        temperature=0.3,
-        max_tokens=256,
-    )
-
-
 async def _main() -> None:
-    model = os.environ.get("OPERAD_LLAMACPP_MODEL", "default")
-    cfg = _cfg(model)
+    cfg = local_config(temperature=0.3, max_tokens=256)
 
     router = Router(
         config=cfg,

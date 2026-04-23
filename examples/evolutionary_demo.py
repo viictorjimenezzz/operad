@@ -1,6 +1,6 @@
-"""Offline demo: `Evolutionary` evolving a seed against a 5-row dataset.
+"""`Evolutionary` evolving a seed against a 5-row dataset.
 
-Runs entirely without a provider. The seed leaf's output depends
+Runs offline — no model server required. The seed leaf's output depends
 deterministically on its rule count, so applying `AppendRule` across
 generations nudges the population toward a target score. The demo
 prints the seed's score, the best score per generation, and the final
