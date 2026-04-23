@@ -6,10 +6,14 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-Backend = Literal["llamacpp", "lmstudio", "ollama", "openai", "bedrock"]
+Backend = Literal[
+    "llamacpp", "lmstudio", "ollama", "openai", "bedrock", "anthropic"
+]
 
 _LOCAL_BACKENDS: frozenset[Backend] = frozenset({"llamacpp", "lmstudio", "ollama"})
-_REMOTE_BACKENDS: frozenset[Backend] = frozenset({"openai", "bedrock"})
+_REMOTE_BACKENDS: frozenset[Backend] = frozenset(
+    {"openai", "bedrock", "anthropic"}
+)
 
 
 class Configuration(BaseModel):

@@ -106,6 +106,7 @@ class Agent(strands.Agent, Generic[In, Out]):
     rules: ClassVar[Sequence[str]] = ()
     examples: ClassVar[Sequence[Example[Any, Any]]] = ()
     renderer: ClassVar[str | None] = None
+    default_sampling: ClassVar[dict[str, Any]] = {}
 
     # --- instance state (populated by __init__ / build) ---------------------
     config: Configuration | None
@@ -139,6 +140,15 @@ class Agent(strands.Agent, Generic[In, Out]):
                 agent=cls.__name__,
             )
 
+        if config is not None and cls.default_sampling:
+            user_set = config.model_fields_set
+            fill = {
+                k: v
+                for k, v in cls.default_sampling.items()
+                if k not in user_set and k in type(config).model_fields
+            }
+            if fill:
+                config = config.model_copy(update=fill)
         self.config = config
         self.role = role if role is not None else cls.role
         self.task = task if task is not None else cls.task

@@ -46,3 +46,4 @@ class Extractor(Agent[In, Out]):
         "Never invent information not supported by the input.",
         "Match the output schema's field types and descriptions exactly.",
     )
+    default_sampling = {"temperature": 0.0}

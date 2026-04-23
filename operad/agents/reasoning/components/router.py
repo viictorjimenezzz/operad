@@ -67,6 +67,7 @@ class Router(Agent[RouteInput, Choice[str]]):
             output=Choice[str](label="lookup", reasoning="External fact needed."),
         ),
     )
+    default_sampling = {"temperature": 0.0, "max_tokens": 64}
 
 
 __all__ = ["Choice", "RouteInput", "Router"]

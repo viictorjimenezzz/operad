@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import BaseModel
 
 from operad import Agent, AgentGraph, BuildError
 
@@ -67,6 +68,25 @@ async def test_build_catches_edge_input_mismatch_before_llm(cfg) -> None:
         await Wrong().abuild()
     assert exc.value.reason == "input_mismatch"
     assert exc.value.agent is not None and "second" in exc.value.agent
+
+
+async def test_build_catches_leaf_root_broken_output(cfg) -> None:
+    class _Broken(BaseModel):
+        @classmethod
+        def model_construct(cls, *a, **kw) -> "_Broken":  # type: ignore[override]
+            raise RuntimeError("broken output class")
+
+    class DefaultLeaf(Agent[A, _Broken]):
+        input = A
+        output = _Broken
+        role = "r"
+        task = "t"
+
+    leaf = DefaultLeaf(config=cfg, input=A, output=_Broken)
+    with pytest.raises(BuildError) as exc:
+        await leaf.abuild()
+    assert exc.value.reason == "output_mismatch"
+    assert "DefaultLeaf" in str(exc.value)
 
 
 async def test_build_catches_root_output_mismatch(cfg) -> None:
