@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import platform
+import re
 from contextvars import ContextVar
 from importlib.metadata import PackageNotFoundError, version as _pkg_version
 from typing import Any, Generic, TypeVar
@@ -68,11 +69,27 @@ def hash_json(obj: Any) -> str:
     return hash_str(json.dumps(obj, sort_keys=True, default=str))
 
 
+# Matches a `user:pass@` authority prefix, with or without a leading scheme.
+# Credentials embedded in `host` would otherwise be hashed verbatim, making
+# identical deployments hash differently based on operator.
+_HOST_AUTH_RE = re.compile(r"^(?P<scheme>[a-z][a-z0-9+.-]*://)?[^/@]+@")
+
+
 def hash_config(config: Configuration | None) -> str:
-    """Hash a `Configuration` with `api_key` excluded."""
+    """Hash a `Configuration` with `api_key` excluded.
+
+    The `host` field is additionally scrubbed of any embedded
+    `user:pass@` authority so credentials never bleed into the
+    reproducibility hash.
+    """
     if config is None:
         return ""
     dumped = config.model_dump(mode="json", exclude={"api_key"})
+    host = dumped.get("host")
+    if isinstance(host, str):
+        m = _HOST_AUTH_RE.match(host)
+        if m:
+            dumped["host"] = (m.group("scheme") or "") + host[m.end():]
     return hash_json(dumped)
 
 

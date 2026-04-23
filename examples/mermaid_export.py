@@ -1,6 +1,8 @@
 """Build a small composite and print its Mermaid graph.
 
-Offline demo — no model server needed. ``build()`` traces the tree,
+Runs offline — no model server required.
+
+``build()`` traces the tree,
 type-checks every edge, and produces an ``AgentGraph`` that
 ``to_mermaid`` renders as a flowchart.
 

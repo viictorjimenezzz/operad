@@ -24,6 +24,7 @@ import strands
 from pydantic import BaseModel, ConfigDict
 
 from ..runtime import acquire as _acquire_slot
+from ..runtime.retry import with_retry as _with_retry
 from ..utils.errors import BuildError
 from .config import Configuration
 from .diff import AgentDiff, diff_states
@@ -55,6 +56,16 @@ class Example(BaseModel, Generic[In, Out]):
     output: Out
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+def _system_to_str(rendered: str | list[dict[str, str]] | None) -> str:
+    if rendered is None:
+        return ""
+    if isinstance(rendered, list):
+        return "\n\n".join(
+            m.get("content", "") for m in rendered if m.get("role") == "system"
+        )
+    return rendered
 
 
 # Per-task tracer. When set, `Agent.invoke` short-circuits into the tracer
@@ -108,6 +119,8 @@ class Agent(strands.Agent, Generic[In, Out]):
     task: ClassVar[str] = ""
     rules: ClassVar[Sequence[str]] = ()
     examples: ClassVar[Sequence[Example[Any, Any]]] = ()
+    renderer: ClassVar[str | None] = None
+    default_sampling: ClassVar[dict[str, Any]] = {}
 
     # --- instance state (populated by __init__ / build) ---------------------
     config: Configuration | None
@@ -141,6 +154,15 @@ class Agent(strands.Agent, Generic[In, Out]):
                 agent=cls.__name__,
             )
 
+        if config is not None and cls.default_sampling:
+            user_set = config.model_fields_set
+            fill = {
+                k: v
+                for k, v in cls.default_sampling.items()
+                if k not in user_set and k in type(config).model_fields
+            }
+            if fill:
+                config = config.model_copy(update=fill)
         self.config = config
         self.role = role if role is not None else cls.role
         self.task = task if task is not None else cls.task
@@ -285,14 +307,25 @@ class Agent(strands.Agent, Generic[In, Out]):
         return new
 
     # --- message formatting (overridable) -----------------------------------
-    def format_system_message(self) -> str:
-        """Render the agent's static contract into a system-message string.
+    def format_system_message(self) -> str | list[dict[str, str]]:
+        """Render the agent's static contract into a system message.
 
         Default: XML-tagged sections (``<role>``, ``<task>``, ``<rules>``,
-        ``<examples>``, ``<output_schema>``). Override for a different
-        wire format.
+        ``<examples>``, ``<output_schema>``). The renderer is selected by
+        the class-level ``renderer`` override, falling back to
+        ``config.renderer`` (``"xml"``, ``"markdown"``, or ``"chat"``).
+        The ``"chat"`` renderer returns a list of ``{"role","content"}``
+        messages; the others return a single string. Override this
+        method for a fully custom wire format.
         """
-        return render.render_system(self)
+        mode = type(self).renderer or (
+            self.config.renderer if self.config is not None else "xml"
+        )
+        if mode == "markdown":
+            return render.markdown.render_system(self)
+        if mode == "chat":
+            return render.chat.render_system(self)
+        return render.xml.render_system(self)
 
     def format_user_message(self, x: In) -> str:
         """Render a per-call input into the user-message string.
@@ -327,13 +360,15 @@ class Agent(strands.Agent, Generic[In, Out]):
             print(f"=== {path} ===", file=out)
             print(prompt, file=out)
 
-    def operad_dump(self) -> dict[str, str]:
+    def operad_dump(self) -> dict[str, str | list[dict[str, str]]]:
         """Return `{qualified_path: rendered_system_prompt}` for every leaf.
 
         Machine-readable sibling of `operad()`. Same skip rules: only
-        default-forward leaves appear.
+        default-forward leaves appear. Values are whatever
+        `format_system_message()` returns (``str`` for xml/markdown,
+        ``list[dict]`` for the chat renderer).
         """
-        result: dict[str, str] = {}
+        result: dict[str, str | list[dict[str, str]]] = {}
         for path, node in _labelled_tree(self):
             if node._children:
                 continue
@@ -379,15 +414,36 @@ class Agent(strands.Agent, Generic[In, Out]):
         backends without native structured output or when the caller
         wants to see exactly what the model produced.
         """
+        from ..runtime.observers.base import _RETRY_META
+
+        meta = _RETRY_META.get()
+
+        def _record(attempt: int, last: BaseException | None) -> None:
+            if meta is not None:
+                meta["retries"] = attempt - 1
+                meta["last_error"] = None if last is None else repr(last)
+
+        structuredio = self.config.structuredio  # type: ignore[union-attr]
         user_msg = self.format_user_message(x)
+
         async with _acquire_slot(self.config):  # type: ignore[arg-type]
-            if self.config.structuredio:  # type: ignore[union-attr]
-                result = await super().invoke_async(  # type: ignore[misc]
-                    user_msg,
-                    structured_output_model=self.output,
-                )
-                return result.structured_output  # type: ignore[return-value,no-any-return]
-            result = await super().invoke_async(user_msg)  # type: ignore[misc]
+            async def _call() -> Any:
+                if structuredio:
+                    return await super(Agent, self).invoke_async(  # type: ignore[misc]
+                        user_msg,
+                        structured_output_model=self.output,
+                    )
+                return await super(Agent, self).invoke_async(user_msg)  # type: ignore[misc]
+
+            result = await _with_retry(
+                _call,
+                max_retries=self.config.max_retries,
+                backoff_base=self.config.backoff_base,
+                timeout=self.config.timeout,
+                on_attempt=_record,
+            )
+        if structuredio:
+            return result.structured_output  # type: ignore[return-value,no-any-return]
         text = _extract_text(result)
         try:
             return self.output.model_validate_json(text)  # type: ignore[no-any-return,union-attr]
@@ -432,6 +488,8 @@ class Agent(strands.Agent, Generic[In, Out]):
             tok_g = _RUN_GRAPH_HASH.set(graph_hash)
         tok_r = _obs._RUN_ID.set(run_id)
         tok_p = _obs._PATH_STACK.set((self, path))
+        retry_meta: dict[str, Any] = {}
+        tok_m = _obs._RETRY_META.set(retry_meta)
         start_meta: dict[str, Any] = {}
         if is_root:
             start_meta["graph"] = _graph_json_or_none(self)
@@ -474,7 +532,7 @@ class Agent(strands.Agent, Generic[In, Out]):
                 hash_python_version=PYTHON_VERSION_HASH,
                 hash_model=hash_config(self.config),
                 hash_prompt=hash_str(
-                    (self.format_system_message() or "")
+                    _system_to_str(self.format_system_message())
                     + "\n\n"
                     + self.format_user_message(x)
                 ),
@@ -491,6 +549,7 @@ class Agent(strands.Agent, Generic[In, Out]):
             if is_root:
                 end_meta["is_root"] = True
                 end_meta["output_type"] = _qualified(self.output)  # type: ignore[arg-type]
+            end_meta.update(retry_meta)
             await _obs.registry.notify(
                 _obs.AgentEvent(
                     run_id, path, "end", x, envelope, None, started, finished, end_meta
@@ -499,6 +558,7 @@ class Agent(strands.Agent, Generic[In, Out]):
             return envelope
         except BaseException as e:
             err_meta: dict[str, Any] = {"is_root": True} if is_root else {}
+            err_meta.update(retry_meta)
             await _obs.registry.notify(
                 _obs.AgentEvent(
                     run_id, path, "error", x, None, e, started, time.monotonic(), err_meta
@@ -506,6 +566,7 @@ class Agent(strands.Agent, Generic[In, Out]):
             )
             raise
         finally:
+            _obs._RETRY_META.reset(tok_m)
             _obs._RUN_ID.reset(tok_r)
             _obs._PATH_STACK.reset(tok_p)
             if tok_g is not None:

@@ -40,7 +40,10 @@ class _RuleCountLeaf(Agent[Q, R]):
         return R.model_construct(value=len(self.rules))
 
 
-class _RuleCountMetric:
+from operad import MetricBase
+
+
+class _RuleCountMetric(MetricBase):
     """Scores predicted.value toward a target rule count."""
 
     name = "rule_count"

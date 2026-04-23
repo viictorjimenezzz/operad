@@ -80,7 +80,7 @@ Foundations + runtime + first components (iterations 1–3):
   agents with metric feedback; their API shape is whatever the
   algorithm needs.
 - `operad.models` — per-backend resolvers: `llamacpp`, `lmstudio`,
-  `ollama`, `openai`, `bedrock`.
+  `ollama`, `openai`, `bedrock`, `anthropic`.
 - `operad.runtime.slots` — per-endpoint concurrency limits.
 - `operad.metrics` — `Metric` protocol, `ExactMatch`, `JsonValid`,
   `Latency`.
@@ -119,6 +119,11 @@ of `Reasoner` / `Classifier` / `Extractor` sets `input`, `output`, and
 any prompt-level overrides at the class level; instantiation is
 `Leaf(config=cfg)`.
 
+**Each component ships a `default_sampling` dict.** Class-level
+opinions (e.g. `Classifier` → `temperature=0.0`) merge into the
+caller's `Configuration` at construction; user-explicit fields
+always win.
+
 **`build()` symbolically traces the architecture**, type-checking every
 parent-to-child handoff before any model is contacted. Out pops an
 `AgentGraph`.
@@ -132,16 +137,42 @@ and closes a loop over their outputs.
 judge is a `Critic`, which is an `Agent[Candidate[In, Out], Score]` —
 the same `build()` story applies.
 
+## Configuration
+
+Every leaf carries a `Configuration` describing its backend, model, and
+sampling. Three fields control runtime resilience against flaky
+endpoints:
+
+- `timeout: float | None = None` — per-attempt wall-clock budget, in
+  seconds. `None` disables the timeout.
+- `max_retries: int = 0` — number of retries after the initial attempt.
+  `max_retries=N` permits up to `N+1` total attempts.
+- `backoff_base: float = 0.5` — base delay, in seconds. The delay
+  before retry `i` (1-indexed) is `backoff_base * 2**(i-1)` plus a
+  uniform jitter in `[0, backoff_base)` to avoid synchronized retry
+  storms across sibling agents.
+
+Retries wrap the provider call inside `Agent.forward` and do NOT retry
+contract errors (`BuildError`, `pydantic.ValidationError`) or
+cancellation (`asyncio.CancelledError`). Each invocation's terminal
+event records `metadata["retries"]` (count) and `metadata["last_error"]`
+(the final exception's `repr`, or `None`), so a `TraceObserver` surfaces
+retry activity in every saved run.
+
 ## Run the demo
 
 ```bash
-# 1. Start a local llama-server on 127.0.0.1:8080 with a model loaded.
+# 1. Start a local llama-server on 127.0.0.1:9000 serving google/gemma-4-e4b.
 # 2. Then:
-uv run python examples/parallel.py
+uv run --extra observers python demo.py
 ```
 
-Set `OPERAD_LLAMACPP_HOST` and `OPERAD_LLAMACPP_MODEL` to point
-somewhere else.
+`demo.py` is a ~30-second, Rich-formatted showcase: rendered prompts,
+Mermaid graph, live invocation, trace dump, and a mutation diff.
+
+Every network-backed example in `examples/` uses the same canonical
+target via `examples/_config.py` — set `OPERAD_LLAMACPP_HOST` and
+`OPERAD_LLAMACPP_MODEL` to override host or model.
 
 ## Run from YAML
 
@@ -188,6 +219,37 @@ One narrative example per major abstraction, in `examples/`:
 All network-requiring examples read `OPERAD_LLAMACPP_HOST` /
 `OPERAD_LLAMACPP_MODEL`; `mermaid_export.py` runs without a model.
 
+## Renderers
+
+`Agent.format_system_message` supports three wire formats. XML is the
+default; switch per-agent or per-configuration when a model prefers a
+different shape.
+
+| Renderer | Output | When to use |
+| --- | --- | --- |
+| `"xml"` | `<role>`, `<task>`, `<rules>`, `<examples>`, `<output_schema>` | Default; Anthropic-documented format, portable across backends. |
+| `"markdown"` | `# Role` / `# Task` / `# Rules` / `# Output schema` (table) | Models that follow Markdown better than tag soup. |
+| `"chat"` | `list[{"role","content"}]` | Backends with native chat templates (llama.cpp `--chat-template`, Ollama, LM Studio) — v1 emits `[{"role":"system","content": ...}]`. |
+
+Selection precedence: class-level `renderer: ClassVar[str] = "..."`
+override wins, then `Configuration.renderer`, then XML.
+
+```python
+from typing import ClassVar
+from operad import Agent, Configuration
+
+# per-configuration
+cfg = Configuration(backend="llamacpp", host="127.0.0.1:8080",
+                    model="gemma", renderer="markdown")
+
+# per-class
+class MarkdownReasoner(Reasoner):
+    renderer: ClassVar[str] = "markdown"
+```
+
+`Field(description=...)` on `In` and `Out` surfaces in all three
+renderers.
+
 ## Tests
 
 ```bash
@@ -205,6 +267,7 @@ backend at a time — each test skips unless its specific value is set.
 | openai   | `openai`             | `OPENAI_API_KEY` | `OPERAD_OPENAI_MODEL` (`gpt-4o-mini`)                               |
 | ollama   | `ollama`             | —              | `OPERAD_OLLAMA_HOST` (`127.0.0.1:11434`), `OPERAD_OLLAMA_MODEL` (`llama3.2`)      |
 | lmstudio | `lmstudio`           | —              | `OPERAD_LMSTUDIO_HOST` (`127.0.0.1:1234`), `OPERAD_LMSTUDIO_MODEL` (`default`)    |
+| anthropic| `anthropic`          | `ANTHROPIC_API_KEY` | `OPERAD_ANTHROPIC_MODEL` (`claude-haiku-4-5`)                    |
 
 ```bash
 OPERAD_INTEGRATION=llamacpp \
@@ -241,6 +304,21 @@ cfg = Configuration(
 Both modes feed the model the same per-field `Field(description=...)`
 metadata and the `<output_schema>` block, so prompts are identical; the
 difference is only whether strands or your leaf does the parse.
+
+## Tracing
+
+```python
+import operad.tracing as tracing
+
+with tracing.watch(jsonl="run.jsonl"):
+    out = await agent(x)
+```
+
+`watch()` attaches a Rich TUI (when the `observers` extra is installed)
+and, if `jsonl=...` is given, an NDJSON event log. Setting
+`OPERAD_TRACE=/tmp/run.jsonl` at import time auto-attaches the JSONL
+writer with zero code changes. Replay post-mortem with
+`uv run operad tail run.jsonl --speed=0`.
 
 ## Layout
 

@@ -8,9 +8,11 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from .base import MetricBase
+
 
 @dataclass
-class RegexMatch:
+class RegexMatch(MetricBase):
     """1.0 if `pattern` matches the string form of `predicted.<field>`.
 
     Uses `re.search` (partial match). The pattern is compiled once on

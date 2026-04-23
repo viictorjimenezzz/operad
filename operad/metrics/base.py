@@ -1,4 +1,4 @@
-"""The `Metric` protocol."""
+"""The `Metric` protocol and default-batch base class."""
 
 from __future__ import annotations
 
@@ -18,3 +18,27 @@ class Metric(Protocol):
     name: str
 
     async def score(self, predicted: BaseModel, expected: BaseModel) -> float: ...
+
+    async def score_batch(
+        self, pairs: list[tuple[BaseModel, BaseModel]]
+    ) -> list[float]: ...
+
+
+class MetricBase:
+    """Default `Metric` implementation supplying a batch fan-out.
+
+    Concrete metrics that do not need a custom batching strategy can
+    inherit from this class and override only `score`. Metrics that can
+    parallelise (e.g. LLM-judge metrics like `RubricCritic`) override
+    `score_batch` directly.
+    """
+
+    name: str = ""
+
+    async def score(self, predicted: BaseModel, expected: BaseModel) -> float:
+        raise NotImplementedError
+
+    async def score_batch(
+        self, pairs: list[tuple[BaseModel, BaseModel]]
+    ) -> list[float]:
+        return [await self.score(p, e) for p, e in pairs]

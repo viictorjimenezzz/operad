@@ -47,3 +47,4 @@ class Actor(Agent[In, Out]):
         "Prefer small, verifiable actions over large compound ones.",
         "Make every argument explicit; do not assume unstated defaults.",
     )
+    default_sampling = {"temperature": 0.3}

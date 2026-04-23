@@ -1,5 +1,7 @@
 """Observer demo: a two-stage Pipeline logging every event to NDJSON.
 
+Runs offline — no model server required.
+
     uv run python examples/observer_demo.py
 
 Writes `/tmp/operad_observer_demo.jsonl`, prints it back, and also

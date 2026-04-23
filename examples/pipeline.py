@@ -1,10 +1,10 @@
 """Three-stage Pipeline: extract -> plan -> evaluate.
 
+Requires a local llama-server serving google/gemma-4-e4b on 127.0.0.1:9000.
+Override via OPERAD_LLAMACPP_HOST and OPERAD_LLAMACPP_MODEL.
+
 Shows typed edges across three different leaf kinds. ``build()``
 verifies each handoff before any tokens are generated.
-
-Requires a local llama-server at ``$OPERAD_LLAMACPP_HOST`` (default
-``127.0.0.1:8080``). Set ``OPERAD_LLAMACPP_MODEL`` to pick a model.
 
     uv run python examples/pipeline.py
 """
@@ -12,11 +12,12 @@ Requires a local llama-server at ``$OPERAD_LLAMACPP_HOST`` (default
 from __future__ import annotations
 
 import asyncio
-import os
 
 from pydantic import BaseModel, Field
 
-from operad import Configuration, Evaluator, Extractor, Pipeline, Planner
+from operad import Evaluator, Extractor, Pipeline, Planner
+
+from _config import local_config
 
 
 class Request(BaseModel):
@@ -37,18 +38,8 @@ class Answer(BaseModel):
     answer: str = Field(default="", description="The final, user-facing answer.")
 
 
-def _cfg() -> Configuration:
-    return Configuration(
-        backend="llamacpp",
-        host=os.environ.get("OPERAD_LLAMACPP_HOST", "127.0.0.1:8080"),
-        model=os.environ.get("OPERAD_LLAMACPP_MODEL", "default"),
-        temperature=0.2,
-        max_tokens=512,
-    )
-
-
 async def _main() -> None:
-    cfg = _cfg()
+    cfg = local_config(temperature=0.2, max_tokens=512)
     pipeline = Pipeline(
         Extractor(config=cfg, input=Request, output=Task),
         Planner(config=cfg, input=Task, output=Plan),

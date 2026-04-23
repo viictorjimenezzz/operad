@@ -42,3 +42,4 @@ class Reasoner(Agent[In, Out]):
         "Show your reasoning before the final answer.",
         "Prefer uncertainty ('I don't know') over a confident wrong guess.",
     )
+    default_sampling = {"temperature": 0.7}

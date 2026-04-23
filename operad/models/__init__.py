@@ -15,6 +15,7 @@ Per-backend handling of `Configuration` knobs:
 | ollama    | wrapped as `options` dict                | —                       | —       | —           |
 | openai    | splatted into `params` dict              | max_completion_tokens   | ✓       | ✓           |
 | bedrock   | splatted as top-level BedrockModel kwargs | —                      | —       | —           |
+| anthropic | splatted into `additional_request_fields` | thinking.budget_tokens  | ✓       | ✓           |
 
 - `extra` semantics match what each backend's native SDK accepts.
 - `top_k` and `seed` on bedrock are threaded via `additional_request_fields`;
@@ -29,6 +30,7 @@ from typing import TYPE_CHECKING
 
 from ..core.config import Configuration
 from ..utils.errors import BuildError
+from .anthropic import build as _build_anthropic
 from .bedrock import build as _build_bedrock
 from .llamacpp import build as _build_llamacpp
 from .lmstudio import build as _build_lmstudio
@@ -52,6 +54,8 @@ def resolve_model(cfg: Configuration) -> "Model":
             return _build_openai(cfg)
         case "bedrock":
             return _build_bedrock(cfg)
+        case "anthropic":
+            return _build_anthropic(cfg)
         case other:
             raise BuildError(
                 "prompt_incomplete",
