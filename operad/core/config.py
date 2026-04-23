@@ -44,6 +44,7 @@ class Configuration(BaseModel):
     backoff_base: float = 0.5
 
     stream: bool = False
+    structuredio: bool = True
     renderer: Literal["xml", "markdown", "chat"] = "xml"
 
     extra: dict[str, Any] = Field(default_factory=dict)

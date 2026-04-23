@@ -76,6 +76,19 @@ def _system_to_str(rendered: str | list[dict[str, str]] | None) -> str:
 _TRACER: ContextVar["Tracer | None"] = ContextVar("_TRACER", default=None)
 
 
+def _extract_text(result: Any) -> str:
+    """Join every text content block from a strands ``AgentResult``."""
+    message = getattr(result, "message", None)
+    if message is None:
+        return ""
+    content = message.get("content", []) if isinstance(message, dict) else getattr(
+        message, "content", []
+    )
+    return "".join(
+        block.get("text", "") for block in content if isinstance(block, dict)
+    )
+
+
 class Agent(strands.Agent, Generic[In, Out]):
     """Typed, composable agent.
 
@@ -401,6 +414,12 @@ class Agent(strands.Agent, Generic[In, Out]):
         path: consumes strands' ``stream_async`` iterator, emits ``chunk``
         observer events for each mid-run token, and parses the accumulated
         text back to ``self.output``. The return shape is unchanged.
+
+        When ``config.structuredio`` is ``False``, the call omits
+        ``structured_output_model`` and parses the model's textual
+        response as JSON against ``self.output``. Use this path for
+        backends without native structured output or when the caller
+        wants to see exactly what the model produced.
         """
         if self.config is not None and getattr(self.config, "stream", False):
             return await self._stream_forward(x, self._default_chunk_sink)
@@ -414,12 +433,17 @@ class Agent(strands.Agent, Generic[In, Out]):
                 meta["retries"] = attempt - 1
                 meta["last_error"] = None if last is None else repr(last)
 
+        structuredio = self.config.structuredio  # type: ignore[union-attr]
+        user_msg = self.format_user_message(x)
+
         async with _acquire_slot(self.config):  # type: ignore[arg-type]
             async def _call() -> Any:
-                return await super(Agent, self).invoke_async(  # type: ignore[misc]
-                    self.format_user_message(x),
-                    structured_output_model=self.output,
-                )
+                if structuredio:
+                    return await super(Agent, self).invoke_async(  # type: ignore[misc]
+                        user_msg,
+                        structured_output_model=self.output,
+                    )
+                return await super(Agent, self).invoke_async(user_msg)  # type: ignore[misc]
 
             result = await _with_retry(
                 _call,
@@ -428,7 +452,17 @@ class Agent(strands.Agent, Generic[In, Out]):
                 timeout=self.config.timeout,
                 on_attempt=_record,
             )
-        return result.structured_output  # type: ignore[return-value,no-any-return]
+        if structuredio:
+            return result.structured_output  # type: ignore[return-value,no-any-return]
+        text = _extract_text(result)
+        try:
+            return self.output.model_validate_json(text)  # type: ignore[no-any-return,union-attr]
+        except Exception as e:
+            raise BuildError(
+                "output_mismatch",
+                f"could not parse textual response as {self.output.__name__}: {e}",  # type: ignore[union-attr]
+                agent=type(self).__name__,
+            ) from e
 
     async def _default_chunk_sink(self, i: int, piece: str) -> None:
         from ..runtime.observers import base as _obs

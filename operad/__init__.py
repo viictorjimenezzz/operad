@@ -117,6 +117,7 @@ from .runtime import SlotRegistry, set_limit
 from .runtime.streaming import ChunkEvent
 from . import tracing
 from .runtime.trace import Trace, TraceObserver, TraceStep
+from .runtime.trace_diff import TraceDiff, TraceStepDelta, trace_diff
 from .runtime.observers import (
     AgentEvent,
     JsonlObserver,
@@ -254,8 +255,10 @@ __all__ = [
     "ToolResult",
     "ToolUser",
     "Trace",
+    "TraceDiff",
     "TraceObserver",
     "TraceStep",
+    "TraceStepDelta",
     "Turn",
     "TurnChoice",
     "TurnTaker",
@@ -274,5 +277,6 @@ __all__ = [
     "set_limit",
     "to_json",
     "to_mermaid",
+    "trace_diff",
     "tracing",
 ]
