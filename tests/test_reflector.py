@@ -40,9 +40,9 @@ async def test_reflector_stub_produces_typed_reflection() -> None:
     )
     r = await _StubReflector(canned=canned).abuild()
     out = await r(ReflectionInput(original_request="q", candidate_answer="a"))
-    assert isinstance(out, Reflection)
-    assert out.needs_revision is True
-    assert out.deficiencies == ["off-by-one"]
+    assert isinstance(out.response, Reflection)
+    assert out.response.needs_revision is True
+    assert out.response.deficiencies == ["off-by-one"]
 
 
 async def test_reflector_is_registered_as_a_leaf_agent() -> None:

@@ -36,7 +36,7 @@ async def _main() -> None:
     print("--- run ---")
 
     answer = await agent(Task(goal="What is the sum of the first five primes?"))
-    print(answer.model_dump_json(indent=2))
+    print(answer.response.model_dump_json(indent=2))
 
 
 if __name__ == "__main__":

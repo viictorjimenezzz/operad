@@ -33,8 +33,8 @@ async def test_pipeline_build_captures_edges(cfg) -> None:
             self.second = FakeLeaf(config=cfg, input=B, output=C)
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
-            mid = await self.first(x)
-            return await self.second(mid)
+            mid = (await self.first(x)).response
+            return (await self.second(mid)).response
 
     p = await Pipeline().abuild()
     g: AgentGraph = p._graph
@@ -98,7 +98,7 @@ async def test_build_is_idempotent_after_mutation(cfg) -> None:
             self.second = FakeLeaf(config=cfg, input=B, output=C)
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
-            return await self.second(await self.first(x))
+            return (await self.second((await self.first(x)).response)).response
 
     p = await Pipeline().abuild()
     assert p._built is True
@@ -121,7 +121,7 @@ async def test_build_marks_all_descendants_built(cfg) -> None:
             self.second = FakeLeaf(config=cfg, input=B, output=C)
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
-            return await self.second(await self.first(x))
+            return (await self.second((await self.first(x)).response)).response
 
     p = await Pipeline().abuild()
     assert p._built is True
@@ -236,7 +236,7 @@ async def test_init_strands_runs_after_successful_trace(cfg, monkeypatch) -> Non
             self.second = FakeLeaf(config=cfg, input=B, output=C)
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
-            return await self.second(await self.first(x))
+            return (await self.second((await self.first(x)).response)).response
 
     await Pipeline().abuild()
     assert set(calls) == {"Pipeline", "FakeLeaf"}
@@ -255,7 +255,7 @@ async def test_shared_child_warning(cfg) -> None:
             self.second = shared
 
         async def forward(self, x: A) -> B:  # type: ignore[override]
-            return await self.first(x)
+            return (await self.first(x)).response
 
     with pytest.warns(UserWarning, match="shared"):
         await TwoSlots().abuild()
@@ -274,7 +274,7 @@ async def test_unshared_children_emit_no_warning(cfg) -> None:
             self.second = FakeLeaf(config=cfg, input=B, output=C)
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
-            return await self.second(await self.first(x))
+            return (await self.second((await self.first(x)).response)).response
 
     with _warnings.catch_warnings():
         _warnings.simplefilter("error")

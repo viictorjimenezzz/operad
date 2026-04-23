@@ -38,5 +38,5 @@ class Pipeline(Agent[In, Out]):
     async def forward(self, x: In) -> Out:  # type: ignore[override]
         current: BaseModel = x
         for stage in self._stages:
-            current = await stage(current)
+            current = (await stage(current)).response
         return current  # type: ignore[return-value]

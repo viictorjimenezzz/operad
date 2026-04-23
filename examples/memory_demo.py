@@ -48,7 +48,7 @@ async def _main() -> None:
         ]
     )
 
-    beliefs = await extractor(conversation)
+    beliefs = (await extractor(conversation)).response
 
     store: MemoryStore[Belief] = MemoryStore(schema=Belief)
     for b in beliefs.items:

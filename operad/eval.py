@@ -64,7 +64,7 @@ async def evaluate(
 
     async def _one(x: In) -> Out:
         async with sem:
-            return await agent(x)
+            return (await agent(x)).response
 
     predicted = await asyncio.gather(*(_one(inp) for inp, _ in dataset))
     expected = [exp for _, exp in dataset]

@@ -29,7 +29,7 @@ class _TwoRefs(Agent[Any, Any]):
         self.second = leaf
 
     async def forward(self, x: A) -> B:  # type: ignore[override]
-        return await self.first(x)
+        return (await self.first(x)).response
 
 
 class _DefaultForwardLeaf(Agent[Any, Any]):

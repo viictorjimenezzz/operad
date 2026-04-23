@@ -35,21 +35,21 @@ async def test_tool_user_builds_without_config() -> None:
 async def test_known_tool_returns_ok_true_with_result() -> None:
     u = await ToolUser(tools={"add": _AddTool()}).abuild()
     out = await u(ToolCall(tool_name="add", args={"a": 2, "b": 3}))
-    assert isinstance(out, ToolResult)
-    assert out.ok is True
-    assert out.result == 5
-    assert out.error == ""
+    assert isinstance(out.response, ToolResult)
+    assert out.response.ok is True
+    assert out.response.result == 5
+    assert out.response.error == ""
 
 
 async def test_unknown_tool_returns_ok_false_with_error() -> None:
     u = await ToolUser(tools={"add": _AddTool()}).abuild()
     out = await u(ToolCall(tool_name="missing", args={}))
-    assert out.ok is False
-    assert "missing" in out.error
+    assert out.response.ok is False
+    assert "missing" in out.response.error
 
 
 async def test_raising_tool_returns_ok_false_with_message() -> None:
     u = await ToolUser(tools={"boom": _RaisingTool()}).abuild()
     out = await u(ToolCall(tool_name="boom", args={}))
-    assert out.ok is False
-    assert "kaboom" in out.error
+    assert out.response.ok is False
+    assert "kaboom" in out.response.error

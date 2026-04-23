@@ -74,8 +74,8 @@ async def test_invoke_after_build_returns_correct_type(cfg) -> None:
         config=cfg, input=A, output=B, canned={"value": 42}
     ).abuild()
     out = await leaf(A(text="hi"))
-    assert isinstance(out, B)
-    assert out.value == 42
+    assert isinstance(out.response, B)
+    assert out.response.value == 42
 
 
 async def test_agent_is_built_flag_flips(cfg) -> None:

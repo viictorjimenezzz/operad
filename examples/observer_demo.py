@@ -63,7 +63,7 @@ async def _main() -> None:
 
     try:
         out = await pipe(Question(text="how do observers work?"))
-        print(f"result: {out.text}\n")
+        print(f"result: {out.response.text}\n")
     finally:
         jo.close()
         observers.unregister(jo)

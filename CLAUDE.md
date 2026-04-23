@@ -35,6 +35,11 @@ examples/            narrative examples, one per abstraction
 - **`build()` before invoke.** Leaves need `config`; composites do not.
   `build()` symbolically traces the tree, type-checks each edge, and
   wires `strands.Agent` for leaves — all before a single token.
+- **`await agent(x)` returns `OperadOutput[Out]`.** Reach into
+  `.response` for the typed payload; `hash_*` / `run_id` / `agent_path`
+  / `latency_ms` / `prompt_tokens` live on the envelope. Composite
+  `forward` methods still return plain `Out`, so children unwrap
+  `.response` at each call site (see `operad/agents/pipeline.py`).
 - **Components vs. algorithms.** `In -> Out` contract → component
   (subclass `Agent[In, Out]`, lives in `agents/`). Loop-with-metric
   feedback whose natural API is not `__call__(x)` → algorithm (plain

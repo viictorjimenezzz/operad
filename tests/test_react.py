@@ -79,8 +79,8 @@ async def test_react_graph_captures_four_typed_edges(cfg) -> None:
 async def test_react_end_to_end_routes_through_stub_pipeline(cfg) -> None:
     r = await _stub_react(cfg).abuild()
     out = await r(Task(goal="what is the answer?"))
-    assert isinstance(out, Answer)
-    assert out.answer == "42"
+    assert isinstance(out.response, Answer)
+    assert out.response.answer == "42"
 
 
 async def test_react_subagents_use_component_defaults(cfg) -> None:

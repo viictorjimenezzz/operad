@@ -48,7 +48,7 @@ async def test_leaf_emits_start_then_end(cfg) -> None:
     obs_registry.register(col)
 
     out = await leaf(A(text="hi"))
-    assert out.value == 7
+    assert out.response.value == 7
 
     assert [e.kind for e in col.events] == ["start", "end"]
     assert col.events[0].agent_path == "FakeLeaf"
@@ -88,7 +88,7 @@ async def test_observer_exception_is_isolated(cfg) -> None:
     obs_registry.register(good)
 
     out = await leaf(A())
-    assert isinstance(out, B)
+    assert isinstance(out.response, B)
     assert bad.calls >= 1
     assert [e.kind for e in good.events] == ["start", "end"]
 
@@ -107,8 +107,8 @@ async def test_no_events_during_build(cfg) -> None:
             self.second = FakeLeaf(config=cfg, input=B, output=C)
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
-            mid = await self.first(x)
-            return await self.second(mid)
+            mid = (await self.first(x)).response
+            return (await self.second(mid)).response
 
     await Tree().abuild()
 
@@ -151,8 +151,8 @@ async def test_nested_composite_dotted_paths(cfg) -> None:
             )
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
-            mid = await self.first(x)
-            return await self.second(mid)
+            mid = (await self.first(x)).response
+            return (await self.second(mid)).response
 
     chain = await Chain().abuild()
     col = _Collector()
@@ -181,7 +181,7 @@ async def test_shared_run_id_across_children(cfg) -> None:
             )
 
         async def forward(self, x: A) -> B:  # type: ignore[override]
-            return await self.only(x)
+            return (await self.only(x)).response
 
     chain = await Chain().abuild()
     col = _Collector()

@@ -18,8 +18,8 @@ async def test_pipeline_runs_stages_in_order(cfg) -> None:
     p = Pipeline(first, second, input=A, output=C)
     await p.abuild()
     out = await p(A(text="hi"))
-    assert isinstance(out, C)
-    assert out.label == "done"
+    assert isinstance(out.response, C)
+    assert out.response.label == "done"
 
 
 async def test_pipeline_captures_every_edge(cfg) -> None:
@@ -51,8 +51,8 @@ async def test_pipeline_single_stage_passes_through(cfg) -> None:
     p = Pipeline(only, input=A, output=B)
     await p.abuild()
     out = await p(A(text="hi"))
-    assert isinstance(out, B)
-    assert out.value == 99
+    assert isinstance(out.response, B)
+    assert out.response.value == 99
 
 
 async def test_pipeline_composite_needs_no_config(cfg) -> None:

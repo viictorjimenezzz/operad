@@ -42,11 +42,13 @@ class BestOfN(Generic[In, Out]):
         self.n = n
 
     async def run(self, x: In) -> Out:
-        candidates: list[Out] = await asyncio.gather(
+        gen_envelopes = await asyncio.gather(
             *(self.generator(x) for _ in range(self.n))
         )
-        scores: list[Score] = await asyncio.gather(
+        candidates: list[Out] = [env.response for env in gen_envelopes]
+        judge_envelopes = await asyncio.gather(
             *(self.judge(Candidate(input=x, output=c)) for c in candidates)
         )
+        scores: list[Score] = [env.response for env in judge_envelopes]
         best = max(range(self.n), key=lambda i: scores[i].score)
         return candidates[best]

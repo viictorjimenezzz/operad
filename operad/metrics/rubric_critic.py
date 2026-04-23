@@ -32,13 +32,13 @@ class RubricCritic:
 
     async def score(self, predicted: BaseModel, expected: BaseModel) -> float:
         del expected
-        s = await self.critic(Candidate(output=predicted))
+        s = (await self.critic(Candidate(output=predicted))).response
         return float(s.score)
 
     async def score_batch(
         self, pairs: list[tuple[BaseModel, BaseModel]]
     ) -> list[float]:
-        results = await asyncio.gather(
+        envelopes = await asyncio.gather(
             *(self.critic(Candidate(output=p)) for p, _ in pairs)
         )
-        return [float(s.score) for s in results]
+        return [float(env.response.score) for env in envelopes]
