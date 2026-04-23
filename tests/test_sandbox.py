@@ -60,7 +60,12 @@ async def test_nonzero_exit_raises_with_stderr() -> None:
 async def test_timeout_kills_process() -> None:
     proc = _proc_mock()
 
-    async def _raise_timeout(*a: Any, **kw: Any) -> None:
+    async def _raise_timeout(coro: Any = None, *a: Any, **kw: Any) -> None:
+        # `asyncio.wait_for(proc.communicate(...), timeout=...)` passes the
+        # inner coroutine positionally. Close it so the AsyncMock it came
+        # from doesn't raise `RuntimeWarning: coroutine was never awaited`.
+        if hasattr(coro, "close"):
+            coro.close()
         raise asyncio.TimeoutError
 
     with (
