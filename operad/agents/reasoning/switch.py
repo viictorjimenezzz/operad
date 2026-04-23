@@ -85,7 +85,7 @@ class Switch(Agent[In, Out]):
             first = next(iter(self._branches.values()))
             return first.output.model_construct()  # type: ignore[return-value]
 
-        choice = await self.router(x)
+        choice = (await self.router(x)).response
         label = getattr(choice, "label", None)
         branch = self._branches.get(label)
         if branch is None:
@@ -95,7 +95,7 @@ class Switch(Agent[In, Out]):
                 f"known labels: {sorted(self._branches, key=repr)}",
                 agent=type(self).__name__,
             )
-        return await branch(x)
+        return (await branch(x)).response
 
 
 __all__ = ["Switch"]

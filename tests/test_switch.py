@@ -64,14 +64,14 @@ async def test_switch_build_traces_router_and_every_branch() -> None:
 async def test_switch_runtime_dispatches_to_selected_branch() -> None:
     s = await _build_switch(label="a").abuild()
     out = await s(A(text="x"))
-    assert isinstance(out, B)
-    assert out.value == 1
+    assert isinstance(out.response, B)
+    assert out.response.value == 1
     assert len(s.branch_a.invocations) == 1  # type: ignore[attr-defined]
     assert s.branch_b.invocations == []  # type: ignore[attr-defined]
 
     s2 = await _build_switch(label="b").abuild()
     out2 = await s2(A(text="y"))
-    assert out2.value == 2
+    assert out2.response.value == 2
     assert s2.branch_a.invocations == []  # type: ignore[attr-defined]
     assert len(s2.branch_b.invocations) == 1  # type: ignore[attr-defined]
 

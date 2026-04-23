@@ -54,11 +54,14 @@ from .core import (
     Edge,
     Example,
     Node,
+    OperadOutput,
     abuild_agent,
     build_agent,
+    from_json,
     to_json,
     to_mermaid,
 )
+from .core.graph import TypeRegistry
 from .eval import EvalReport, evaluate
 from .metrics import (
     Contains,
@@ -73,6 +76,7 @@ from .metrics import (
 )
 from .models import resolve_model
 from .runtime import SlotRegistry, set_limit
+from .runtime.trace import Trace, TraceObserver, TraceStep
 from .runtime.observers import (
     AgentEvent,
     JsonlObserver,
@@ -125,6 +129,7 @@ __all__ = [
     "Observation",
     "Observer",
     "ObserverRegistry",
+    "OperadOutput",
     "OtelObserver",
     "Parallel",
     "Pipeline",
@@ -152,12 +157,17 @@ __all__ = [
     "ToolCall",
     "ToolResult",
     "ToolUser",
+    "Trace",
+    "TraceObserver",
+    "TraceStep",
     "Turn",
+    "TypeRegistry",
     "UserModel",
     "UserModelExtractor",
     "abuild_agent",
     "build_agent",
     "evaluate",
+    "from_json",
     "observers",
     "resolve_model",
     "set_limit",

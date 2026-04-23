@@ -33,8 +33,8 @@ async def test_pipeline_build_captures_edges(cfg) -> None:
             self.second = FakeLeaf(config=cfg, input=B, output=C)
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
-            mid = await self.first(x)
-            return await self.second(mid)
+            mid = (await self.first(x)).response
+            return (await self.second(mid)).response
 
     p = await Pipeline().abuild()
     g: AgentGraph = p._graph
@@ -61,7 +61,7 @@ async def test_build_catches_edge_input_mismatch_before_llm(cfg) -> None:
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
             await self.first(x)
-            return await self.second(x)  # type: ignore[arg-type]
+            return (await self.second(x)).response  # type: ignore[arg-type]
 
     with pytest.raises(BuildError) as exc:
         await Wrong().abuild()
@@ -80,7 +80,7 @@ async def test_build_catches_root_output_mismatch(cfg) -> None:
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
             # Returns a B but declared Out is C.
-            return await self.only(x)  # type: ignore[return-value]
+            return (await self.only(x)).response  # type: ignore[return-value]
 
     with pytest.raises(BuildError) as exc:
         await BadRoot().abuild()
@@ -98,7 +98,7 @@ async def test_build_is_idempotent_after_mutation(cfg) -> None:
             self.second = FakeLeaf(config=cfg, input=B, output=C)
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
-            return await self.second(await self.first(x))
+            return (await self.second((await self.first(x)).response)).response
 
     p = await Pipeline().abuild()
     assert p._built is True
@@ -121,7 +121,7 @@ async def test_build_marks_all_descendants_built(cfg) -> None:
             self.second = FakeLeaf(config=cfg, input=B, output=C)
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
-            return await self.second(await self.first(x))
+            return (await self.second((await self.first(x)).response)).response
 
     p = await Pipeline().abuild()
     assert p._built is True
@@ -149,8 +149,8 @@ async def test_payload_branch_raises(cfg) -> None:
 
         async def forward(self, x: A) -> B:  # type: ignore[override]
             if x.text:
-                return await self.a(x)
-            return await self.a(x)
+                return (await self.a(x)).response
+            return (await self.a(x)).response
 
     with pytest.raises(BuildError) as exc:
         await Brancher().abuild()
@@ -170,7 +170,7 @@ async def test_payload_branch_raises_in_nested_composite(cfg) -> None:
 
         async def forward(self, x: A) -> B:  # type: ignore[override]
             _ = x.text  # payload read in nested composite
-            return await self.leaf(x)
+            return (await self.leaf(x)).response
 
     class Outer(Agent):
         input = A
@@ -181,7 +181,7 @@ async def test_payload_branch_raises_in_nested_composite(cfg) -> None:
             self.inner = Inner()
 
         async def forward(self, x: A) -> B:  # type: ignore[override]
-            return await self.inner(x)
+            return (await self.inner(x)).response
 
     with pytest.raises(BuildError) as exc:
         await Outer().abuild()
@@ -209,7 +209,7 @@ async def test_init_strands_skipped_on_trace_failure(cfg, monkeypatch) -> None:
 
         async def forward(self, x: A) -> B:  # type: ignore[override]
             _ = x.text  # triggers payload_branch
-            return await self.a(x)
+            return (await self.a(x)).response
 
     with pytest.raises(BuildError):
         await Brancher().abuild()
@@ -236,7 +236,7 @@ async def test_init_strands_runs_after_successful_trace(cfg, monkeypatch) -> Non
             self.second = FakeLeaf(config=cfg, input=B, output=C)
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
-            return await self.second(await self.first(x))
+            return (await self.second((await self.first(x)).response)).response
 
     await Pipeline().abuild()
     assert set(calls) == {"Pipeline", "FakeLeaf"}
@@ -255,7 +255,7 @@ async def test_shared_child_warning(cfg) -> None:
             self.second = shared
 
         async def forward(self, x: A) -> B:  # type: ignore[override]
-            return await self.first(x)
+            return (await self.first(x)).response
 
     with pytest.warns(UserWarning, match="shared"):
         await TwoSlots().abuild()
@@ -274,7 +274,7 @@ async def test_unshared_children_emit_no_warning(cfg) -> None:
             self.second = FakeLeaf(config=cfg, input=B, output=C)
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
-            return await self.second(await self.first(x))
+            return (await self.second((await self.first(x)).response)).response
 
     with _warnings.catch_warnings():
         _warnings.simplefilter("error")

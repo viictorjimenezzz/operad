@@ -30,7 +30,7 @@ async def test_parallel_fans_out_and_combines(cfg) -> None:
     )
     await p.abuild()
     out = await p(A(text="go"))
-    assert out.payload == ["10", "20"]
+    assert out.response.payload == ["10", "20"]
 
 
 async def test_parallel_records_all_child_edges(cfg) -> None:

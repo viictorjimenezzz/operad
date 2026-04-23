@@ -79,6 +79,32 @@ class FakeLeaf(Agent[Any, Any]):
         return self.output.model_construct(**self.canned)
 
 
+@pytest.fixture
+def assert_no_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make any outbound socket or HTTP send raise.
+
+    Attach in tests that claim zero-cost replay. The fixture patches
+    both ``socket.socket.connect`` and ``httpx.AsyncClient.send`` (if
+    httpx is installed) for the duration of the test.
+    """
+    import socket
+
+    def _blocked_connect(*a: Any, **k: Any) -> None:
+        raise AssertionError("network call blocked by assert_no_network fixture")
+
+    monkeypatch.setattr(socket.socket, "connect", _blocked_connect)
+
+    try:
+        import httpx
+
+        async def _blocked_send(*a: Any, **k: Any) -> None:
+            raise AssertionError("network call blocked by assert_no_network fixture")
+
+        monkeypatch.setattr(httpx.AsyncClient, "send", _blocked_send)
+    except ImportError:
+        pass
+
+
 class BrokenOutputLeaf(Agent[Any, Any]):
     """Leaf that intentionally returns the wrong type (used in tests)."""
 

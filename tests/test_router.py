@@ -28,9 +28,9 @@ class _StubRouter(Router):
 async def test_router_emits_typed_choice() -> None:
     r = await _StubRouter(label="search").abuild()
     out = await r(RouteInput(query="find Paris"))
-    assert isinstance(out, Mode)
-    assert out.label == "search"
-    assert out.reasoning == "stub"
+    assert isinstance(out.response, Mode)
+    assert out.response.label == "search"
+    assert out.response.reasoning == "stub"
 
 
 async def test_router_default_output_is_choice_str_alias() -> None:
