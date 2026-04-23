@@ -25,6 +25,18 @@ from .conversational import (
     TurnTaker,
     Utterance,
 )
+from .memory import (
+    Belief,
+    BeliefExtractor,
+    Beliefs,
+    Conversation,
+    EpisodicSummarizer,
+    MemoryStore,
+    Summary,
+    Turn,
+    UserModel,
+    UserModelExtractor,
+)
 from .parallel import Parallel
 from .pipeline import Pipeline
 from .reasoning import (
@@ -47,10 +59,16 @@ __all__ = [
     "Action",
     "Actor",
     "Answer",
+    "Belief",
+    "BeliefExtractor",
+    "Beliefs",
     "Classifier",
+    "Conversation",
     "Critic",
+    "EpisodicSummarizer",
     "Evaluator",
     "Extractor",
+    "MemoryStore",
     "Observation",
     "Parallel",
     "Persona",
@@ -62,10 +80,14 @@ __all__ = [
     "Safeguard",
     "SafeguardVerdict",
     "StyledUtterance",
+    "Summary",
     "Talker",
     "Task",
     "Thought",
+    "Turn",
     "TurnChoice",
     "TurnTaker",
+    "UserModel",
+    "UserModelExtractor",
     "Utterance",
 ]

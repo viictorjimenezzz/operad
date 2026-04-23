@@ -11,6 +11,25 @@ class Classifier(Agent[In, Out]):
     Expects ``output`` to be a Pydantic model whose label field uses a
     constrained type (``Literal[...]``, ``Enum``), so the LLM's
     structured-output mode can only return a valid label.
+
+    A canonical few-shot::
+
+        from typing import Literal
+        from pydantic import BaseModel, Field
+        from operad import Example
+
+        class Email(BaseModel):
+            body: str = Field(description="The email body.")
+
+        class Label(BaseModel):
+            label: Literal["spam", "ham"] = Field(description="The class.")
+
+        examples = (
+            Example[Email, Label](
+                input=Email(body="Congratulations! You've won a free iPhone."),
+                output=Label(label="spam"),
+            ),
+        )
     """
 
     role = "You are a decisive classifier that assigns exactly one label."

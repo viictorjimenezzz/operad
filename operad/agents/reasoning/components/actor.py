@@ -16,6 +16,24 @@ class Actor(Agent[In, Out]):
     downstream ``Extractor`` (or real tool executor) that consumes the
     action. The output schema typically has a short action name plus
     whatever arguments the action needs.
+
+    A canonical few-shot on a ``Thought -> Action`` specialization::
+
+        from operad import Example
+        from operad.agents.reasoning.react import Thought, Action
+
+        examples = (
+            Example[Thought, Action](
+                input=Thought(
+                    reasoning="Need to look up today's exchange rate.",
+                    next_action="query a currency API",
+                ),
+                output=Action(
+                    name="fetch_rate",
+                    details="GET /rates?from=USD&to=EUR",
+                ),
+            ),
+        )
     """
 
     role = "You are a decisive actor that turns plans into concrete actions."
