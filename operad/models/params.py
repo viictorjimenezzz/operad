@@ -14,6 +14,10 @@ def openai_style_params(cfg: Configuration) -> dict[str, Any]:
     dict (temperature, max_tokens, top_p, seed, stop, ...). llama.cpp also
     accepts its own extensions (top_k, mirostat, grammar, ...), which is
     what `cfg.extra` is for.
+
+    `reasoning_tokens` is forwarded as `max_completion_tokens`, matching
+    OpenAI's reasoning-model API; non-reasoning models will error if the
+    field is set — callers should leave it unset for those.
     """
     params: dict[str, Any] = {
         "temperature": cfg.temperature,
@@ -27,8 +31,25 @@ def openai_style_params(cfg: Configuration) -> dict[str, Any]:
         params["seed"] = cfg.seed
     if cfg.stop is not None:
         params["stop"] = cfg.stop
+    if cfg.reasoning_tokens is not None:
+        params["max_completion_tokens"] = cfg.reasoning_tokens
     params.update(cfg.extra)
     return params
+
+
+def openai_client_args(cfg: Configuration) -> dict[str, Any]:
+    """Build a `client_args` dict for OpenAI-SDK-backed adapters.
+
+    Threads `timeout` and `max_retries` when set; the OpenAI Python SDK
+    accepts both as client constructor kwargs. `api_key` and `base_url`
+    are the caller's responsibility.
+    """
+    args: dict[str, Any] = {}
+    if cfg.timeout is not None:
+        args["timeout"] = cfg.timeout
+    if cfg.max_retries:
+        args["max_retries"] = cfg.max_retries
+    return args
 
 
 def http_base_url(host: str) -> str:

@@ -136,3 +136,157 @@ async def test_build_requires_input_output(cfg) -> None:
     with pytest.raises(BuildError) as exc:
         NoTypesLeaf(config=cfg)
     assert exc.value.reason == "prompt_incomplete"
+
+
+async def test_payload_branch_raises(cfg) -> None:
+    class Brancher(Agent):
+        input = A
+        output = B
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+            self.a = FakeLeaf(config=cfg, input=A, output=B)
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            if x.text:
+                return await self.a(x)
+            return await self.a(x)
+
+    with pytest.raises(BuildError) as exc:
+        await Brancher().abuild()
+    assert exc.value.reason == "payload_branch"
+    assert "text" in str(exc.value)
+    assert "Brancher" in str(exc.value)
+
+
+async def test_payload_branch_raises_in_nested_composite(cfg) -> None:
+    class Inner(Agent):
+        input = A
+        output = B
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+            self.leaf = FakeLeaf(config=cfg, input=A, output=B)
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            _ = x.text  # payload read in nested composite
+            return await self.leaf(x)
+
+    class Outer(Agent):
+        input = A
+        output = B
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+            self.inner = Inner()
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            return await self.inner(x)
+
+    with pytest.raises(BuildError) as exc:
+        await Outer().abuild()
+    assert exc.value.reason == "payload_branch"
+    assert exc.value.agent == "Outer.inner"
+
+
+async def test_init_strands_skipped_on_trace_failure(cfg, monkeypatch) -> None:
+    from operad.core import build as build_mod
+
+    calls: list[str] = []
+
+    def tracker(a: Agent) -> None:
+        calls.append(type(a).__name__)
+
+    monkeypatch.setattr(build_mod, "_init_strands", tracker)
+
+    class Brancher(Agent):
+        input = A
+        output = B
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+            self.a = FakeLeaf(config=cfg, input=A, output=B)
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            _ = x.text  # triggers payload_branch
+            return await self.a(x)
+
+    with pytest.raises(BuildError):
+        await Brancher().abuild()
+    assert calls == []
+
+
+async def test_init_strands_runs_after_successful_trace(cfg, monkeypatch) -> None:
+    from operad.core import build as build_mod
+
+    calls: list[str] = []
+
+    def tracker(a: Agent) -> None:
+        calls.append(type(a).__name__)
+
+    monkeypatch.setattr(build_mod, "_init_strands", tracker)
+
+    class Pipeline(Agent):
+        input = A
+        output = C
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=C)
+            self.first = FakeLeaf(config=cfg, input=A, output=B)
+            self.second = FakeLeaf(config=cfg, input=B, output=C)
+
+        async def forward(self, x: A) -> C:  # type: ignore[override]
+            return await self.second(await self.first(x))
+
+    await Pipeline().abuild()
+    assert set(calls) == {"Pipeline", "FakeLeaf"}
+
+
+async def test_shared_child_warning(cfg) -> None:
+    shared = FakeLeaf(config=cfg, input=A, output=B)
+
+    class TwoSlots(Agent):
+        input = A
+        output = B
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+            self.first = shared
+            self.second = shared
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            return await self.first(x)
+
+    with pytest.warns(UserWarning, match="shared"):
+        await TwoSlots().abuild()
+
+
+async def test_unshared_children_emit_no_warning(cfg) -> None:
+    import warnings as _warnings
+
+    class Pipeline(Agent):
+        input = A
+        output = C
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=C)
+            self.first = FakeLeaf(config=cfg, input=A, output=B)
+            self.second = FakeLeaf(config=cfg, input=B, output=C)
+
+        async def forward(self, x: A) -> C:  # type: ignore[override]
+            return await self.second(await self.first(x))
+
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("error")
+        await Pipeline().abuild()
+
+
+async def test_sentinel_is_instance_of_input() -> None:
+    from operad.core.build import _PayloadBranchAccess, _make_sentinel
+
+    sentinel = _make_sentinel(A)
+    assert isinstance(sentinel, A)
+    with pytest.raises(_PayloadBranchAccess) as exc:
+        _ = sentinel.text
+    assert exc.value.cls_name == "A"
+    assert exc.value.field_name == "text"
