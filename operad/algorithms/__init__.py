@@ -2,13 +2,32 @@
 
 Unlike `agents/`, nothing in this package inherits from `Agent`.
 Algorithms have their own API (``run(...)``) whose signature reflects
-what the algorithm does. An ``Evolutionary.run(template) -> Agent``
+what the algorithm does. An ``Evolutionary.run() -> Agent``
 simply doesn't fit the ``Agent[In, Out]`` mold.
 """
 
 from __future__ import annotations
 
 from .best_of_n import BestOfN
+from .debate import Critique, Debate, DebateRecord, DebateTurn, Proposal
+from .evolutionary import Evolutionary
 from .judge import Candidate, Score
+from .self_refine import Reflection, ReflectionInput, RefinementInput, SelfRefine
+from .verifier_loop import VerifierLoop
 
-__all__ = ["BestOfN", "Candidate", "Score"]
+__all__ = [
+    "BestOfN",
+    "Candidate",
+    "Critique",
+    "Debate",
+    "DebateRecord",
+    "DebateTurn",
+    "Evolutionary",
+    "Proposal",
+    "Reflection",
+    "ReflectionInput",
+    "RefinementInput",
+    "Score",
+    "SelfRefine",
+    "VerifierLoop",
+]
