@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class AgentEvent:
     run_id: str
     agent_path: str
-    kind: Literal["start", "end", "error"]
+    kind: Literal["start", "end", "error", "chunk"]
     input: BaseModel | None
     output: BaseModel | None
     error: BaseException | None

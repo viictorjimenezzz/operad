@@ -188,6 +188,33 @@ One narrative example per major abstraction, in `examples/`:
 All network-requiring examples read `OPERAD_LLAMACPP_HOST` /
 `OPERAD_LLAMACPP_MODEL`; `mermaid_export.py` runs without a model.
 
+## Streaming
+
+Set `Configuration(stream=True)` to consume token-level chunks from the
+backend as they arrive. `agent.stream(x)` is an async iterator that
+yields `ChunkEvent`s for each mid-run piece and terminates with the
+same `OperadOutput[Out]` envelope you get from `await agent(x)`:
+
+```python
+from operad import Configuration, ChunkEvent, OperadOutput
+
+cfg = Configuration(backend="llamacpp", host="127.0.0.1:8080",
+                    model="qwen2.5-7b-instruct", stream=True)
+leaf = await MyLeaf(config=cfg).abuild()
+
+async for item in leaf.stream(MyIn(question="...")):
+    if isinstance(item, ChunkEvent):
+        print(item.text, end="", flush=True)
+    else:
+        final: OperadOutput = item
+```
+
+`await agent(x)` still returns a single `OperadOutput` when
+`stream=True` — it consumes the stream internally and returns the
+envelope. Observers receive a new `"chunk"` event kind for each piece;
+`RichDashboardObserver` updates the agent's line in place. Backends
+that do not support streaming fall back to a single-envelope yield.
+
 ## Tests
 
 ```bash
