@@ -71,7 +71,7 @@ async def _main() -> None:
     )
     await root.abuild()
     report = await root(Go())
-    for name, answer in report.answers.items():
+    for name, answer in report.response.answers.items():
         print(f"\n{name}\n{'-' * 40}\n{answer}\n")
 
 

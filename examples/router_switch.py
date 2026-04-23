@@ -82,7 +82,7 @@ async def _main() -> None:
 
     for query in ("Hello there!", "What is the capital of France?"):
         reply = await root(RouteInput(query=query))
-        print(f"\n> {query}\n{reply.text}")
+        print(f"\n> {query}\n{reply.response.text}")
 
 
 if __name__ == "__main__":

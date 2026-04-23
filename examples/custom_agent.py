@@ -67,7 +67,7 @@ async def _main() -> None:
     agent = Punster(config=_cfg())
     await agent.abuild()
     result = await agent(Joke(topic="databases"))
-    print(result.model_dump_json(indent=2))
+    print(result.response.model_dump_json(indent=2))
 
 
 if __name__ == "__main__":

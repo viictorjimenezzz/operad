@@ -27,10 +27,18 @@ root = Parallel(
 
 async def main():
     await root.abuild()
-    print(await root(Q(text="Write something about concurrency.")))
+    out = await root(Q(text="Write something about concurrency."))
+    print(out.response)  # the typed Out
+    print(out.run_id, out.hash_input, out.latency_ms)  # reproducibility + timing
 
 asyncio.run(main())
 ```
+
+Every invocation returns an `OperadOutput[Out]`: `out.response` is the
+user's typed payload, and the envelope carries `run_id`, `agent_path`,
+`latency_ms`, optional `prompt_tokens` / `completion_tokens`, plus a
+stable `hash_*` fingerprint (model, prompt, graph, input, schema) for
+reproducibility.
 
 That's the whole program. `build()` walks the tree, resolves the model
 backend, checks every typed edge, and returns a computation graph you

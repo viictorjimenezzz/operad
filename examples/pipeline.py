@@ -58,7 +58,7 @@ async def _main() -> None:
     )
     await pipeline.abuild()
     result = await pipeline(Request(text="I want to learn Rust in a month on a budget."))
-    print(result.model_dump_json(indent=2))
+    print(result.response.model_dump_json(indent=2))
 
 
 if __name__ == "__main__":
