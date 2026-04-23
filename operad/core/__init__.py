@@ -10,15 +10,18 @@ from __future__ import annotations
 from .agent import Agent, Example, In, Out
 from .build import AgentGraph, Edge, Node, abuild_agent, build_agent
 from .config import Backend, Configuration
+from .diff import AgentDiff, Change
 from .graph import from_json, to_json, to_mermaid
 from .output import OperadOutput
 from .state import AgentState
 
 __all__ = [
     "Agent",
+    "AgentDiff",
     "AgentGraph",
     "AgentState",
     "Backend",
+    "Change",
     "Configuration",
     "Edge",
     "Example",

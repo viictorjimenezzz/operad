@@ -12,11 +12,13 @@ instance attributes carry the live values, freely mutable before
 from __future__ import annotations
 
 import copy
+import html as _html
+import sys
 import time
 import uuid
 from collections.abc import Sequence
 from contextvars import ContextVar
-from typing import Any, ClassVar, Generic, Self, TYPE_CHECKING, TypeVar
+from typing import Any, ClassVar, Generic, Self, TextIO, TYPE_CHECKING, TypeVar
 
 import strands
 from pydantic import BaseModel, ConfigDict
@@ -24,6 +26,7 @@ from pydantic import BaseModel, ConfigDict
 from ..runtime import acquire as _acquire_slot
 from ..utils.errors import BuildError
 from .config import Configuration
+from .diff import AgentDiff, diff_states
 from .output import (
     OPERAD_VERSION_HASH,
     PYTHON_VERSION_HASH,
@@ -287,6 +290,68 @@ class Agent(strands.Agent, Generic[In, Out]):
         """
         return render.render_input(x)
 
+    # --- introspection ------------------------------------------------------
+    def operad(self, *, file: TextIO | None = None) -> None:
+        """Print every default-forward leaf's rendered system prompt.
+
+        Walks the agent tree and prints, for each leaf that delegates to
+        the default `Agent.forward`, the full system message produced by
+        `format_system_message()` — role, task, rules, examples, and
+        output schema. Composites and custom-forward leaves are skipped:
+        neither surfaces a prompt the model will see.
+
+        Zero tokens are generated; no observer events are emitted. Use
+        as a sanity check before `abuild()` and before any billable call.
+        """
+        out = sys.stdout if file is None else file
+        rendered = self.operad_dump()
+        if not rendered:
+            print("(no default-forward leaves)", file=out)
+            return
+        for i, (path, prompt) in enumerate(rendered.items()):
+            if i > 0:
+                print("", file=out)
+            print(f"=== {path} ===", file=out)
+            print(prompt, file=out)
+
+    def operad_dump(self) -> dict[str, str]:
+        """Return `{qualified_path: rendered_system_prompt}` for every leaf.
+
+        Machine-readable sibling of `operad()`. Same skip rules: only
+        default-forward leaves appear.
+        """
+        result: dict[str, str] = {}
+        for path, node in _labelled_tree(self):
+            if node._children:
+                continue
+            if type(node).forward is not Agent.forward:
+                continue
+            result[path] = node.format_system_message()
+        return result
+
+    def diff(self, other: "Agent[Any, Any]") -> AgentDiff:
+        """Compare another agent to this one; `self` is the reference ("before").
+
+        Returns an `AgentDiff` covering role/task (string-level),
+        rules (line-level), examples (list add/remove), config
+        (field-level), and structural changes (child added / removed).
+        Neither agent is mutated; the comparison runs over `state()`
+        snapshots.
+        """
+        return diff_states(self.state(), other.state())
+
+    def _repr_html_(self) -> str:
+        """Rich HTML rendering for Jupyter / marimo / VS Code notebooks.
+
+        Delegates to `AgentGraph._repr_html_` when the agent has been
+        built; otherwise falls back to an escaped `<pre>` summary. Plain
+        text environments continue to use `__repr__`.
+        """
+        graph = self.__dict__.get("_graph")
+        if self._built and graph is not None and hasattr(graph, "_repr_html_"):
+            return graph._repr_html_()  # type: ignore[no-any-return]
+        return f"<pre>{_html.escape(repr(self))}</pre>"
+
     # --- default leaf forward ------------------------------------------------
     async def forward(self, x: In) -> Out:
         """Default leaf behavior: single Strands call with structured output.
@@ -471,3 +536,28 @@ def _compute_graph_hash(agent: "Agent[Any, Any]") -> str:
     from .graph import to_json as _graph_to_json
 
     return hash_json(_graph_to_json(graph))
+
+
+def _labelled_tree(
+    root: "Agent[Any, Any]",
+) -> list[tuple[str, "Agent[Any, Any]"]]:
+    """Yield `(qualified_path, agent)` for `root` and every descendant.
+
+    Breadth-first with `id()` de-duplication, matching the walk pattern in
+    `operad.core.build._tree`. The root's path is its class name; each
+    descendant's path appends the attribute it was attached under.
+    """
+    root_name = type(root).__name__
+    out: list[tuple[str, "Agent[Any, Any]"]] = [(root_name, root)]
+    seen: set[int] = {id(root)}
+    queue: list[tuple[str, "Agent[Any, Any]"]] = [(root_name, root)]
+    while queue:
+        parent_path, parent = queue.pop(0)
+        for attr, child in parent._children.items():
+            if id(child) in seen:
+                continue
+            seen.add(id(child))
+            child_path = f"{parent_path}.{attr}"
+            out.append((child_path, child))
+            queue.append((child_path, child))
+    return out

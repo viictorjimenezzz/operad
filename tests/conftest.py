@@ -7,7 +7,9 @@ so no network or provider credentials are required.
 
 from __future__ import annotations
 
-from typing import Any
+import os
+from pathlib import Path
+from typing import Any, Iterator
 
 import pytest
 from pydantic import BaseModel
@@ -51,6 +53,28 @@ def cfg() -> Configuration:
         temperature=0.0,
         max_tokens=16,
     )
+
+
+@pytest.fixture
+def cassette(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Record/replay LLM calls for this test via a JSONL cassette.
+
+    Default mode is ``replay`` (missing keys raise ``CassetteMiss``).
+    Set ``OPERAD_CASSETTE=record`` against a real backend to refresh the
+    file at ``<testfile_dir>/cassettes/<test_name>.jsonl``.
+    """
+    from operad.testing.cassette import cassette_context
+
+    mode = os.environ.get("OPERAD_CASSETTE", "replay")
+    if mode not in ("record", "replay"):
+        raise ValueError(
+            f"OPERAD_CASSETTE must be 'record' or 'replay', got {mode!r}"
+        )
+    path = (
+        Path(request.fspath).parent / "cassettes" / f"{request.node.name}.jsonl"
+    )
+    with cassette_context(path, mode=mode):  # type: ignore[arg-type]
+        yield
 
 
 # --- Helpers ---------------------------------------------------------------
