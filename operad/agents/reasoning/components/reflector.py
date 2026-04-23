@@ -56,6 +56,7 @@ class Reflector(Agent[ReflectionInput, Reflection]):
             ),
         ),
     )
+    default_sampling = {"temperature": 0.3}
 
 
 __all__ = ["Reflection", "ReflectionInput", "Reflector"]
