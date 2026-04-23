@@ -14,6 +14,17 @@ without users having to know the exact domain path.
 
 from __future__ import annotations
 
+from .conversational import (
+    Persona,
+    RefusalLeaf,
+    Safeguard,
+    SafeguardVerdict,
+    StyledUtterance,
+    Talker,
+    TurnChoice,
+    TurnTaker,
+    Utterance,
+)
 from .memory import (
     Belief,
     BeliefExtractor,
@@ -78,19 +89,25 @@ __all__ = [
     "MemoryStore",
     "Observation",
     "Parallel",
+    "Persona",
     "Pipeline",
     "Planner",
     "Query",
     "ReAct",
     "Reasoner",
+    "RefusalLeaf",
     "Reflection",
     "ReflectionInput",
     "Reflector",
     "Retriever",
     "RouteInput",
     "Router",
+    "Safeguard",
+    "SafeguardVerdict",
+    "StyledUtterance",
     "Summary",
     "Switch",
+    "Talker",
     "Task",
     "Thought",
     "Tool",
@@ -98,6 +115,9 @@ __all__ = [
     "ToolResult",
     "ToolUser",
     "Turn",
+    "TurnChoice",
+    "TurnTaker",
     "UserModel",
     "UserModelExtractor",
+    "Utterance",
 ]
