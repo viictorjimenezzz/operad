@@ -37,12 +37,22 @@ from .core import (
 from .metrics import ExactMatch, JsonValid, Latency, Metric
 from .models import resolve_model
 from .runtime import SlotRegistry, set_limit
+from .runtime.observers import (
+    AgentEvent,
+    JsonlObserver,
+    Observer,
+    ObserverRegistry,
+    OtelObserver,
+    RichDashboardObserver,
+    registry as observers,
+)
 from .utils.errors import BuildError, BuildReason
 
 __all__ = [
     "Action",
     "Actor",
     "Agent",
+    "AgentEvent",
     "AgentGraph",
     "AgentState",
     "Answer",
@@ -60,21 +70,27 @@ __all__ = [
     "Example",
     "Extractor",
     "JsonValid",
+    "JsonlObserver",
     "Latency",
     "Metric",
     "Node",
     "Observation",
+    "Observer",
+    "ObserverRegistry",
+    "OtelObserver",
     "Parallel",
     "Pipeline",
     "Planner",
     "ReAct",
     "Reasoner",
+    "RichDashboardObserver",
     "Score",
     "SlotRegistry",
     "Task",
     "Thought",
     "abuild_agent",
     "build_agent",
+    "observers",
     "resolve_model",
     "set_limit",
     "to_json",
