@@ -11,10 +11,12 @@ from .agent import Agent, Example, In, Out
 from .build import AgentGraph, Edge, Node, abuild_agent, build_agent
 from .config import Backend, Configuration
 from .graph import to_json, to_mermaid
+from .state import AgentState
 
 __all__ = [
     "Agent",
     "AgentGraph",
+    "AgentState",
     "Backend",
     "Configuration",
     "Edge",

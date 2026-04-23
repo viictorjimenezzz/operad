@@ -23,6 +23,7 @@ from .algorithms import BestOfN, Candidate, Score
 from .core import (
     Agent,
     AgentGraph,
+    AgentState,
     Backend,
     Configuration,
     Edge,
@@ -43,6 +44,7 @@ __all__ = [
     "Actor",
     "Agent",
     "AgentGraph",
+    "AgentState",
     "Answer",
     "Backend",
     "BestOfN",
