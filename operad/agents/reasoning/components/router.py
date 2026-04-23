@@ -23,31 +23,8 @@ string, so ``Switch`` can reason about exhaustiveness at compose time.
 
 from __future__ import annotations
 
-from typing import Generic, TypeVar
-
-from pydantic import BaseModel, ConfigDict, Field
-
 from ....core.agent import Agent, Example
-
-
-T = TypeVar("T")
-
-
-class Choice(BaseModel, Generic[T]):
-    """A typed routing decision.
-
-    ``label`` is the chosen key; subclasses should narrow it with a
-    ``Literal[...]`` parameter. ``reasoning`` is a short rationale.
-    """
-
-    label: T = Field(description="The chosen label from the allowed set.")
-    reasoning: str = Field(default="", description="Short rationale for the choice.")
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-
-class RouteInput(BaseModel):
-    query: str = Field(description="The input to route.")
+from ..schemas import Choice, RouteInput
 
 
 class Router(Agent[RouteInput, Choice[str]]):

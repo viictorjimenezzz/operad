@@ -8,28 +8,8 @@ flags specific deficiencies and proposes a revision.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
-
 from ....core.agent import Agent, Example
-
-
-class ReflectionInput(BaseModel):
-    original_request: str = Field(description="The user's original ask.")
-    candidate_answer: str = Field(description="The prior answer to review.")
-
-
-class Reflection(BaseModel):
-    needs_revision: bool = Field(
-        description="True iff the candidate answer should be revised.",
-    )
-    deficiencies: list[str] = Field(
-        default_factory=list,
-        description="Specific, concrete flaws in the candidate answer.",
-    )
-    suggested_revision: str = Field(
-        default="",
-        description="Revised answer; empty when needs_revision is False.",
-    )
+from ..schemas import Reflection, ReflectionInput
 
 
 class Reflector(Agent[ReflectionInput, Reflection]):

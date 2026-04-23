@@ -16,7 +16,7 @@ from typing import Any, Generic
 
 from pydantic import BaseModel, Field
 
-from ..agents.reasoning.components.reflector import Reflection, ReflectionInput
+from ..agents.reasoning.schemas import Reflection, ReflectionInput
 from ..core.agent import Agent, In, Out
 
 

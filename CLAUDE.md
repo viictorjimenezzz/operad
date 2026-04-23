@@ -30,6 +30,7 @@ examples/            narrative examples, one per abstraction
 - **Components declare their contract as class attributes** (`input`,
   `output`, `role`, `task`, `rules`, `examples`). Instances override via
   constructor kwargs only — no wrapper object, no hidden state.
+- **Each `agents/<domain>/` uses `schemas.py` for shared types.**
 - **Composites are pure routers.** `forward` on a composite routes
   between children; it never inspects payload *values*.
 - **`build()` before invoke.** Leaves need `config`; composites do not.

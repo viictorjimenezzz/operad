@@ -20,7 +20,7 @@ class Actor(Agent[In, Out]):
     A canonical few-shot on a ``Thought -> Action`` specialization::
 
         from operad import Example
-        from operad.agents.reasoning.react import Thought, Action
+        from operad.agents.reasoning.schemas import Thought, Action
 
         examples = (
             Example[Thought, Action](

@@ -1,58 +1,32 @@
-"""Typed edges for the coding domain."""
+"""Deprecated alias for :mod:`operad.agents.coding.schemas`.
+
+Importing from this module emits a :class:`DeprecationWarning` and
+re-exports the canonical schemas. Remove in a future release.
+"""
 
 from __future__ import annotations
 
-from typing import Literal
+import warnings
 
-from pydantic import BaseModel, Field
+warnings.warn(
+    "operad.agents.coding.types is renamed to operad.agents.coding.schemas; "
+    "the old name will be removed in a future release",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
+from .schemas import (  # noqa: E402,F401
+    DiffChunk,
+    PRDiff,
+    PRSummary,
+    ReviewComment,
+    ReviewReport,
+)
 
-class DiffChunk(BaseModel):
-    """A single diff hunk with optional surrounding context."""
-
-    path: str = Field(default="", description="Repository-relative file path.")
-    old: str = Field(default="", description="The pre-change hunk body.")
-    new: str = Field(default="", description="The post-change hunk body.")
-    context: str = Field(
-        default="", description="Surrounding code (populated by ContextOptimizer)."
-    )
-
-
-class PRDiff(BaseModel):
-    """A pull request's full set of diff hunks."""
-
-    chunks: list[DiffChunk] = Field(
-        default_factory=list, description="All diff hunks in the pull request."
-    )
-
-
-class PRSummary(BaseModel):
-    """At-a-glance summary of a pull request diff."""
-
-    headline: str = Field(
-        default="", description="One-line PR headline, under 70 characters."
-    )
-    changes: list[str] = Field(
-        default_factory=list,
-        description="Bulleted logical changes; one entry per idea, not per file.",
-    )
-
-
-class ReviewComment(BaseModel):
-    """One localized review comment."""
-
-    path: str = Field(default="", description="File path the comment is about.")
-    line: int = Field(
-        default=0, description="1-based line number in the post-change file."
-    )
-    severity: Literal["info", "warning", "error"] = Field(
-        default="info", description="Severity tier for the comment."
-    )
-    comment: str = Field(default="", description="Human-readable review note.")
-
-
-class ReviewReport(BaseModel):
-    """Aggregated output of a code review over a whole PR."""
-
-    comments: list[ReviewComment] = Field(default_factory=list)
-    summary: str = Field(default="", description="Short narrative summary.")
+__all__ = [
+    "DiffChunk",
+    "PRDiff",
+    "PRSummary",
+    "ReviewComment",
+    "ReviewReport",
+]
