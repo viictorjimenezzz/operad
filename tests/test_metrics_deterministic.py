@@ -44,3 +44,21 @@ async def test_metric_protocol_is_runtime_checkable() -> None:
     assert isinstance(ExactMatch(), Metric)
     assert isinstance(JsonValid(), Metric)
     assert isinstance(Latency(), Metric)
+
+
+async def test_latency_score_zero_before_measure() -> None:
+    m = Latency()
+    assert await m.score(A(), A()) == 0.0
+
+
+async def test_latency_score_is_useful_after_measure() -> None:
+    m = Latency()
+
+    async def sleeper() -> None:
+        await asyncio.sleep(0.01)
+
+    await m.measure(sleeper)
+    s = await m.score(A(), A())
+    assert 0.0 < s <= 1.0
+    # Latest measurement is ~0.01s → 1 / 1.01 ≈ 0.99
+    assert s > 0.9

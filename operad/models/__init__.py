@@ -5,6 +5,22 @@ public entry point is `resolve_model(cfg)`, which dispatches on
 `cfg.backend`. Each adapter is responsible for threading *all* relevant
 `Configuration` fields into that backend's native constructor (no silent
 drops of temperature, seed, stop, etc.).
+
+Per-backend handling of `Configuration` knobs:
+
+| Backend   | `extra` destination                      | reasoning_tokens        | timeout | max_retries |
+| --------- | ---------------------------------------- | ----------------------- | ------- | ----------- |
+| llamacpp  | splatted into `params` dict              | max_completion_tokens   | —       | —           |
+| lmstudio  | splatted into `params` dict              | max_completion_tokens   | ✓       | ✓           |
+| ollama    | wrapped as `options` dict                | —                       | —       | —           |
+| openai    | splatted into `params` dict              | max_completion_tokens   | ✓       | ✓           |
+| bedrock   | splatted as top-level BedrockModel kwargs | —                      | —       | —           |
+
+- `extra` semantics match what each backend's native SDK accepts.
+- `top_k` and `seed` on bedrock are threaded via `additional_request_fields`;
+  other backends put them in their params / kwargs directly.
+- `backoff_base` is not consumed by any adapter; it is reserved for
+  observer-driven retry logic in `operad.runtime`.
 """
 
 from __future__ import annotations

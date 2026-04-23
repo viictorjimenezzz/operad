@@ -17,17 +17,51 @@
 from __future__ import annotations
 
 import asyncio
+import warnings
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import strands
+from pydantic import BaseModel
 
 from ..models import resolve_model
 from ..utils.errors import BuildError
 from .agent import Agent, _TRACER
 
 NodeKind = Literal["leaf", "composite"]
+
+
+class _PayloadBranchAccess(Exception):
+    """Internal signal — raised when a composite's `forward` reads a sentinel
+    field during trace. Converted to `BuildError("payload_branch", ...)` at
+    the nearest forward-call boundary.
+    """
+
+    def __init__(self, cls_name: str, field_name: str) -> None:
+        self.cls_name = cls_name
+        self.field_name = field_name
+
+
+def _make_sentinel(cls: type[BaseModel]) -> BaseModel:
+    """Return a trace-time sentinel of `cls` that raises on field reads.
+
+    The sentinel is an instance of a dynamic subclass of `cls`, so
+    `isinstance(sentinel, cls)` still holds. Reads of any declared model
+    field raise `_PayloadBranchAccess`; dunder and pydantic-internal
+    attribute access pass through.
+    """
+    field_names = frozenset(cls.model_fields)
+
+    class _Sentinel(cls):  # type: ignore[misc, valid-type]
+        def __getattribute__(self, name: str) -> Any:
+            if name in field_names:
+                raise _PayloadBranchAccess(cls.__name__, name)
+            return object.__getattribute__(self, name)
+
+    _Sentinel.__name__ = f"_Sentinel[{cls.__name__}]"
+    _Sentinel.__qualname__ = _Sentinel.__name__
+    return _Sentinel.model_construct()
 
 
 @dataclass
@@ -128,8 +162,18 @@ class Tracer:
         if child._children:
             self._stack.append((child, callee))
             try:
-                sentinel = child.input.model_construct()
-                out = await child.forward(sentinel)
+                sentinel = _make_sentinel(child.input)
+                try:
+                    out = await child.forward(sentinel)
+                except _PayloadBranchAccess as exc:
+                    raise BuildError(
+                        "payload_branch",
+                        f"composite {type(child).__name__}.forward read "
+                        f"{exc.cls_name}.{exc.field_name!r} during trace; "
+                        "route on a child's typed output (e.g. Switch over a "
+                        "Literal choice) instead of the payload value",
+                        agent=callee,
+                    ) from exc
                 if not isinstance(out, child.output):
                     raise BuildError(
                         "output_mismatch",
@@ -217,9 +261,50 @@ def _init_strands(a: Agent[Any, Any]) -> None:
         ) from e
 
 
+def _warn_shared_children(root: Agent[Any, Any]) -> None:
+    """Emit a warning for any agent instance that appears under more than
+    one parent attribute. Sharing is legal but hides mutation-coupling,
+    so surface it.
+    """
+    parents_by_id: dict[int, list[str]] = {}
+    queue: list[tuple[Agent[Any, Any], str]] = [(root, type(root).__name__)]
+    visited: set[int] = {id(root)}
+    while queue:
+        parent, parent_path = queue.pop(0)
+        for attr, child in parent._children.items():
+            path = f"{parent_path}.{attr}"
+            parents_by_id.setdefault(id(child), []).append(path)
+            if id(child) not in visited:
+                visited.add(id(child))
+                queue.append((child, path))
+    for parents in parents_by_id.values():
+        if len(parents) > 1:
+            warnings.warn(
+                f"child agent is shared across paths: {', '.join(parents)}; "
+                "mutation on the shared instance affects every occurrence",
+                stacklevel=3,
+            )
+
+
 async def _trace(root: Agent[Any, Any], tracer: Tracer) -> Any:
     token = _TRACER.set(tracer)
     try:
+        # Only composites get the payload-branch guard: they are supposed
+        # to route on structure, not values. Custom-forward leaves are
+        # pure computations and legitimately read input fields.
+        if root._children:
+            sentinel = _make_sentinel(root.input)  # type: ignore[arg-type]
+            try:
+                return await root.forward(sentinel)
+            except _PayloadBranchAccess as exc:
+                raise BuildError(
+                    "payload_branch",
+                    f"composite {type(root).__name__}.forward read "
+                    f"{exc.cls_name}.{exc.field_name!r} during trace; "
+                    "route on a child's typed output (e.g. Switch over a "
+                    "Literal choice) instead of the payload value",
+                    agent=type(root).__name__,
+                ) from exc
         sentinel = root.input.model_construct()  # type: ignore[union-attr]
         return await root.forward(sentinel)
     finally:
@@ -227,29 +312,40 @@ async def _trace(root: Agent[Any, Any], tracer: Tracer) -> Any:
 
 
 async def abuild_agent(root: Agent[Any, Any]) -> Agent[Any, Any]:
-    """Compile an agent architecture (async entry point)."""
+    """Compile an agent architecture (async entry point).
+
+    Passes run in order: validate → warn-on-shared-children → trace
+    (composite roots only) → init-strands. Running `_init_strands` last
+    means a failed trace leaves no leaf with stale strands state.
+    """
     for a in _tree(root):
         _validate(a)
-    for a in _tree(root):
-        _init_strands(a)
+    _warn_shared_children(root)
 
     tracer = Tracer(root)
-    try:
-        out = await _trace(root, tracer)
-    except BuildError:
-        raise
-    except Exception as e:
-        raise BuildError(
-            "trace_failed", str(e), agent=type(root).__name__
-        ) from e
+    # Trace unless the root is a default-forward leaf — those need strands
+    # to be initialised before their forward can run, and since they have
+    # no children there is no graph to record anyway.
+    if root._children or not _is_default_forward(root):
+        try:
+            out = await _trace(root, tracer)
+        except BuildError:
+            raise
+        except Exception as e:
+            raise BuildError(
+                "trace_failed", str(e), agent=type(root).__name__
+            ) from e
 
-    if not isinstance(out, root.output):  # type: ignore[arg-type]
-        raise BuildError(
-            "output_mismatch",
-            f"{type(root).__name__}.forward returned {type(out).__name__}, "
-            f"expected {root.output.__name__}",  # type: ignore[union-attr]
-            agent=type(root).__name__,
-        )
+        if not isinstance(out, root.output):  # type: ignore[arg-type]
+            raise BuildError(
+                "output_mismatch",
+                f"{type(root).__name__}.forward returned {type(out).__name__}, "
+                f"expected {root.output.__name__}",  # type: ignore[union-attr]
+                agent=type(root).__name__,
+            )
+
+    for a in _tree(root):
+        _init_strands(a)
 
     object.__setattr__(root, "_graph", tracer.graph)
     object.__setattr__(root, "_built", True)

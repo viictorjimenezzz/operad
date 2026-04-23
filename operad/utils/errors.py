@@ -14,6 +14,7 @@ BuildReason = Literal[
     "input_mismatch",
     "output_mismatch",
     "trace_failed",
+    "payload_branch",
 ]
 
 

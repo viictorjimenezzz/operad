@@ -47,10 +47,14 @@ class JsonValid:
 class Latency:
     """Wall-clock time (seconds) of a callable, returned as a *negative* score.
 
-    Metrics are "higher is better" by convention, so latency is negated so
-    the fastest run wins. Call `await Latency().measure(fn, *args)` to get
-    a score; `score(...)` is also provided for protocol conformance but
-    returns 0.0 (there's nothing to measure after the fact).
+    Metrics are "higher is better" by convention. Call
+    `await Latency().measure(fn, *args)` to record an elapsed time; it
+    returns `-elapsed` so the fastest run wins on the raw scale.
+
+    `score()` reports a normalised `1 / (1 + latest_measurement)` in
+    `(0.0, 1.0]` based on the most recent `measure()`; returns `0.0`
+    when nothing has been measured yet. Pair the two: `measure` captures,
+    `score` summarises.
     """
 
     name: str = "latency"
@@ -70,4 +74,6 @@ class Latency:
 
     async def score(self, predicted: BaseModel, expected: BaseModel) -> float:
         del predicted, expected
-        return 0.0
+        if not self._measurements:
+            return 0.0
+        return 1.0 / (1.0 + self._measurements[-1])

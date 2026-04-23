@@ -25,6 +25,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from ...core.agent import Agent
+from ...core.config import Configuration
 from .components import Actor, Evaluator, Extractor, Reasoner
 
 
@@ -86,7 +87,7 @@ class ReAct(Agent[Task, Answer]):
     input = Task
     output = Answer
 
-    def __init__(self, *, config) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, *, config: Configuration) -> None:
         super().__init__(config=None, input=Task, output=Answer)
 
         self.reasoner: Reasoner[Task, Thought] = Reasoner(

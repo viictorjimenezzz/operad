@@ -22,5 +22,14 @@ def build(cfg: Configuration) -> "BedrockModel":
         kwargs["top_p"] = cfg.top_p
     if cfg.stop is not None:
         kwargs["stop_sequences"] = cfg.stop
+
+    additional: dict[str, Any] = {}
+    if cfg.top_k is not None:
+        additional["top_k"] = cfg.top_k
+    if cfg.seed is not None:
+        additional["seed"] = cfg.seed
+    if additional:
+        kwargs["additional_request_fields"] = additional
+
     kwargs.update(cfg.extra)
     return BedrockModel(**kwargs)
