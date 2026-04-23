@@ -54,7 +54,7 @@ async def test_leaf_emits_start_then_end(cfg) -> None:
     assert col.events[0].agent_path == "FakeLeaf"
     assert col.events[1].agent_path == "FakeLeaf"
     assert col.events[0].input.text == "hi"
-    assert col.events[1].output.value == 7
+    assert col.events[1].output.response.value == 7
     assert col.events[0].run_id == col.events[1].run_id
     assert col.events[1].finished_at is not None
 
@@ -132,7 +132,7 @@ async def test_jsonl_observer_round_trip(tmp_path: Path, cfg) -> None:
     assert [r["kind"] for r in records] == ["start", "end"]
     assert records[0]["run_id"] == records[1]["run_id"]
     assert records[0]["input"] == {"text": "abc"}
-    assert records[1]["output"] == {"value": 3}
+    assert records[1]["output"]["response"] == {"value": 3}
     assert records[0]["agent_path"] == "FakeLeaf"
 
 

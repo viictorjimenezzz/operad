@@ -2,7 +2,10 @@
 
     uv run python examples/observer_demo.py
 
-Writes `/tmp/operad_observer_demo.jsonl` and prints it back.
+Writes `/tmp/operad_observer_demo.jsonl`, prints it back, and also
+snapshots the run via `TraceObserver` to show the reproducibility
+artefact. Note: `Agent.invoke` returns an `OperadOutput[Out]` envelope;
+the typed payload is at `.response`.
 """
 
 from __future__ import annotations
@@ -13,7 +16,14 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from operad import Agent, Configuration, JsonlObserver, Pipeline, observers
+from operad import (
+    Agent,
+    Configuration,
+    JsonlObserver,
+    Pipeline,
+    TraceObserver,
+    observers,
+)
 
 
 class Question(BaseModel):
@@ -59,7 +69,9 @@ async def _main() -> None:
     if log_path.exists():
         log_path.unlink()
     jo = JsonlObserver(log_path)
+    tracer = TraceObserver()
     observers.register(jo)
+    observers.register(tracer)
 
     try:
         out = await pipe(Question(text="how do observers work?"))
@@ -67,9 +79,14 @@ async def _main() -> None:
     finally:
         jo.close()
         observers.unregister(jo)
+        observers.unregister(tracer)
 
     print(f"--- {log_path} ---")
     print(log_path.read_text())
+
+    trace = tracer.last()
+    if trace is not None:
+        print(f"--- trace: {len(trace.steps)} steps, run_id={trace.run_id} ---")
 
 
 if __name__ == "__main__":

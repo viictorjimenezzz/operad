@@ -40,8 +40,8 @@ class Parallel(Agent[In, Out]):
         self._combine = combine
 
     async def forward(self, x: In) -> Out:  # type: ignore[override]
-        envelopes = await asyncio.gather(
+        wrapped = await asyncio.gather(
             *(getattr(self, key)(x) for key in self._keys)
         )
-        results = [env.response for env in envelopes]
+        results = [w.response for w in wrapped]
         return self._combine(dict(zip(self._keys, results, strict=True)))

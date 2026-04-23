@@ -86,17 +86,17 @@ class Debate(Generic[In, Out]):
         self.rounds = rounds
 
     async def run(self, x: In) -> Out:
-        envelopes = await asyncio.gather(*(p(x) for p in self.proposers))
-        proposals: list[Proposal] = [e.response for e in envelopes]
+        raw_proposals = await asyncio.gather(*(p(x) for p in self.proposers))
+        proposals: list[Proposal] = [r.response for r in raw_proposals]
         record: DebateRecord[In] = DebateRecord(
             request=x, proposals=proposals, critiques=[]
         )
         for _ in range(self.rounds):
-            critique_envelopes = await asyncio.gather(
+            raw_critiques = await asyncio.gather(
                 *(
                     self.critic(DebateTurn(record=record, focus=p))
                     for p in proposals
                 )
             )
-            record.critiques.extend(e.response for e in critique_envelopes)
+            record.critiques.extend(r.response for r in raw_critiques)
         return (await self.synthesizer(record)).response

@@ -100,13 +100,13 @@ class Sweep(Generic[In, Out]):
         await asyncio.gather(*(a.abuild() for a in agents))
 
         sem = asyncio.Semaphore(self.concurrency)
-        envelopes = await asyncio.gather(
+        outputs = await asyncio.gather(
             *(_bounded(sem, a(x)) for a in agents)
         )
 
         cells = [
-            SweepCell[In, Out](parameters=combo, output=env.response)
-            for combo, env in zip(combos, envelopes)
+            SweepCell[In, Out](parameters=combo, output=out.response)
+            for combo, out in zip(combos, outputs)
         ]
         return SweepReport[In, Out](cells=cells)
 

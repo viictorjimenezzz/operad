@@ -103,7 +103,7 @@ async def test_pr_reviewer_mermaid_contains_stage_paths(cfg) -> None:
 
 async def test_pr_reviewer_routes_through_stubs_end_to_end(cfg) -> None:
     r = await _stub_pr_reviewer(cfg).abuild()
-    out = await r(PRDiff(chunks=[DiffChunk(path="a.py", old="o", new="n")]))
-    assert isinstance(out.response, ReviewReport)
-    assert out.response.summary == "h"  # from summarizer's headline
-    assert len(out.response.comments) == 1 and out.response.comments[0].comment == "ok"
+    out = (await r(PRDiff(chunks=[DiffChunk(path="a.py", old="o", new="n")]))).response
+    assert isinstance(out, ReviewReport)
+    assert out.summary == "h"  # from summarizer's headline
+    assert len(out.comments) == 1 and out.comments[0].comment == "ok"

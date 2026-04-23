@@ -18,7 +18,6 @@ import time
 import uuid
 from collections.abc import Sequence
 from contextvars import ContextVar
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
 from typing import Any, ClassVar, Generic, Self, TextIO, TYPE_CHECKING, TypeVar
 
 import strands
@@ -29,12 +28,14 @@ from ..utils.errors import BuildError
 from .config import Configuration
 from .diff import AgentDiff, diff_states
 from .output import (
+    OPERAD_VERSION_HASH,
+    PYTHON_VERSION_HASH,
     OperadOutput,
-    _extract_usage,
-    hash_configuration,
-    hash_input,
-    hash_output_schema,
-    hash_prompt,
+    _RUN_GRAPH_HASH,
+    hash_config,
+    hash_json,
+    hash_schema,
+    hash_str,
 )
 from .state import AgentState
 from . import render
@@ -60,20 +61,6 @@ class Example(BaseModel, Generic[In, Out]):
 # instead of validating and running `forward`. This is how `build()` performs
 # symbolic tracing without touching an LLM.
 _TRACER: ContextVar["Tracer | None"] = ContextVar("_TRACER", default=None)
-
-
-# Per-call usage slot. Leaf `forward` writes token counts here from the
-# strands result; the surrounding `invoke` reads them when building the
-# `OperadOutput` envelope. Composites never write (no model call), so
-# composite envelopes see `None` and leave usage fields unset.
-_USAGE: ContextVar[dict[str, int] | None] = ContextVar("_USAGE", default=None)
-
-
-try:
-    _OPERAD_VERSION = _pkg_version("operad")
-except PackageNotFoundError:  # editable install without dist-info
-    _OPERAD_VERSION = "0.0.0+unknown"
-_PYTHON_VERSION = sys.version.split()[0]
 
 
 class Agent(strands.Agent, Generic[In, Out]):
@@ -378,20 +365,19 @@ class Agent(strands.Agent, Generic[In, Out]):
                 self.format_user_message(x),
                 structured_output_model=self.output,
             )
-        _USAGE.set(_extract_usage(result))
         return result.structured_output  # type: ignore[return-value,no-any-return]
 
     # --- framework entry point ----------------------------------------------
-    async def invoke(self, x: In) -> "OperadOutput[Out]":
-        """Validate contract, run `forward`, return an `OperadOutput` envelope.
+    async def invoke(self, x: In) -> OperadOutput[Out]:
+        """Validate contract, then run `forward`, wrap in `OperadOutput`.
 
         When a symbolic tracer is active (during `build()`), this method
-        short-circuits into the tracer instead of running real logic —
-        the tracer returns the raw sentinel `Out`, not an envelope.
+        short-circuits into the tracer instead of running real logic.
         """
         tracer = _TRACER.get()
         if tracer is not None:
-            return await tracer.record(self, x)  # type: ignore[return-value,no-any-return]
+            response = await tracer.record(self, x)
+            return OperadOutput[Any].model_construct(response=response)
 
         from ..runtime.observers import base as _obs
 
@@ -403,16 +389,26 @@ class Agent(strands.Agent, Generic[In, Out]):
             attr = _attr_name_hint(parent_agent, self) or type(self).__name__
             path = f"{parent_path}.{attr}"
 
+        is_root = _obs._RUN_ID.get() is None
         run_id = _obs._RUN_ID.get() or uuid.uuid4().hex
         started_wall = time.time()
-        started_mono = time.monotonic()
+        started = time.monotonic()
+
+        graph_hash = _RUN_GRAPH_HASH.get()
+        tok_g = None
+        if is_root:
+            graph_hash = _compute_graph_hash(self)
+            tok_g = _RUN_GRAPH_HASH.set(graph_hash)
         tok_r = _obs._RUN_ID.set(run_id)
         tok_p = _obs._PATH_STACK.set((self, path))
-        tok_u = _USAGE.set(None)
+        start_meta: dict[str, Any] = {}
+        if is_root:
+            start_meta["graph"] = _graph_json_or_none(self)
+            start_meta["is_root"] = True
         try:
             await _obs.registry.notify(
                 _obs.AgentEvent(
-                    run_id, path, "start", x, None, None, started_mono, None, {}
+                    run_id, path, "start", x, None, None, started, None, start_meta
                 )
             )
 
@@ -439,67 +435,52 @@ class Agent(strands.Agent, Generic[In, Out]):
                     agent=type(self).__name__,
                 )
 
-            finished_mono = time.monotonic()
-            envelope = self._wrap_output(
-                y, x, run_id, path, started_wall, started_mono, finished_mono
+            finished = time.monotonic()
+            finished_wall = time.time()
+            envelope = OperadOutput[Any].model_construct(
+                response=y,
+                hash_operad_version=OPERAD_VERSION_HASH,
+                hash_python_version=PYTHON_VERSION_HASH,
+                hash_model=hash_config(self.config),
+                hash_prompt=hash_str(
+                    (self.format_system_message() or "")
+                    + "\n\n"
+                    + self.format_user_message(x)
+                ),
+                hash_graph=graph_hash,
+                hash_input=hash_json(x.model_dump(mode="json")),
+                hash_output_schema=hash_schema(self.output),  # type: ignore[arg-type]
+                run_id=run_id,
+                agent_path=path,
+                started_at=started_wall,
+                finished_at=finished_wall,
+                latency_ms=(finished - started) * 1000.0,
             )
-
+            end_meta: dict[str, Any] = {}
+            if is_root:
+                end_meta["is_root"] = True
+                end_meta["output_type"] = _qualified(self.output)  # type: ignore[arg-type]
             await _obs.registry.notify(
                 _obs.AgentEvent(
-                    run_id, path, "end", x, y, None, started_mono, finished_mono, {}
+                    run_id, path, "end", x, envelope, None, started, finished, end_meta
                 )
             )
             return envelope
         except BaseException as e:
+            err_meta: dict[str, Any] = {"is_root": True} if is_root else {}
             await _obs.registry.notify(
                 _obs.AgentEvent(
-                    run_id, path, "error", x, None, e, started_mono, time.monotonic(), {}
+                    run_id, path, "error", x, None, e, started, time.monotonic(), err_meta
                 )
             )
             raise
         finally:
             _obs._RUN_ID.reset(tok_r)
             _obs._PATH_STACK.reset(tok_p)
-            _USAGE.reset(tok_u)
+            if tok_g is not None:
+                _RUN_GRAPH_HASH.reset(tok_g)
 
-    def _wrap_output(
-        self,
-        y: "Out",
-        x: "In",
-        run_id: str,
-        path: str,
-        started_wall: float,
-        started_mono: float,
-        finished_mono: float,
-    ) -> "OperadOutput[Out]":
-        usage = _USAGE.get() or {}
-        finished_wall = started_wall + (finished_mono - started_mono)
-        envelope_cls = OperadOutput[self.output]  # type: ignore[valid-type]
-        return envelope_cls.model_construct(
-            response=y,
-            hash_operad_version=_OPERAD_VERSION,
-            hash_python_version=_PYTHON_VERSION,
-            hash_model=(
-                hash_configuration(self.config) if self.config is not None else "composite"
-            ),
-            hash_prompt=hash_prompt(
-                getattr(self, "_rendered_system", "") or "",
-                self.format_user_message(x),
-            ),
-            hash_graph=getattr(self, "_graph_hash", ""),
-            hash_input=hash_input(x),
-            hash_output_schema=hash_output_schema(self.output),  # type: ignore[arg-type]
-            run_id=run_id,
-            agent_path=path,
-            started_at=started_wall,
-            finished_at=finished_wall,
-            latency_ms=(finished_mono - started_mono) * 1000.0,
-            prompt_tokens=usage.get("prompt_tokens"),
-            completion_tokens=usage.get("completion_tokens"),
-            cost_usd=None,
-        )
-
-    async def __call__(self, x: In) -> "OperadOutput[Out]":  # type: ignore[override]
+    async def __call__(self, x: In) -> OperadOutput[Out]:  # type: ignore[override]
         return await self.invoke(x)
 
     # --- build --------------------------------------------------------------
@@ -525,6 +506,36 @@ def _attr_name_hint(parent: "Agent[Any, Any]", child: "Agent[Any, Any]") -> str 
         if value is child:
             return name
     return None
+
+
+def _graph_json_or_none(agent: "Agent[Any, Any]") -> Any:
+    graph = getattr(agent, "_graph", None)
+    if graph is None:
+        return None
+    from .graph import to_json as _graph_to_json
+
+    return _graph_to_json(graph)
+
+
+def _qualified(t: type) -> str:
+    from .graph import _qualified_name
+
+    return _qualified_name(t)
+
+
+def _compute_graph_hash(agent: "Agent[Any, Any]") -> str:
+    """Hash the agent's compiled graph if present, else hash its path.
+
+    Algorithms (e.g. `BestOfN`) may invoke a child agent as the "root"
+    call of a fresh run; that child carries its own `_graph`. Non-root
+    children within a run share the hash set by the outer invocation.
+    """
+    graph = getattr(agent, "_graph", None)
+    if graph is None:
+        return hash_str(type(agent).__name__)
+    from .graph import to_json as _graph_to_json
+
+    return hash_json(_graph_to_json(graph))
 
 
 def _labelled_tree(

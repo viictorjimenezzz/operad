@@ -47,6 +47,14 @@ examples/            narrative examples, one per abstraction
 - **Offline tests use `FakeLeaf`** from `tests/conftest.py`. Tests that
   hit a real model go to `tests/integration/` and are gated by
   `OPERAD_INTEGRATION`.
+- **`Agent.invoke` returns `OperadOutput[Out]`.** The typed payload is
+  at `.response`; the envelope also carries `run_id`, `agent_path`,
+  timings, and seven `hash_*` reproducibility fields. `forward` still
+  returns bare `Out` — only composites need to unwrap children via
+  `(await child(x)).response`. Attach a `TraceObserver` to capture a
+  full run as a `Trace`; the `Trace` is the reproducibility artefact
+  for any production run (save/load to JSON or NDJSON; re-score
+  against new metrics via `replay()` without touching an LLM).
 
 ## Common tasks
 

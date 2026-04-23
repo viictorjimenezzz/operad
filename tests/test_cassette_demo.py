@@ -45,9 +45,9 @@ CASSETTE_DIR = Path(__file__).parent / "cassettes"
 @pytest.mark.asyncio
 async def test_cassette_replays_recorded_answer(cassette, cfg) -> None:
     leaf = await DemoLeaf(config=cfg).abuild()
-    out = await leaf(DemoIn(question="what is 2+2?"))
-    assert isinstance(out.response, DemoOut)
-    assert out.response.answer == "four"
+    out = (await leaf(DemoIn(question="what is 2+2?"))).response
+    assert isinstance(out, DemoOut)
+    assert out.answer == "four"
 
 
 @pytest.mark.asyncio

@@ -28,7 +28,6 @@ from pydantic import BaseModel
 from ..models import resolve_model
 from ..utils.errors import BuildError
 from .agent import Agent, _TRACER
-from .output import OperadOutput, hash_graph
 
 NodeKind = Literal["leaf", "composite"]
 
@@ -199,36 +198,7 @@ class Tracer:
             finally:
                 self._stack.pop()
 
-        return _trace_envelope(child.output)
-
-
-def _trace_envelope(output_cls: type[BaseModel]) -> Any:
-    """Build a minimal `OperadOutput` for trace-time returns.
-
-    Composite `forward` methods access `.response` on child results; during
-    tracing we short-circuit through `Tracer.record`, so we must return
-    an envelope shape, not a raw `Out`. Metadata fields are filled with
-    placeholders — nothing reads them during a trace.
-    """
-    envelope_cls = OperadOutput[output_cls]  # type: ignore[valid-type]
-    return envelope_cls.model_construct(
-        response=output_cls.model_construct(),
-        hash_operad_version="",
-        hash_python_version="",
-        hash_model="",
-        hash_prompt="",
-        hash_graph="",
-        hash_input="",
-        hash_output_schema="",
-        run_id="trace",
-        agent_path="trace",
-        started_at=0.0,
-        finished_at=0.0,
-        latency_ms=0.0,
-        prompt_tokens=None,
-        completion_tokens=None,
-        cost_usd=None,
-    )
+        return child.output.model_construct()
 
 
 def _find_attr_name(parent: Agent[Any, Any], child: Agent[Any, Any]) -> str | None:
@@ -283,20 +253,12 @@ def _init_strands(a: Agent[Any, Any]) -> None:
     themselves.
     """
     if not _is_default_forward(a):
-        # Composites and custom-forward leaves never talk to strands, but we
-        # still fingerprint their role/task/rules in `hash_prompt`. Composites
-        # (children present) have no meaningful system message; custom-forward
-        # leaves do.
-        rendered = "" if a._children else a.format_system_message()
-        object.__setattr__(a, "_rendered_system", rendered)
         return
     try:
         from strands.types.agent import ConcurrentInvocationMode
 
         model = resolve_model(a.config)  # type: ignore[arg-type]
-        rendered_system = a.format_system_message()
-        system_prompt = rendered_system or None
-        object.__setattr__(a, "_rendered_system", rendered_system)
+        system_prompt = a.format_system_message() or None
         strands.Agent.__init__(
             a,
             model=model,
@@ -401,11 +363,8 @@ async def abuild_agent(root: Agent[Any, Any]) -> Agent[Any, Any]:
 
     object.__setattr__(root, "_graph", tracer.graph)
     object.__setattr__(root, "_built", True)
-    graph_hash = hash_graph(tracer.graph)
-    object.__setattr__(root, "_graph_hash", graph_hash)
     for a in _walk(root):
         object.__setattr__(a, "_built", True)
-        object.__setattr__(a, "_graph_hash", graph_hash)
     return root
 
 

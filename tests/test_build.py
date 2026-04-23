@@ -61,7 +61,7 @@ async def test_build_catches_edge_input_mismatch_before_llm(cfg) -> None:
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
             await self.first(x)
-            return await self.second(x)  # type: ignore[arg-type]
+            return (await self.second(x)).response  # type: ignore[arg-type]
 
     with pytest.raises(BuildError) as exc:
         await Wrong().abuild()
@@ -80,7 +80,7 @@ async def test_build_catches_root_output_mismatch(cfg) -> None:
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
             # Returns a B but declared Out is C.
-            return await self.only(x)  # type: ignore[return-value]
+            return (await self.only(x)).response  # type: ignore[return-value]
 
     with pytest.raises(BuildError) as exc:
         await BadRoot().abuild()
@@ -149,8 +149,8 @@ async def test_payload_branch_raises(cfg) -> None:
 
         async def forward(self, x: A) -> B:  # type: ignore[override]
             if x.text:
-                return await self.a(x)
-            return await self.a(x)
+                return (await self.a(x)).response
+            return (await self.a(x)).response
 
     with pytest.raises(BuildError) as exc:
         await Brancher().abuild()
@@ -170,7 +170,7 @@ async def test_payload_branch_raises_in_nested_composite(cfg) -> None:
 
         async def forward(self, x: A) -> B:  # type: ignore[override]
             _ = x.text  # payload read in nested composite
-            return await self.leaf(x)
+            return (await self.leaf(x)).response
 
     class Outer(Agent):
         input = A
@@ -181,7 +181,7 @@ async def test_payload_branch_raises_in_nested_composite(cfg) -> None:
             self.inner = Inner()
 
         async def forward(self, x: A) -> B:  # type: ignore[override]
-            return await self.inner(x)
+            return (await self.inner(x)).response
 
     with pytest.raises(BuildError) as exc:
         await Outer().abuild()
@@ -209,7 +209,7 @@ async def test_init_strands_skipped_on_trace_failure(cfg, monkeypatch) -> None:
 
         async def forward(self, x: A) -> B:  # type: ignore[override]
             _ = x.text  # triggers payload_branch
-            return await self.a(x)
+            return (await self.a(x)).response
 
     with pytest.raises(BuildError):
         await Brancher().abuild()
