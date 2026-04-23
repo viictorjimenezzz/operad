@@ -193,6 +193,37 @@ One narrative example per major abstraction, in `examples/`:
 All network-requiring examples read `OPERAD_LLAMACPP_HOST` /
 `OPERAD_LLAMACPP_MODEL`; `mermaid_export.py` runs without a model.
 
+## Renderers
+
+`Agent.format_system_message` supports three wire formats. XML is the
+default; switch per-agent or per-configuration when a model prefers a
+different shape.
+
+| Renderer | Output | When to use |
+| --- | --- | --- |
+| `"xml"` | `<role>`, `<task>`, `<rules>`, `<examples>`, `<output_schema>` | Default; Anthropic-documented format, portable across backends. |
+| `"markdown"` | `# Role` / `# Task` / `# Rules` / `# Output schema` (table) | Models that follow Markdown better than tag soup. |
+| `"chat"` | `list[{"role","content"}]` | Backends with native chat templates (llama.cpp `--chat-template`, Ollama, LM Studio) — v1 emits `[{"role":"system","content": ...}]`. |
+
+Selection precedence: class-level `renderer: ClassVar[str] = "..."`
+override wins, then `Configuration.renderer`, then XML.
+
+```python
+from typing import ClassVar
+from operad import Agent, Configuration
+
+# per-configuration
+cfg = Configuration(backend="llamacpp", host="127.0.0.1:8080",
+                    model="gemma", renderer="markdown")
+
+# per-class
+class MarkdownReasoner(Reasoner):
+    renderer: ClassVar[str] = "markdown"
+```
+
+`Field(description=...)` on `In` and `Out` surfaces in all three
+renderers.
+
 ## Tests
 
 ```bash

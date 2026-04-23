@@ -258,7 +258,12 @@ def _init_strands(a: Agent[Any, Any]) -> None:
         from strands.types.agent import ConcurrentInvocationMode
 
         model = resolve_model(a.config)  # type: ignore[arg-type]
-        system_prompt = a.format_system_message() or None
+        rendered = a.format_system_message()
+        if isinstance(rendered, list):
+            rendered = "\n\n".join(
+                m.get("content", "") for m in rendered if m.get("role") == "system"
+            )
+        system_prompt = rendered or None
         strands.Agent.__init__(
             a,
             model=model,

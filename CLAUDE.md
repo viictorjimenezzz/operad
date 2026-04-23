@@ -44,6 +44,12 @@ examples/            narrative examples, one per abstraction
   (subclass `Agent[In, Out]`, lives in `agents/`). Loop-with-metric
   feedback whose natural API is not `__call__(x)` → algorithm (plain
   class with `run(...)`, lives in `algorithms/`).
+- **Three renderers.** `format_system_message` selects between
+  `"xml"` (default; XML-tagged sections), `"markdown"` (headings +
+  schema table), and `"chat"` (`list[{"role","content"}]` for backends
+  with native chat templates). Pick via `Configuration(renderer=...)`
+  or set `renderer: ClassVar[str] = "markdown"` on any subclass.
+  Modules live under `operad/core/render/`.
 - **Offline tests use `FakeLeaf`** from `tests/conftest.py`. Tests that
   hit a real model go to `tests/integration/` and are gated by
   `OPERAD_INTEGRATION`.
