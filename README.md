@@ -135,13 +135,17 @@ the same `build()` story applies.
 ## Run the demo
 
 ```bash
-# 1. Start a local llama-server on 127.0.0.1:8080 with a model loaded.
+# 1. Start a local llama-server on 127.0.0.1:9000 serving google/gemma-4-e4b.
 # 2. Then:
-uv run python examples/parallel.py
+uv run --extra observers python demo.py
 ```
 
-Set `OPERAD_LLAMACPP_HOST` and `OPERAD_LLAMACPP_MODEL` to point
-somewhere else.
+`demo.py` is a ~30-second, Rich-formatted showcase: rendered prompts,
+Mermaid graph, live invocation, trace dump, and a mutation diff.
+
+Every network-backed example in `examples/` uses the same canonical
+target via `examples/_config.py` — set `OPERAD_LLAMACPP_HOST` and
+`OPERAD_LLAMACPP_MODEL` to override host or model.
 
 ## Run from YAML
 

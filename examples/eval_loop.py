@@ -1,8 +1,9 @@
 """Offline evaluation demo: score a canned agent over a tiny dataset.
 
-Runs five rows through a `FakeLeaf`-style agent (no network or model
-server required) and prints the resulting `EvalReport` with per-row
-scores and per-metric means.
+Runs offline — no model server required.
+
+Runs five rows through a `FakeLeaf`-style agent and prints the resulting
+`EvalReport` with per-row scores and per-metric means.
 
     uv run python examples/eval_loop.py
 """

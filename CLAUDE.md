@@ -62,7 +62,14 @@ examples/            narrative examples, one per abstraction
 - **Add a domain.** Copy the shape of `operad/agents/reasoning/`.
 - **Run tests.** `uv run pytest tests/`.
 - **Run an example.** `uv run python examples/<name>.py` (start a local
-  llama-server first for network-requiring ones).
+  llama-server first for network-requiring ones). Every network-backed
+  example builds its `Configuration` via `examples/_config.py`
+  (`local_config(**overrides)`), which defaults to
+  `127.0.0.1:9000` + `google/gemma-4-e4b` and honours
+  `OPERAD_LLAMACPP_HOST` / `OPERAD_LLAMACPP_MODEL` overrides.
+- **End-to-end showcase.** `uv run --extra observers python demo.py`
+  prints rendered prompts, Mermaid, a live run, trace path, and a
+  mutation diff.
 - **Integration tests.**
   `OPERAD_INTEGRATION=llamacpp OPERAD_LLAMACPP_HOST=127.0.0.1:8080 \
    OPERAD_LLAMACPP_MODEL=<model> uv run pytest tests/integration -v`.
