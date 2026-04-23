@@ -81,7 +81,9 @@ examples/            narrative examples, one per abstraction
   `OPERAD_INTEGRATION=llamacpp OPERAD_LLAMACPP_HOST=127.0.0.1:8080 \
    OPERAD_LLAMACPP_MODEL=<model> uv run pytest tests/integration -v`.
 - **Inspect a built agent.** `agent.operad()` prints every leaf's
-  rendered prompt; `agent.diff(other)` compares two agents. In Jupyter
+  rendered prompt; `agent.diff(other)` compares two agents;
+  `trace_diff(prev, next)` compares two captured runs step by step
+  (see `operad/runtime/trace_diff.py`). In Jupyter
   / VS Code notebooks, evaluating a built agent renders its Mermaid
   graph inline via `_repr_html_` (requires a Mermaid-aware front-end,
   e.g. `jupyterlab-mermaid` or the VS Code Jupyter extension).
