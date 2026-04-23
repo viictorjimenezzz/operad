@@ -259,6 +259,21 @@ OPERAD_INTEGRATION=lmstudio \
 uv run pytest tests/integration/test_lmstudio.py -v
 ```
 
+## Tracing
+
+```python
+import operad.tracing as tracing
+
+with tracing.watch(jsonl="run.jsonl"):
+    out = await agent(x)
+```
+
+`watch()` attaches a Rich TUI (when the `observers` extra is installed)
+and, if `jsonl=...` is given, an NDJSON event log. Setting
+`OPERAD_TRACE=/tmp/run.jsonl` at import time auto-attaches the JSONL
+writer with zero code changes. Replay post-mortem with
+`uv run operad tail run.jsonl --speed=0`.
+
 ## Layout
 
 ```

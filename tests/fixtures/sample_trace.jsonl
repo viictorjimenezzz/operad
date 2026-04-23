@@ -1,0 +1,4 @@
+{"run_id": "abc123de-0000-4000-8000-000000000000", "agent_path": "Pipeline", "kind": "start", "input": {"text": "hi"}, "output": null, "started_at": 1000.0, "finished_at": null, "metadata": {"is_root": true}}
+{"run_id": "abc123de-0000-4000-8000-000000000000", "agent_path": "Pipeline.first", "kind": "start", "input": {"text": "hi"}, "output": null, "started_at": 1000.01, "finished_at": null, "metadata": {}}
+{"run_id": "abc123de-0000-4000-8000-000000000000", "agent_path": "Pipeline.first", "kind": "end", "input": {"text": "hi"}, "output": {"value": 2}, "started_at": 1000.01, "finished_at": 1000.02, "metadata": {}}
+{"run_id": "abc123de-0000-4000-8000-000000000000", "agent_path": "Pipeline", "kind": "end", "input": {"text": "hi"}, "output": {"label": "ok"}, "started_at": 1000.0, "finished_at": 1000.03, "metadata": {"is_root": true}}

@@ -90,6 +90,12 @@ examples/            narrative examples, one per abstraction
   `FakeLeaf` for pure-offline unit tests with no LLM in the loop;
   reach for cassettes when you need a *specific* model response that
   would otherwise require the network.
+- **One-liner tracing.** `with operad.tracing.watch(jsonl="run.jsonl"):`
+  attaches the Rich TUI (optional `observers` extra) and an NDJSON event
+  log for the duration of the block, unregistering only what it added.
+  Setting `OPERAD_TRACE=/tmp/run.jsonl` at `import operad.tracing` time
+  auto-attaches the JSONL writer. Replay post-mortem with
+  `uv run operad tail run.jsonl [--speed=0]`.
 
 ## Where to find
 

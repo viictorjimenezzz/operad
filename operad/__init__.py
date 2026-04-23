@@ -114,6 +114,7 @@ from .metrics import (
 from .metrics.base import MetricBase
 from .models import resolve_model
 from .runtime import SlotRegistry, set_limit
+from . import tracing
 from .runtime.trace import Trace, TraceObserver, TraceStep
 from .runtime.observers import (
     AgentEvent,
@@ -271,4 +272,5 @@ __all__ = [
     "set_limit",
     "to_json",
     "to_mermaid",
+    "tracing",
 ]
