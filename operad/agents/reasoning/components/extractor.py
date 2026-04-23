@@ -12,6 +12,25 @@ class Extractor(Agent[In, Out]):
     ``Field(description=...)`` annotations drive how each slot is
     populated — they're rendered verbatim into the system prompt via
     ``<output_schema>``.
+
+    A canonical few-shot::
+
+        from pydantic import BaseModel, Field
+        from operad import Example
+
+        class Sentence(BaseModel):
+            text: str = Field(description="A free-form sentence.")
+
+        class Person(BaseModel):
+            name: str = Field(default="", description="The person's name.")
+            age: int = Field(default=0, description="Age in years.")
+
+        examples = (
+            Example[Sentence, Person](
+                input=Sentence(text="Ada Lovelace was 36 when she died."),
+                output=Person(name="Ada Lovelace", age=36),
+            ),
+        )
     """
 
     role = (
