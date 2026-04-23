@@ -17,7 +17,7 @@ class Reasoner(Agent[In, Out]):
     A canonical few-shot on a ``Task -> Thought``-shaped specialization::
 
         from operad import Example
-        from operad.agents.reasoning.react import Task, Thought
+        from operad.agents.reasoning.schemas import Task, Thought
 
         examples = (
             Example[Task, Thought](
@@ -42,3 +42,4 @@ class Reasoner(Agent[In, Out]):
         "Show your reasoning before the final answer.",
         "Prefer uncertainty ('I don't know') over a confident wrong guess.",
     )
+    default_sampling = {"temperature": 0.7}

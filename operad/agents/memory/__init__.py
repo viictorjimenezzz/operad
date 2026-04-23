@@ -1,7 +1,7 @@
 """Memory domain: typed shapes, extractor leaves, and a memory store.
 
 Mirrors the ``reasoning/`` layout — leaves live under ``components/``,
-typed shapes live in ``shapes.py``, and a plain-class data primitive
+typed shapes live in ``schemas.py``, and a plain-class data primitive
 (``MemoryStore``) sits alongside. Future composed memory patterns
 (e.g. a consolidator algorithm) would live at this package root.
 """
@@ -13,7 +13,7 @@ from .components import (
     EpisodicSummarizer,
     UserModelExtractor,
 )
-from .shapes import (
+from .schemas import (
     Belief,
     Beliefs,
     Conversation,

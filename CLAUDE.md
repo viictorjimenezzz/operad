@@ -30,6 +30,7 @@ examples/            narrative examples, one per abstraction
 - **Components declare their contract as class attributes** (`input`,
   `output`, `role`, `task`, `rules`, `examples`). Instances override via
   constructor kwargs only — no wrapper object, no hidden state.
+- **Each `agents/<domain>/` uses `schemas.py` for shared types.**
 - **Composites are pure routers.** `forward` on a composite routes
   between children; it never inspects payload *values*.
 - **`build()` before invoke.** Leaves need `config`; composites do not.
@@ -44,6 +45,12 @@ examples/            narrative examples, one per abstraction
   (subclass `Agent[In, Out]`, lives in `agents/`). Loop-with-metric
   feedback whose natural API is not `__call__(x)` → algorithm (plain
   class with `run(...)`, lives in `algorithms/`).
+- **Three renderers.** `format_system_message` selects between
+  `"xml"` (default; XML-tagged sections), `"markdown"` (headings +
+  schema table), and `"chat"` (`list[{"role","content"}]` for backends
+  with native chat templates). Pick via `Configuration(renderer=...)`
+  or set `renderer: ClassVar[str] = "markdown"` on any subclass.
+  Modules live under `operad/core/render/`.
 - **Offline tests use `FakeLeaf`** from `tests/conftest.py`. Tests that
   hit a real model go to `tests/integration/` and are gated by
   `OPERAD_INTEGRATION`.
@@ -62,7 +69,14 @@ examples/            narrative examples, one per abstraction
 - **Add a domain.** Copy the shape of `operad/agents/reasoning/`.
 - **Run tests.** `uv run pytest tests/`.
 - **Run an example.** `uv run python examples/<name>.py` (start a local
-  llama-server first for network-requiring ones).
+  llama-server first for network-requiring ones). Every network-backed
+  example builds its `Configuration` via `examples/_config.py`
+  (`local_config(**overrides)`), which defaults to
+  `127.0.0.1:9000` + `google/gemma-4-e4b` and honours
+  `OPERAD_LLAMACPP_HOST` / `OPERAD_LLAMACPP_MODEL` overrides.
+- **End-to-end showcase.** `uv run --extra observers python demo.py`
+  prints rendered prompts, Mermaid, a live run, trace path, and a
+  mutation diff.
 - **Integration tests.**
   `OPERAD_INTEGRATION=llamacpp OPERAD_LLAMACPP_HOST=127.0.0.1:8080 \
    OPERAD_LLAMACPP_MODEL=<model> uv run pytest tests/integration -v`.
@@ -84,6 +98,12 @@ examples/            narrative examples, one per abstraction
   `FakeLeaf` for pure-offline unit tests with no LLM in the loop;
   reach for cassettes when you need a *specific* model response that
   would otherwise require the network.
+- **One-liner tracing.** `with operad.tracing.watch(jsonl="run.jsonl"):`
+  attaches the Rich TUI (optional `observers` extra) and an NDJSON event
+  log for the duration of the block, unregistering only what it added.
+  Setting `OPERAD_TRACE=/tmp/run.jsonl` at `import operad.tracing` time
+  auto-attaches the JSONL writer. Replay post-mortem with
+  `uv run operad tail run.jsonl [--speed=0]`.
 
 ## Where to find
 

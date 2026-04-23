@@ -22,53 +22,10 @@ because the loop is metric-driven, not purely structural.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
-
 from ...core.agent import Agent
 from ...core.config import Configuration
 from .components import Actor, Evaluator, Extractor, Reasoner
-
-
-# --- typed edges -------------------------------------------------------------
-
-
-class Task(BaseModel):
-    """What the ReAct agent should accomplish."""
-
-    goal: str = Field(description="The objective to solve.")
-    context: str = Field(default="", description="Optional background information.")
-
-
-class Thought(BaseModel):
-    """The Reasoner's deliberation about the task."""
-
-    reasoning: str = Field(description="Step-by-step thought about the task.")
-    next_action: str = Field(
-        description="Short description of the concrete next action to take."
-    )
-
-
-class Action(BaseModel):
-    """The Actor's chosen next step, ready to be executed or simulated."""
-
-    name: str = Field(description="The action's short name (e.g. 'search', 'compute').")
-    details: str = Field(description="What this action does, with arguments.")
-
-
-class Observation(BaseModel):
-    """The outcome of the action, synthesized into textual form."""
-
-    result: str = Field(description="What the action produced.")
-    success: bool = Field(
-        default=True, description="Whether the action appears to have succeeded."
-    )
-
-
-class Answer(BaseModel):
-    """The Evaluator's final answer to the original task."""
-
-    reasoning: str = Field(description="How the observation leads to the answer.")
-    answer: str = Field(description="Final, concise answer to the task.")
+from .schemas import Action, Answer, Observation, Task, Thought
 
 
 # --- composition -------------------------------------------------------------

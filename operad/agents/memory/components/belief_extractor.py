@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ....core.agent import Agent, Example
-from ..shapes import Belief, Beliefs, Conversation, Turn
+from ..schemas import Belief, Beliefs, Conversation, Turn
 
 
 class BeliefExtractor(Agent[Conversation, Beliefs]):

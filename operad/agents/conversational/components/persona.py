@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ....core.agent import Agent, Example
-from ..talker import StyledUtterance, Utterance
+from ..schemas import StyledUtterance, Utterance
 
 
 class Persona(Agent[Utterance, StyledUtterance]):

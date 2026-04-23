@@ -1,42 +1,29 @@
 """Memory-domain demo: extract beliefs from a two-turn conversation
 and store them in a typed ``MemoryStore[Belief]``.
 
-    OPERAD_LLAMACPP_HOST=127.0.0.1:8080 \\
-    OPERAD_LLAMACPP_MODEL=qwen2.5-7b-instruct \\
-    uv run python examples/memory_demo.py
+Requires a local llama-server serving google/gemma-4-e4b on 127.0.0.1:9000.
+Override via OPERAD_LLAMACPP_HOST and OPERAD_LLAMACPP_MODEL.
 
-Matches the ``examples/parallel.py`` style: reads llama-server endpoint
-and model from environment variables; no offline fallback.
+    uv run python examples/memory_demo.py
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
 
 from operad import (
     Belief,
     BeliefExtractor,
-    Configuration,
     Conversation,
     MemoryStore,
     Turn,
 )
 
-
-def _cfg(model: str) -> Configuration:
-    return Configuration(
-        backend="llamacpp",
-        host=os.environ.get("OPERAD_LLAMACPP_HOST", "127.0.0.1:8080"),
-        model=model,
-        temperature=0.0,
-        max_tokens=512,
-    )
+from _config import local_config
 
 
 async def _main() -> None:
-    model = os.environ.get("OPERAD_LLAMACPP_MODEL", "default")
-    cfg = _cfg(model)
+    cfg = local_config(temperature=0.0, max_tokens=512)
 
     extractor = BeliefExtractor(config=cfg)
     await extractor.abuild()

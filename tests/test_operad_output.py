@@ -29,6 +29,16 @@ def test_hash_config_excludes_api_key() -> None:
     assert hash_config(a) != hash_config(c)
 
 
+def test_hash_config_strips_host_auth() -> None:
+    auth = Configuration(backend="llamacpp", model="m", host="u:p@127.0.0.1:9000")
+    plain = Configuration(backend="llamacpp", model="m", host="127.0.0.1:9000")
+    assert hash_config(auth) == hash_config(plain)
+
+    scheme_auth = Configuration(backend="llamacpp", model="m", host="http://u:p@host/x")
+    scheme_plain = Configuration(backend="llamacpp", model="m", host="http://host/x")
+    assert hash_config(scheme_auth) == hash_config(scheme_plain)
+
+
 def test_hash_schema_is_stable() -> None:
     assert hash_schema(A) == hash_schema(A)
     assert hash_schema(A) != hash_schema(B)

@@ -1,5 +1,10 @@
 """Federated demo: one graph, two backends, independent slot budgets.
 
+Requires a local llama-server serving google/gemma-4-e4b on 127.0.0.1:9000.
+Override via OPERAD_LLAMACPP_HOST and OPERAD_LLAMACPP_MODEL. Also needs
+OPENAI_API_KEY for the hosted leg; override its model with
+OPERAD_OPENAI_MODEL (default ``gpt-4o-mini``).
+
 A ``Parallel`` fans the same ``Post`` out to three children: two cheap
 local classifiers on llamacpp and one hosted synthesiser on OpenAI.
 The combine step folds their outputs into a single ``Report``. This
@@ -8,13 +13,9 @@ llamacpp calls share one semaphore while the OpenAI call runs on an
 independent one (see ``operad/runtime/slots.py`` line 37-38). Call
 ``set_limit`` before ``abuild()`` — semaphores cache on first use.
 
-    OPERAD_LLAMACPP_HOST=127.0.0.1:8080 \\
-    OPERAD_LLAMACPP_MODEL=<local-model> \\
-    OPENAI_API_KEY=sk-... \\
     uv run python examples/federated.py
 
-Costs money on the OpenAI side. ``OPERAD_OPENAI_MODEL`` overrides the
-default (``gpt-4o-mini``).
+Costs money on the OpenAI side.
 """
 
 from __future__ import annotations
@@ -26,6 +27,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from operad import Classifier, Configuration, Parallel, Reasoner, set_limit
+
+from _config import local_config
 
 
 class Post(BaseModel):
@@ -62,12 +65,7 @@ SAMPLE = (
 
 
 async def _main() -> None:
-    local = Configuration(
-        backend="llamacpp",
-        host=os.environ["OPERAD_LLAMACPP_HOST"],
-        model=os.environ["OPERAD_LLAMACPP_MODEL"],
-        temperature=0.0,
-    )
+    local = local_config(temperature=0.0)
     hosted = Configuration(
         backend="openai",
         model=os.environ.get("OPERAD_OPENAI_MODEL", "gpt-4o-mini"),

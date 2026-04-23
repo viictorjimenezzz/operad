@@ -10,10 +10,11 @@ from pydantic import BaseModel
 
 from ..algorithms.judge import Candidate
 from ..core.agent import Agent
+from .base import MetricBase
 
 
 @dataclass
-class RubricCritic:
+class RubricCritic(MetricBase):
     """Expose a critic agent as a `Metric`.
 
     `.score()` builds a `Candidate(output=predicted)` and returns the

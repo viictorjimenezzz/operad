@@ -5,6 +5,7 @@ Subcommands:
     operad run   <config.yaml> --input <input.json>
     operad trace <config.yaml>
     operad graph <config.yaml> [--format json|mermaid]
+    operad tail  <trace.jsonl> [--speed 1.0]
 
 Heavy imports (yaml, operad internals) live inside each handler so
 `operad --help` starts fast.
@@ -39,6 +40,17 @@ def _parser() -> argparse.ArgumentParser:
         choices=("json", "mermaid"),
         default="json",
         help="Output format (default: json).",
+    )
+
+    tail = sub.add_parser(
+        "tail", help="Replay an NDJSON trace log (from JsonlObserver)."
+    )
+    tail.add_argument("path", type=Path, help="Path to NDJSON trace file.")
+    tail.add_argument(
+        "--speed",
+        type=float,
+        default=1.0,
+        help="Replay speed multiplier (default 1.0). Use 0 for instant.",
     )
 
     return p
@@ -101,7 +113,57 @@ def _graph(args: argparse.Namespace) -> int:
     return 0
 
 
-_DISPATCH = {"run": _run, "trace": _trace, "graph": _graph}
+def _tail(args: argparse.Namespace) -> int:
+    import time
+
+    from .configs.loader import ConfigError
+
+    path: Path = args.path
+    speed: float = args.speed
+
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError as e:
+        raise ConfigError(f"trace file not found: {path}") from e
+
+    events: list[dict[str, Any]] = []
+    for lineno, line in enumerate(raw.splitlines(), start=1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError as e:
+            raise ConfigError(f"{path}:{lineno}: invalid JSON: {e}") from e
+
+    try:
+        from rich.console import Console  # type: ignore[import-not-found]
+
+        console: Any = Console()
+        printer = lambda s: console.print(s)  # noqa: E731
+    except ImportError:
+        printer = print
+
+    for i, ev in enumerate(events):
+        kind = ev.get("kind", "?")
+        ap = ev.get("agent_path", "?")
+        run = str(ev.get("run_id", ""))[:8]
+        err = ev.get("error")
+        suffix = f" {err['type']}: {err['message']}" if isinstance(err, dict) else ""
+        printer(f"[{run}] {kind:5s} {ap}{suffix}")
+
+        if speed > 0 and i + 1 < len(events):
+            nxt = events[i + 1]
+            dt = float(nxt.get("started_at", 0.0) or 0.0) - float(
+                ev.get("started_at", 0.0) or 0.0
+            )
+            if dt > 0:
+                time.sleep(dt / speed)
+
+    return 0
+
+
+_DISPATCH = {"run": _run, "trace": _trace, "graph": _graph, "tail": _tail}
 
 
 def main(argv: list[str] | None = None) -> int:

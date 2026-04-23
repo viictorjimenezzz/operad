@@ -33,8 +33,16 @@ def hash_model(cfg: Configuration) -> str:
     return _digest(_stable_json(data))
 
 
-def hash_prompt(system: str, user: str) -> str:
-    """Hash a rendered (system, user) prompt pair."""
+def hash_prompt(
+    system: str | list[dict[str, str]],
+    user: str,
+) -> str:
+    """Hash a rendered (system, user) prompt pair.
+
+    ``system`` may be either a rendered string (xml/markdown) or a
+    list of ``{"role","content"}`` messages (chat renderer); both
+    hash deterministically via stable JSON.
+    """
     return _digest(_stable_json({"system": system, "user": user}))
 
 

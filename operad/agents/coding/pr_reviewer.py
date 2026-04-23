@@ -17,7 +17,7 @@ from ...core.agent import Agent
 from ...core.config import Configuration
 from .components import CodeReviewer, ContextOptimizer, DiffSummarizer
 from .components.context_optimizer import ReadFile
-from .types import DiffChunk, PRDiff, PRSummary, ReviewComment, ReviewReport
+from .schemas import DiffChunk, PRDiff, PRSummary, ReviewComment, ReviewReport
 
 __all__ = [
     "DiffChunk",

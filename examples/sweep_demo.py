@@ -1,8 +1,10 @@
-"""Sweep: run a 2x2 parameter grid in parallel, offline.
+"""Sweep: run a 2x2 parameter grid in parallel.
 
-Uses a hand-rolled leaf that echoes its own `task` length so the demo
-runs with no network. Shows the shape of a `SweepReport` and the
-``(parameters, output)`` layout of each cell.
+Runs offline — no model server required.
+
+Uses a hand-rolled leaf that echoes its own `task` length. Shows the
+shape of a `SweepReport` and the ``(parameters, output)`` layout of
+each cell.
 
     uv run python examples/sweep_demo.py
 """
