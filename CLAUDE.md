@@ -58,6 +58,24 @@ examples/            narrative examples, one per abstraction
 - **Integration tests.**
   `OPERAD_INTEGRATION=llamacpp OPERAD_LLAMACPP_HOST=127.0.0.1:8080 \
    OPERAD_LLAMACPP_MODEL=<model> uv run pytest tests/integration -v`.
+- **Inspect a built agent.** `agent.operad()` prints every leaf's
+  rendered prompt; `agent.diff(other)` compares two agents. In Jupyter
+  / VS Code notebooks, evaluating a built agent renders its Mermaid
+  graph inline via `_repr_html_` (requires a Mermaid-aware front-end,
+  e.g. `jupyterlab-mermaid` or the VS Code Jupyter extension).
+- **Cassette replay for LLM-backed tests.** Name the `cassette` fixture
+  in a test that exercises a default-forward leaf; the fixture
+  monkeypatches `Agent.forward` to serve responses from
+  `tests/cassettes/<test_name>.jsonl`. Default mode is **replay** —
+  missing keys raise `CassetteMiss`. To refresh a cassette against a
+  real backend:
+  `OPERAD_CASSETTE=record OPERAD_INTEGRATION=llamacpp \
+   uv run pytest tests/<file> -v`.
+  Cassette files store hashes + the serialised response only (never
+  the rendered prompt or API keys), so they are safe to commit. Use
+  `FakeLeaf` for pure-offline unit tests with no LLM in the loop;
+  reach for cassettes when you need a *specific* model response that
+  would otherwise require the network.
 
 ## Where to find
 

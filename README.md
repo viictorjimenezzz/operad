@@ -178,6 +178,7 @@ Mermaid rendering of the built graph; `graph` dumps it as JSON.
 One narrative example per major abstraction, in `examples/`:
 
 - `parallel.py` — fan-out over specialized `Reasoner`s with a combine step.
+- `federated.py` — `Parallel` over heterogeneous backends (llamacpp + OpenAI) with per-endpoint slot budgets.
 - `pipeline.py` — three-stage `Pipeline` (`Extractor -> Planner -> Evaluator`) with typed edges.
 - `react.py` — standalone `ReAct`; prints the Mermaid graph before running.
 - `best_of_n.py` — `BestOfN` algorithm over a `Reasoner` generator and `Critic` judge.
