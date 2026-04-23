@@ -165,6 +165,20 @@ uv run operad graph examples/config-react.yaml --format json
 the graph, invokes, and prints the `Out` as JSON. `trace` prints the
 Mermaid rendering of the built graph; `graph` dumps it as JSON.
 
+## Examples
+
+One narrative example per major abstraction, in `examples/`:
+
+- `parallel.py` — fan-out over specialized `Reasoner`s with a combine step.
+- `pipeline.py` — three-stage `Pipeline` (`Extractor -> Planner -> Evaluator`) with typed edges.
+- `react.py` — standalone `ReAct`; prints the Mermaid graph before running.
+- `best_of_n.py` — `BestOfN` algorithm over a `Reasoner` generator and `Critic` judge.
+- `custom_agent.py` — minimal user-defined `Agent[In, Out]` subclass with seeded `examples=`.
+- `mermaid_export.py` — **offline** demo: `build()` a small composite and print its Mermaid graph.
+
+All network-requiring examples read `OPERAD_LLAMACPP_HOST` /
+`OPERAD_LLAMACPP_MODEL`; `mermaid_export.py` runs without a model.
+
 ## Tests
 
 ```bash

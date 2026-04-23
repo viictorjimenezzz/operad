@@ -14,6 +14,18 @@ without users having to know the exact domain path.
 
 from __future__ import annotations
 
+from .memory import (
+    Belief,
+    BeliefExtractor,
+    Beliefs,
+    Conversation,
+    EpisodicSummarizer,
+    MemoryStore,
+    Summary,
+    Turn,
+    UserModel,
+    UserModelExtractor,
+)
 from .parallel import Parallel
 from .pipeline import Pipeline
 from .reasoning import (
@@ -36,16 +48,26 @@ __all__ = [
     "Action",
     "Actor",
     "Answer",
+    "Belief",
+    "BeliefExtractor",
+    "Beliefs",
     "Classifier",
+    "Conversation",
     "Critic",
+    "EpisodicSummarizer",
     "Evaluator",
     "Extractor",
+    "MemoryStore",
     "Observation",
     "Parallel",
     "Pipeline",
     "Planner",
     "ReAct",
     "Reasoner",
+    "Summary",
     "Task",
     "Thought",
+    "Turn",
+    "UserModel",
+    "UserModelExtractor",
 ]

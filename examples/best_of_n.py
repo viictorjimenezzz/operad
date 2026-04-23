@@ -1,0 +1,56 @@
+"""Best-of-N: generate 3 candidate answers, let a Critic pick the winner.
+
+``BestOfN`` is an *algorithm* (plain class with ``run(x)``), not an
+Agent. It orchestrates a generator Agent and a judge Agent with metric
+feedback. Its ``run(x)`` returns the highest-scored candidate.
+
+Requires a local llama-server at ``$OPERAD_LLAMACPP_HOST`` (default
+``127.0.0.1:8080``). Set ``OPERAD_LLAMACPP_MODEL`` to pick a model.
+
+    uv run python examples/best_of_n.py
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+
+from pydantic import BaseModel, Field
+
+from operad import BestOfN, Configuration, Critic, Reasoner
+
+
+class Question(BaseModel):
+    text: str = Field(description="A trivia question.")
+
+
+class Answer(BaseModel):
+    reasoning: str = Field(default="", description="Short justification.")
+    answer: str = Field(default="", description="A concise factual answer.")
+
+
+def _cfg() -> Configuration:
+    return Configuration(
+        backend="llamacpp",
+        host=os.environ.get("OPERAD_LLAMACPP_HOST", "127.0.0.1:8080"),
+        model=os.environ.get("OPERAD_LLAMACPP_MODEL", "default"),
+        temperature=0.9,
+        max_tokens=256,
+    )
+
+
+async def _main() -> None:
+    cfg = _cfg()
+    generator = Reasoner(config=cfg, input=Question, output=Answer)
+    judge = Critic(config=cfg)
+
+    await generator.abuild()
+    await judge.abuild()
+
+    bon = BestOfN(generator=generator, judge=judge, n=3)
+    winner = await bon.run(Question(text="What is the tallest mountain on Earth?"))
+    print(winner.model_dump_json(indent=2))
+
+
+if __name__ == "__main__":
+    asyncio.run(_main())

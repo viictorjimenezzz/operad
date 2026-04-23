@@ -12,6 +12,29 @@ class Planner(Agent[In, Out]):
     ``list[Step]``) field. Subclass to specialize: a software-engineering
     planner might override ``role`` to mention tools, a travel planner
     might override ``rules`` to add budget constraints.
+
+    A canonical few-shot::
+
+        from pydantic import BaseModel, Field
+        from operad import Example
+
+        class Goal(BaseModel):
+            goal: str = Field(description="What to accomplish.")
+
+        class Plan(BaseModel):
+            steps: list[str] = Field(default_factory=list)
+
+        examples = (
+            Example[Goal, Plan](
+                input=Goal(goal="Bake a loaf of bread."),
+                output=Plan(steps=[
+                    "Mix flour, water, salt, yeast.",
+                    "Knead the dough for ten minutes.",
+                    "Let rise for one hour.",
+                    "Shape and bake at 220C for 30 minutes.",
+                ]),
+            ),
+        )
     """
 
     role = "You are a methodical planner that turns goals into small, concrete steps."
