@@ -185,13 +185,32 @@ All network-requiring examples read `OPERAD_LLAMACPP_HOST` /
 uv run pytest tests/
 ```
 
-The integration test runs only when opted in:
+### Integration tests (opt-in)
+
+Gated by `OPERAD_INTEGRATION=<backend>`; never run in CI by default. One
+backend at a time — each test skips unless its specific value is set.
+
+| Backend  | `OPERAD_INTEGRATION` | Required env   | Optional env (with defaults)                                          |
+| -------- | -------------------- | -------------- | --------------------------------------------------------------------- |
+| llamacpp | `llamacpp`           | —              | `OPERAD_LLAMACPP_HOST` (`127.0.0.1:8080`), `OPERAD_LLAMACPP_MODEL` (`default`)   |
+| openai   | `openai`             | `OPENAI_API_KEY` | `OPERAD_OPENAI_MODEL` (`gpt-4o-mini`)                               |
+| ollama   | `ollama`             | —              | `OPERAD_OLLAMA_HOST` (`127.0.0.1:11434`), `OPERAD_OLLAMA_MODEL` (`llama3.2`)      |
+| lmstudio | `lmstudio`           | —              | `OPERAD_LMSTUDIO_HOST` (`127.0.0.1:1234`), `OPERAD_LMSTUDIO_MODEL` (`default`)    |
 
 ```bash
 OPERAD_INTEGRATION=llamacpp \
 OPERAD_LLAMACPP_HOST=127.0.0.1:8080 \
 OPERAD_LLAMACPP_MODEL=qwen2.5-7b-instruct \
 uv run pytest tests/integration -v
+
+OPERAD_INTEGRATION=openai OPENAI_API_KEY=sk-... \
+uv run pytest tests/integration/test_openai.py -v
+
+OPERAD_INTEGRATION=ollama \
+uv run pytest tests/integration/test_ollama.py -v
+
+OPERAD_INTEGRATION=lmstudio \
+uv run pytest tests/integration/test_lmstudio.py -v
 ```
 
 ## Layout
