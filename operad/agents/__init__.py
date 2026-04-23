@@ -14,6 +14,17 @@ without users having to know the exact domain path.
 
 from __future__ import annotations
 
+from .conversational import (
+    Persona,
+    RefusalLeaf,
+    Safeguard,
+    SafeguardVerdict,
+    StyledUtterance,
+    Talker,
+    TurnChoice,
+    TurnTaker,
+    Utterance,
+)
 from .parallel import Parallel
 from .pipeline import Pipeline
 from .reasoning import (
@@ -42,10 +53,19 @@ __all__ = [
     "Extractor",
     "Observation",
     "Parallel",
+    "Persona",
     "Pipeline",
     "Planner",
     "ReAct",
     "Reasoner",
+    "RefusalLeaf",
+    "Safeguard",
+    "SafeguardVerdict",
+    "StyledUtterance",
+    "Talker",
     "Task",
     "Thought",
+    "TurnChoice",
+    "TurnTaker",
+    "Utterance",
 ]
