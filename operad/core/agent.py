@@ -12,6 +12,8 @@ instance attributes carry the live values, freely mutable before
 from __future__ import annotations
 
 import copy
+import time
+import uuid
 from collections.abc import Sequence
 from contextvars import ContextVar
 from typing import Any, ClassVar, Generic, Self, TYPE_CHECKING, TypeVar
@@ -301,30 +303,64 @@ class Agent(strands.Agent, Generic[In, Out]):
         if tracer is not None:
             return await tracer.record(self, x)  # type: ignore[return-value,no-any-return]
 
-        if not self._built:
-            raise BuildError(
-                "not_built",
-                "call .build() before .invoke()",
-                agent=type(self).__name__,
+        from ..runtime.observers import base as _obs
+
+        parent_entry = _obs._PATH_STACK.get()
+        if parent_entry is None:
+            path = type(self).__name__
+        else:
+            parent_agent, parent_path = parent_entry
+            attr = _attr_name_hint(parent_agent, self) or type(self).__name__
+            path = f"{parent_path}.{attr}"
+
+        run_id = _obs._RUN_ID.get() or uuid.uuid4().hex
+        started = time.monotonic()
+        tok_r = _obs._RUN_ID.set(run_id)
+        tok_p = _obs._PATH_STACK.set((self, path))
+        try:
+            await _obs.registry.notify(
+                _obs.AgentEvent(run_id, path, "start", x, None, None, started, None, {})
             )
 
-        if not isinstance(x, self.input):  # type: ignore[arg-type]
-            raise BuildError(
-                "input_mismatch",
-                f"expected {self.input.__name__}, got {type(x).__name__}",  # type: ignore[union-attr]
-                agent=type(self).__name__,
+            if not self._built:
+                raise BuildError(
+                    "not_built",
+                    "call .build() before .invoke()",
+                    agent=type(self).__name__,
+                )
+
+            if not isinstance(x, self.input):  # type: ignore[arg-type]
+                raise BuildError(
+                    "input_mismatch",
+                    f"expected {self.input.__name__}, got {type(x).__name__}",  # type: ignore[union-attr]
+                    agent=type(self).__name__,
+                )
+
+            y = await self.forward(x)
+
+            if not isinstance(y, self.output):  # type: ignore[arg-type]
+                raise BuildError(
+                    "output_mismatch",
+                    f"forward returned {type(y).__name__}, expected {self.output.__name__}",  # type: ignore[union-attr]
+                    agent=type(self).__name__,
+                )
+
+            await _obs.registry.notify(
+                _obs.AgentEvent(
+                    run_id, path, "end", x, y, None, started, time.monotonic(), {}
+                )
             )
-
-        y = await self.forward(x)
-
-        if not isinstance(y, self.output):  # type: ignore[arg-type]
-            raise BuildError(
-                "output_mismatch",
-                f"forward returned {type(y).__name__}, expected {self.output.__name__}",  # type: ignore[union-attr]
-                agent=type(self).__name__,
+            return y
+        except BaseException as e:
+            await _obs.registry.notify(
+                _obs.AgentEvent(
+                    run_id, path, "error", x, None, e, started, time.monotonic(), {}
+                )
             )
-
-        return y
+            raise
+        finally:
+            _obs._RUN_ID.reset(tok_r)
+            _obs._PATH_STACK.reset(tok_p)
 
     async def __call__(self, x: In) -> Out:  # type: ignore[override]
         return await self.invoke(x)
@@ -345,3 +381,10 @@ class Agent(strands.Agent, Generic[In, Out]):
         from .build import abuild_agent
 
         return await abuild_agent(self)
+
+
+def _attr_name_hint(parent: "Agent[Any, Any]", child: "Agent[Any, Any]") -> str | None:
+    for name, value in parent._children.items():
+        if value is child:
+            return name
+    return None

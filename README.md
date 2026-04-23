@@ -135,19 +135,82 @@ uv run python examples/parallel.py
 Set `OPERAD_LLAMACPP_HOST` and `OPERAD_LLAMACPP_MODEL` to point
 somewhere else.
 
+## Run from YAML
+
+You can run an agent end-to-end without writing Python by pointing the
+`operad` CLI at a YAML config:
+
+```yaml
+# examples/config-react.yaml
+agent: operad.agents.reasoning.react.ReAct
+config:
+  backend: llamacpp
+  host: 127.0.0.1:8080
+  model: qwen2.5-7b-instruct
+  temperature: 0.3
+runtime:
+  slots:
+    - backend: llamacpp
+      host: 127.0.0.1:8080
+      limit: 8
+```
+
+```bash
+uv run operad run   examples/config-react.yaml --input examples/task.json
+uv run operad trace examples/config-react.yaml
+uv run operad graph examples/config-react.yaml --format json
+```
+
+`run` validates the input JSON against the agent's `input` model, builds
+the graph, invokes, and prints the `Out` as JSON. `trace` prints the
+Mermaid rendering of the built graph; `graph` dumps it as JSON.
+
+## Examples
+
+One narrative example per major abstraction, in `examples/`:
+
+- `parallel.py` — fan-out over specialized `Reasoner`s with a combine step.
+- `pipeline.py` — three-stage `Pipeline` (`Extractor -> Planner -> Evaluator`) with typed edges.
+- `react.py` — standalone `ReAct`; prints the Mermaid graph before running.
+- `best_of_n.py` — `BestOfN` algorithm over a `Reasoner` generator and `Critic` judge.
+- `custom_agent.py` — minimal user-defined `Agent[In, Out]` subclass with seeded `examples=`.
+- `mermaid_export.py` — **offline** demo: `build()` a small composite and print its Mermaid graph.
+
+All network-requiring examples read `OPERAD_LLAMACPP_HOST` /
+`OPERAD_LLAMACPP_MODEL`; `mermaid_export.py` runs without a model.
+
 ## Tests
 
 ```bash
 uv run pytest tests/
 ```
 
-The integration test runs only when opted in:
+### Integration tests (opt-in)
+
+Gated by `OPERAD_INTEGRATION=<backend>`; never run in CI by default. One
+backend at a time — each test skips unless its specific value is set.
+
+| Backend  | `OPERAD_INTEGRATION` | Required env   | Optional env (with defaults)                                          |
+| -------- | -------------------- | -------------- | --------------------------------------------------------------------- |
+| llamacpp | `llamacpp`           | —              | `OPERAD_LLAMACPP_HOST` (`127.0.0.1:8080`), `OPERAD_LLAMACPP_MODEL` (`default`)   |
+| openai   | `openai`             | `OPENAI_API_KEY` | `OPERAD_OPENAI_MODEL` (`gpt-4o-mini`)                               |
+| ollama   | `ollama`             | —              | `OPERAD_OLLAMA_HOST` (`127.0.0.1:11434`), `OPERAD_OLLAMA_MODEL` (`llama3.2`)      |
+| lmstudio | `lmstudio`           | —              | `OPERAD_LMSTUDIO_HOST` (`127.0.0.1:1234`), `OPERAD_LMSTUDIO_MODEL` (`default`)    |
 
 ```bash
 OPERAD_INTEGRATION=llamacpp \
 OPERAD_LLAMACPP_HOST=127.0.0.1:8080 \
 OPERAD_LLAMACPP_MODEL=qwen2.5-7b-instruct \
 uv run pytest tests/integration -v
+
+OPERAD_INTEGRATION=openai OPENAI_API_KEY=sk-... \
+uv run pytest tests/integration/test_openai.py -v
+
+OPERAD_INTEGRATION=ollama \
+uv run pytest tests/integration/test_ollama.py -v
+
+OPERAD_INTEGRATION=lmstudio \
+uv run pytest tests/integration/test_lmstudio.py -v
 ```
 
 ## Layout

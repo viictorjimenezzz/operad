@@ -10,5 +10,6 @@ from __future__ import annotations
 
 from .best_of_n import BestOfN
 from .judge import Candidate, Score
+from .sweep import Sweep, SweepCell, SweepReport
 
-__all__ = ["BestOfN", "Candidate", "Score"]
+__all__ = ["BestOfN", "Candidate", "Score", "Sweep", "SweepCell", "SweepReport"]
