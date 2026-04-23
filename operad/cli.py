@@ -76,7 +76,7 @@ def _run(args: argparse.Namespace) -> int:
 
     agent.build()
     out = asyncio.run(agent.invoke(x))
-    print(out.model_dump_json())
+    print(out.response.model_dump_json())
     return 0
 
 

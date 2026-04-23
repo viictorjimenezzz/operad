@@ -104,7 +104,7 @@ class ReAct(Agent[Task, Answer]):
         )
 
     async def forward(self, x: Task) -> Answer:  # type: ignore[override]
-        thought = await self.reasoner(x)
-        action = await self.actor(thought)
-        observation = await self.extractor(action)
-        return await self.evaluator(observation)
+        thought = (await self.reasoner(x)).response
+        action = (await self.actor(thought)).response
+        observation = (await self.extractor(action)).response
+        return (await self.evaluator(observation)).response

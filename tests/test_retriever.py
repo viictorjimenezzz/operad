@@ -25,9 +25,9 @@ async def test_retriever_builds_without_config_and_returns_typed_hits() -> None:
     await r.abuild()
 
     out = await r(Query(text="hello", k=2))
-    assert isinstance(out, Hits)
-    assert [h.text for h in out.items] == ["one", "two"]
-    assert out.items[0].score == 0.9
+    assert isinstance(out.response, Hits)
+    assert [h.text for h in out.response.items] == ["one", "two"]
+    assert out.response.items[0].score == 0.9
 
 
 async def test_retriever_passes_query_through() -> None:

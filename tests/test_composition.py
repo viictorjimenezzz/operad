@@ -38,13 +38,13 @@ async def test_linear_pipeline_invokes_end_to_end(cfg) -> None:
             # forward() is called once with sentinel inputs during build()
             # (where intermediates are default-constructed outputs), so it
             # must not branch on payload values - just route.
-            mid = await self.first(x)
-            return await self.second(mid)
+            mid = (await self.first(x)).response
+            return (await self.second(mid)).response
 
     p = await Pipeline().abuild()
     out = await p(A(text="start"))
-    assert isinstance(out, C)
-    assert out.label == "done"
+    assert isinstance(out.response, C)
+    assert out.response.label == "done"
 
 
 async def test_fanout_with_gather_records_all_edges(cfg) -> None:
@@ -64,7 +64,7 @@ async def test_fanout_with_gather_records_all_edges(cfg) -> None:
         async def forward(self, x: A) -> D:  # type: ignore[override]
             a, b = await asyncio.gather(self.left(x), self.right(x))
             return D.model_construct(
-                payload=[str(a.value), str(b.value)]
+                payload=[str(a.response.value), str(b.response.value)]
             )
 
     f = await FanOut().abuild()
@@ -74,8 +74,8 @@ async def test_fanout_with_gather_records_all_edges(cfg) -> None:
     assert callees == {"FanOut.left", "FanOut.right"}
 
     out = await f(A(text="go"))
-    assert isinstance(out, D)
-    assert out.payload == ["10", "20"]
+    assert isinstance(out.response, D)
+    assert out.response.payload == ["10", "20"]
 
 
 async def test_nested_composites_are_captured(cfg) -> None:
@@ -90,7 +90,7 @@ async def test_nested_composites_are_captured(cfg) -> None:
             )
 
         async def forward(self, x: A) -> B:  # type: ignore[override]
-            return await self.leaf(x)
+            return (await self.leaf(x)).response
 
     class Outer(Agent):
         input = A
@@ -104,8 +104,8 @@ async def test_nested_composites_are_captured(cfg) -> None:
             )
 
         async def forward(self, x: A) -> C:  # type: ignore[override]
-            mid = await self.inner(x)
-            return await self.final(mid)
+            mid = (await self.inner(x)).response
+            return (await self.final(mid)).response
 
     o = await Outer().abuild()
 
@@ -122,8 +122,8 @@ async def test_nested_composites_are_captured(cfg) -> None:
     assert any(e.callee.endswith(".leaf") for e in g.edges)
 
     out = await o(A(text="go"))
-    assert isinstance(out, C)
-    assert out.label == "ok"
+    assert isinstance(out.response, C)
+    assert out.response.label == "ok"
 
 
 async def test_same_child_called_multiple_times_records_multiple_edges(cfg) -> None:
@@ -139,7 +139,7 @@ async def test_same_child_called_multiple_times_records_multiple_edges(cfg) -> N
 
         async def forward(self, x: A) -> B:  # type: ignore[override]
             _ = await self.step(x)
-            return await self.step(x)
+            return (await self.step(x)).response
 
     t = await Twice().abuild()
     step_edges = [e for e in t._graph.edges if e.callee == "Twice.step"]

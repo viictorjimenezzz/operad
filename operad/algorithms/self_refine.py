@@ -52,21 +52,21 @@ class SelfRefine(Generic[In, Out]):
         self.max_iter = max_iter
 
     async def run(self, x: In) -> Out:
-        current: Out = await self.generator(x)
+        current: Out = (await self.generator(x)).response
         for _ in range(self.max_iter):
-            r = await self.reflector(
+            r = (await self.reflector(
                 ReflectionInput(
                     original_request=str(x),
                     candidate_answer=str(current),
                 )
-            )
+            )).response
             if not r.needs_revision:
                 return current
-            current = await self.refiner(
+            current = (await self.refiner(
                 RefinementInput(
                     request=str(x),
                     prior=current,
                     critique=r,
                 )
-            )
+            )).response
         return current

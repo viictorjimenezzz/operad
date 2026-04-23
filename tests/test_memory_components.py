@@ -72,8 +72,8 @@ async def test_belief_extractor_invoke_with_canned_forward(cfg) -> None:
     try:
         await leaf.abuild()
         out = await leaf(Conversation(turns=[Turn(speaker="user", text="I love jazz.")]))
-        assert isinstance(out, Beliefs)
-        assert out.items[0].object == "jazz"
+        assert isinstance(out.response, Beliefs)
+        assert out.response.items[0].object == "jazz"
     finally:
         del type(leaf).forward
 
@@ -86,8 +86,8 @@ async def test_user_model_extractor_invoke_with_canned_forward(cfg) -> None:
     try:
         await leaf.abuild()
         out = await leaf(Conversation(turns=[Turn(speaker="user", text="I'm Ada.")]))
-        assert isinstance(out, UserModel)
-        assert out.attributes == {"name": "Ada"}
+        assert isinstance(out.response, UserModel)
+        assert out.response.attributes == {"name": "Ada"}
     finally:
         del type(leaf).forward
 
@@ -100,7 +100,7 @@ async def test_episodic_summarizer_invoke_with_canned_forward(cfg) -> None:
     try:
         await leaf.abuild()
         out = await leaf(Conversation(turns=[Turn(speaker="user", text="hello")]))
-        assert isinstance(out, Summary)
-        assert out.title == "Hi"
+        assert isinstance(out.response, Summary)
+        assert out.response.title == "Hi"
     finally:
         del type(leaf).forward

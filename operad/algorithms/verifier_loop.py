@@ -34,8 +34,8 @@ class VerifierLoop(Generic[In, Out]):
     async def run(self, x: In) -> Out:
         last: Out | None = None
         for _ in range(self.max_iter):
-            last = await self.generator(x)
-            score = await self.critic(Candidate(input=x, output=last))
+            last = (await self.generator(x)).response
+            score = (await self.critic(Candidate(input=x, output=last))).response
             if score.score >= self.threshold:
                 return last
         assert last is not None  # max_iter >= 1 guaranteed at construction

@@ -57,7 +57,7 @@ async def test_context_optimizer_fills_empty_context() -> None:
 
     opt = ContextOptimizer(read_file=fake_read)
     await opt.abuild()
-    out = await opt(
+    out = (await opt(
         PRDiff(
             chunks=[
                 DiffChunk(path="a.py", old="x", new="y"),
@@ -65,7 +65,7 @@ async def test_context_optimizer_fills_empty_context() -> None:
                 DiffChunk(path="", old="x", new="y"),
             ]
         )
-    )
+    )).response
     assert out.chunks[0].context, "context should be filled from fake_read"
     assert "a.py" in out.chunks[0].context
     assert out.chunks[1].context == "prefilled"
@@ -79,7 +79,7 @@ async def test_context_optimizer_survives_read_file_errors() -> None:
 
     opt = ContextOptimizer(read_file=boom)
     await opt.abuild()
-    out = await opt(PRDiff(chunks=[DiffChunk(path="nope.py", old="", new="")]))
+    out = (await opt(PRDiff(chunks=[DiffChunk(path="nope.py", old="", new="")]))).response
     assert out.chunks[0].context == ""
 
 
@@ -90,7 +90,7 @@ async def test_context_optimizer_trims_large_files() -> None:
 
     opt = ContextOptimizer(read_file=big, window=5)
     await opt.abuild()
-    out = await opt(PRDiff(chunks=[DiffChunk(path="big.py", old="", new="")]))
+    out = (await opt(PRDiff(chunks=[DiffChunk(path="big.py", old="", new="")]))).response
     ctx = out.chunks[0].context
     assert "..." in ctx
     assert "line0" in ctx

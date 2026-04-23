@@ -69,7 +69,7 @@ async def test_allow_path_invokes_turn_taker_and_persona(cfg) -> None:
     )
     await talker.abuild()
 
-    out = await talker(Utterance(user_message="hi"))
+    out = (await talker(Utterance(user_message="hi"))).response
     assert isinstance(out, StyledUtterance)
     assert out.response == "ok then"
     assert talker.turn_taker.calls == 1
@@ -88,7 +88,7 @@ async def test_block_path_short_circuits_to_refusal(cfg) -> None:
     )
     await talker.abuild()
 
-    out = await talker(Utterance(user_message="disallowed"))
+    out = (await talker(Utterance(user_message="disallowed"))).response
     assert isinstance(out, StyledUtterance)
     assert "can't help" in out.response
     # Refusal path bypasses the other two leaves at runtime. They are
@@ -111,6 +111,6 @@ async def test_graph_records_both_branches(cfg) -> None:
 async def test_refusal_leaf_does_not_need_config() -> None:
     refusal = RefusalLeaf()
     await refusal.abuild()
-    out = await refusal(SafeguardVerdict(label="block", reason="nope"))
+    out = (await refusal(SafeguardVerdict(label="block", reason="nope"))).response
     assert isinstance(out, StyledUtterance)
     assert out.response

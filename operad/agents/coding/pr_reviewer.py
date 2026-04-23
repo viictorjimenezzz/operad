@@ -52,9 +52,9 @@ class PRReviewer(Agent[PRDiff, ReviewReport]):
         self.reviewer = CodeReviewer(config=config)
 
     async def forward(self, x: PRDiff) -> ReviewReport:  # type: ignore[override]
-        enriched = await self.optimizer(x)
-        summary = await self.summarizer(enriched)
-        report = await self.reviewer(enriched)
+        enriched = (await self.optimizer(x)).response
+        summary = (await self.summarizer(enriched)).response
+        report = (await self.reviewer(enriched)).response
         return ReviewReport(
             comments=list(report.comments),
             summary=summary.headline,

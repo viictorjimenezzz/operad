@@ -141,16 +141,16 @@ class Talker(Agent[Utterance, StyledUtterance]):
         self.refusal = RefusalLeaf()
 
     async def forward(self, x: Utterance) -> StyledUtterance:  # type: ignore[override]
-        verdict = await self.safeguard(x)
+        verdict = (await self.safeguard(x)).response
 
         # Trace-time: visit every branch so `build()` records both edges
         # and type-checks the block path. This replaces Stream E's Switch.
         if _TRACER.get() is not None:
             await self.turn_taker(x)
             await self.persona(x)
-            return await self.refusal(verdict)
+            return (await self.refusal(verdict)).response
 
         if verdict.label == "block":
-            return await self.refusal(verdict)
+            return (await self.refusal(verdict)).response
         await self.turn_taker(x)
-        return await self.persona(x)
+        return (await self.persona(x)).response

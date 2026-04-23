@@ -105,7 +105,7 @@ class Sweep(Generic[In, Out]):
         )
 
         cells = [
-            SweepCell[In, Out](parameters=combo, output=out)
+            SweepCell[In, Out](parameters=combo, output=out.response)
             for combo, out in zip(combos, outputs)
         ]
         return SweepReport[In, Out](cells=cells)

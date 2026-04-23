@@ -56,7 +56,7 @@ async def test_shared_leaf_across_deep_branches_warns_once(cfg) -> None:
             self.leaf = shared
 
         async def forward(self, x: A) -> A:  # type: ignore[override]
-            return await self.leaf(x)
+            return (await self.leaf(x)).response
 
     root = Parallel(
         {"left": Branch(), "right": Branch()},
