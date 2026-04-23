@@ -15,6 +15,24 @@ class Evaluator(Agent[In, Out]):
     The last step of a reason-act-observe-evaluate chain. The output
     schema typically has a short ``reasoning`` field followed by the
     concrete ``answer`` so the model's commitment is explicit.
+
+    A canonical few-shot on an ``Observation -> Answer`` specialization::
+
+        from operad import Example
+        from operad.agents.reasoning.react import Observation, Answer
+
+        examples = (
+            Example[Observation, Answer](
+                input=Observation(
+                    result="The lookup returned 1.09 EUR per USD.",
+                    success=True,
+                ),
+                output=Answer(
+                    reasoning="The rate lookup succeeded with a clear value.",
+                    answer="1 USD = 1.09 EUR",
+                ),
+            ),
+        )
     """
 
     role = "You are a careful evaluator that commits to a final answer."
