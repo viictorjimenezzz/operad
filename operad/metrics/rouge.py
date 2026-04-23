@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
+from .base import MetricBase
+
 _TOKEN = re.compile(r"\w+")
 
 
@@ -15,7 +17,7 @@ def _tokens(s: str) -> list[str]:
 
 
 @dataclass
-class Rouge1:
+class Rouge1(MetricBase):
     """Unigram overlap F1 between `predicted.<field>` and `expected.<field>`.
 
     Not a full `rouge-score` reimplementation — just precision, recall,

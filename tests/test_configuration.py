@@ -74,6 +74,27 @@ def test_configuration_new_fields_defaults() -> None:
     assert cfg.backoff_base == 0.5
 
 
+def test_configuration_anthropic_forbids_host() -> None:
+    with pytest.raises(ValidationError):
+        Configuration(
+            backend="anthropic",
+            model="claude-haiku-4-5",
+            host="api.anthropic.com",
+        )
+
+
+def test_configuration_anthropic_accepts_api_key() -> None:
+    cfg = Configuration(
+        backend="anthropic",
+        model="claude-haiku-4-5",
+        api_key="sk-ant-test",
+        reasoning_tokens=512,
+    )
+    assert cfg.backend == "anthropic"
+    assert cfg.api_key == "sk-ant-test"
+    assert cfg.reasoning_tokens == 512
+
+
 def test_configuration_still_forbids_unknown_after_new_fields() -> None:
     with pytest.raises(ValidationError):
         Configuration(

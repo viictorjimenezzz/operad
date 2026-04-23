@@ -68,3 +68,11 @@ _RUN_ID: ContextVar[str | None] = ContextVar("_RUN_ID", default=None)
 _PATH_STACK: ContextVar[tuple["Agent[Any, Any]", str] | None] = ContextVar(
     "_PATH_STACK", default=None
 )
+
+# Per-invoke scratch dict for retry metadata. `Agent.invoke` sets it
+# before dispatching to `forward` and merges it into the terminal event
+# metadata; the default leaf forward populates it via `with_retry`'s
+# on_attempt callback.
+_RETRY_META: ContextVar[dict[str, Any] | None] = ContextVar(
+    "_RETRY_META", default=None
+)

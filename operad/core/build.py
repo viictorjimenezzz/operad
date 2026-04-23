@@ -258,7 +258,12 @@ def _init_strands(a: Agent[Any, Any]) -> None:
         from strands.types.agent import ConcurrentInvocationMode
 
         model = resolve_model(a.config)  # type: ignore[arg-type]
-        system_prompt = a.format_system_message() or None
+        rendered = a.format_system_message()
+        if isinstance(rendered, list):
+            rendered = "\n\n".join(
+                m.get("content", "") for m in rendered if m.get("role") == "system"
+            )
+        system_prompt = rendered or None
         strands.Agent.__init__(
             a,
             model=model,
@@ -357,6 +362,21 @@ async def abuild_agent(root: Agent[Any, Any]) -> Agent[Any, Any]:
                 f"expected {root.output.__name__}",  # type: ignore[union-attr]
                 agent=type(root).__name__,
             )
+    else:
+        # Default-forward leaf root: trace is skipped (there's no graph to
+        # capture), but verify the declared `output` can be round-tripped
+        # as a Pydantic model so a malformed contract fails at build time
+        # rather than on first invoke.
+        try:
+            root.output.model_construct()  # type: ignore[union-attr]
+        except Exception as e:
+            raise BuildError(
+                "output_mismatch",
+                f"leaf root {type(root).__name__}.output "
+                f"({getattr(root.output, '__name__', root.output)!r}) "
+                f"is not a usable Pydantic model: {e}",
+                agent=type(root).__name__,
+            ) from e
 
     for a in _tree(root):
         _init_strands(a)

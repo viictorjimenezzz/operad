@@ -98,6 +98,7 @@ from .core import (
     to_mermaid,
 )
 from .core.graph import TypeRegistry
+from .datasets import Dataset
 from .eval import EvalReport, evaluate
 from .metrics import (
     Contains,
@@ -110,8 +111,10 @@ from .metrics import (
     Rouge1,
     RubricCritic,
 )
+from .metrics.base import MetricBase
 from .models import resolve_model
 from .runtime import SlotRegistry, set_limit
+from . import tracing
 from .runtime.trace import Trace, TraceObserver, TraceStep
 from .runtime.trace_diff import TraceDiff, TraceStepDelta, trace_diff
 from .runtime.observers import (
@@ -169,6 +172,7 @@ __all__ = [
     "Conversation",
     "CostTracker",
     "Critic",
+    "Dataset",
     "Critique",
     "Debate",
     "DebateRecord",
@@ -193,6 +197,7 @@ __all__ = [
     "Latency",
     "MemoryStore",
     "Metric",
+    "MetricBase",
     "Node",
     "Observation",
     "Observer",
@@ -271,4 +276,5 @@ __all__ = [
     "to_json",
     "to_mermaid",
     "trace_diff",
+    "tracing",
 ]

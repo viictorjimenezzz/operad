@@ -14,29 +14,11 @@ CodeHits)``) while keeping the same dispatch skeleton.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from ....core.agent import Agent, Example
-
-
-class Hit(BaseModel):
-    text: str = Field(description="The retrieved content.")
-    score: float = Field(description="Relevance score in [0, 1].")
-    source: str = Field(default="", description="Source identifier.")
-
-
-class Query(BaseModel):
-    text: str = Field(description="The search query.")
-    k: int = Field(default=5, description="Maximum number of hits to return.")
-
-
-class Hits(BaseModel):
-    items: list[Hit] = Field(
-        default_factory=list,
-        description="Hits ordered by descending relevance.",
-    )
+from ..schemas import Hit, Hits, Query
 
 
 class Retriever(Agent[Query, Hits]):

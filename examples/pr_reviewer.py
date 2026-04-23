@@ -1,19 +1,18 @@
 """Synthetic PR review against a local llama.cpp endpoint.
 
-    OPERAD_LLAMACPP_HOST=127.0.0.1:8080 \\
-    OPERAD_LLAMACPP_MODEL=<model> \\
-    uv run python examples/pr_reviewer.py
+Requires a local llama-server serving google/gemma-4-e4b on 127.0.0.1:9000.
+Override via OPERAD_LLAMACPP_HOST and OPERAD_LLAMACPP_MODEL.
 
-Without ``OPERAD_LLAMACPP_MODEL`` set, the script prints a hint and
-exits cleanly — so it is safe to run as a smoke check.
+    uv run python examples/pr_reviewer.py
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
 
-from operad import Configuration, DiffChunk, PRDiff, PRReviewer, set_limit
+from operad import DiffChunk, PRDiff, PRReviewer, set_limit
+
+from _config import local_config
 
 
 SYNTHETIC = PRDiff(
@@ -37,23 +36,8 @@ async def _fake_read(path: str) -> str:
     return f"# {path}\n# (synthetic file body)\n"
 
 
-def _cfg(model: str) -> Configuration:
-    return Configuration(
-        backend="llamacpp",
-        host=os.environ.get("OPERAD_LLAMACPP_HOST", "127.0.0.1:8080"),
-        model=model,
-        temperature=0.2,
-        max_tokens=1024,
-    )
-
-
 async def _main() -> None:
-    model = os.environ.get("OPERAD_LLAMACPP_MODEL")
-    if not model:
-        print("Set OPERAD_LLAMACPP_MODEL to run this example.")
-        return
-
-    cfg = _cfg(model)
+    cfg = local_config(temperature=0.2, max_tokens=1024)
     set_limit(backend="llamacpp", host=cfg.host, limit=2)
 
     reviewer = PRReviewer(config=cfg, read_file=_fake_read)

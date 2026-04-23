@@ -13,27 +13,10 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel
 
 from ....core.agent import Agent, Example
-
-
-class ToolCall(BaseModel):
-    tool_name: str = Field(default="", description="Name of the tool to invoke.")
-    args: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Keyword arguments passed to the tool.",
-    )
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-
-class ToolResult(BaseModel):
-    ok: bool = Field(description="True iff the tool ran successfully.")
-    result: Any = Field(default=None, description="Tool return value when ok.")
-    error: str = Field(default="", description="Error message when not ok.")
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+from ..schemas import ToolCall, ToolResult
 
 
 class Tool(Protocol):
@@ -60,6 +43,7 @@ class ToolUser(Agent[ToolCall, ToolResult]):
             output=ToolResult(ok=True, result=3),
         ),
     )
+    default_sampling = {"temperature": 0.0}
 
     def __init__(
         self,

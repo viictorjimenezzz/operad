@@ -8,11 +8,21 @@ under ``if __name__ == "__main__":``).
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
 
 EXAMPLES_DIR = Path(__file__).resolve().parent.parent / "examples"
+
+
+@pytest.fixture(autouse=True)
+def _examples_on_path():
+    sys.path.insert(0, str(EXAMPLES_DIR))
+    try:
+        yield
+    finally:
+        sys.path.remove(str(EXAMPLES_DIR))
 
 
 @pytest.mark.parametrize("path", sorted(EXAMPLES_DIR.glob("*.py")))

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ....core.agent import Agent, Example
-from ..talker import TurnChoice, Utterance
+from ..schemas import TurnChoice, Utterance
 
 
 class TurnTaker(Agent[Utterance, TurnChoice]):

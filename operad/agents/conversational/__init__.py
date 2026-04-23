@@ -7,15 +7,9 @@ end-to-end composition: a safeguarded, persona-styled response.
 
 from __future__ import annotations
 
-from .talker import (
-    RefusalLeaf,
-    SafeguardVerdict,
-    StyledUtterance,
-    Talker,
-    TurnChoice,
-    Utterance,
-)
 from .components import Persona, Safeguard, TurnTaker
+from .schemas import SafeguardVerdict, StyledUtterance, TurnChoice, Utterance
+from .talker import RefusalLeaf, Talker
 
 __all__ = [
     "Persona",

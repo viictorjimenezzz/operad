@@ -1,24 +1,25 @@
 """Fan-out demo: run several specialized Reasoners on a shared prompt.
 
+Requires a local llama-server serving google/gemma-4-e4b on 127.0.0.1:9000.
+Override via OPERAD_LLAMACPP_HOST and OPERAD_LLAMACPP_MODEL.
+
 Each child of the ``Parallel`` composite runs concurrently against the
 same local model server; the combine step folds their outputs into a
 single report. Good minimal showcase of typed composition +
 ``abuild()`` + per-endpoint concurrency slots.
 
     uv run python examples/parallel.py
-
-Set ``OPERAD_LLAMACPP_HOST`` and ``OPERAD_LLAMACPP_MODEL`` to point at a
-different llama-server endpoint or model.
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
 
 from pydantic import BaseModel, Field
 
-from operad import Configuration, Parallel, Reasoner, set_limit
+from operad import Parallel, Reasoner, set_limit
+
+from _config import local_config
 
 
 class Go(BaseModel):
@@ -41,19 +42,8 @@ TASKS: dict[str, tuple[str, str]] = {
 }
 
 
-def _cfg(model: str) -> Configuration:
-    return Configuration(
-        backend="llamacpp",
-        host=os.environ.get("OPERAD_LLAMACPP_HOST", "127.0.0.1:8080"),
-        model=model,
-        temperature=0.7,
-        max_tokens=512,
-    )
-
-
 async def _main() -> None:
-    model = os.environ.get("OPERAD_LLAMACPP_MODEL", "default")
-    cfg = _cfg(model)
+    cfg = local_config(temperature=0.7, max_tokens=512)
     set_limit(backend="llamacpp", host=cfg.host, limit=len(TASKS))
 
     children = {

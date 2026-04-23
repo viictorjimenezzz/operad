@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ....core.agent import Agent, Example
-from ..shapes import Conversation, Turn, UserModel
+from ..schemas import Conversation, Turn, UserModel
 
 
 class UserModelExtractor(Agent[Conversation, UserModel]):

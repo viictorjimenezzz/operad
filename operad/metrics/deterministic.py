@@ -9,11 +9,13 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
+from .base import MetricBase
+
 T = TypeVar("T", bound=BaseModel)
 
 
 @dataclass
-class ExactMatch:
+class ExactMatch(MetricBase):
     """1.0 if `predicted == expected` (deep Pydantic equality), else 0.0."""
 
     name: str = "exact_match"
@@ -23,7 +25,7 @@ class ExactMatch:
 
 
 @dataclass
-class JsonValid:
+class JsonValid(MetricBase):
     """1.0 if `predicted` round-trips through `model_dump_json` cleanly.
 
     Pydantic v2 objects are validated at construction, so this almost
@@ -44,7 +46,7 @@ class JsonValid:
 
 
 @dataclass
-class Latency:
+class Latency(MetricBase):
     """Wall-clock time (seconds) of a callable, returned as a *negative* score.
 
     Metrics are "higher is better" by convention. Call

@@ -19,7 +19,7 @@ class Evaluator(Agent[In, Out]):
     A canonical few-shot on an ``Observation -> Answer`` specialization::
 
         from operad import Example
-        from operad.agents.reasoning.react import Observation, Answer
+        from operad.agents.reasoning.schemas import Observation, Answer
 
         examples = (
             Example[Observation, Answer](
@@ -45,3 +45,4 @@ class Evaluator(Agent[In, Out]):
         "If the observation is insufficient, say so in the answer rather "
         "than fabricating detail.",
     )
+    default_sampling = {"temperature": 0.2}

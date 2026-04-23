@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ....core.agent import Agent, Example
-from ..talker import SafeguardVerdict, Utterance
+from ..schemas import SafeguardVerdict, Utterance
 
 
 class Safeguard(Agent[Utterance, SafeguardVerdict]):

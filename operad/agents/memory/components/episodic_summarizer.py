@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ....core.agent import Agent, Example
-from ..shapes import Conversation, Summary, Turn
+from ..schemas import Conversation, Summary, Turn
 
 
 class EpisodicSummarizer(Agent[Conversation, Summary]):

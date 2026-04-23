@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ....core.agent import Agent, Example
-from ..types import DiffChunk, PRDiff, ReviewComment, ReviewReport
+from ..schemas import DiffChunk, PRDiff, ReviewComment, ReviewReport
 
 
 class CodeReviewer(Agent[PRDiff, ReviewReport]):

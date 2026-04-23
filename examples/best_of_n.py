@@ -1,11 +1,11 @@
 """Best-of-N: generate 3 candidate answers, let a Critic pick the winner.
 
+Requires a local llama-server serving google/gemma-4-e4b on 127.0.0.1:9000.
+Override via OPERAD_LLAMACPP_HOST and OPERAD_LLAMACPP_MODEL.
+
 ``BestOfN`` is an *algorithm* (plain class with ``run(x)``), not an
 Agent. It orchestrates a generator Agent and a judge Agent with metric
 feedback. Its ``run(x)`` returns the highest-scored candidate.
-
-Requires a local llama-server at ``$OPERAD_LLAMACPP_HOST`` (default
-``127.0.0.1:8080``). Set ``OPERAD_LLAMACPP_MODEL`` to pick a model.
 
     uv run python examples/best_of_n.py
 """
@@ -13,11 +13,12 @@ Requires a local llama-server at ``$OPERAD_LLAMACPP_HOST`` (default
 from __future__ import annotations
 
 import asyncio
-import os
 
 from pydantic import BaseModel, Field
 
-from operad import BestOfN, Configuration, Critic, Reasoner
+from operad import BestOfN, Critic, Reasoner
+
+from _config import local_config
 
 
 class Question(BaseModel):
@@ -29,18 +30,8 @@ class Answer(BaseModel):
     answer: str = Field(default="", description="A concise factual answer.")
 
 
-def _cfg() -> Configuration:
-    return Configuration(
-        backend="llamacpp",
-        host=os.environ.get("OPERAD_LLAMACPP_HOST", "127.0.0.1:8080"),
-        model=os.environ.get("OPERAD_LLAMACPP_MODEL", "default"),
-        temperature=0.9,
-        max_tokens=256,
-    )
-
-
 async def _main() -> None:
-    cfg = _cfg()
+    cfg = local_config(temperature=0.9, max_tokens=256)
     generator = Reasoner(config=cfg, input=Question, output=Answer)
     judge = Critic(config=cfg)
 
