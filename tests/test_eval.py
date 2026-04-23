@@ -6,7 +6,8 @@ import asyncio
 
 import pytest
 
-from operad import BuildError, EvalReport, ExactMatch, evaluate
+from operad import BuildError, Dataset, EvalReport, ExactMatch, evaluate
+from operad.core.agent import _compute_graph_hash
 
 from .conftest import A, FakeLeaf
 
@@ -63,3 +64,34 @@ async def test_evaluate_respects_concurrency_bound(cfg) -> None:
     await evaluate(agent, dataset, [ExactMatch()], concurrency=2)
     assert max_inflight <= 2
     assert max_inflight >= 1
+
+
+async def test_evaluate_with_dataset_populates_hashes(cfg) -> None:
+    agent = FakeLeaf(config=cfg, input=A, output=A, canned={"text": "hello"})
+    await agent.abuild()
+
+    ds = Dataset(
+        [(A(text="q1"), A(text="hello")), (A(text="q2"), A(text="hello"))],
+        name="greetings",
+        version="v1",
+    )
+    report = await evaluate(agent, ds, [ExactMatch()])
+
+    assert report.summary["exact_match"] == pytest.approx(1.0)
+    assert report.hash_dataset == ds.hash_dataset
+    assert report.hash_dataset != ""
+    assert report.hash_graph == _compute_graph_hash(agent)
+    assert report.hash_graph != ""
+    assert report.dataset_name == "greetings"
+    assert report.dataset_version == "v1"
+
+
+async def test_evaluate_raw_iterable_still_works(cfg) -> None:
+    agent = FakeLeaf(config=cfg, input=A, output=A, canned={"text": "hi"})
+    await agent.abuild()
+
+    pairs = [(A(text="a"), A(text="hi"))]
+    report = await evaluate(agent, pairs, [ExactMatch()])
+    assert report.summary["exact_match"] == pytest.approx(1.0)
+    assert report.hash_dataset != ""
+    assert report.dataset_name == ""

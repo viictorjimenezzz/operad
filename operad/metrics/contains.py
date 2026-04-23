@@ -6,9 +6,11 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
+from .base import MetricBase
+
 
 @dataclass
-class Contains:
+class Contains(MetricBase):
     """1.0 if `str(expected.<field>)` is a substring of `str(predicted.<field>)`.
 
     Useful for "did the answer mention X?" style evaluation where
