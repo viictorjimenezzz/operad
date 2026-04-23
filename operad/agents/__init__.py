@@ -14,6 +14,17 @@ without users having to know the exact domain path.
 
 from __future__ import annotations
 
+from .coding import (
+    CodeReviewer,
+    ContextOptimizer,
+    DiffChunk,
+    DiffSummarizer,
+    PRDiff,
+    PRReviewer,
+    PRSummary,
+    ReviewComment,
+    ReviewReport,
+)
 from .conversational import (
     Persona,
     RefusalLeaf,
@@ -79,8 +90,12 @@ __all__ = [
     "Beliefs",
     "Choice",
     "Classifier",
+    "CodeReviewer",
+    "ContextOptimizer",
     "Conversation",
     "Critic",
+    "DiffChunk",
+    "DiffSummarizer",
     "EpisodicSummarizer",
     "Evaluator",
     "Extractor",
@@ -88,6 +103,9 @@ __all__ = [
     "Hits",
     "MemoryStore",
     "Observation",
+    "PRDiff",
+    "PRReviewer",
+    "PRSummary",
     "Parallel",
     "Persona",
     "Pipeline",
@@ -100,6 +118,8 @@ __all__ = [
     "ReflectionInput",
     "Reflector",
     "Retriever",
+    "ReviewComment",
+    "ReviewReport",
     "RouteInput",
     "Router",
     "Safeguard",
