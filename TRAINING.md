@@ -322,7 +322,75 @@ fit loop to the hash.
 
 ---
 
-## 10. Further reading
+## 10. Observability and human feedback
+
+`Trainer.fit` emits lifecycle events on operad's observer registry, so
+training is visible wherever the agent graph already is:
+
+- **Terminal.** `TrainerProgressObserver` (from `operad.train`)
+  renders a Rich progress bar with nested epoch + batch bars. It
+  consumes `algo_start`/`iteration`/`algo_end` events from `Trainer`
+  plus `batch_start`/`batch_end` from `DataLoader`.
+- **Web dashboard.** `operad-dashboard` mounts four per-run panels
+  under `GET /runs/{run_id}`: fitness curve, mutation heatmap,
+  `PromptDrift` timeline, training progress. They all share the
+  same bounded event buffer inside `WebDashboardObserver`.
+- **Disk / external.** `JsonlObserver` and `OtelObserver` carry the
+  same events; no training-specific plumbing required.
+
+```python
+from operad import dashboard as operad_dashboard
+from operad.runtime.observers import registry
+from operad.train import TrainerProgressObserver
+
+registry.register(TrainerProgressObserver())
+operad_dashboard.attach(port=7860)  # if dashboard is running
+
+report = await trainer.fit(loader, epochs=5)
+```
+
+The `PromptDrift` callback emits an `AlgorithmEvent(kind="iteration",
+algorithm_path="PromptDrift")` per epoch with `hash_before`,
+`hash_after`, and `changed_params`, so the dashboard's drift panel
+turns silent prompt evolution into a scannable timeline.
+
+### Human-in-the-loop training with Studio
+
+`HumanFeedbackCallback` dumps one NDJSON row per validation sample
+during `Trainer.fit`; `apps/studio/` lets a human rate those rows in
+the browser and re-launches training with `HumanFeedbackLoss` as the
+loss:
+
+```python
+from operad.train import (
+    HumanFeedbackCallback, HumanFeedbackLoss, Trainer,
+)
+
+# Round 1 — dump unrated rows for labeling.
+trainer = Trainer(agent, optimizer, loss_fn,
+                  callbacks=[HumanFeedbackCallback("hf.jsonl")])
+await trainer.fit(loader, val_ds=val, epochs=1)
+trainer.save("talker.json")
+
+# Human labels hf.jsonl via `operad-studio --data-dir . --agent-bundle talker.json`.
+
+# Round 2 — train on ratings.
+trainer2 = Trainer.load(
+    "talker.json",
+    loss_fn=HumanFeedbackLoss("hf.jsonl"),
+    optimizer_factory=lambda a: TextualGradientDescent(a.parameters(), lr=1.0),
+)
+await trainer2.fit(loader, epochs=3)
+```
+
+Rows whose rating is null → `HumanFeedbackLoss` returns a neutral
+score with a null gradient, so the trainer still counts the sample
+but applies no pressure — the agent only gets feedback on outputs
+the human has actually rated.
+
+---
+
+## 11. Further reading
 
 - [`operad/optim/README.md`](operad/optim/README.md) — the design
   document: the four-word spine, the full dependency graph, the

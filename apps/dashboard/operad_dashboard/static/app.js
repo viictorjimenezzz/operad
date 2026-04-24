@@ -45,7 +45,8 @@ async function refreshRuns() {
     runsBody.innerHTML = "";
     for (const it of items) {
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${it.run_id.slice(0, 8)}</td><td>${it.state}</td><td>${fmtTime(it.last_event_at)}</td>`;
+      const shortId = it.run_id.slice(0, 8);
+      tr.innerHTML = `<td><a href="/runs/${it.run_id}">${shortId}</a></td><td>${it.state}</td><td>${fmtTime(it.last_event_at)}</td>`;
       runsBody.appendChild(tr);
     }
     const previous = currentRunId;

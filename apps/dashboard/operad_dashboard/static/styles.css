@@ -77,3 +77,66 @@ header h1 { margin: 0; font-size: 1.1rem; letter-spacing: 0.05em; }
 table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
 th, td { text-align: left; padding: 0.2rem 0.4rem; border-bottom: 1px solid #1d212b; }
 th { color: #8a92a6; font-weight: 500; }
+
+/* Run-detail page layout. */
+.home-link { color: inherit; text-decoration: none; }
+.home-link:hover { text-decoration: underline; }
+.badge-running { background: #1e4d2b; }
+.badge-ended { background: #2d3340; }
+.badge-error { background: #5a1f24; }
+.run-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+.run-detail .panel { min-height: 200px; }
+
+/* Progress panel. */
+.progress-bars { display: flex; flex-direction: column; gap: 0.5rem; }
+.progress-bars label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; }
+.progress-bars progress { width: 100%; height: 0.75rem; }
+.progress-eta { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; color: #8a92a6; }
+.progress-label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* Fitness panel. */
+#fitness-chart { width: 100%; max-width: 560px; height: 240px; }
+.fallback {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  color: #8a92a6;
+  max-height: 200px;
+  overflow: auto;
+}
+
+/* Mutations panel. */
+.mutations-table-wrap { overflow-x: auto; max-height: 320px; }
+#mutations-table { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+#mutations-table td {
+  text-align: center;
+  min-width: 3rem;
+  border: 1px solid #1d212b;
+  font-size: 0.75rem;
+}
+#mutations-table td.op-name { text-align: left; font-weight: 500; }
+#mutations-table td.zero-success { background: rgba(239, 68, 68, 0.8); color: #fff; }
+
+/* Drift panel. */
+.drift-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  font-size: 0.8rem;
+}
+.drift-timeline li {
+  padding: 0.4rem 0.5rem;
+  border-left: 2px solid #2d3340;
+  margin-bottom: 0.3rem;
+}
+.drift-timeline li.first { border-left-color: #4a8cff; }
+.drift-hash { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #8a92a6; }
+.drift-changed { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; margin-top: 0.2rem; }
+.drift-changed summary { cursor: pointer; color: #8a92a6; }
+.drift-changed ul { margin: 0.2rem 0 0 1rem; padding: 0; }

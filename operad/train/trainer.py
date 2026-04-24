@@ -38,6 +38,7 @@ from ..optim.optimizer import Optimizer
 from ..optim.parameter import Parameter, TextualGradient
 from ..optim.tape import tape
 from ..runtime.events import set_current_epoch
+from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 from ..utils.errors import BuildError
 from .callbacks import Callback, EarlyStopping, GradClip
 from .report import EpochReport, TrainingReport
@@ -158,10 +159,58 @@ class Trainer(Generic[In, Out]):
         epoch_reports: list[EpochReport] = []
         batch_counter = 0
 
+        with _enter_algorithm_run():
+            await emit_algorithm_event(
+                "algo_start",
+                algorithm_path="Trainer",
+                payload={
+                    "epochs": int(epochs),
+                    "seed_hash_content": seed_hash,
+                    "batch_size": getattr(loader, "batch_size", None),
+                },
+            )
+            training = await self._fit_loop(
+                loader=loader,
+                val_ds=val_ds,
+                epochs=epochs,
+                cbs=cbs,
+                seed_hash=seed_hash,
+                early_stopping=early_stopping,
+                epoch_reports=epoch_reports,
+                batch_counter=batch_counter,
+            )
+            await emit_algorithm_event(
+                "algo_end",
+                algorithm_path="Trainer",
+                payload={
+                    "epochs_completed": len(epoch_reports),
+                    "final_hash_content": self.agent.hash_content,
+                },
+            )
+        self._last_report = training
+        return training
+
+    async def _fit_loop(
+        self,
+        *,
+        loader: DataLoader[In, Out],
+        val_ds: Dataset[In, Out] | None,
+        epochs: int,
+        cbs: list[Callback],
+        seed_hash: str,
+        early_stopping: EarlyStopping | None,
+        epoch_reports: list[EpochReport],
+        batch_counter: int,
+    ) -> TrainingReport:
         for cb in cbs:
             await cb.on_fit_start(self)
 
         for epoch in range(epochs):
+            await emit_algorithm_event(
+                "iteration",
+                algorithm_path="Trainer",
+                payload={"phase": "epoch_start", "epoch": epoch},
+            )
             for cb in cbs:
                 await cb.on_epoch_start(self, epoch)
 
@@ -236,6 +285,18 @@ class Trainer(Generic[In, Out]):
             for cb in cbs:
                 await cb.on_epoch_end(self, report)
 
+            await emit_algorithm_event(
+                "iteration",
+                algorithm_path="Trainer",
+                payload={
+                    "phase": "epoch_end",
+                    "epoch": epoch,
+                    "train_loss": train_loss,
+                    "val_loss": val_loss,
+                    "hash_content": report.hash_content,
+                },
+            )
+
             if self._should_stop:
                 break
 
@@ -249,7 +310,6 @@ class Trainer(Generic[In, Out]):
         for cb in cbs:
             await cb.on_fit_end(self, training)
 
-        self._last_report = training
         return training
 
     def save(self, path: str | Path) -> None:

@@ -79,8 +79,18 @@ def _safe_metadata(meta: dict[str, Any]) -> dict[str, Any]:
 class WebDashboardObserver:
     """Operad Observer that broadcasts events to per-subscriber asyncio queues."""
 
-    def __init__(self, registry: RunRegistry | None = None) -> None:
-        self.registry = registry or RunRegistry()
+    def __init__(
+        self,
+        registry: RunRegistry | None = None,
+        *,
+        events_per_run: int | None = None,
+    ) -> None:
+        if registry is not None:
+            self.registry = registry
+        elif events_per_run is not None:
+            self.registry = RunRegistry(events_per_run=events_per_run)
+        else:
+            self.registry = RunRegistry()
         self._subscribers: list[asyncio.Queue[dict[str, Any]]] = []
 
     def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
@@ -111,6 +121,7 @@ class WebDashboardObserver:
                 metadata=event.metadata,
             )
         envelope = serialize_event(event)
+        self.registry.append_event(event.run_id, envelope)
         await self.broadcast(envelope)
 
     async def broadcast(self, envelope: dict[str, Any]) -> None:
