@@ -18,11 +18,12 @@ exactly once, ensuring the ``AgentGraph`` records edges to all of them.
 from __future__ import annotations
 
 import re
+import warnings
 from collections.abc import Hashable, Mapping
 from typing import Any
 
 from ...core.agent import Agent, In, Out, _TRACER
-from ...utils.errors import BuildError
+from ...utils.errors import BuildError, SideEffectDuringTrace
 
 
 _SLUG_RE = re.compile(r"[^0-9a-zA-Z_]+")
@@ -48,6 +49,12 @@ class Switch(Agent[In, Out]):
 
     At build time (tracer active): invoke the router, then invoke every
     branch once with the input sentinel so the graph captures all edges.
+
+    Branches must remain side-effect-free during symbolic trace; if a
+    branch needs to call a real API, do it inside a leaf child of the
+    branch, not in the branch's ``forward`` itself. A
+    ``SideEffectDuringTrace`` warning fires once per ``Switch.build()``
+    to remind callers of this contract.
     """
 
     def __init__(
@@ -79,6 +86,12 @@ class Switch(Agent[In, Out]):
     async def forward(self, x: In) -> Out:  # type: ignore[override]
         tracer = _TRACER.get()
         if tracer is not None:
+            warnings.warn(
+                "Switch is tracing all branches; ensure they are "
+                "side-effect-free. See Switch docstring.",
+                SideEffectDuringTrace,
+                stacklevel=3,
+            )
             await self.router(x)
             for br in self._branches.values():
                 await br(x)

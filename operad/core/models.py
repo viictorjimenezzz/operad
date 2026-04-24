@@ -27,6 +27,7 @@ Per-backend handling of `Configuration` knobs:
 from __future__ import annotations
 
 import time
+import warnings
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
@@ -521,8 +522,47 @@ _BATCH_POLLERS = {
 # --- resolver ---------------------------------------------------------------
 
 
+_BACKEND_SAMPLING_CAPABILITIES: dict[Backend, frozenset[str]] = {
+    "anthropic": frozenset(
+        {"temperature", "max_tokens", "top_p", "top_k", "stop", "reasoning_tokens"}
+    ),
+    "bedrock": frozenset(
+        {"temperature", "max_tokens", "top_p", "top_k", "seed", "stop"}
+    ),
+    "llamacpp": frozenset(
+        {"temperature", "max_tokens", "top_p", "top_k", "seed", "stop", "reasoning_tokens"}
+    ),
+    "lmstudio": frozenset(
+        {"temperature", "max_tokens", "top_p", "top_k", "seed", "stop", "reasoning_tokens"}
+    ),
+    "ollama": frozenset({"temperature", "max_tokens", "top_p", "stop"}),
+    "openai": frozenset(
+        {"temperature", "max_tokens", "top_p", "top_k", "seed", "stop", "reasoning_tokens"}
+    ),
+    "gemini": frozenset(
+        {"temperature", "max_tokens", "top_p", "top_k", "seed", "stop", "reasoning_tokens"}
+    ),
+    "huggingface": frozenset(
+        {"temperature", "max_tokens", "top_p", "top_k", "seed", "stop"}
+    ),
+}
+
+
+def _warn_dead_sampling_knobs(cfg: Configuration) -> None:
+    honoured = _BACKEND_SAMPLING_CAPABILITIES.get(cfg.backend, frozenset())
+    user_set = cfg.sampling.model_fields_set
+    for field in sorted(user_set - honoured):
+        warnings.warn(
+            f"Configuration.sampling.{field} is set but backend "
+            f"{cfg.backend!r} does not consume it; the value will be ignored.",
+            UserWarning,
+            stacklevel=3,
+        )
+
+
 def resolve_model(cfg: Configuration) -> "Model":
     """Return a configured `strands.models.Model` for the given configuration."""
+    _warn_dead_sampling_knobs(cfg)
     if cfg.batch:
         return _build_batch(cfg)
     match cfg.backend:
