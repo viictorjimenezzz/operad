@@ -46,6 +46,60 @@ def to_mermaid(graph: AgentGraph) -> str:
     return "\n".join(lines)
 
 
+def to_mermaid_edge(
+    caller: str,
+    callee: str,
+    callee_io: tuple[type, type],
+    *,
+    caller_io: tuple[type, type] | None = None,
+    note: str | None = None,
+) -> str:
+    """Render a two-node, one-edge Mermaid fragment for BuildError footers.
+
+    The edge is marked with ❌ to draw the reader's eye to the failing
+    hand-off. When `caller_io` is None the caller is rendered as a bare
+    label (e.g. the composite root whose own `forward` returned the wrong
+    type); otherwise both endpoints carry `In -> Out` labels.
+    """
+    caller_id = _mermaid_id(caller)
+    callee_id = _mermaid_id(callee)
+    if caller_io is not None:
+        caller_label = (
+            f"{caller}<br/>{_type_label(caller_io[0])} -> "
+            f"{_type_label(caller_io[1])}"
+        )
+    else:
+        caller_label = caller
+    callee_label = (
+        f"{callee}<br/>{_type_label(callee_io[0])} -> "
+        f"{_type_label(callee_io[1])}"
+    )
+    edge_label = "❌" if note is None else f"❌ {note}"
+    lines = [
+        "flowchart LR",
+        f'    {caller_id}["{caller_label}"]',
+        f'    {callee_id}["{callee_label}"]',
+        f'    {caller_id} -->|"{edge_label}"| {callee_id}',
+    ]
+    return "\n".join(lines)
+
+
+def to_mermaid_node(
+    path: str, io: tuple[type, type], *, note: str | None = None
+) -> str:
+    """Render a single-node Mermaid fragment for BuildError footers.
+
+    Used for errors with no failing edge (e.g. `router_miss`: the Switch
+    received a label no branch matched). When `note` is given it is
+    appended as a second line inside the node label.
+    """
+    nid = _mermaid_id(path)
+    label = f"{path}<br/>{_type_label(io[0])} -> {_type_label(io[1])}"
+    if note is not None:
+        label = f"{label}<br/>❌ {note}"
+    return "flowchart LR\n" + f'    {nid}["{label}"]'
+
+
 def _node_json(n: Node) -> dict[str, Any]:
     return {
         "path": n.path,
@@ -143,4 +197,6 @@ __all__ = [
     "from_json",
     "to_json",
     "to_mermaid",
+    "to_mermaid_edge",
+    "to_mermaid_node",
 ]

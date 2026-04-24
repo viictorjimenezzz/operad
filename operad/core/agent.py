@@ -899,6 +899,39 @@ class Agent(strands.Agent, Generic[In, Out]):
 
         return await abuild_agent(self)
 
+    # --- freeze / thaw ------------------------------------------------------
+    def freeze(self, path: str) -> None:
+        """Persist a built agent to `path` as a single JSON file.
+
+        Skips API keys. Captures declared state, computation graph, each
+        leaf's rendered system message, and a pickled blob of composite /
+        custom-forward routing state with intra-tree Agent references
+        rewritten to a sentinel that `thaw` reattaches.
+        """
+        from .freeze import freeze_agent
+
+        freeze_agent(self, path)
+
+    @classmethod
+    def thaw(cls, path: str) -> "Agent[Any, Any]":
+        """Reconstitute a built agent previously written with `freeze`.
+
+        Skips symbolic tracing and per-leaf system-message rendering.
+        Raises `BuildError("not_built", ...)` on version mismatch or
+        when the frozen root's class is not a subclass of `cls`.
+        """
+        from .freeze import thaw_agent
+
+        obj = thaw_agent(path)
+        if not isinstance(obj, cls):
+            raise BuildError(
+                "not_built",
+                f"frozen class {type(obj).__name__} is not a "
+                f"{cls.__name__}",
+                agent=cls.__name__,
+            )
+        return obj
+
     # --- presentation -------------------------------------------------------
     def summary(self) -> str:
         """One-paragraph overview: class, leaf/composite counts, hashes.

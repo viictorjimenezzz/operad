@@ -89,11 +89,18 @@ class Switch(Agent[In, Out]):
         label = getattr(choice, "label", None)
         branch = self._branches.get(label)
         if branch is None:
+            from ...core.graph import to_mermaid_node
+
             raise BuildError(
                 "router_miss",
                 f"router emitted {label!r} with no matching branch; "
                 f"known labels: {sorted(self._branches, key=repr)}",
                 agent=type(self).__name__,
+                mermaid=to_mermaid_node(
+                    type(self).__name__,
+                    (self.input, self.output),  # type: ignore[arg-type]
+                    note=f"router emitted {label!r}, no branch matched",
+                ),
             )
         return (await branch(x)).response
 
