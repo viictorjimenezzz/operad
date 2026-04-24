@@ -29,6 +29,13 @@ Wave 1 slot 1-1 ships the `Parameter` data spine; later waves add
 
 from __future__ import annotations
 
+from operad.optim.loss import (
+    CompositeLoss,
+    CriticLoss,
+    JSONShapeLoss,
+    Loss,
+    LossFromMetric,
+)
 from operad.optim.parameter import (
     CategoricalParameter,
     ExampleListParameter,
@@ -47,9 +54,14 @@ from operad.optim.parameter import (
 
 __all__ = [
     "CategoricalParameter",
+    "CompositeLoss",
+    "CriticLoss",
     "ExampleListParameter",
     "FloatParameter",
+    "JSONShapeLoss",
     "ListConstraint",
+    "Loss",
+    "LossFromMetric",
     "NumericConstraint",
     "Parameter",
     "ParameterConstraint",
