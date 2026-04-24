@@ -14,9 +14,11 @@ that calls ``await best.run(x)`` from its own ``forward``.
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Generic
 
 from ..core.agent import Agent, In, Out
+from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 from .judge import Candidate, Score
 
 
@@ -42,18 +44,50 @@ class BestOfN(Generic[In, Out]):
         self.n = n
 
     async def run(self, x: In) -> Out:
-        # Concurrent calls to one Agent corrupt the strands-owned conversation
-        # history, so give each candidate its own instance.
-        gens = [self.generator] + [self.generator.clone() for _ in range(self.n - 1)]
-        judges = [self.judge] + [self.judge.clone() for _ in range(self.n - 1)]
-        if self.n > 1:
-            await asyncio.gather(*(a.abuild() for a in gens[1:] + judges[1:]))
+        path = type(self).__name__
+        started = time.time()
+        with _enter_algorithm_run():
+            await emit_algorithm_event(
+                "algo_start",
+                algorithm_path=path,
+                payload={"n": self.n},
+                started_at=started,
+            )
+            try:
+                # Concurrent calls to one Agent corrupt the strands-owned conversation
+                # history, so give each candidate its own instance.
+                gens = [self.generator] + [self.generator.clone() for _ in range(self.n - 1)]
+                judges = [self.judge] + [self.judge.clone() for _ in range(self.n - 1)]
+                if self.n > 1:
+                    await asyncio.gather(*(a.abuild() for a in gens[1:] + judges[1:]))
 
-        gen_outputs = await asyncio.gather(*(gens[i](x) for i in range(self.n)))
-        candidates: list[Out] = [g.response for g in gen_outputs]
-        judge_outputs = await asyncio.gather(
-            *(judges[i](Candidate(input=x, output=candidates[i])) for i in range(self.n))
-        )
-        scores: list[Score] = [j.response for j in judge_outputs]
-        best = max(range(self.n), key=lambda i: scores[i].score)
-        return candidates[best]
+                gen_outputs = await asyncio.gather(*(gens[i](x) for i in range(self.n)))
+                candidates: list[Out] = [g.response for g in gen_outputs]
+                judge_outputs = await asyncio.gather(
+                    *(judges[i](Candidate(input=x, output=candidates[i])) for i in range(self.n))
+                )
+                scores: list[Score] = [j.response for j in judge_outputs]
+                for i, s in enumerate(scores):
+                    await emit_algorithm_event(
+                        "candidate",
+                        algorithm_path=path,
+                        payload={"candidate_index": i, "score": s.score},
+                    )
+                best = max(range(self.n), key=lambda i: scores[i].score)
+                await emit_algorithm_event(
+                    "algo_end",
+                    algorithm_path=path,
+                    payload={"best_index": best, "score": scores[best].score},
+                    started_at=started,
+                    finished_at=time.time(),
+                )
+                return candidates[best]
+            except Exception as e:
+                await emit_algorithm_event(
+                    "algo_error",
+                    algorithm_path=path,
+                    payload={"type": type(e).__name__, "message": str(e)},
+                    started_at=started,
+                    finished_at=time.time(),
+                )
+                raise

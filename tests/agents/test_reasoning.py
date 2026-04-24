@@ -258,7 +258,7 @@ async def test_retriever_builds_without_config_and_returns_typed_hits() -> None:
     assert r.config is None
     await r.abuild()
 
-    out = await r(Query(text="hello", k=2))
+    out = await r(Query(text="hello", top_k=2))
     assert isinstance(out.response, Hits)
     assert [h.text for h in out.response.items] == ["one", "two"]
     assert out.response.items[0].score == 0.9
@@ -273,10 +273,10 @@ async def test_retriever_passes_query_through() -> None:
 
     r = await Retriever(lookup=lookup).abuild()
     seen.clear()  # discard the trace-time sentinel call
-    await r(Query(text="foo", k=3))
+    await r(Query(text="foo", top_k=3))
     assert len(seen) == 1
     assert seen[0].text == "foo"
-    assert seen[0].k == 3
+    assert seen[0].top_k == 3
 
 # --- from test_router.py ---
 pytestmark = pytest.mark.asyncio

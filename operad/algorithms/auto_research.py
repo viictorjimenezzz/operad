@@ -14,10 +14,12 @@ over a metric-feedback loop, not ``__call__(x: In) -> Out``.
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
+from ..core.agent import Agent
 from ..agents.reasoning.schemas import (
     Answer,
     Hits,
@@ -25,6 +27,7 @@ from ..agents.reasoning.schemas import (
     ReflectionInput,
     Task,
 )
+from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 from .judge import Candidate
 
 if TYPE_CHECKING:
@@ -33,7 +36,6 @@ if TYPE_CHECKING:
         Planner,
         Reasoner,
         Reflector,
-        Retriever,
     )
 
 
@@ -74,7 +76,8 @@ class AutoResearcher:
     Callers pin the leaves' generic types:
 
     - ``planner: Planner[Task, ResearchPlan]``
-    - ``retriever: Retriever`` (``Query -> Hits``, fixed)
+    - ``retriever: Agent[Query, Hits]`` (any compatible leaf — e.g.
+      ``Retriever``, ``FakeRetriever``, ``BM25Retriever``)
     - ``reasoner: Reasoner[ResearchInput, Answer]``
     - ``critic: Critic`` (``Candidate -> Score``, fixed)
     - ``reflector: Reflector`` (``ReflectionInput -> Reflection``, fixed)
@@ -82,13 +85,27 @@ class AutoResearcher:
     Each attempt is independent; under concurrency, supply distinct seeds
     via each leaf's ``Configuration.sampling.seed`` to avoid identical
     candidates.
+
+    Example::
+
+        from operad.agents.reasoning.components import FakeRetriever, Hit
+
+        ar = AutoResearcher(
+            planner=...,
+            retriever=FakeRetriever(
+                corpus=[Hit(text="Paris is the capital of France.", score=0.0)]
+            ),
+            reasoner=...,
+            critic=...,
+            reflector=...,
+        )
     """
 
     def __init__(
         self,
         *,
         planner: Planner,
-        retriever: Retriever,
+        retriever: Agent[Query, Hits],
         reasoner: Reasoner,
         critic: Critic,
         reflector: Reflector,
@@ -110,6 +127,7 @@ class AutoResearcher:
         self.threshold = threshold
 
     async def _one_attempt(self, x: Task) -> tuple[Answer, float]:
+        path = type(self).__name__
         plan = (await self.planner(x)).response
         hits = (await self.retriever(Query(text=plan.query))).response
         draft: Answer = (
@@ -118,7 +136,12 @@ class AutoResearcher:
         score = (
             await self.critic(Candidate(input=x, output=draft))
         ).response.score
-        for _ in range(self.max_iter):
+        await emit_algorithm_event(
+            "iteration",
+            algorithm_path=path,
+            payload={"iter_index": 0, "phase": "reason", "score": score},
+        )
+        for iter_index in range(self.max_iter):
             if score >= self.threshold:
                 break
             r = (
@@ -129,6 +152,15 @@ class AutoResearcher:
                     )
                 )
             ).response
+            await emit_algorithm_event(
+                "iteration",
+                algorithm_path=path,
+                payload={
+                    "iter_index": iter_index + 1,
+                    "phase": "reflect",
+                    "score": score,
+                },
+            )
             draft = (
                 await self.reasoner(
                     ResearchInput(
@@ -141,13 +173,53 @@ class AutoResearcher:
             score = (
                 await self.critic(Candidate(input=x, output=draft))
             ).response.score
+            await emit_algorithm_event(
+                "iteration",
+                algorithm_path=path,
+                payload={
+                    "iter_index": iter_index + 1,
+                    "phase": "reason",
+                    "score": score,
+                },
+            )
         return draft, score
 
     async def run(self, x: Task) -> Answer:
-        pairs = await asyncio.gather(
-            *(self._one_attempt(x) for _ in range(self.n))
-        )
-        return max(pairs, key=lambda p: p[1])[0]
+        path = type(self).__name__
+        started = time.time()
+        with _enter_algorithm_run():
+            await emit_algorithm_event(
+                "algo_start",
+                algorithm_path=path,
+                payload={
+                    "n": self.n,
+                    "max_iter": self.max_iter,
+                    "threshold": self.threshold,
+                },
+                started_at=started,
+            )
+            try:
+                pairs = await asyncio.gather(
+                    *(self._one_attempt(x) for _ in range(self.n))
+                )
+                best = max(pairs, key=lambda p: p[1])
+                await emit_algorithm_event(
+                    "algo_end",
+                    algorithm_path=path,
+                    payload={"score": best[1]},
+                    started_at=started,
+                    finished_at=time.time(),
+                )
+                return best[0]
+            except Exception as e:
+                await emit_algorithm_event(
+                    "algo_error",
+                    algorithm_path=path,
+                    payload={"type": type(e).__name__, "message": str(e)},
+                    started_at=started,
+                    finished_at=time.time(),
+                )
+                raise
 
 
 __all__ = ["AutoResearcher", "ResearchInput", "ResearchPlan"]

@@ -46,6 +46,13 @@ from operad.optim.grad_agent import (
     parameter_grad_for,
     propagate,
 )
+from operad.optim.loss import (
+    CompositeLoss,
+    CriticLoss,
+    JSONShapeLoss,
+    Loss,
+    LossFromMetric,
+)
 from operad.optim.parameter import (
     CategoricalParameter,
     ExampleListParameter,
@@ -61,17 +68,29 @@ from operad.optim.parameter import (
     TextualGradient,
     VocabConstraint,
 )
+from operad.optim.tape import (
+    Tape,
+    TapeEntry,
+    TapeObserver,
+    enabled,
+    tape,
+)
 
 __all__ = [
     "PARAMETER_GRAD_AGENTS",
     "BackpropAgent",
     "CategoricalParameter",
     "CategoricalParameterGrad",
+    "CompositeLoss",
+    "CriticLoss",
     "ExampleListParameter",
     "ExampleListParameterGrad",
     "FloatParameter",
     "FloatParameterGrad",
+    "JSONShapeLoss",
     "ListConstraint",
+    "Loss",
+    "LossFromMetric",
     "NumericConstraint",
     "Parameter",
     "ParameterConstraint",
@@ -83,12 +102,17 @@ __all__ = [
     "PropagateOutput",
     "RuleListParameter",
     "RuleListParameterGrad",
+    "Tape",
+    "TapeEntry",
+    "TapeObserver",
     "TextConstraint",
     "TextParameter",
     "TextParameterGrad",
     "TextualGradient",
     "VocabConstraint",
+    "enabled",
     "parameter_grad",
     "parameter_grad_for",
     "propagate",
+    "tape",
 ]
