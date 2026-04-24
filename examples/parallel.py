@@ -18,6 +18,7 @@ import asyncio
 from pydantic import BaseModel, Field
 
 from operad import Parallel
+from operad.core.config import Sampling
 from operad.agents import Reasoner
 from operad.runtime import set_limit
 
@@ -45,7 +46,7 @@ TASKS: dict[str, tuple[str, str]] = {
 
 
 async def _main() -> None:
-    cfg = local_config(temperature=0.7, max_tokens=512)
+    cfg = local_config(sampling=Sampling(temperature=0.7, max_tokens=512))
     set_limit(backend="llamacpp", host=cfg.host, concurrency=len(TASKS))
 
     children = {

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 
+from operad.core.config import Sampling
 from operad.agents import Talker, Utterance
 from operad.runtime import set_limit
 
@@ -28,7 +29,7 @@ TURNS: list[str] = [
 
 
 async def _main() -> None:
-    cfg = local_config(temperature=0.3, max_tokens=512)
+    cfg = local_config(sampling=Sampling(temperature=0.3, max_tokens=512))
     set_limit(backend="llamacpp", host=cfg.host, concurrency=4)
 
     talker = Talker(config=cfg)

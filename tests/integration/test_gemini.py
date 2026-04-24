@@ -16,6 +16,7 @@ import pytest
 from pydantic import BaseModel
 
 from operad import Agent, Configuration
+from operad.core.config import Sampling
 
 
 pytestmark = [
@@ -44,8 +45,7 @@ async def test_leaf_against_real_gemini() -> None:
         backend="gemini",
         model=os.environ.get("OPERAD_GEMINI_MODEL", "gemini-1.5-flash"),
         api_key=api_key,
-        temperature=0.0,
-        max_tokens=64,
+        sampling=Sampling(temperature=0.0, max_tokens=64),
     )
 
     class Echoer(Agent[_Greeting, _Echo]):

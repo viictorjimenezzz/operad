@@ -17,6 +17,7 @@ import pytest
 from pydantic import BaseModel
 
 from operad import Agent, Configuration
+from operad.core.config import Sampling
 
 
 pytestmark = [
@@ -45,8 +46,7 @@ async def test_leaf_against_real_anthropic() -> None:
         backend="anthropic",
         model=os.environ.get("OPERAD_ANTHROPIC_MODEL", "claude-haiku-4-5"),
         api_key=api_key,
-        temperature=0.0,
-        max_tokens=128,
+        sampling=Sampling(temperature=0.0, max_tokens=128),
     )
 
     class Answerer(Agent[_Question, _Answer]):

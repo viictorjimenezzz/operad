@@ -18,6 +18,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from operad.core.config import Sampling
 from operad.agents import (
     Choice,
     Reasoner,
@@ -38,7 +39,7 @@ class Label(Choice[Literal["greet", "factoid"]]):
 
 
 async def _main() -> None:
-    cfg = local_config(temperature=0.3, max_tokens=256)
+    cfg = local_config(sampling=Sampling(temperature=0.3, max_tokens=256))
 
     router = Router(
         config=cfg,

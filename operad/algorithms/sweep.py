@@ -46,7 +46,7 @@ class Sweep(Generic[In, Out]):
     """Run a parameter grid in parallel over clones of `seed`.
 
     ``parameters`` maps dotted attribute paths (e.g.
-    ``"reasoner.config.temperature"``) to lists of values. Every
+    ``"reasoner.config.sampling.temperature"``) to lists of values. Every
     combination of values spawns one ``seed.clone()``; each clone is
     re-parameterised via :func:`operad.utils.paths.set_path`, rebuilt,
     and invoked with ``x``.

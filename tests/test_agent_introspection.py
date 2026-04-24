@@ -148,8 +148,8 @@ def test_diff_detects_examples_add_and_remove(cfg: Configuration) -> None:
 def test_diff_detects_config_field_changes(cfg: Configuration) -> None:
     a = FakeLeaf(config=cfg, input=A, output=B)
     b = a.clone()
-    b.config.temperature = 0.9
-    b.config.max_tokens = 512
+    b.config.sampling.temperature = 0.9
+    b.config.sampling.max_tokens = 512
 
     d = a.diff(b)
     cfg_changes = [c for c in d.changes if c.kind == "config"]

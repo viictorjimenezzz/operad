@@ -63,10 +63,10 @@ async def test_leaf_returning_wrong_type_raises_output_mismatch(cfg) -> None:
 async def test_prompt_fields_mutable_before_build(cfg) -> None:
     leaf = FakeLeaf(config=cfg, input=A, output=B, task="v1")
     leaf.task = "v2"
-    leaf.config.temperature = 0.1
+    leaf.config.sampling.temperature = 0.1
     await leaf.abuild()
     assert leaf.task == "v2"
-    assert leaf.config.temperature == 0.1
+    assert leaf.config.sampling.temperature == 0.1
 
 
 async def test_invoke_after_build_returns_correct_type(cfg) -> None:

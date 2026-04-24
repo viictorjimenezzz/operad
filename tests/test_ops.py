@@ -102,7 +102,7 @@ def test_append_example_rejects_non_example(cfg) -> None:
 def test_set_temperature_updates_config(cfg) -> None:
     a = _Composite(cfg)
     SetTemperature(path="leaf", temperature=0.9).apply(a)
-    assert a.leaf.config.temperature == 0.9
+    assert a.leaf.config.sampling.temperature == 0.9
 
 
 def test_set_temperature_on_composite_raises(cfg) -> None:

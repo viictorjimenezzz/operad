@@ -10,9 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
-
 from operad import Agent, Configuration
+from operad.core.config import Sampling
 from operad.agents.reasoning.components.classifier import Classifier
 from operad.agents.reasoning.components.critic import Critic
 from operad.agents.reasoning.components.reasoner import Reasoner
@@ -21,16 +20,22 @@ from operad.agents.reasoning.components.router import Router
 from .conftest import A, B, FakeLeaf
 
 
-def _bare_cfg(**overrides: Any) -> Configuration:
+def _bare_cfg(**sampling_overrides: Any) -> Configuration:
     """A Configuration with no sampling fields set unless overridden."""
-    return Configuration(backend="openai", model="gpt-4o-mini", **overrides)
+    if sampling_overrides:
+        return Configuration(
+            backend="openai",
+            model="gpt-4o-mini",
+            sampling=Sampling(**sampling_overrides),
+        )
+    return Configuration(backend="openai", model="gpt-4o-mini")
 
 
 def test_default_sampling_fills_unset_fields() -> None:
     leaf = Classifier(config=_bare_cfg(), input=A, output=B)
     assert leaf.config is not None
-    assert leaf.config.temperature == 0.0
-    assert leaf.config.max_tokens == 128
+    assert leaf.config.sampling.temperature == 0.0
+    assert leaf.config.sampling.max_tokens == 128
 
 
 def test_user_value_wins_over_default() -> None:
@@ -38,8 +43,8 @@ def test_user_value_wins_over_default() -> None:
         config=_bare_cfg(temperature=0.9), input=A, output=B
     )
     assert leaf.config is not None
-    assert leaf.config.temperature == 0.9
-    assert leaf.config.max_tokens == 128
+    assert leaf.config.sampling.temperature == 0.9
+    assert leaf.config.sampling.max_tokens == 128
 
 
 def test_user_max_tokens_wins_over_default() -> None:
@@ -47,8 +52,8 @@ def test_user_max_tokens_wins_over_default() -> None:
         config=_bare_cfg(max_tokens=999), input=A, output=B
     )
     assert leaf.config is not None
-    assert leaf.config.temperature == 0.0
-    assert leaf.config.max_tokens == 999
+    assert leaf.config.sampling.temperature == 0.0
+    assert leaf.config.sampling.max_tokens == 999
 
 
 def test_config_none_is_passthrough() -> None:
@@ -68,35 +73,35 @@ def test_fakeleaf_inherits_empty_default_sampling() -> None:
     cfg = _bare_cfg(temperature=0.42, max_tokens=7)
     leaf = FakeLeaf(config=cfg, input=A, output=B)
     assert leaf.config is not None
-    assert leaf.config.temperature == 0.42
-    assert leaf.config.max_tokens == 7
+    assert leaf.config.sampling.temperature == 0.42
+    assert leaf.config.sampling.max_tokens == 7
 
 
 def test_callers_config_is_not_mutated_in_place() -> None:
     cfg = _bare_cfg()
-    original_temp = cfg.temperature
-    original_max = cfg.max_tokens
+    original_temp = cfg.sampling.temperature
+    original_max = cfg.sampling.max_tokens
     leaf = Classifier(config=cfg, input=A, output=B)
-    assert cfg.temperature == original_temp
-    assert cfg.max_tokens == original_max
+    assert cfg.sampling.temperature == original_temp
+    assert cfg.sampling.max_tokens == original_max
     assert leaf.config is not cfg
 
 
 def test_reasoner_default_temperature() -> None:
     leaf = Reasoner(config=_bare_cfg(), input=A, output=B)
     assert leaf.config is not None
-    assert leaf.config.temperature == 0.7
+    assert leaf.config.sampling.temperature == 0.7
 
 
 def test_critic_defaults() -> None:
     leaf = Critic(config=_bare_cfg())
     assert leaf.config is not None
-    assert leaf.config.temperature == 0.0
-    assert leaf.config.max_tokens == 512
+    assert leaf.config.sampling.temperature == 0.0
+    assert leaf.config.sampling.max_tokens == 512
 
 
 def test_router_defaults() -> None:
     leaf = Router(config=_bare_cfg())
     assert leaf.config is not None
-    assert leaf.config.temperature == 0.0
-    assert leaf.config.max_tokens == 64
+    assert leaf.config.sampling.temperature == 0.0
+    assert leaf.config.sampling.max_tokens == 64

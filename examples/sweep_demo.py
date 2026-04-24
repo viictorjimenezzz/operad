@@ -16,6 +16,7 @@ import asyncio
 from pydantic import BaseModel, Field
 
 from operad import Agent, Configuration
+from operad.core.config import Sampling
 from operad.algorithms import Sweep
 
 
@@ -40,8 +41,7 @@ async def _main() -> None:
         backend="llamacpp",
         host="127.0.0.1:0",
         model="offline",
-        temperature=0.0,
-        max_tokens=16,
+        sampling=Sampling(temperature=0.0, max_tokens=16),
     )
     seed = _EchoLeaf(config=cfg, task="seed")
     await seed.abuild()

@@ -20,6 +20,7 @@ import pytest
 from pydantic import BaseModel
 
 from operad import Agent, Configuration
+from operad.core.config import Sampling
 
 
 pytestmark = [
@@ -46,8 +47,7 @@ async def test_leaf_against_real_llamacpp_server() -> None:
         backend="llamacpp",
         host=os.environ.get("OPERAD_LLAMACPP_HOST", "127.0.0.1:8080"),
         model=os.environ.get("OPERAD_LLAMACPP_MODEL", "default"),
-        temperature=0.0,
-        max_tokens=64,
+        sampling=Sampling(temperature=0.0, max_tokens=64),
     )
 
     class Echoer(Agent[_Greeting, _Echo]):

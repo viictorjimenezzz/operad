@@ -15,6 +15,7 @@ import os
 import pytest
 
 from operad import Configuration
+from operad.core.config import Sampling
 from operad.core.models import resolve_model
 
 
@@ -35,8 +36,7 @@ async def test_huggingface_tiny_generation() -> None:
     cfg = Configuration(
         backend="huggingface",
         model=os.environ.get("OPERAD_HF_MODEL", "HuggingFaceTB/SmolLM2-135M"),
-        temperature=0.0,
-        max_tokens=16,
+        sampling=Sampling(temperature=0.0, max_tokens=16),
     )
     model = resolve_model(cfg)
     out = await model.forward("The capital of France is")

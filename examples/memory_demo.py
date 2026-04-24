@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 
+from operad.core.config import Sampling
 from operad.agents import (
     Belief,
     BeliefExtractor,
@@ -23,7 +24,7 @@ from _config import local_config
 
 
 async def _main() -> None:
-    cfg = local_config(temperature=0.0, max_tokens=512)
+    cfg = local_config(sampling=Sampling(temperature=0.0, max_tokens=512))
 
     extractor = BeliefExtractor(config=cfg)
     await extractor.abuild()

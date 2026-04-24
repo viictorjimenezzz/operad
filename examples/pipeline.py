@@ -16,6 +16,7 @@ import asyncio
 from pydantic import BaseModel, Field
 
 from operad import Pipeline
+from operad.core.config import Sampling
 from operad.agents import Evaluator, Extractor, Planner
 
 from _config import local_config
@@ -40,7 +41,7 @@ class Answer(BaseModel):
 
 
 async def _main() -> None:
-    cfg = local_config(temperature=0.2, max_tokens=512)
+    cfg = local_config(sampling=Sampling(temperature=0.2, max_tokens=512))
     pipeline = Pipeline(
         Extractor(config=cfg, input=Request, output=Task),
         Planner(config=cfg, input=Task, output=Plan),

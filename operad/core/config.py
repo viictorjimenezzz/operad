@@ -28,40 +28,68 @@ _BATCH_BACKENDS: frozenset[Backend] = frozenset(
 )
 
 
+class Sampling(BaseModel):
+    """LLM sampling knobs."""
+
+    temperature: float = 0.7
+    max_tokens: int = 2048
+    top_p: float | None = None
+    top_k: int | None = None
+    seed: int | None = None
+    stop: list[str] | None = None
+    reasoning_tokens: int | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class Resilience(BaseModel):
+    """Retry / timeout policy."""
+
+    timeout: float | None = None
+    max_retries: int = 0
+    backoff_base: float = 0.5
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class IOConfig(BaseModel):
+    """Input/output rendering + streaming toggles."""
+
+    stream: bool = False
+    structuredio: bool = True
+    renderer: Literal["xml", "markdown", "chat"] = "xml"
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class Runtime(BaseModel):
+    """Backend-specific pass-through fields."""
+
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class Configuration(BaseModel):
     """Provider-agnostic runtime knobs for a model call.
 
     `backend` + `model` identify the provider and weights. `host` is required
     for local backends (llamacpp, lmstudio, ollama) and must be absent for
-    hosted backends (openai, bedrock). Sampling knobs are backend-agnostic;
-    unrecognized provider parameters go into `extra` and are passed through
-    by the `models/` resolver.
+    hosted backends (openai, bedrock, anthropic, gemini). Sampling,
+    resilience, io, and backend-specific runtime knobs live in nested
+    sub-models.
     """
 
     backend: Backend
     model: str
     host: str | None = None
     api_key: str | None = None
-
-    temperature: float = 0.7
-    max_tokens: int = 2048
-    top_p: float | None = None
-    top_k: int | None = None
-    reasoning_tokens: int | None = None
-    seed: int | None = None
-    stop: list[str] | None = None
-
-    timeout: float | None = None
-    max_retries: int = 0
-    backoff_base: float = 0.5
-
-    stream: bool = False
-    structuredio: bool = True
-    renderer: Literal["xml", "markdown", "chat"] = "xml"
-
     batch: bool = False
 
-    extra: dict[str, Any] = Field(default_factory=dict)
+    sampling: Sampling = Field(default_factory=Sampling)
+    resilience: Resilience = Field(default_factory=Resilience)
+    io: IOConfig = Field(default_factory=IOConfig)
+    runtime: Runtime = Field(default_factory=Runtime)
 
     model_config = ConfigDict(extra="forbid")
 

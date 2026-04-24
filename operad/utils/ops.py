@@ -147,7 +147,11 @@ class SetTemperature(_OpBase):
                 f"(no config)"
             )
         target.config = target.config.model_copy(
-            update={"temperature": self.temperature}
+            update={
+                "sampling": target.config.sampling.model_copy(
+                    update={"temperature": self.temperature}
+                )
+            }
         )
 
 

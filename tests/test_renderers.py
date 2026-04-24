@@ -10,6 +10,7 @@ from typing import ClassVar
 from pydantic import BaseModel, Field
 
 from operad import Agent, Configuration
+from operad.core.config import IOConfig
 from operad.core import render
 
 
@@ -42,7 +43,7 @@ def _cfg(renderer: str = "xml") -> Configuration:
         backend="llamacpp",
         host="127.0.0.1:0",
         model="test",
-        renderer=renderer,  # type: ignore[arg-type]
+        io=IOConfig(renderer=renderer),  # type: ignore[arg-type]
     )
 
 

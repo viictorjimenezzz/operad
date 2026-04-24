@@ -168,14 +168,16 @@ class Agent(strands.Agent, Generic[In, Out]):
             )
 
         if config is not None and cls.default_sampling:
-            user_set = config.model_fields_set
+            from .config import Sampling
+            user_set = config.sampling.model_fields_set
             fill = {
                 k: v
                 for k, v in cls.default_sampling.items()
-                if k not in user_set and k in type(config).model_fields
+                if k not in user_set and k in Sampling.model_fields
             }
             if fill:
-                config = config.model_copy(update=fill)
+                new_sampling = config.sampling.model_copy(update=fill)
+                config = config.model_copy(update={"sampling": new_sampling})
         self.config = config
         self.role = role if role is not None else cls.role
         self.task = task if task is not None else cls.task
@@ -358,13 +360,13 @@ class Agent(strands.Agent, Generic[In, Out]):
         Default: XML-tagged sections (``<role>``, ``<task>``, ``<rules>``,
         ``<examples>``, ``<output_schema>``). The renderer is selected by
         the class-level ``renderer`` override, falling back to
-        ``config.renderer`` (``"xml"``, ``"markdown"``, or ``"chat"``).
+        ``config.io.renderer`` (``"xml"``, ``"markdown"``, or ``"chat"``).
         The ``"chat"`` renderer returns a list of ``{"role","content"}``
         messages; the others return a single string. Override this
         method for a fully custom wire format.
         """
         mode = type(self).renderer or (
-            self.config.renderer if self.config is not None else "xml"
+            self.config.io.renderer if self.config is not None else "xml"
         )
         if mode == "markdown":
             return render.markdown.render_system(self)
@@ -453,18 +455,18 @@ class Agent(strands.Agent, Generic[In, Out]):
         (see ``operad.core.build._init_strands``); here we only render
         the per-call user turn. Composite agents override this.
 
-        When ``self.config.stream`` is True, dispatches to the streaming
+        When ``self.config.io.stream`` is True, dispatches to the streaming
         path: consumes strands' ``stream_async`` iterator, emits ``chunk``
         observer events for each mid-run token, and parses the accumulated
         text back to ``self.output``. The return shape is unchanged.
 
-        When ``config.structuredio`` is ``False``, the call omits
+        When ``config.io.structuredio`` is ``False``, the call omits
         ``structured_output_model`` and parses the model's textual
         response as JSON against ``self.output``. Use this path for
         backends without native structured output or when the caller
         wants to see exactly what the model produced.
         """
-        if self.config is not None and getattr(self.config, "stream", False):
+        if self.config is not None and self.config.io.stream:
             return await self._stream_forward(x, self._default_chunk_sink)
 
         from ..runtime.observers.base import _RETRY_META
@@ -476,7 +478,7 @@ class Agent(strands.Agent, Generic[In, Out]):
                 meta["retries"] = attempt - 1
                 meta["last_error"] = None if last is None else repr(last)
 
-        structuredio = self.config.structuredio  # type: ignore[union-attr]
+        structuredio = self.config.io.structuredio  # type: ignore[union-attr]
         user_msg = self.format_user_message(x)
 
         async with _acquire_slot(self.config) as slot:  # type: ignore[arg-type]
@@ -492,9 +494,9 @@ class Agent(strands.Agent, Generic[In, Out]):
             try:
                 result = await _with_retry(
                     _call,
-                    max_retries=self.config.max_retries,
-                    backoff_base=self.config.backoff_base,
-                    timeout=self.config.timeout,
+                    max_retries=self.config.resilience.max_retries,
+                    backoff_base=self.config.resilience.backoff_base,
+                    timeout=self.config.resilience.timeout,
                     on_attempt=_record,
                 )
             finally:
@@ -778,7 +780,7 @@ class Agent(strands.Agent, Generic[In, Out]):
     ) -> AsyncIterator[ChunkEvent | OperadOutput[Out]]:
         """Yield ``ChunkEvent``s while the model generates; terminate with the full ``OperadOutput``.
 
-        Equivalent to ``await self.invoke(x)`` when ``config.stream`` is
+        Equivalent to ``await self.invoke(x)`` when ``config.io.stream`` is
         False or the backend does not support streaming — in which case
         exactly one ``OperadOutput`` is yielded and no ``ChunkEvent``s.
 
@@ -786,7 +788,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         whole stream under a new ``run_id``. Downstream consumers must
         key on ``run_id``.
         """
-        if self.config is None or not getattr(self.config, "stream", False):
+        if self.config is None or not self.config.io.stream:
             yield await self.invoke(x)
             return
 

@@ -18,7 +18,7 @@ VALID_YAML = {
         "backend": "llamacpp",
         "host": "127.0.0.1:8080",
         "model": "test-model",
-        "temperature": 0.3,
+        "sampling": {"temperature": 0.3},
     },
     "runtime": {
         "slots": [

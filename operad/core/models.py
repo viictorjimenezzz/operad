@@ -72,27 +72,27 @@ def openai_style_params(cfg: Configuration) -> dict[str, Any]:
     llama.cpp and LM Studio both accept the OpenAI chat-completions params
     dict (temperature, max_tokens, top_p, seed, stop, ...). llama.cpp also
     accepts its own extensions (top_k, mirostat, grammar, ...), which is
-    what `cfg.extra` is for.
+    what `cfg.runtime.extra` is for.
 
     `reasoning_tokens` is forwarded as `max_completion_tokens`, matching
     OpenAI's reasoning-model API; non-reasoning models will error if the
     field is set — callers should leave it unset for those.
     """
     params: dict[str, Any] = {
-        "temperature": cfg.temperature,
-        "max_tokens": cfg.max_tokens,
+        "temperature": cfg.sampling.temperature,
+        "max_tokens": cfg.sampling.max_tokens,
     }
-    if cfg.top_p is not None:
-        params["top_p"] = cfg.top_p
-    if cfg.top_k is not None:
-        params["top_k"] = cfg.top_k
-    if cfg.seed is not None:
-        params["seed"] = cfg.seed
-    if cfg.stop is not None:
-        params["stop"] = cfg.stop
-    if cfg.reasoning_tokens is not None:
-        params["max_completion_tokens"] = cfg.reasoning_tokens
-    params.update(cfg.extra)
+    if cfg.sampling.top_p is not None:
+        params["top_p"] = cfg.sampling.top_p
+    if cfg.sampling.top_k is not None:
+        params["top_k"] = cfg.sampling.top_k
+    if cfg.sampling.seed is not None:
+        params["seed"] = cfg.sampling.seed
+    if cfg.sampling.stop is not None:
+        params["stop"] = cfg.sampling.stop
+    if cfg.sampling.reasoning_tokens is not None:
+        params["max_completion_tokens"] = cfg.sampling.reasoning_tokens
+    params.update(cfg.runtime.extra)
     return params
 
 
@@ -104,10 +104,10 @@ def openai_client_args(cfg: Configuration) -> dict[str, Any]:
     are the caller's responsibility.
     """
     args: dict[str, Any] = {}
-    if cfg.timeout is not None:
-        args["timeout"] = cfg.timeout
-    if cfg.max_retries:
-        args["max_retries"] = cfg.max_retries
+    if cfg.resilience.timeout is not None:
+        args["timeout"] = cfg.resilience.timeout
+    if cfg.resilience.max_retries:
+        args["max_retries"] = cfg.resilience.max_retries
     return args
 
 
@@ -129,29 +129,29 @@ def _build_anthropic(cfg: Configuration) -> "AnthropicModel":
 
     kwargs: dict[str, Any] = {
         "model_id": cfg.model,
-        "temperature": cfg.temperature,
-        "max_tokens": cfg.max_tokens,
+        "temperature": cfg.sampling.temperature,
+        "max_tokens": cfg.sampling.max_tokens,
     }
     if cfg.api_key is not None:
         kwargs["api_key"] = cfg.api_key
-    if cfg.top_p is not None:
-        kwargs["top_p"] = cfg.top_p
-    if cfg.top_k is not None:
-        kwargs["top_k"] = cfg.top_k
-    if cfg.stop is not None:
-        kwargs["stop_sequences"] = cfg.stop
-    if cfg.timeout is not None:
-        kwargs["timeout"] = cfg.timeout
-    if cfg.max_retries:
-        kwargs["max_retries"] = cfg.max_retries
+    if cfg.sampling.top_p is not None:
+        kwargs["top_p"] = cfg.sampling.top_p
+    if cfg.sampling.top_k is not None:
+        kwargs["top_k"] = cfg.sampling.top_k
+    if cfg.sampling.stop is not None:
+        kwargs["stop_sequences"] = cfg.sampling.stop
+    if cfg.resilience.timeout is not None:
+        kwargs["timeout"] = cfg.resilience.timeout
+    if cfg.resilience.max_retries:
+        kwargs["max_retries"] = cfg.resilience.max_retries
 
     additional: dict[str, Any] = {}
-    if cfg.reasoning_tokens is not None:
+    if cfg.sampling.reasoning_tokens is not None:
         additional["thinking"] = {
             "type": "enabled",
-            "budget_tokens": cfg.reasoning_tokens,
+            "budget_tokens": cfg.sampling.reasoning_tokens,
         }
-    additional.update(cfg.extra)
+    additional.update(cfg.runtime.extra)
     if additional:
         kwargs["additional_request_fields"] = additional
 
@@ -163,23 +163,23 @@ def _build_bedrock(cfg: Configuration) -> "BedrockModel":
 
     kwargs: dict[str, Any] = {
         "model_id": cfg.model,
-        "temperature": cfg.temperature,
-        "max_tokens": cfg.max_tokens,
+        "temperature": cfg.sampling.temperature,
+        "max_tokens": cfg.sampling.max_tokens,
     }
-    if cfg.top_p is not None:
-        kwargs["top_p"] = cfg.top_p
-    if cfg.stop is not None:
-        kwargs["stop_sequences"] = cfg.stop
+    if cfg.sampling.top_p is not None:
+        kwargs["top_p"] = cfg.sampling.top_p
+    if cfg.sampling.stop is not None:
+        kwargs["stop_sequences"] = cfg.sampling.stop
 
     additional: dict[str, Any] = {}
-    if cfg.top_k is not None:
-        additional["top_k"] = cfg.top_k
-    if cfg.seed is not None:
-        additional["seed"] = cfg.seed
+    if cfg.sampling.top_k is not None:
+        additional["top_k"] = cfg.sampling.top_k
+    if cfg.sampling.seed is not None:
+        additional["seed"] = cfg.sampling.seed
     if additional:
         kwargs["additional_request_fields"] = additional
 
-    kwargs.update(cfg.extra)
+    kwargs.update(cfg.runtime.extra)
     return BedrockModel(**kwargs)
 
 
@@ -219,15 +219,15 @@ def _build_ollama(cfg: Configuration) -> "OllamaModel":
     assert cfg.host is not None
     kwargs: dict[str, Any] = {
         "model_id": cfg.model,
-        "temperature": cfg.temperature,
-        "max_tokens": cfg.max_tokens,
+        "temperature": cfg.sampling.temperature,
+        "max_tokens": cfg.sampling.max_tokens,
     }
-    if cfg.top_p is not None:
-        kwargs["top_p"] = cfg.top_p
-    if cfg.stop is not None:
-        kwargs["stop_sequences"] = cfg.stop
-    if cfg.extra:
-        kwargs["options"] = dict(cfg.extra)
+    if cfg.sampling.top_p is not None:
+        kwargs["top_p"] = cfg.sampling.top_p
+    if cfg.sampling.stop is not None:
+        kwargs["stop_sequences"] = cfg.sampling.stop
+    if cfg.runtime.extra:
+        kwargs["options"] = dict(cfg.runtime.extra)
     return OllamaModel(host=http_base_url(cfg.host), **kwargs)
 
 
@@ -254,26 +254,26 @@ def _build_gemini(cfg: Configuration) -> "GeminiModel":
         ) from e
 
     params: dict[str, Any] = {
-        "temperature": cfg.temperature,
-        "max_output_tokens": cfg.max_tokens,
+        "temperature": cfg.sampling.temperature,
+        "max_output_tokens": cfg.sampling.max_tokens,
     }
-    if cfg.top_p is not None:
-        params["top_p"] = cfg.top_p
-    if cfg.top_k is not None:
-        params["top_k"] = cfg.top_k
-    if cfg.seed is not None:
-        params["seed"] = cfg.seed
-    if cfg.stop is not None:
-        params["stop_sequences"] = cfg.stop
-    if cfg.reasoning_tokens is not None:
-        params["thinking_config"] = {"thinking_budget": cfg.reasoning_tokens}
-    params.update(cfg.extra)
+    if cfg.sampling.top_p is not None:
+        params["top_p"] = cfg.sampling.top_p
+    if cfg.sampling.top_k is not None:
+        params["top_k"] = cfg.sampling.top_k
+    if cfg.sampling.seed is not None:
+        params["seed"] = cfg.sampling.seed
+    if cfg.sampling.stop is not None:
+        params["stop_sequences"] = cfg.sampling.stop
+    if cfg.sampling.reasoning_tokens is not None:
+        params["thinking_config"] = {"thinking_budget": cfg.sampling.reasoning_tokens}
+    params.update(cfg.runtime.extra)
 
     client_args: dict[str, Any] = {}
     if cfg.api_key is not None:
         client_args["api_key"] = cfg.api_key
-    if cfg.timeout is not None:
-        client_args["timeout"] = cfg.timeout
+    if cfg.resilience.timeout is not None:
+        client_args["timeout"] = cfg.resilience.timeout
 
     return GeminiModel(
         client_args=client_args or None,
@@ -298,10 +298,10 @@ def _build_huggingface(cfg: Configuration) -> "Model":
             "`pip install 'operad[huggingface]'`."
         ) from e
 
-    if cfg.seed is not None:
-        transformers.set_seed(cfg.seed)
+    if cfg.sampling.seed is not None:
+        transformers.set_seed(cfg.sampling.seed)
 
-    device = str(cfg.extra.get("device", "cpu"))
+    device = str(cfg.runtime.extra.get("device", "cpu"))
     key = (cfg.model, device)
     pipe = _HF_PIPELINE_CACHE.get(key)
     if pipe is None:
@@ -310,7 +310,7 @@ def _build_huggingface(cfg: Configuration) -> "Model":
             "model": cfg.model,
         }
         pipeline_kwargs.update(
-            {k: v for k, v in cfg.extra.items() if k != "device"}
+            {k: v for k, v in cfg.runtime.extra.items() if k != "device"}
         )
         if device != "cpu":
             pipeline_kwargs["device"] = device
@@ -351,16 +351,16 @@ class _HuggingFaceModel:
         import asyncio
 
         gen_kwargs: dict[str, Any] = {
-            "max_new_tokens": self._cfg.max_tokens,
-            "temperature": self._cfg.temperature,
-            "do_sample": self._cfg.temperature > 0,
+            "max_new_tokens": self._cfg.sampling.max_tokens,
+            "temperature": self._cfg.sampling.temperature,
+            "do_sample": self._cfg.sampling.temperature > 0,
         }
-        if self._cfg.top_p is not None:
-            gen_kwargs["top_p"] = self._cfg.top_p
-        if self._cfg.top_k is not None:
-            gen_kwargs["top_k"] = self._cfg.top_k
-        if self._cfg.stop is not None:
-            gen_kwargs["stop_strings"] = self._cfg.stop
+        if self._cfg.sampling.top_p is not None:
+            gen_kwargs["top_p"] = self._cfg.sampling.top_p
+        if self._cfg.sampling.top_k is not None:
+            gen_kwargs["top_k"] = self._cfg.sampling.top_k
+        if self._cfg.sampling.stop is not None:
+            gen_kwargs["stop_strings"] = self._cfg.sampling.stop
 
         result = await asyncio.to_thread(
             self._pipeline, prompt, **gen_kwargs
