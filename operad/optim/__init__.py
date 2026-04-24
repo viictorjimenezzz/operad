@@ -44,6 +44,13 @@ from operad.optim.parameter import (
     TextualGradient,
     VocabConstraint,
 )
+from operad.optim.tape import (
+    Tape,
+    TapeEntry,
+    TapeObserver,
+    enabled,
+    tape,
+)
 
 __all__ = [
     "CategoricalParameter",
@@ -55,8 +62,13 @@ __all__ = [
     "ParameterConstraint",
     "ParameterKind",
     "RuleListParameter",
+    "Tape",
+    "TapeEntry",
+    "TapeObserver",
     "TextConstraint",
     "TextParameter",
     "TextualGradient",
     "VocabConstraint",
+    "enabled",
+    "tape",
 ]
