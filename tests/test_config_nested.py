@@ -95,7 +95,19 @@ def test_hash_config_stable_under_round_trip() -> None:
 
 
 def test_local_config_round_trip() -> None:
-    from examples._config import local_config
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "examples._config",
+        Path(__file__).resolve().parent.parent / "examples" / "_config.py",
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["examples._config"] = module
+    spec.loader.exec_module(module)
+    local_config = module.local_config
 
     cfg = local_config(sampling=Sampling(temperature=0.25))
     assert cfg.backend == "llamacpp"

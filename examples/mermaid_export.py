@@ -6,11 +6,13 @@ Runs offline — no model server required.
 type-checks every edge, and produces an ``AgentGraph`` that
 ``to_mermaid`` renders as a flowchart.
 
-    uv run python examples/mermaid_export.py
+Run:
+    uv run python examples/mermaid_export.py [--offline]
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 
 from pydantic import BaseModel, Field
@@ -34,7 +36,7 @@ class Verdict(BaseModel):
     plausible: bool = Field(default=False, description="Whether the claim seems plausible.")
 
 
-async def _main() -> None:
+async def main(offline: bool = False) -> None:
     # Host intentionally unreachable — build() does not contact the model.
     cfg = Configuration(backend="llamacpp", host="127.0.0.1:0", model="offline")
 
@@ -49,4 +51,11 @@ async def _main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(_main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Run without contacting any LLM server.",
+    )
+    args = parser.parse_args()
+    asyncio.run(main(offline=args.offline))

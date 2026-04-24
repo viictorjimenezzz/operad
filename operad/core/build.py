@@ -328,6 +328,15 @@ def _init_strands(
             agent=type(a).__name__,
         ) from e
 
+    # strands.Agent.__init__ sets `self.state = AgentState(...)` as an
+    # instance attribute, which shadows operad's `Agent.state()` method
+    # and breaks `.state()`, `.hash_content`, `.diff()` on any built leaf.
+    # Move strands' state to a safe slot so the method stays accessible.
+    # Operad never calls strands' take_snapshot / load_snapshot, so the
+    # relocation is invisible outside the stashed attribute.
+    if "state" in a.__dict__:
+        object.__setattr__(a, "_strands_state", a.__dict__.pop("state"))
+
 
 def _warn_shared_children(root: Agent[Any, Any]) -> None:
     """Emit a warning for any agent instance that appears under more than

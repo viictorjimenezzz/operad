@@ -46,6 +46,8 @@ class OperadOutput(BaseModel, Generic[Out]):
 
     run_id: str = ""
     agent_path: str = ""
+    backend: str = ""
+    model: str = ""
     started_at: float = 0.0
     finished_at: float = 0.0
     latency_ms: float = 0.0

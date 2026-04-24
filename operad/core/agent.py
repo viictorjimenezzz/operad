@@ -769,6 +769,8 @@ class Agent(strands.Agent, Generic[In, Out]):
             hash_output_schema=hash_schema(self.output),  # type: ignore[arg-type]
             run_id=run_id,
             agent_path=path,
+            backend=(self.config.backend if self.config is not None else ""),
+            model=(self.config.model if self.config is not None else ""),
             started_at=started_wall,
             finished_at=finished_wall,
             latency_ms=(finished - started) * 1000.0,
@@ -800,7 +802,9 @@ class Agent(strands.Agent, Generic[In, Out]):
             start_meta, _retry_meta, tokens,
         ) = self._enter_run(path, track_retry=False)
 
-        queue: asyncio.Queue[Any] = asyncio.Queue()
+        # Bounded so a slow consumer applies backpressure to the producer
+        # instead of letting the queue grow without bound on a long stream.
+        queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=64)
         _SENTINEL_DONE = object()
 
         try:
@@ -858,6 +862,14 @@ class Agent(strands.Agent, Generic[In, Out]):
                         yield item
             finally:
                 await task
+
+            # If the driver task itself raised (e.g. its finally was
+            # cancelled mid-put), surface that so we never silently
+            # drop an error on the floor.
+            if final_error is None and task.done():
+                driver_exc = task.exception()
+                if driver_exc is not None:
+                    final_error = driver_exc
 
             if final_error is not None:
                 raise final_error

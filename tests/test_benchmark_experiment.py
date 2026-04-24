@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from operad import Agent, Configuration
+from operad.core.config import Sampling
 from operad.benchmark import Dataset, Entry, Experiment
 from operad.metrics import ExactMatch
 from operad.utils.ops import AppendRule
@@ -178,8 +179,7 @@ async def test_api_key_scrubbed(tmp_path: Path) -> None:
         backend="llamacpp",
         host="127.0.0.1:0",
         model="test",
-        temperature=0.0,
-        max_tokens=16,
+        sampling=Sampling(temperature=0.0, max_tokens=16),
         api_key=secret,
     )
     agent = RoundTripLeaf(config=cfg)

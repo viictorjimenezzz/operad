@@ -2,18 +2,19 @@
 
 Runs offline — no model server required.
 
-    uv run python examples/observer_demo.py
-
 Writes `/tmp/operad_observer_demo.jsonl`, prints it back, and also
 snapshots the run via `TraceObserver` to show the reproducibility
 artefact. Note: `Agent.invoke` returns an `OperadOutput[Out]` envelope;
 the typed payload is at `.response`.
+
+Run:
+    uv run python examples/observer_demo.py [--offline]
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
-import os
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -21,6 +22,8 @@ from pydantic import BaseModel, Field
 from operad import Agent, Configuration, Pipeline
 from operad.runtime.observers import JsonlObserver, registry as observers
 from operad.runtime.trace import TraceObserver
+
+from _config import local_config
 
 
 class Question(BaseModel):
@@ -46,16 +49,8 @@ class _EchoLeaf(Agent):
         return self.output(text=self._reply)
 
 
-def _cfg() -> Configuration:
-    return Configuration(
-        backend="llamacpp",
-        host=os.environ.get("OPERAD_LLAMACPP_HOST", "127.0.0.1:8080"),
-        model="demo",
-    )
-
-
-async def _main() -> None:
-    cfg = _cfg()
+async def main(offline: bool = False) -> None:
+    cfg = local_config(host="127.0.0.1:0", model="offline")
     drafter = _EchoLeaf(config=cfg, input=Question, output=Draft, reply="draft")
     polisher = _EchoLeaf(config=cfg, input=Draft, output=Answer, reply="final")
 
@@ -87,4 +82,11 @@ async def _main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(_main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Run without contacting any LLM server.",
+    )
+    args = parser.parse_args()
+    asyncio.run(main(offline=args.offline))
