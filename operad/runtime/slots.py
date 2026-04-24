@@ -25,6 +25,7 @@ import asyncio
 import collections
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 
 from ..core.config import Backend, Configuration
 
@@ -170,6 +171,20 @@ class SlotToken:
             self._tpm.charge(tokens)
 
 
+@dataclass(frozen=True, slots=True)
+class SlotOccupancy:
+    """Live utilisation for one (backend, host) key."""
+
+    backend: Backend
+    host: str
+    concurrency_used: int
+    concurrency_cap: int | None
+    rpm_used: int
+    rpm_cap: int | None
+    tpm_used: int
+    tpm_cap: int | None
+
+
 class SlotRegistry:
     """Per-endpoint gates keyed by `(backend, host)`.
 
@@ -256,6 +271,52 @@ class SlotRegistry:
     def tpm_for(self, cfg: Configuration) -> SlidingCounter | None:
         return self._tpm.get(self._key(cfg))
 
+    def occupancy(self) -> list[SlotOccupancy]:
+        """Return a snapshot across all registered (backend, host) keys.
+
+        Reads are atomic per key (one lock acquire per key); the list is
+        built best-effort over the keys known at call time. Counters use
+        the sliding-window `current(now)` value, so RPM/TPM reflect the
+        last minute up to `now = time.monotonic()`.
+        """
+        keys: set[_Key] = set()
+        keys.update(self._concurrency)
+        keys.update(self._semaphores)
+        keys.update(self._rpm_limits)
+        keys.update(self._tpm_limits)
+
+        out: list[SlotOccupancy] = []
+        for key in list(keys):
+            backend, host = key
+            cap = self._concurrency.get(key, self.default)
+            sem = self._semaphores.get(key)
+            # asyncio.Semaphore exposes no public counter; ._value is the
+            # remaining permits. Single-threaded event loop makes this read
+            # consistent without taking a lock.
+            used = (cap - sem._value) if sem is not None else 0
+
+            rpm = self._rpm.get(key)
+            rpm_used = rpm.current() if rpm is not None else 0
+            rpm_cap = rpm.limit if (rpm is not None and rpm.limit != 0) else None
+
+            tpm = self._tpm.get(key)
+            tpm_used = tpm.current() if tpm is not None else 0
+            tpm_cap = tpm.limit if (tpm is not None and tpm.limit != 0) else None
+
+            out.append(
+                SlotOccupancy(
+                    backend=backend,
+                    host=host,
+                    concurrency_used=used,
+                    concurrency_cap=cap,
+                    rpm_used=rpm_used,
+                    rpm_cap=rpm_cap,
+                    tpm_used=tpm_used,
+                    tpm_cap=tpm_cap,
+                )
+            )
+        return out
+
     def reset(self) -> None:
         """Drop every cached gate (useful in tests)."""
         self._concurrency.clear()
@@ -325,6 +386,7 @@ async def acquire(cfg: Configuration) -> AsyncIterator[SlotToken]:
 
 __all__ = [
     "SlidingCounter",
+    "SlotOccupancy",
     "SlotRegistry",
     "SlotToken",
     "acquire",

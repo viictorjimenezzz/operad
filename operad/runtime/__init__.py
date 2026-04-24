@@ -9,6 +9,6 @@ would produce a circular import during ``operad.core.agent`` init.
 
 from __future__ import annotations
 
-from .slots import SlotRegistry, acquire, registry, set_limit
+from .slots import SlotOccupancy, SlotRegistry, acquire, registry, set_limit
 
-__all__ = ["SlotRegistry", "acquire", "registry", "set_limit"]
+__all__ = ["SlotOccupancy", "SlotRegistry", "acquire", "registry", "set_limit"]
