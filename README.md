@@ -1,6 +1,6 @@
 # operad
 
-**Typed, composable agent architectures for local-first LLM servers.**
+**Typed, composable agent architectures with PyTorch-style training for local-first LLM servers.**
 Agents are Python modules in the `torch.nn` sense: you build them, nest
 them, trace them, and run them against local or hosted LLMs. Composition
 is the whole mental model — hence the name.
@@ -113,6 +113,14 @@ parent-to-child handoff before any model is contacted. Out pops an
 `AgentGraph`. Built graphs can be `freeze()`-ed to disk and `thaw()`-ed
 elsewhere to skip the symbolic trace (useful for CLIs, Lambdas, tests).
 
+**Agents are trainable.** Every mutable field on an Agent —
+`role`, `task`, `rules`, `examples`, sampling knobs — is a
+`Parameter`. `operad.optim` ships `TextualGradientDescent`,
+`MomentumTextGrad`, `EvoGradient`, `OPROOptimizer`, and
+`APEOptimizer` (subclasses of a shared `Optimizer` base), plus
+`operad.train.Trainer`, which wraps fit/evaluate/predict with
+callbacks and LR schedulers. See [TRAINING.md](TRAINING.md).
+
 **Components compose; algorithms orchestrate.** Everything in
 `operad.agents` is an `Agent[In, Out]` that nests freely. Everything
 in `operad.algorithms` is a plain class that takes Agents as parameters
@@ -141,6 +149,39 @@ plus `demo.py --offline` — run `bash scripts/verify.sh`.
 Every network-backed example in `examples/` uses the same canonical
 target via `examples/_config.py` — set `OPERAD_LLAMACPP_HOST` and
 `OPERAD_LLAMACPP_MODEL` to override host or model.
+
+## Train an agent
+
+Every field that matters — `role`, `task`, `rules`, `examples`,
+sampling — is a first-class `Parameter`. Pick a loss, an optimizer,
+and a trainer, and you have a real fit loop:
+
+```python
+from operad import Pipeline
+from operad.optim import CriticLoss, TextualGradientDescent
+from operad.optim.lr_scheduler import CosineExplorationLR
+from operad.train import Trainer
+from operad.data import DataLoader, random_split
+
+agent = Pipeline(Planner(...), Reasoner(...), Critic(...))
+agent.mark_trainable(role=True, task=True, rules=True)
+await agent.abuild()
+
+train, val = random_split(dataset, [0.8, 0.2])
+loader     = DataLoader(train, batch_size=8, shuffle=True)
+
+loss_fn   = CriticLoss(rubric_critic)
+optimizer = TextualGradientDescent(agent.parameters(), lr=1.0)
+scheduler = CosineExplorationLR(optimizer, T_max=10)
+
+trainer = Trainer(agent, optimizer, loss_fn, scheduler=scheduler)
+report  = await trainer.fit(loader, val_ds=val, epochs=5)
+```
+
+`TextualGradient` is a Pydantic critique, not a float; `backward()`
+walks the runtime tape, and every `Parameter` that took blame gets
+rewritten by its optimizer. Full walkthrough in
+[TRAINING.md](TRAINING.md).
 
 ## Run from YAML
 
@@ -241,6 +282,17 @@ operad/
   benchmark/         Dataset, Entry, AggregatedMetric, evaluate, EvalReport
   metrics/           Metric protocol, ExactMatch, JsonValid, Latency,
                      Contains, RegexMatch, Rouge1, RubricCritic, CostTracker
+  optim/             Parameter, TextualGradient, tape()/backward(),
+                     Loss + CriticLoss + LossFromMetric,
+                     Optimizer fleet (TextualGradientDescent,
+                     MomentumTextGrad, EvoGradient, OPROOptimizer,
+                     APEOptimizer), lr_scheduler family,
+                     BackpropAgent, RewriteAgent
+  train/             Trainer (fit/evaluate/predict), callbacks
+                     (EarlyStopping, BestCheckpoint, GradClip,
+                     PromptDrift, LearningRateLogger, MemoryRotation),
+                     EpochReport / TrainingReport
+  data/              DataLoader, Batch, Sampler family, random_split
   cli.py             operad run/trace/graph/tail
   tracing.py         watch() context manager + OPERAD_TRACE env
 tests/               offline tests + opt-in integration
