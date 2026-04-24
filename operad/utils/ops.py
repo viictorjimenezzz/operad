@@ -348,6 +348,43 @@ class CompoundOp(_OpBase):
         self._applied_count = 0
 
 
+def default_mutations(agent: "Agent[Any, Any]") -> list[Op]:
+    """Return a small starter set of root-keyed `Op`s for `agent`.
+
+    Used by `Agent.auto_tune` as the default mutation pool. Kept
+    intentionally shallow (≤ 8 ops) and root-keyed — users with
+    composites or domain-specific mutation strategies should supply
+    their own `mutations=` list.
+
+    The set includes, conditional on the agent's declared state:
+
+    - `AppendRule` × 2 (generic constraints)
+    - `TweakRole` × 1–2 (persona rotation)
+    - `EditTask` × 1 (reworded task; skipped when `task` is empty)
+    - `SetTemperature` × 2 (bump + drop; skipped when `config` is None)
+    """
+    ops: list[Op] = [
+        AppendRule(path="", rule="Be concise."),
+        AppendRule(path="", rule="Follow the rules carefully."),
+        TweakRole(
+            path="",
+            role=agent.role or "You are a careful, helpful assistant.",
+        ),
+        TweakRole(
+            path="",
+            role=(agent.role + " Think step by step.").strip()
+            if agent.role
+            else "You are a meticulous expert. Think step by step.",
+        ),
+    ]
+    if agent.task:
+        ops.append(EditTask(path="", task=f"Carefully: {agent.task}"))
+    if agent.config is not None:
+        ops.append(SetTemperature(path="", temperature=0.3))
+        ops.append(SetTemperature(path="", temperature=0.9))
+    return ops
+
+
 __all__ = [
     "AppendExample",
     "AppendRule",
@@ -361,4 +398,5 @@ __all__ = [
     "SetModel",
     "SetTemperature",
     "TweakRole",
+    "default_mutations",
 ]

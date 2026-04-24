@@ -913,6 +913,49 @@ class Agent(strands.Agent, Generic[In, Out]):
 
         return await abuild_agent(self)
 
+    # --- auto-tune ----------------------------------------------------------
+    async def auto_tune(
+        self,
+        dataset: Any,
+        metric: Any,
+        *,
+        mutations: list[Any] | None = None,
+        population_size: int = 8,
+        generations: int = 4,
+        rng: Any = None,
+    ) -> "Agent[In, Out]":
+        """Evolve a copy of this agent to improve `metric` on `dataset`.
+
+        A thin wrapper around `operad.algorithms.Evolutionary`. Clones
+        `self` so the caller's agent is never mutated, picks a small
+        default mutation set when `mutations` is None, and returns the
+        best agent found in the final generation.
+
+        `dataset` may be a `Dataset`, an iterable of `Entry` objects, or
+        an iterable of `(input, expected_output)` tuples.
+
+        For custom observers, recombination strategies, or fine-grained
+        control over the population, use `operad.algorithms.Evolutionary`
+        directly.
+        """
+        from ..algorithms import Evolutionary
+        from ..utils.ops import default_mutations
+
+        seed = self.clone()
+        ops = mutations if mutations is not None else default_mutations(seed)
+        pairs = _coerce_eval_pairs(dataset)
+
+        algo = Evolutionary(
+            seed=seed,
+            mutations=ops,
+            metric=metric,
+            dataset=pairs,
+            population_size=population_size,
+            generations=generations,
+            rng=rng,
+        )
+        return await algo.run()
+
     # --- freeze / thaw ------------------------------------------------------
     def freeze(self, path: str) -> None:
         """Persist a built agent to `path` as a single JSON file.
@@ -1064,6 +1107,26 @@ class Agent(strands.Agent, Generic[In, Out]):
                     leaf.__dict__.pop("system_prompt", None)
                 else:
                     leaf.system_prompt = original_sp
+
+
+def _coerce_eval_pairs(dataset: Any) -> list[tuple[Any, Any]]:
+    """Normalise `auto_tune`'s dataset to `list[tuple[input, expected]]`."""
+    from ..benchmark.dataset import Dataset
+    from ..benchmark.entry import Entry
+
+    items = list(dataset) if not isinstance(dataset, Dataset) else list(dataset)
+    pairs: list[tuple[Any, Any]] = []
+    for item in items:
+        if isinstance(item, Entry):
+            if item.expected_output is None:
+                raise ValueError(
+                    "auto_tune: every dataset entry must have an expected_output"
+                )
+            pairs.append((item.input, item.expected_output))
+        else:
+            inp, exp = item
+            pairs.append((inp, exp))
+    return pairs
 
 
 def _attr_name_hint(parent: "Agent[Any, Any]", child: "Agent[Any, Any]") -> str | None:
