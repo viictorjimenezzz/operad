@@ -17,10 +17,12 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import traceback
 import warnings
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, NoReturn
 
 import strands
 from pydantic import BaseModel
@@ -30,6 +32,8 @@ from ..utils.errors import BuildError
 from .agent import Agent, _TRACER
 
 NodeKind = Literal["leaf", "composite"]
+
+_CORE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class _PayloadBranchAccess(Exception):
@@ -43,25 +47,124 @@ class _PayloadBranchAccess(Exception):
         self.field_name = field_name
 
 
+class _PayloadBranchDunder(Exception):
+    """Internal signal — raised when a composite's `forward` exercises a
+    branching dunder (`__bool__`, `__eq__`, `__iter__`, ...) on the
+    sentinel during trace. Converted to `BuildError("payload_branch", ...)`
+    at the nearest forward-call boundary.
+    """
+
+    def __init__(self, cls_name: str, dunder: str) -> None:
+        self.cls_name = cls_name
+        self.dunder = dunder
+
+
 def _make_sentinel(cls: type[BaseModel]) -> BaseModel:
-    """Return a trace-time sentinel of `cls` that raises on field reads.
+    """Return a trace-time sentinel of `cls` that raises on field reads
+    and on value-branching dunders.
 
     The sentinel is an instance of a dynamic subclass of `cls`, so
     `isinstance(sentinel, cls)` still holds. Reads of any declared model
-    field raise `_PayloadBranchAccess`; dunder and pydantic-internal
-    attribute access pass through.
+    field raise `_PayloadBranchAccess`; truthy/comparison/iteration
+    dunders raise `_PayloadBranchDunder`. Pydantic internals and
+    structural attribute access (`__class__`, `__repr__`, ...) pass
+    through unchanged.
     """
     field_names = frozenset(cls.model_fields)
+    cls_name = cls.__name__
+
+    def _dunder(name: str) -> Any:
+        def _trap(self: Any, *args: Any, **kwargs: Any) -> Any:
+            raise _PayloadBranchDunder(cls_name, name)
+
+        _trap.__name__ = name
+        return _trap
 
     class _Sentinel(cls):  # type: ignore[misc, valid-type]
         def __getattribute__(self, name: str) -> Any:
             if name in field_names:
-                raise _PayloadBranchAccess(cls.__name__, name)
+                raise _PayloadBranchAccess(cls_name, name)
             return object.__getattribute__(self, name)
+
+        __bool__ = _dunder("__bool__")
+        __eq__ = _dunder("__eq__")
+        __ne__ = _dunder("__ne__")
+        __lt__ = _dunder("__lt__")
+        __le__ = _dunder("__le__")
+        __gt__ = _dunder("__gt__")
+        __ge__ = _dunder("__ge__")
+        __hash__ = _dunder("__hash__")  # type: ignore[assignment]
+        __iter__ = _dunder("__iter__")
+        __len__ = _dunder("__len__")
+        __contains__ = _dunder("__contains__")
+        __getitem__ = _dunder("__getitem__")
 
     _Sentinel.__name__ = f"_Sentinel[{cls.__name__}]"
     _Sentinel.__qualname__ = _Sentinel.__name__
     return _Sentinel.model_construct()
+
+
+def _user_frame(exc: BaseException) -> tuple[str, int] | None:
+    """Walk `exc.__traceback__` from innermost outward; return the first
+    frame whose filename is not inside `operad/core/` or `pydantic`.
+
+    Returns ``(basename, lineno)`` or ``None`` if no such frame exists
+    (e.g. forward was defined in a Jupyter cell or `exec`'d string).
+    """
+    try:
+        frames = traceback.extract_tb(exc.__traceback__)
+    except Exception:
+        return None
+    for frame in reversed(frames):
+        fn = frame.filename or ""
+        if not fn or fn.startswith("<"):
+            continue
+        try:
+            abs_fn = os.path.abspath(fn)
+        except Exception:
+            continue
+        if abs_fn.startswith(_CORE_DIR):
+            continue
+        if f"{os.sep}pydantic{os.sep}" in abs_fn:
+            continue
+        return (os.path.basename(fn), frame.lineno)
+    return None
+
+
+def _raise_payload_branch(
+    exc: _PayloadBranchAccess | _PayloadBranchDunder,
+    *,
+    agent_name: str,
+    composite_cls: str,
+    io: tuple[type, type],
+) -> NoReturn:
+    """Convert a payload-branch signal into a `BuildError("payload_branch")`.
+
+    Both `_PayloadBranchAccess` (field read) and `_PayloadBranchDunder`
+    (truthy/comparison/iter) funnel through here so the two catch sites
+    in ``_trace`` and ``Tracer.record`` stay tiny.
+    """
+    from .graph import to_mermaid_node
+
+    if isinstance(exc, _PayloadBranchAccess):
+        access = f"{exc.cls_name}.{exc.field_name!r}"
+        note = f"read {exc.cls_name}.{exc.field_name} during trace"
+    else:
+        access = f"{exc.cls_name} via {exc.dunder}"
+        note = f"{exc.cls_name} {exc.dunder} during trace"
+
+    frame = _user_frame(exc)
+    locus = f" at {frame[0]}:{frame[1]}" if frame else ""
+
+    raise BuildError(
+        "payload_branch",
+        f"composite {composite_cls}.forward read "
+        f"{access}{locus} during trace; "
+        "route on a child's typed output (e.g. Switch over a "
+        "Literal choice) instead of the payload value",
+        agent=agent_name,
+        mermaid=to_mermaid_node(agent_name, io, note=note),
+    ) from exc
 
 
 @dataclass
@@ -197,25 +300,13 @@ class Tracer:
                 sentinel = _make_sentinel(child.input)
                 try:
                     out = await child.forward(sentinel)
-                except _PayloadBranchAccess as exc:
-                    from .graph import to_mermaid_node
-
-                    raise BuildError(
-                        "payload_branch",
-                        f"composite {type(child).__name__}.forward read "
-                        f"{exc.cls_name}.{exc.field_name!r} during trace; "
-                        "route on a child's typed output (e.g. Switch over a "
-                        "Literal choice) instead of the payload value",
-                        agent=callee,
-                        mermaid=to_mermaid_node(
-                            callee,
-                            (child.input, child.output),
-                            note=(
-                                f"read {exc.cls_name}.{exc.field_name} "
-                                "during trace"
-                            ),
-                        ),
-                    ) from exc
+                except (_PayloadBranchAccess, _PayloadBranchDunder) as exc:
+                    _raise_payload_branch(
+                        exc,
+                        agent_name=callee,
+                        composite_cls=type(child).__name__,
+                        io=(child.input, child.output),
+                    )
                 if not isinstance(out, child.output):
                     from .graph import to_mermaid_node
 
@@ -373,25 +464,13 @@ async def _trace(root: Agent[Any, Any], tracer: Tracer) -> Any:
             sentinel = _make_sentinel(root.input)  # type: ignore[arg-type]
             try:
                 return await root.forward(sentinel)
-            except _PayloadBranchAccess as exc:
-                from .graph import to_mermaid_node
-
-                raise BuildError(
-                    "payload_branch",
-                    f"composite {type(root).__name__}.forward read "
-                    f"{exc.cls_name}.{exc.field_name!r} during trace; "
-                    "route on a child's typed output (e.g. Switch over a "
-                    "Literal choice) instead of the payload value",
-                    agent=type(root).__name__,
-                    mermaid=to_mermaid_node(
-                        type(root).__name__,
-                        (root.input, root.output),  # type: ignore[arg-type]
-                        note=(
-                            f"read {exc.cls_name}.{exc.field_name} "
-                            "during trace"
-                        ),
-                    ),
-                ) from exc
+            except (_PayloadBranchAccess, _PayloadBranchDunder) as exc:
+                _raise_payload_branch(
+                    exc,
+                    agent_name=type(root).__name__,
+                    composite_cls=type(root).__name__,
+                    io=(root.input, root.output),  # type: ignore[arg-type]
+                )
         sentinel = root.input.model_construct()  # type: ignore[union-attr]
         return await root.forward(sentinel)
     finally:
