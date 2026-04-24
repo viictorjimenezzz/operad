@@ -26,18 +26,41 @@ Per-backend handling of `Configuration` knobs:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import time
+from typing import TYPE_CHECKING, Any, Literal
 
-from .config import Configuration
+from pydantic import BaseModel, Field
+
+from .config import Backend, Configuration
 from ..utils.errors import BuildError
 
 if TYPE_CHECKING:
     from strands.models.anthropic import AnthropicModel
     from strands.models.bedrock import BedrockModel
+    from strands.models.gemini import GeminiModel
     from strands.models.llamacpp import LlamaCppModel
     from strands.models.model import Model
     from strands.models.ollama import OllamaModel
     from strands.models.openai import OpenAIModel
+
+
+class BatchHandle(BaseModel):
+    """Opaque handle to a provider-side batch submission."""
+
+    provider: Backend
+    provider_batch_id: str
+    endpoint: str
+    submitted_at: float
+    raw: dict[str, Any] = Field(default_factory=dict)
+
+
+class BatchResult(BaseModel):
+    """Terminal state for a batch job: completion, failure, or cancellation."""
+
+    handle: BatchHandle
+    status: Literal["completed", "failed", "cancelled"]
+    output: Any = None
+    error: str | None = None
 
 
 # --- shared parameter helpers ------------------------------------------------
@@ -221,11 +244,287 @@ def _build_openai(cfg: Configuration) -> "OpenAIModel":
     )
 
 
+def _build_gemini(cfg: Configuration) -> "GeminiModel":
+    try:
+        from strands.models.gemini import GeminiModel
+    except ImportError as e:
+        raise ImportError(
+            "Gemini backend requires the [gemini] extra: "
+            "`pip install 'operad[gemini]'`."
+        ) from e
+
+    params: dict[str, Any] = {
+        "temperature": cfg.temperature,
+        "max_output_tokens": cfg.max_tokens,
+    }
+    if cfg.top_p is not None:
+        params["top_p"] = cfg.top_p
+    if cfg.top_k is not None:
+        params["top_k"] = cfg.top_k
+    if cfg.seed is not None:
+        params["seed"] = cfg.seed
+    if cfg.stop is not None:
+        params["stop_sequences"] = cfg.stop
+    if cfg.reasoning_tokens is not None:
+        params["thinking_config"] = {"thinking_budget": cfg.reasoning_tokens}
+    params.update(cfg.extra)
+
+    client_args: dict[str, Any] = {}
+    if cfg.api_key is not None:
+        client_args["api_key"] = cfg.api_key
+    if cfg.timeout is not None:
+        client_args["timeout"] = cfg.timeout
+
+    return GeminiModel(
+        client_args=client_args or None,
+        model_id=cfg.model,
+        params=params,
+    )
+
+
+# Pipelines are expensive to construct (multi-second model download + load).
+# We intentionally break the "resolve_model returns a fresh object" invariant
+# here and cache by (model, device) so repeated resolves for the same config
+# share a pipeline. The HF adapter documents this at its public surface.
+_HF_PIPELINE_CACHE: dict[tuple[str, str], Any] = {}
+
+
+def _build_huggingface(cfg: Configuration) -> "Model":
+    try:
+        import transformers
+    except ImportError as e:
+        raise ImportError(
+            "HuggingFace backend requires the [huggingface] extra: "
+            "`pip install 'operad[huggingface]'`."
+        ) from e
+
+    if cfg.seed is not None:
+        transformers.set_seed(cfg.seed)
+
+    device = str(cfg.extra.get("device", "cpu"))
+    key = (cfg.model, device)
+    pipe = _HF_PIPELINE_CACHE.get(key)
+    if pipe is None:
+        pipeline_kwargs: dict[str, Any] = {
+            "task": "text-generation",
+            "model": cfg.model,
+        }
+        pipeline_kwargs.update(
+            {k: v for k, v in cfg.extra.items() if k != "device"}
+        )
+        if device != "cpu":
+            pipeline_kwargs["device"] = device
+        pipe = transformers.pipeline(**pipeline_kwargs)
+        _HF_PIPELINE_CACHE[key] = pipe
+
+    return _HuggingFaceModel(cfg=cfg, pipeline=pipe)
+
+
+def _build_batch(cfg: Configuration) -> "Model":
+    # Validator on Configuration already restricts cfg.backend to openai /
+    # anthropic / bedrock when batch=True, so we trust that here.
+    return _BatchModel(cfg=cfg)
+
+
+# --- local / batch model wrappers ------------------------------------------
+
+# These classes satisfy the strands `Model` ABC surface with the minimum
+# required to be instantiable. Full stream/structured_output integration
+# with the `Agent.invoke` envelope is deferred to a future brief; callers
+# use the low-level entry points (`generate` / `forward`) directly.
+
+
+class _HuggingFaceModel:
+    """Thin wrapper around a `transformers.pipeline` for local generation.
+
+    The pipeline is not async; `forward` offloads the call to a worker
+    thread. Concurrent invokes against the same pipeline instance will
+    serialize — this is a deliberate simplification of Wave 2.
+    """
+
+    def __init__(self, cfg: Configuration, pipeline: Any) -> None:
+        self._cfg = cfg
+        self._pipeline = pipeline
+        self.config: dict[str, Any] = {"model_id": cfg.model}
+
+    async def forward(self, prompt: str) -> str:
+        import asyncio
+
+        gen_kwargs: dict[str, Any] = {
+            "max_new_tokens": self._cfg.max_tokens,
+            "temperature": self._cfg.temperature,
+            "do_sample": self._cfg.temperature > 0,
+        }
+        if self._cfg.top_p is not None:
+            gen_kwargs["top_p"] = self._cfg.top_p
+        if self._cfg.top_k is not None:
+            gen_kwargs["top_k"] = self._cfg.top_k
+        if self._cfg.stop is not None:
+            gen_kwargs["stop_strings"] = self._cfg.stop
+
+        result = await asyncio.to_thread(
+            self._pipeline, prompt, **gen_kwargs
+        )
+        if isinstance(result, list) and result:
+            first = result[0]
+            if isinstance(first, dict) and "generated_text" in first:
+                return str(first["generated_text"])
+        return str(result)
+
+
+class _BatchModel:
+    """Submit-only adapter that returns a `BatchHandle` from `forward`.
+
+    Invoking a batch-configured agent through the high-level envelope is
+    not supported in Wave 2 — callers must use `forward` directly and
+    poll via `poll_batch(handle)`.
+    """
+
+    def __init__(self, cfg: Configuration) -> None:
+        self._cfg = cfg
+        self.config: dict[str, Any] = {
+            "model_id": cfg.model,
+            "provider": cfg.backend,
+        }
+
+    async def forward(self, payload: Any) -> BatchHandle:
+        submitter = _BATCH_SUBMITTERS.get(self._cfg.backend)
+        if submitter is None:
+            raise BuildError(
+                "prompt_incomplete",
+                f"batch mode is not supported for backend "
+                f"{self._cfg.backend!r}",
+            )
+        raw = await submitter(self._cfg, payload)
+        return BatchHandle(
+            provider=self._cfg.backend,
+            provider_batch_id=str(raw.get("id", "")),
+            endpoint=str(raw.get("endpoint", "")),
+            submitted_at=time.time(),
+            raw=raw,
+        )
+
+
+async def _submit_openai_batch(
+    cfg: Configuration, payload: Any
+) -> dict[str, Any]:
+    from openai import AsyncOpenAI
+
+    client = AsyncOpenAI(api_key=cfg.api_key)
+    batch = await client.batches.create(
+        input_file_id=payload["input_file_id"],
+        endpoint=payload.get("endpoint", "/v1/chat/completions"),
+        completion_window=payload.get("completion_window", "24h"),
+    )
+    raw = batch.model_dump() if hasattr(batch, "model_dump") else dict(batch)
+    raw.setdefault("endpoint", payload.get("endpoint", "/v1/chat/completions"))
+    return raw
+
+
+async def _submit_anthropic_batch(
+    cfg: Configuration, payload: Any
+) -> dict[str, Any]:
+    try:
+        from anthropic import AsyncAnthropic
+    except ImportError as e:  # pragma: no cover - depends on install
+        raise ImportError(
+            "Anthropic batch requires the `anthropic` package."
+        ) from e
+
+    client = AsyncAnthropic(api_key=cfg.api_key)
+    batch = await client.messages.batches.create(requests=payload["requests"])
+    raw = batch.model_dump() if hasattr(batch, "model_dump") else dict(batch)
+    raw.setdefault("endpoint", "/v1/messages/batches")
+    return raw
+
+
+async def _submit_bedrock_batch(
+    cfg: Configuration, payload: Any
+) -> dict[str, Any]:  # pragma: no cover - network-only
+    raise BuildError(
+        "prompt_incomplete",
+        "bedrock batch submission requires caller-supplied "
+        "`CreateModelInvocationJob` parameters; direct boto3 usage is the "
+        "Wave 2 path.",
+    )
+
+
+_BATCH_SUBMITTERS = {
+    "openai": _submit_openai_batch,
+    "anthropic": _submit_anthropic_batch,
+    "bedrock": _submit_bedrock_batch,
+}
+
+
+async def poll_batch(handle: BatchHandle) -> BatchResult | None:
+    """Return a `BatchResult` when the job is terminal, else `None`."""
+    poller = _BATCH_POLLERS.get(handle.provider)
+    if poller is None:
+        raise BuildError(
+            "prompt_incomplete",
+            f"batch polling is not supported for backend "
+            f"{handle.provider!r}",
+        )
+    return await poller(handle)
+
+
+async def _poll_openai_batch(handle: BatchHandle) -> BatchResult | None:
+    from openai import AsyncOpenAI
+
+    client = AsyncOpenAI()
+    batch = await client.batches.retrieve(handle.provider_batch_id)
+    status = getattr(batch, "status", None)
+    if status in {"validating", "in_progress", "finalizing"}:
+        return None
+    if status == "completed":
+        return BatchResult(handle=handle, status="completed", output=batch)
+    if status == "cancelled":
+        return BatchResult(handle=handle, status="cancelled")
+    return BatchResult(
+        handle=handle, status="failed", error=str(status or "unknown")
+    )
+
+
+async def _poll_anthropic_batch(
+    handle: BatchHandle,
+) -> BatchResult | None:  # pragma: no cover - network-only
+    from anthropic import AsyncAnthropic
+
+    client = AsyncAnthropic()
+    batch = await client.messages.batches.retrieve(handle.provider_batch_id)
+    status = getattr(batch, "processing_status", None)
+    if status == "in_progress":
+        return None
+    if status == "ended":
+        return BatchResult(handle=handle, status="completed", output=batch)
+    return BatchResult(
+        handle=handle, status="failed", error=str(status or "unknown")
+    )
+
+
+async def _poll_bedrock_batch(
+    handle: BatchHandle,
+) -> BatchResult | None:  # pragma: no cover - network-only
+    raise BuildError(
+        "prompt_incomplete",
+        "bedrock batch polling is not yet wired; use boto3 directly.",
+    )
+
+
+_BATCH_POLLERS = {
+    "openai": _poll_openai_batch,
+    "anthropic": _poll_anthropic_batch,
+    "bedrock": _poll_bedrock_batch,
+}
+
+
 # --- resolver ---------------------------------------------------------------
 
 
 def resolve_model(cfg: Configuration) -> "Model":
     """Return a configured `strands.models.Model` for the given configuration."""
+    if cfg.batch:
+        return _build_batch(cfg)
     match cfg.backend:
         case "llamacpp":
             return _build_llamacpp(cfg)
@@ -239,6 +538,10 @@ def resolve_model(cfg: Configuration) -> "Model":
             return _build_bedrock(cfg)
         case "anthropic":
             return _build_anthropic(cfg)
+        case "gemini":
+            return _build_gemini(cfg)
+        case "huggingface":
+            return _build_huggingface(cfg)
         case other:
             raise BuildError(
                 "prompt_incomplete",
@@ -246,4 +549,4 @@ def resolve_model(cfg: Configuration) -> "Model":
             )
 
 
-__all__ = ["resolve_model"]
+__all__ = ["BatchHandle", "BatchResult", "poll_batch", "resolve_model"]

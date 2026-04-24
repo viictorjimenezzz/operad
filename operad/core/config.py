@@ -7,12 +7,24 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Backend = Literal[
-    "llamacpp", "lmstudio", "ollama", "openai", "bedrock", "anthropic"
+    "llamacpp",
+    "lmstudio",
+    "ollama",
+    "openai",
+    "bedrock",
+    "anthropic",
+    "gemini",
+    "huggingface",
 ]
 
-_LOCAL_BACKENDS: frozenset[Backend] = frozenset({"llamacpp", "lmstudio", "ollama"})
+_LOCAL_BACKENDS: frozenset[Backend] = frozenset(
+    {"llamacpp", "lmstudio", "ollama", "huggingface"}
+)
 _REMOTE_BACKENDS: frozenset[Backend] = frozenset(
-    {"openai", "bedrock", "anthropic"}
+    {"openai", "bedrock", "anthropic", "gemini"}
+)
+_BATCH_BACKENDS: frozenset[Backend] = frozenset(
+    {"openai", "anthropic", "bedrock"}
 )
 
 
@@ -47,20 +59,38 @@ class Configuration(BaseModel):
     structuredio: bool = True
     renderer: Literal["xml", "markdown", "chat"] = "xml"
 
+    batch: bool = False
+
     extra: dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
     def _check_host_matches_backend(self) -> "Configuration":
-        if self.backend in _LOCAL_BACKENDS and not self.host:
+        # huggingface runs in-process: no host required, and any host rejected.
+        if self.backend == "huggingface":
+            if self.host is not None:
+                raise ValueError(
+                    f"backend={self.backend!r} does not take a `host`; "
+                    f"got {self.host!r}"
+                )
+        elif self.backend in _LOCAL_BACKENDS and not self.host:
             raise ValueError(
                 f"backend={self.backend!r} requires `host` "
                 f"(e.g. '127.0.0.1:8080')"
             )
-        if self.backend in _REMOTE_BACKENDS and self.host is not None:
+        elif self.backend in _REMOTE_BACKENDS and self.host is not None:
             raise ValueError(
                 f"backend={self.backend!r} does not take a `host`; "
                 f"got {self.host!r}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _check_batch_backend(self) -> "Configuration":
+        if self.batch and self.backend not in _BATCH_BACKENDS:
+            raise ValueError(
+                f"batch=True requires backend in {sorted(_BATCH_BACKENDS)!r}; "
+                f"got {self.backend!r}"
             )
         return self
