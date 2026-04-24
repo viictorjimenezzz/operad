@@ -1,8 +1,8 @@
-"""Safeguard leaves — task-agnostic input sanitisation and output moderation."""
+"""Safeguard leaves — chat-scope input gating and rejection response."""
 
 from __future__ import annotations
 
-from .input_sanitizer import InputSanitizer
-from .output_moderator import OutputModerator
+from .context import Context
+from .talker import Talker
 
-__all__ = ["InputSanitizer", "OutputModerator"]
+__all__ = ["Context", "Talker"]

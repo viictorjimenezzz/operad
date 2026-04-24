@@ -1,17 +1,12 @@
-"""Conversational leaves — single-purpose ``Agent`` building blocks.
-
-Each leaf has a fixed ``Utterance -> X`` contract at the class level, so
-instances can be constructed simply as ``Safeguard(config=cfg)``.
-"""
+"""Conversational leaves — talker and titlers."""
 
 from __future__ import annotations
 
-from .persona import Persona
-from .safeguard import Safeguard
-from .turn_taker import TurnTaker
+from .talker import Talker
+from .title import ConversationTitler, InteractionTitler
 
 __all__ = [
-    "Persona",
-    "Safeguard",
-    "TurnTaker",
+    "ConversationTitler",
+    "InteractionTitler",
+    "Talker",
 ]

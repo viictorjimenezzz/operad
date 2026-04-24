@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from .components import (
     Actor,
+    ChatReasoner,
     Classifier,
     Critic,
     Evaluator,
@@ -27,6 +28,9 @@ from .react import ReAct
 from .schemas import (
     Action,
     Answer,
+    ChatReasonerInput,
+    ChatReasonerOutput,
+    ChatRoute,
     Choice,
     Hit,
     Hits,
@@ -46,6 +50,10 @@ __all__ = [
     "Action",
     "Actor",
     "Answer",
+    "ChatReasoner",
+    "ChatReasonerInput",
+    "ChatReasonerOutput",
+    "ChatRoute",
     "Choice",
     "Classifier",
     "Critic",

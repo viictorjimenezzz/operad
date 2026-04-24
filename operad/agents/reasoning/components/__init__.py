@@ -9,6 +9,7 @@ the defaults ad hoc.
 from __future__ import annotations
 
 from .actor import Actor
+from .chat_reasoner import ChatReasoner
 from .classifier import Classifier
 from .critic import Critic
 from .evaluator import Evaluator
@@ -22,6 +23,7 @@ from .tool_user import Tool, ToolCall, ToolResult, ToolUser
 
 __all__ = [
     "Actor",
+    "ChatReasoner",
     "Choice",
     "Classifier",
     "Critic",

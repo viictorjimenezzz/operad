@@ -1,19 +1,16 @@
 """Reusable agent modules — the `torch.nn` library of operad.
 
 The package is organized by *domain*: each subfolder
-(``reasoning/``, future ``coding/``, ``conversational/``, ``memory/``,
-...) groups its leaf components under ``components/`` and its composed
-multi-agent patterns at the domain root. Structural operators
-(``Pipeline``, ``Parallel``) live here at the top level because they
-are domain-agnostic.
-
-Common names are re-exported at this level so
-``from operad.agents import Reasoner, ReAct, Pipeline`` always works
-without users having to know the exact domain path.
+(``reasoning/``, ``coding/``, ``conversational/``, ``memory/``,
+``safeguard/``, ``retrieval/``) groups its leaf components under
+``components/`` and its composed multi-agent patterns at the domain
+root. Structural operators (``Pipeline``, ``Parallel``) live here at
+the top level because they are domain-agnostic.
 """
 
 from __future__ import annotations
 
+from . import safeguard  # noqa: F401
 from .coding import (
     CodeReviewer,
     ContextOptimizer,
@@ -26,35 +23,42 @@ from .coding import (
     ReviewReport,
 )
 from .conversational import (
-    Persona,
-    RefusalLeaf,
-    Safeguard,
-    SafeguardVerdict,
-    StyledUtterance,
-    Talker,
-    TurnChoice,
-    TurnTaker,
-    Utterance,
+    ConversationTitler,
+    ConversationTitlerInput,
+    ConversationTitlerOutput,
+    InteractionTitler,
+    InteractionTitlerInput,
+    InteractionTitlerOutput,
+    TextResponse,
 )
+from .conversational import Talker as ConversationalTalker
+from .conversational import TalkerInput as ConversationalTalkerInput
 from .memory import (
-    Belief,
-    BeliefExtractor,
+    BeliefItem,
+    BeliefOp,
+    BeliefOperation,
     Beliefs,
-    Conversation,
-    EpisodicSummarizer,
+    BeliefsInput,
+    BeliefsOutput,
     MemoryStore,
-    Summary,
-    Turn,
-    UserModel,
-    UserModelExtractor,
+    SessionItem,
+    SessionOp,
+    SessionOperation,
+    SessionTarget,
+    User,
+    UserInput,
+    UserOutput,
 )
-from . import safeguard  # noqa: F401
 from .parallel import Parallel
 from .pipeline import Pipeline
 from .reasoning import (
     Action,
     Actor,
     Answer,
+    ChatReasoner,
+    ChatReasonerInput,
+    ChatReasonerOutput,
+    ChatRoute,
     Choice,
     Classifier,
     Critic,
@@ -81,40 +85,88 @@ from .reasoning import (
     ToolResult,
     ToolUser,
 )
+from .retrieval import (
+    CitationGist,
+    CitationGistInput,
+    ClaimItem,
+    EvidencePlanner,
+    EvidencePlannerInput,
+    EvidencePlannerOutput,
+    FactFilter,
+    FactFilterInput,
+    FactFilterOutput,
+    GistBatchOutput,
+    GistBlock,
+    GistItem,
+)
+from .safeguard import (
+    Context,
+    ContextInput,
+    ContextOutput,
+    SafeguardCategory,
+)
+from .safeguard import Talker as SafeguardTalker
+from .safeguard import TalkerInput as SafeguardTalkerInput
 
 __all__ = [
     "Action",
     "Actor",
     "Answer",
-    "Belief",
-    "BeliefExtractor",
+    "BeliefItem",
+    "BeliefOp",
+    "BeliefOperation",
     "Beliefs",
+    "BeliefsInput",
+    "BeliefsOutput",
+    "ChatReasoner",
+    "ChatReasonerInput",
+    "ChatReasonerOutput",
+    "ChatRoute",
     "Choice",
+    "CitationGist",
+    "CitationGistInput",
+    "ClaimItem",
     "Classifier",
     "CodeReviewer",
+    "Context",
+    "ContextInput",
     "ContextOptimizer",
-    "Conversation",
+    "ContextOutput",
+    "ConversationTitler",
+    "ConversationTitlerInput",
+    "ConversationTitlerOutput",
+    "ConversationalTalker",
+    "ConversationalTalkerInput",
     "Critic",
     "DiffChunk",
     "DiffSummarizer",
-    "EpisodicSummarizer",
     "Evaluator",
+    "EvidencePlanner",
+    "EvidencePlannerInput",
+    "EvidencePlannerOutput",
     "Extractor",
+    "FactFilter",
+    "FactFilterInput",
+    "FactFilterOutput",
+    "GistBatchOutput",
+    "GistBlock",
+    "GistItem",
     "Hit",
     "Hits",
+    "InteractionTitler",
+    "InteractionTitlerInput",
+    "InteractionTitlerOutput",
     "MemoryStore",
     "Observation",
     "PRDiff",
     "PRReviewer",
     "PRSummary",
     "Parallel",
-    "Persona",
     "Pipeline",
     "Planner",
     "Query",
     "ReAct",
     "Reasoner",
-    "RefusalLeaf",
     "Reflection",
     "ReflectionInput",
     "Reflector",
@@ -123,22 +175,22 @@ __all__ = [
     "ReviewReport",
     "RouteInput",
     "Router",
-    "Safeguard",
-    "SafeguardVerdict",
-    "StyledUtterance",
-    "Summary",
+    "SafeguardCategory",
+    "SafeguardTalker",
+    "SafeguardTalkerInput",
+    "SessionItem",
+    "SessionOp",
+    "SessionOperation",
+    "SessionTarget",
     "Switch",
-    "Talker",
     "Task",
+    "TextResponse",
     "Thought",
     "Tool",
     "ToolCall",
     "ToolResult",
     "ToolUser",
-    "Turn",
-    "TurnChoice",
-    "TurnTaker",
-    "UserModel",
-    "UserModelExtractor",
-    "Utterance",
+    "User",
+    "UserInput",
+    "UserOutput",
 ]
