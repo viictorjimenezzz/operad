@@ -1,34 +1,27 @@
 """Gradient-mode context managers: `no_grad()` and `inference_mode()`.
 
-Two `ContextVar` flags underpin the public API:
+The underlying ContextVars live in `operad.core.gradmode` so that
+`operad.core.agent` can consult them without importing from
+`operad.optim` (which would circle back through `grad_agent.py`). This
+module re-exports them for callers that already reference
+``operad.optim.context._GRAD_ENABLED`` (notably `operad.optim.tape`).
 
-- ``_GRAD_ENABLED`` (default ``True``) — consulted by ``tape()`` (wave 2-5)
-  to decide whether to record an `Agent.invoke` call. Flipped to ``False``
-  by both `no_grad()` and `inference_mode()`.
-- ``_INFERENCE_MODE`` (default ``False``) — consulted by
-  `Agent._invoke_envelope` to decide whether to run forward hooks. Flipped
-  to ``True`` only by `inference_mode()`.
-
-The distinction mirrors PyTorch: `no_grad()` is the common case (skip
-autograd bookkeeping); `inference_mode()` is stricter (also skip hooks).
+The distinction between the two CMs mirrors PyTorch: `no_grad()` is the
+common case (skip autograd bookkeeping); `inference_mode()` is stricter
+(also skip forward hooks).
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from contextvars import ContextVar
 
-_GRAD_ENABLED: ContextVar[bool] = ContextVar("_GRAD_ENABLED", default=True)
-_INFERENCE_MODE: ContextVar[bool] = ContextVar("_INFERENCE_MODE", default=False)
-
-
-def _grad_enabled() -> bool:
-    return _GRAD_ENABLED.get()
-
-
-def _inference_mode_active() -> bool:
-    return _INFERENCE_MODE.get()
+from operad.core.gradmode import (
+    _GRAD_ENABLED,
+    _INFERENCE_MODE,
+    _grad_enabled,
+    _inference_mode_active,
+)
 
 
 @asynccontextmanager
@@ -61,4 +54,11 @@ async def inference_mode() -> AsyncIterator[None]:
         _GRAD_ENABLED.reset(grad_token)
 
 
-__all__ = ["no_grad", "inference_mode"]
+__all__ = [
+    "_GRAD_ENABLED",
+    "_INFERENCE_MODE",
+    "_grad_enabled",
+    "_inference_mode_active",
+    "inference_mode",
+    "no_grad",
+]

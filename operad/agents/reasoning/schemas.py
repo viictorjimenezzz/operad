@@ -86,8 +86,8 @@ class Hit(BaseModel):
 
 
 class Query(BaseModel):
-    text: str = Field(description="The search query.")
-    k: int = Field(default=5, description="Maximum number of hits to return.")
+    text: str = Field(default="", description="The search query.")
+    top_k: int = Field(default=5, description="Maximum number of hits to return.")
 
 
 class Hits(BaseModel):

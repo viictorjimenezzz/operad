@@ -58,3 +58,11 @@ class BuildError(Exception):
         if self.mermaid:
             return f"{base}\n\n--- mermaid ---\n{self.mermaid}"
         return base
+
+
+class SideEffectDuringTrace(UserWarning):
+    """Emitted when a composite traces branches that may have side effects.
+
+    Users can silence globally with
+    ``warnings.filterwarnings("ignore", category=SideEffectDuringTrace)``.
+    """

@@ -106,6 +106,36 @@ def test_construct_from_tuples() -> None:
     assert ds[0].expected_output == B(value=1)
 
 
+# --- runtime schema validation (M-4) ----------------------------------------
+
+
+def test_dataset_in_out_cls_validates_cleanly() -> None:
+    ds = Dataset(
+        [(A(text="q1"), A(text="y1")), (A(text="q2"), A(text="y2"))],
+        in_cls=A,
+        out_cls=A,
+    )
+    assert len(ds) == 2
+
+
+def test_dataset_in_out_cls_rejects_bad_rows() -> None:
+    with pytest.raises(ValueError, match="row 0"):
+        Dataset([("bad", "row")], in_cls=A, out_cls=A)
+
+
+def test_dataset_in_out_cls_reports_index_of_bad_row() -> None:
+    good = (A(text="ok"), A(text="ok"))
+    with pytest.raises(ValueError, match="row 1"):
+        Dataset([good, ("bad", "row")], in_cls=A, out_cls=A)
+
+
+def test_dataset_without_cls_still_constructs_tuples() -> None:
+    # Backwards-compat: omitting in_cls/out_cls preserves the prior path.
+    ds = Dataset([(A(text="q"), B(value=1))])
+    assert len(ds) == 1
+    assert ds[0].input == A(text="q")
+
+
 # --- evaluate with per-entry metrics ----------------------------------------
 
 
