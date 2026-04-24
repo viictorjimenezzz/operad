@@ -17,7 +17,7 @@ import random
 from typing import Generic
 
 from ..core.agent import Agent, In, Out
-from ..eval import evaluate
+from ..benchmark import evaluate
 from ..metrics.base import Metric
 from ..utils.ops import Op
 
