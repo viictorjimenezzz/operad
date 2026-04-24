@@ -29,6 +29,7 @@ Wave 1 slot 1-1 ships the `Parameter` data spine; later waves add
 
 from __future__ import annotations
 
+from operad.optim.context import inference_mode, no_grad
 from operad.optim.parameter import (
     CategoricalParameter,
     ExampleListParameter,
@@ -59,4 +60,6 @@ __all__ = [
     "TextParameter",
     "TextualGradient",
     "VocabConstraint",
+    "inference_mode",
+    "no_grad",
 ]
