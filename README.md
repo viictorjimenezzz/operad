@@ -73,6 +73,21 @@ Python 3.12+. Runtime deps are
 Optional extras: `[observers]` (Rich TUI), `[otel]` (OpenTelemetry),
 `[gemini]`, `[huggingface]`.
 
+## Play the demo
+
+One command, no model server required:
+
+```bash
+uv run python apps/demos/agent_evolution/run.py --offline
+```
+
+A seed agent evolves over a handful of generations; the fitness curve
+climbs; the before/after diff prints at the end. Add `--dashboard`
+(after starting `operad-dashboard --port 7860` in another terminal)
+to watch it live. See
+[apps/demos/agent_evolution/README.md](apps/demos/agent_evolution/README.md)
+for the story.
+
 ## Core ideas
 
 **An `Agent` is a `strands.Agent` subclass with typed I/O.** Composites
