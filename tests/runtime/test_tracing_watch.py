@@ -46,21 +46,15 @@ async def test_watch_registers_and_tears_down(cfg, tmp_path) -> None:
 
 async def test_watch_missing_rich_degrades(cfg, monkeypatch) -> None:
     import operad.tracing as tracing
+    import operad.runtime.observers as obs_pkg
 
-    real_import = importlib.import_module
-
-    def fake_import(name: str, *a: Any, **k: Any) -> Any:
-        if name.endswith("rich") or ".rich" in name:
-            raise ImportError("simulated missing rich")
-        return real_import(name, *a, **k)
-
-    monkeypatch.setattr(importlib, "import_module", fake_import)
-    # Force the RichDashboardObserver import inside watch() to miss.
-    import sys
-
-    monkeypatch.setitem(
-        sys.modules, "operad.runtime.observers.rich", _BrokenRichModule()
-    )
+    # `watch()` does `from .runtime.observers import RichDashboardObserver`,
+    # a statement-level import that doesn't route through
+    # `importlib.import_module`. Simulate the missing extra by deleting
+    # the attribute from the already-imported package namespace — the
+    # from-import then raises ImportError as it would when `rich` is
+    # absent.
+    monkeypatch.delattr(obs_pkg, "RichDashboardObserver", raising=False)
 
     pre = len(_obs.registry)
     with pytest.warns(UserWarning, match="rich"):

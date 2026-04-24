@@ -5,11 +5,13 @@ Runs offline — no model server required.
 Runs five rows through a `FakeLeaf`-style agent and prints the resulting
 `EvalReport` with per-row scores and per-metric means.
 
-    uv run python examples/eval_loop.py
+Run:
+    uv run python examples/eval_loop.py [--offline]
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 
@@ -42,7 +44,7 @@ class CannedAgent(Agent[Question, Answer]):
         return Answer(text=self.table.get(x.text, ""))
 
 
-async def _main() -> None:
+async def main(offline: bool = False) -> None:
     cfg = Configuration(
         backend="llamacpp", host="127.0.0.1:0", model="offline", temperature=0.0,
     )
@@ -75,4 +77,11 @@ async def _main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(_main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Run without contacting any LLM server.",
+    )
+    args = parser.parse_args()
+    asyncio.run(main(offline=args.offline))

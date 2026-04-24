@@ -6,12 +6,13 @@ generations nudges the population toward a target score. The demo
 prints the seed's score, the best score per generation, and the final
 evolved agent's change (rule count, rules).
 
-Run with:
-    uv run python examples/evolutionary_demo.py
+Run:
+    uv run python examples/evolutionary_demo.py [--offline]
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import random
 
@@ -20,6 +21,7 @@ from pydantic import BaseModel
 from operad import Agent, Configuration, evaluate
 from operad.algorithms import Evolutionary
 from operad.metrics import ExactMatch
+from operad.metrics.base import MetricBase
 from operad.utils.ops import AppendRule
 
 
@@ -41,7 +43,7 @@ class RuleCountLeaf(Agent[Q, R]):
         return R.model_construct(value=len(self.rules))
 
 
-class RuleCountMetric:
+class RuleCountMetric(MetricBase):
     """Scores predicted.value toward a target rule count (offline)."""
 
     name = "rule_count"
@@ -54,7 +56,7 @@ class RuleCountMetric:
         return 1.0 - min(abs(pv - self.target), self.target) / self.target
 
 
-async def main() -> None:
+async def main(offline: bool = False) -> None:
     cfg = Configuration(
         backend="llamacpp",
         host="127.0.0.1:0",
@@ -92,4 +94,11 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Run without contacting any LLM server.",
+    )
+    args = parser.parse_args()
+    asyncio.run(main(offline=args.offline))

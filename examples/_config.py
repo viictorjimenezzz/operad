@@ -9,6 +9,7 @@ Override via env vars if you have a different setup:
 from __future__ import annotations
 
 import os
+import socket
 
 from operad import Configuration
 
@@ -25,3 +26,13 @@ def local_config(**overrides) -> Configuration:
     )
     base.update(overrides)
     return Configuration(**base)
+
+
+def server_reachable(host: str, timeout: float = 0.5) -> bool:
+    """Return True if a TCP connection to ``host`` (``h:p``) succeeds."""
+    h, _, p = host.partition(":")
+    try:
+        with socket.create_connection((h, int(p)), timeout=timeout):
+            return True
+    except OSError:
+        return False

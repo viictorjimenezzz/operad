@@ -8,18 +8,21 @@ set the class-level defaults (``input``, ``output``, ``role``, ``task``,
 ``rules``, ``examples``), and the framework handles prompt rendering,
 structured output, and graph tracing.
 
-    uv run python examples/custom_agent.py
+Run:
+    uv run python examples/custom_agent.py [--offline]
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
+import sys
 
 from pydantic import BaseModel, Field
 
-from operad import Agent, Example
+from operad import Agent, Configuration, Example
 
-from _config import local_config
+from _config import local_config, server_reachable
 
 
 class Joke(BaseModel):
@@ -54,12 +57,52 @@ class Punster(Agent[Joke, Pun]):
     )
 
 
-async def _main() -> None:
-    agent = Punster(config=local_config(temperature=0.8, max_tokens=128))
+class _OfflinePunster(Agent[Joke, Pun]):
+    """Offline stub matching Punster's typed contract.
+
+    ``build()`` traces with a ``model_construct()`` sentinel whose fields
+    are not populated, so ``forward`` must not read from ``x`` at all.
+    """
+
+    input = Joke
+    output = Pun
+
+    async def forward(self, x: Joke) -> Pun:  # type: ignore[override]
+        return Pun.model_construct(
+            setup="Why did the database break up?",
+            punchline="It had too many unresolved references.",
+        )
+
+
+async def main(offline: bool = False) -> None:
+    script = "custom_agent.py"
+    if offline:
+        cfg = Configuration(
+            backend="llamacpp", host="127.0.0.1:0", model="offline",
+        )
+        agent: Agent[Joke, Pun] = _OfflinePunster(config=cfg)
+    else:
+        cfg = local_config(temperature=0.8, max_tokens=128)
+        print(f"[{script}] backend={cfg.backend} host={cfg.host} model={cfg.model}")
+        if not server_reachable(cfg.host):
+            print(
+                f"[{script}] cannot reach {cfg.host} — start llama-server or pass --offline",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        agent = Punster(config=cfg)
+
     await agent.abuild()
     result = await agent(Joke(topic="databases"))
     print(result.response.model_dump_json(indent=2))
 
 
 if __name__ == "__main__":
-    asyncio.run(_main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Run without contacting any LLM server.",
+    )
+    args = parser.parse_args()
+    asyncio.run(main(offline=args.offline))
