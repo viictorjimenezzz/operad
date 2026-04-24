@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from ....algorithms import Candidate, Score
 from ....core.agent import Agent, Example
+from ..schemas import Candidate, Score
 
 
 class _CriticRequest(BaseModel):

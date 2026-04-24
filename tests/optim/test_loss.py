@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 from pydantic import BaseModel
 
-from operad.algorithms.judge import Candidate, Score
+from operad.agents.reasoning.schemas import Candidate, Score
 from operad.metrics.base import Metric
 from operad.metrics.deterministic import ExactMatch
 from operad.optim import (

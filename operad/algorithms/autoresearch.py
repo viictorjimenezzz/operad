@@ -1,11 +1,17 @@
 """Autonomous research loop: plan → retrieve → reason → critique → reflect,
 selected best-of-N.
 
-``AutoResearcher`` composes existing reasoning leaves into an opinionated
-research pipeline. For each of ``n`` attempts it runs one
-plan→retrieve→reason cycle, then iterates reason+reflect while the
-``Critic``'s score stays below ``threshold``. Across attempts, the
-highest final Critic score selects the winning answer.
+``AutoResearcher`` composes a planner, retriever, reasoner, critic, and
+reflector into an opinionated research pipeline. Components are
+**class-level defaults** so the typical caller only supplies the
+algorithm's own knobs (``context``, ``n``, ``max_iter``, ``threshold``);
+to swap in different components, subclass and override the class
+attributes.
+
+For each of ``n`` attempts it runs one plan→retrieve→reason cycle,
+then iterates reason+reflect while the ``Critic``'s score stays below
+``threshold``. Across attempts, the highest final Critic score selects
+the winning answer.
 
 Home in ``algorithms/`` because the natural API is ``run(task) -> answer``
 over a metric-feedback loop, not ``__call__(x: In) -> Out``.
@@ -15,46 +21,40 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING
+from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
-from ..core.agent import Agent
+from ..agents.reasoning.components import (
+    Critic,
+    FakeRetriever,
+    Planner,
+    Reasoner,
+    Reflector,
+)
 from ..agents.reasoning.schemas import (
     Answer,
+    Candidate,
     Hits,
     Query,
     ReflectionInput,
     Task,
 )
+from ..core.agent import Agent
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
-from .judge import Candidate
-
-if TYPE_CHECKING:
-    from ..agents.reasoning.components import (
-        Critic,
-        Planner,
-        Reasoner,
-        Reflector,
-    )
 
 
 class ResearchPlan(BaseModel):
-    """Typed output of the caller's Planner.
-
-    Pin your planner as ``Planner[Task, ResearchPlan]`` — its ``query``
-    field is fed directly to the Retriever.
-    """
+    """Typed output of the default planner."""
 
     query: str = Field(description="Search query to ground the answer.")
 
 
 class ResearchInput(BaseModel):
-    """Typed input the caller's Reasoner receives.
+    """Typed input the default reasoner receives.
 
-    Pin your reasoner as ``Reasoner[ResearchInput, Answer]``. The
-    ``prior_reflection`` field carries the Reflector's suggested revision
-    across inner-loop iterations; it is empty on the first pass.
+    The ``prior_reflection`` field carries the Reflector's suggested
+    revision across inner-loop iterations; it is empty on the first pass.
     """
 
     task: Task = Field(description="The research task to answer.")
@@ -65,50 +65,83 @@ class ResearchInput(BaseModel):
     )
 
 
+class ResearchContext(BaseModel):
+    """Durable context shared across every component of an ``AutoResearcher``.
+
+    Rendered into each component's system prompt at construction time
+    so the planner, retriever, reasoner, critic, and reflector all
+    know the larger problem they are working on. Pass a plain string
+    when you just want free-form context; use the structured fields
+    when multiple facets matter.
+    """
+
+    domain: str = Field(
+        default="",
+        description="Subject-matter area, e.g. 'climate science' or 'legal research'.",
+    )
+    audience: str = Field(
+        default="",
+        description="Who the final answer is for; shapes register and depth.",
+    )
+    constraints: str = Field(
+        default="",
+        description="Hard constraints: citation style, length, forbidden sources.",
+    )
+    notes: str = Field(
+        default="",
+        description="Any additional free-form context worth propagating.",
+    )
+
+    def render(self) -> str:
+        parts: list[str] = []
+        if self.domain:
+            parts.append(f"Domain: {self.domain}")
+        if self.audience:
+            parts.append(f"Audience: {self.audience}")
+        if self.constraints:
+            parts.append(f"Constraints: {self.constraints}")
+        if self.notes:
+            parts.append(f"Notes: {self.notes}")
+        return "\n".join(parts)
+
+
+def _render_context(ctx: "ResearchContext | str") -> str:
+    if isinstance(ctx, ResearchContext):
+        return ctx.render()
+    return ctx
+
+
 class AutoResearcher:
     """Planner → Retriever → Reasoner → Critic → Reflector, best of N.
 
     The ``Critic`` serves two roles: per-attempt verifier (its score
-    gates the reflect inner loop — iteration continues while the score is
-    below ``threshold``) and N-selection judge (the attempt with the
+    gates the reflect inner loop — iteration continues while the score
+    is below ``threshold``) and N-selection judge (the attempt with the
     highest final Critic score wins).
 
-    Callers pin the leaves' generic types:
+    Class-level defaults provide a usable out-of-the-box pipeline.
+    Override any of the class attributes in a subclass to swap in a
+    differently-configured component.
 
-    - ``planner: Planner[Task, ResearchPlan]``
-    - ``retriever: Agent[Query, Hits]`` (any compatible leaf — e.g.
-      ``Retriever``, ``FakeRetriever``, ``BM25Retriever``)
-    - ``reasoner: Reasoner[ResearchInput, Answer]``
-    - ``critic: Critic`` (``Candidate -> Score``, fixed)
-    - ``reflector: Reflector`` (``ReflectionInput -> Reflection``, fixed)
-
-    Each attempt is independent; under concurrency, supply distinct seeds
-    via each leaf's ``Configuration.sampling.seed`` to avoid identical
-    candidates.
+    Each attempt is independent; under concurrency, distinct seeds on
+    the component configs ensure diverse candidates.
 
     Example::
 
-        from operad.agents.reasoning.components import FakeRetriever, Hit
-
-        ar = AutoResearcher(
-            planner=...,
-            retriever=FakeRetriever(
-                corpus=[Hit(text="Paris is the capital of France.", score=0.0)]
-            ),
-            reasoner=...,
-            critic=...,
-            reflector=...,
-        )
+        ar = AutoResearcher(context="EU energy policy", n=3)
+        answer = await ar.run(Task(goal="Summarize the REPowerEU plan."))
     """
+
+    planner: ClassVar[Planner] = Planner(input=Task, output=ResearchPlan)
+    retriever: ClassVar[Agent[Query, Hits]] = FakeRetriever(corpus=[])
+    reasoner: ClassVar[Reasoner] = Reasoner(input=ResearchInput, output=Answer)
+    critic: ClassVar[Critic] = Critic()
+    reflector: ClassVar[Reflector] = Reflector()
 
     def __init__(
         self,
+        context: "ResearchContext | str" = "",
         *,
-        planner: Planner,
-        retriever: Agent[Query, Hits],
-        reasoner: Reasoner,
-        critic: Critic,
-        reflector: Reflector,
         n: int = 3,
         max_iter: int = 2,
         threshold: float = 0.8,
@@ -117,11 +150,16 @@ class AutoResearcher:
             raise ValueError(f"n must be >= 1, got {n}")
         if max_iter < 0:
             raise ValueError(f"max_iter must be >= 0, got {max_iter}")
-        self.planner = planner
-        self.retriever = retriever
-        self.reasoner = reasoner
-        self.critic = critic
-        self.reflector = reflector
+
+        ctx = _render_context(context)
+        cls = type(self)
+        self.planner = cls.planner.clone(context=ctx)
+        self.retriever = cls.retriever.clone(context=ctx)
+        self.reasoner = cls.reasoner.clone(context=ctx)
+        self.critic = cls.critic.clone(context=ctx)
+        self.reflector = cls.reflector.clone(context=ctx)
+
+        self.context = ctx
         self.n = n
         self.max_iter = max_iter
         self.threshold = threshold
@@ -222,4 +260,9 @@ class AutoResearcher:
                 raise
 
 
-__all__ = ["AutoResearcher", "ResearchInput", "ResearchPlan"]
+__all__ = [
+    "AutoResearcher",
+    "ResearchContext",
+    "ResearchInput",
+    "ResearchPlan",
+]

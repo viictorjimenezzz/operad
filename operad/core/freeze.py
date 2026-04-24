@@ -45,6 +45,7 @@ _KNOWN_AGENT_ATTRS: frozenset[str] = frozenset(
     {
         "role",
         "task",
+        "context",
         "rules",
         "examples",
         "config",
@@ -184,6 +185,7 @@ def _redact_state(state: AgentState) -> AgentState:
         class_name=state.class_name,
         role=state.role,
         task=state.task,
+        context=state.context,
         rules=list(state.rules),
         examples=[dict(e) for e in state.examples],
         config=cfg,
@@ -367,6 +369,7 @@ def _new_agent(cls: type, state: AgentState, io: tuple[type, type]) -> Agent:
     obj.output = io[1]  # type: ignore[assignment]
     obj.role = state.role
     obj.task = state.task
+    obj.context = state.context
     obj.rules = list(state.rules)
     obj.config = (
         state.config.model_copy(deep=True) if state.config is not None else None

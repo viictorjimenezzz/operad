@@ -164,6 +164,7 @@ class Agent(strands.Agent, Generic[In, Out]):
     output: ClassVar[type[BaseModel] | None] = None
     role: ClassVar[str] = ""
     task: ClassVar[str] = ""
+    context: ClassVar[str] = ""
     rules: ClassVar[Sequence[str]] = ()
     examples: ClassVar[Sequence[Example[Any, Any]]] = ()
     renderer: ClassVar[str | None] = None
@@ -181,6 +182,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         config: Configuration | None = None,
         role: str | None = None,
         task: str | None = None,
+        context: str | None = None,
         rules: Sequence[str] | None = None,
         examples: Sequence[Example[In, Out]] | None = None,
         input: type[In] | None = None,
@@ -219,6 +221,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         self.config = config
         self.role = role if role is not None else cls.role
         self.task = task if task is not None else cls.task
+        self.context = context if context is not None else cls.context
         self.rules = list(rules if rules is not None else cls.rules)
         self.examples = list(examples if examples is not None else cls.examples)
         self.input = in_cls
@@ -255,6 +258,7 @@ class Agent(strands.Agent, Generic[In, Out]):
             class_name=type(self).__name__,
             role=self.role,
             task=self.task,
+            context=self.context,
             rules=list(self.rules),
             examples=[e.model_dump(mode="json") for e in self.examples],
             config=(
@@ -287,6 +291,7 @@ class Agent(strands.Agent, Generic[In, Out]):
 
         self.role = s.role
         self.task = s.task
+        self.context = s.context
         self.rules = list(s.rules)
         self.examples = [
             Example(
@@ -313,15 +318,20 @@ class Agent(strands.Agent, Generic[In, Out]):
         """PyTorch-style alias for :meth:`load_state`."""
         self.load_state(sd)
 
-    def clone(self) -> Self:
+    def clone(self, *, context: str | None = None) -> Self:
         """Return a fresh, unbuilt deep copy of this agent.
 
-        Preserves declared Agent state (role, task, rules, examples, config,
-        input/output types) and the composite routing structure. Composite
-        subclasses' extra attributes (e.g. `Pipeline._stages`,
-        `Parallel._keys`/`_combine`) are deep-copied with cloned children
-        substituted for their originals. Default-forward leaves skip the
-        strands-owned internals written by `build()`; the caller rebuilds.
+        Preserves declared Agent state (role, task, context, rules,
+        examples, config, input/output types) and the composite routing
+        structure. Composite subclasses' extra attributes (e.g.
+        `Pipeline._stages`, `Parallel._keys`/`_combine`) are deep-copied
+        with cloned children substituted for their originals.
+        Default-forward leaves skip the strands-owned internals written
+        by `build()`; the caller rebuilds.
+
+        Pass ``context=...`` to override the cloned agent's context
+        string — useful for algorithms that instantiate component
+        defaults with a per-instance context.
 
         Shared children (the same Agent attached under multiple attribute
         names) are cloned once and reattached under each name, preserving
@@ -338,6 +348,7 @@ class Agent(strands.Agent, Generic[In, Out]):
 
         new.role = self.role
         new.task = self.task
+        new.context = context if context is not None else self.context
         new.rules = list(self.rules)
         new.examples = [e.model_copy(deep=True) for e in self.examples]
         new.config = (
@@ -361,7 +372,8 @@ class Agent(strands.Agent, Generic[In, Out]):
         # this to avoid copying strands internals from `_init_strands`.
         if type(self).forward is not Agent.forward:
             _known = {
-                "role", "task", "rules", "examples", "config", "input", "output",
+                "role", "task", "context", "rules", "examples", "config",
+                "input", "output",
                 "_children", "_built", "_graph",
                 "_requires_grad_overrides",
                 "_forward_pre_hooks", "_forward_hooks", "_backward_hooks",

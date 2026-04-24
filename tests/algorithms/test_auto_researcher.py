@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 from pydantic import BaseModel
 
@@ -17,19 +15,19 @@ from operad.agents.reasoning.components import (
 )
 from operad.agents.reasoning.schemas import (
     Answer,
+    Candidate,
     Hit,
-    Hits,
     Query,
     Reflection,
     ReflectionInput,
+    Score,
     Task,
 )
 from operad.algorithms import (
     AutoResearcher,
-    Candidate,
+    ResearchContext,
     ResearchInput,
     ResearchPlan,
-    Score,
 )
 
 
@@ -98,11 +96,13 @@ def _make_retriever() -> tuple[Retriever, list[Query]]:
     return Retriever(lookup=lookup), seen
 
 
-async def _build_all(
+async def _make_ar(
     cfg: Configuration,
     *,
     scores: list[float] | None = None,
-) -> tuple[_Planner, Retriever, list[Query], _Reasoner, _ScriptedCritic, _Reflector]:
+    **kwargs,
+) -> tuple[AutoResearcher, list[Query]]:
+    """Construct an AutoResearcher and swap each component for a scripted fake."""
     planner = await _Planner(cfg).abuild()
     retriever, seen = _make_retriever()
     retriever = await retriever.abuild()
@@ -112,57 +112,36 @@ async def _build_all(
     for a in (planner, reasoner, critic, reflector):
         a.calls = 0  # reset post-trace
     seen.clear()
-    return planner, retriever, seen, reasoner, critic, reflector
+
+    ar = AutoResearcher(**kwargs)
+    ar.planner = planner
+    ar.retriever = retriever
+    ar.reasoner = reasoner
+    ar.critic = critic
+    ar.reflector = reflector
+    return ar, seen
 
 
 async def test_auto_researcher_runs_end_to_end(cfg) -> None:
-    planner, retriever, _, reasoner, critic, reflector = await _build_all(cfg)
-    ar = AutoResearcher(
-        planner=planner,
-        retriever=retriever,
-        reasoner=reasoner,
-        critic=critic,
-        reflector=reflector,
-        n=1,
-        max_iter=0,
-    )
+    ar, _ = await _make_ar(cfg, n=1, max_iter=0)
     out = await ar.run(Task(goal="what is TCP?"))
     assert isinstance(out, Answer)
     assert out.answer.startswith("a-")
 
 
 async def test_auto_researcher_produces_n_candidates(cfg) -> None:
-    planner, retriever, seen, reasoner, critic, reflector = await _build_all(cfg)
-    ar = AutoResearcher(
-        planner=planner,
-        retriever=retriever,
-        reasoner=reasoner,
-        critic=critic,
-        reflector=reflector,
-        n=4,
-        max_iter=0,
-    )
+    ar, seen = await _make_ar(cfg, n=4, max_iter=0)
     await ar.run(Task(goal="go"))
-    assert planner.calls == 4
+    assert ar.planner.calls == 4
     assert len(seen) == 4
-    assert reasoner.calls == 4
-    assert critic.calls == 4
-    assert reflector.calls == 0
+    assert ar.reasoner.calls == 4
+    assert ar.critic.calls == 4
+    assert ar.reflector.calls == 0
 
 
 async def test_auto_researcher_picks_highest_scoring(cfg) -> None:
-    planner, retriever, _, reasoner, critic, reflector = await _build_all(
-        cfg, scores=[0.1, 0.9, 0.2]
-    )
-    ar = AutoResearcher(
-        planner=planner,
-        retriever=retriever,
-        reasoner=reasoner,
-        critic=critic,
-        reflector=reflector,
-        n=3,
-        max_iter=0,
-        threshold=0.0,  # never iterate
+    ar, _ = await _make_ar(
+        cfg, scores=[0.1, 0.9, 0.2], n=3, max_iter=0, threshold=0.0
     )
     out = await ar.run(Task(goal="go"))
     assert isinstance(out, Answer)
@@ -172,81 +151,38 @@ async def test_auto_researcher_picks_highest_scoring(cfg) -> None:
 
 
 async def test_auto_researcher_max_iter_zero_skips_reflection(cfg) -> None:
-    planner, retriever, _, reasoner, critic, reflector = await _build_all(
-        cfg, scores=[0.0]  # always below any positive threshold
-    )
-    ar = AutoResearcher(
-        planner=planner,
-        retriever=retriever,
-        reasoner=reasoner,
-        critic=critic,
-        reflector=reflector,
-        n=2,
-        max_iter=0,
-        threshold=0.99,
+    ar, _ = await _make_ar(
+        cfg, scores=[0.0], n=2, max_iter=0, threshold=0.99,
     )
     await ar.run(Task(goal="go"))
-    assert reflector.calls == 0
-    assert reasoner.calls == 2  # one per attempt, no revisions
+    assert ar.reflector.calls == 0
+    assert ar.reasoner.calls == 2  # one per attempt, no revisions
 
 
 async def test_auto_researcher_loops_when_score_below_threshold(cfg) -> None:
     # First score below threshold forces one reflect pass; second score
     # clears the threshold and the loop exits early.
-    planner, retriever, _, reasoner, critic, reflector = await _build_all(
-        cfg, scores=[0.1, 0.95]
-    )
-    ar = AutoResearcher(
-        planner=planner,
-        retriever=retriever,
-        reasoner=reasoner,
-        critic=critic,
-        reflector=reflector,
-        n=1,
-        max_iter=3,
-        threshold=0.9,
+    ar, _ = await _make_ar(
+        cfg, scores=[0.1, 0.95], n=1, max_iter=3, threshold=0.9,
     )
     await ar.run(Task(goal="go"))
-    assert reasoner.calls == 2
-    assert reflector.calls == 1
-    assert critic.calls == 2
+    assert ar.reasoner.calls == 2
+    assert ar.reflector.calls == 1
+    assert ar.critic.calls == 2
 
 
-async def test_auto_researcher_rejects_zero_n(cfg) -> None:
-    planner, retriever, _, reasoner, critic, reflector = await _build_all(cfg)
+async def test_auto_researcher_rejects_zero_n() -> None:
     with pytest.raises(ValueError, match="n must be >= 1"):
-        AutoResearcher(
-            planner=planner,
-            retriever=retriever,
-            reasoner=reasoner,
-            critic=critic,
-            reflector=reflector,
-            n=0,
-        )
+        AutoResearcher(n=0)
 
 
-async def test_auto_researcher_rejects_negative_max_iter(cfg) -> None:
-    planner, retriever, _, reasoner, critic, reflector = await _build_all(cfg)
+async def test_auto_researcher_rejects_negative_max_iter() -> None:
     with pytest.raises(ValueError, match="max_iter must be >= 0"):
-        AutoResearcher(
-            planner=planner,
-            retriever=retriever,
-            reasoner=reasoner,
-            critic=critic,
-            reflector=reflector,
-            max_iter=-1,
-        )
+        AutoResearcher(max_iter=-1)
 
 
-async def test_auto_researcher_is_not_an_agent(cfg) -> None:
-    planner, retriever, _, reasoner, critic, reflector = await _build_all(cfg)
-    ar = AutoResearcher(
-        planner=planner,
-        retriever=retriever,
-        reasoner=reasoner,
-        critic=critic,
-        reflector=reflector,
-    )
+async def test_auto_researcher_is_not_an_agent() -> None:
+    ar = AutoResearcher()
     assert not isinstance(ar, Agent)
 
 
@@ -266,3 +202,25 @@ async def test_auto_researcher_not_promoted_to_operad_top_level() -> None:
     import operad
 
     assert "AutoResearcher" not in getattr(operad, "__all__", ())
+
+
+async def test_research_context_renders_to_multiline_string() -> None:
+    ctx = ResearchContext(
+        domain="climate science",
+        audience="policy researchers",
+        constraints="no paywalled sources",
+        notes="focus on EU",
+    )
+    rendered = ctx.render()
+    assert "Domain: climate science" in rendered
+    assert "Audience: policy researchers" in rendered
+    assert "Constraints: no paywalled sources" in rendered
+    assert "Notes: focus on EU" in rendered
+
+
+async def test_auto_researcher_propagates_context_to_components() -> None:
+    ar = AutoResearcher(context="a bespoke research topic")
+    assert ar.planner.context == "a bespoke research topic"
+    assert ar.reasoner.context == "a bespoke research topic"
+    assert ar.critic.context == "a bespoke research topic"
+    assert ar.reflector.context == "a bespoke research topic"
