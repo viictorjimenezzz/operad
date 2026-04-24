@@ -17,7 +17,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ValidationError
 
-from operad.algorithms.judge import Candidate
+from operad.agents.reasoning.schemas import Candidate
 from operad.core.agent import Agent
 from operad.metrics.base import Metric, MetricBase
 from operad.optim.parameter import TextualGradient
@@ -106,8 +106,8 @@ class CriticLoss(MetricBase):
 
     The critic's output is duck-typed on `.score` and `.rationale`, so
     any Pydantic model with those attributes works — `Score` itself
-    from `operad.algorithms.judge`, or a user-defined subclass that
-    adds richer fields.
+    from `operad.agents.reasoning.schemas`, or a user-defined subclass
+    that adds richer fields.
     """
 
     def __init__(

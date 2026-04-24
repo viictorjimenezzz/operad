@@ -335,6 +335,18 @@ See [`.conductor/optim/`](.conductor/optim/) for the task plan and
 [`apps/demos/agent_evolution/run.py`](apps/demos/agent_evolution/run.py)
 for a live, fully-offline demo.
 
+A second milestone — **training observability and human-in-the-loop
+labeling** — is also now **SHIPPED**. Four per-run dashboard panels
+(fitness curve, mutation heatmap, `PromptDrift` timeline, training
+progress) render live at `GET /runs/{run_id}` on
+`apps/dashboard/`, driven entirely by the existing observer
+registry. A sibling **Studio** app (`apps/studio/`) closes the loop:
+`HumanFeedbackCallback` writes `(input, predicted)` rows during
+`Trainer.fit`, a human assigns 1-5 ratings in the UI, and the same
+ratings file is replayed as a `HumanFeedbackLoss` on the next fit.
+See [`.conductor/training-v2/`](.conductor/training-v2/) for the
+task plan.
+
 ## 8. Non-goals and deliberate omissions
 
 - **No static-type-checker runtime integration** (`ty`, `mypy`, etc.).

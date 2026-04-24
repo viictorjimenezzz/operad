@@ -1,35 +1,30 @@
 """Algorithms: outer loops that orchestrate Agents with metric feedback.
 
-Unlike `agents/`, nothing in this package inherits from `Agent`.
+Unlike ``agents/``, nothing in this package inherits from ``Agent``.
 Algorithms have their own API (``run(...)``) whose signature reflects
-what the algorithm does. An ``Evolutionary.run() -> Agent``
-simply doesn't fit the ``Agent[In, Out]`` mold.
+what the algorithm does — ``Evolutionary.run() -> Agent`` simply does
+not fit the ``Agent[In, Out]`` mold.
+
+Each algorithm's components are **class-level defaults**; callers
+supply only the algorithm's own knobs at construction time. To swap
+in different components, subclass and override the class attributes.
 """
 
 from __future__ import annotations
 
-from .judge import Candidate, Score
-from .auto_research import AutoResearcher, ResearchInput, ResearchPlan
-from .best_of_n import BestOfN
-from .debate import Critique, Debate, DebateRecord, DebateTurn, Proposal
-from .self_refine import RefinementInput, SelfRefine
+from .autoresearch import AutoResearcher, ResearchContext, ResearchInput, ResearchPlan
+from .beam import Beam
+from .debate import Debate
 from .sweep import Sweep, SweepCell, SweepReport
 from .verifier_loop import VerifierLoop
 
 __all__ = [
     "AutoResearcher",
-    "BestOfN",
-    "Candidate",
-    "Critique",
+    "Beam",
     "Debate",
-    "DebateRecord",
-    "DebateTurn",
-    "Proposal",
-    "RefinementInput",
+    "ResearchContext",
     "ResearchInput",
     "ResearchPlan",
-    "Score",
-    "SelfRefine",
     "Sweep",
     "SweepCell",
     "SweepReport",

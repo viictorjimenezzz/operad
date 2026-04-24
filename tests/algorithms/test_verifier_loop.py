@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 
 from operad import Agent
-from operad.algorithms import Candidate, Score, VerifierLoop
+from operad.agents.reasoning.schemas import Candidate, Score
+from operad.algorithms import VerifierLoop
 
 from ..conftest import A, B
 
@@ -43,30 +44,29 @@ class _ThresholdCritic(Agent[Candidate, Score]):
         return Score(score=1.0 if value >= self.threshold else 0.0)
 
 
-async def test_verifier_loop_exits_early_on_threshold(cfg) -> None:
-    gen = await _Counter(cfg).abuild()
-    critic = await _ThresholdCritic(cfg, threshold=20).abuild()
-    gen.calls = 0
+async def _make_loop(cfg, *, critic_threshold: int, **kwargs) -> VerifierLoop:
+    """Build a VerifierLoop with test generator/critic swapped in."""
+    loop = VerifierLoop(**kwargs)
+    loop.generator = await _Counter(cfg).abuild()
+    loop.generator.calls = 0
+    loop.critic = await _ThresholdCritic(cfg, threshold=critic_threshold).abuild()
+    return loop
 
-    loop = VerifierLoop(gen, critic, threshold=0.8, max_iter=5)
+
+async def test_verifier_loop_exits_early_on_threshold(cfg) -> None:
+    loop = await _make_loop(cfg, critic_threshold=20, max_iter=5)
     out = await loop.run(A(text="q"))
     assert out.value == 20
-    assert gen.calls == 2
+    assert loop.generator.calls == 2
 
 
 async def test_verifier_loop_returns_last_after_max_iter(cfg) -> None:
-    gen = await _Counter(cfg).abuild()
-    critic = await _ThresholdCritic(cfg, threshold=10_000).abuild()
-    gen.calls = 0
-
-    loop = VerifierLoop(gen, critic, threshold=0.8, max_iter=3)
+    loop = await _make_loop(cfg, critic_threshold=10_000, max_iter=3)
     out = await loop.run(A(text="q"))
     assert out.value == 30
-    assert gen.calls == 3
+    assert loop.generator.calls == 3
 
 
-async def test_verifier_loop_rejects_zero_max_iter(cfg) -> None:
-    gen = _Counter(cfg)
-    critic = _ThresholdCritic(cfg, threshold=0)
+async def test_verifier_loop_rejects_zero_max_iter() -> None:
     with pytest.raises(ValueError, match="max_iter"):
-        VerifierLoop(gen, critic, max_iter=0)
+        VerifierLoop(max_iter=0)

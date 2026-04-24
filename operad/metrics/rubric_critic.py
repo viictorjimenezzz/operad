@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from ..algorithms.judge import Candidate
+from ..agents.reasoning.schemas import Candidate
 from ..core.agent import Agent
 from .base import MetricBase
 

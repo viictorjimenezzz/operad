@@ -46,6 +46,10 @@ SECTION_DESCRIPTIONS: dict[str, str] = {
         "Objective accomplished on each invocation; the single most "
         "important instruction."
     ),
+    "context": (
+        "Runtime context supplied by the enclosing caller (e.g. an "
+        "algorithm) so the agent knows the larger problem it is part of."
+    ),
     "rules": "Hard constraints the agent must obey.",
     "examples": "Typed few-shot input/output demonstrations.",
     "system_input": (
@@ -175,6 +179,8 @@ def render_system(agent: "Agent[Any, Any]") -> str:
         parts.append(_section("role", _xml_text_escape(agent.role)))
     if agent.task:
         parts.append(_section("task", _xml_text_escape(agent.task)))
+    if agent.context:
+        parts.append(_section("context", _xml_text_escape(agent.context)))
     if agent.rules:
         parts.append(_section("rules", render_rules(list(agent.rules))))
     if agent.examples:

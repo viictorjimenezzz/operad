@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 from collections import OrderedDict, deque
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Deque, Iterator, Literal
 
 from operad.core.graph import TypeRegistry, from_json, to_mermaid
 
@@ -20,7 +20,7 @@ from operad.core.graph import TypeRegistry, from_json, to_mermaid
 RunState = Literal["running", "ended", "error"]
 
 _DEFAULT_CAPACITY = 100
-_DEFAULT_EVENT_WINDOW = 500
+_DEFAULT_EVENTS_PER_RUN = 1000
 
 
 @dataclass
@@ -30,9 +30,7 @@ class RunInfo:
     last_event_at: float
     state: RunState = "running"
     mermaid: str | None = None
-    events: deque[dict[str, Any]] = field(
-        default_factory=lambda: deque(maxlen=_DEFAULT_EVENT_WINDOW)
-    )
+    events: Deque[dict[str, Any]] = field(default_factory=deque)
     event_counts: dict[str, int] = field(default_factory=dict)
     algorithm_path: str | None = None
     algorithm_kinds: set[str] = field(default_factory=set)
@@ -86,17 +84,31 @@ class RunInfo:
 
 
 class RunRegistry:
-    """Bounded LRU of run_id → RunInfo. Drop-oldest on overflow."""
+    """Bounded LRU of run_id → RunInfo. Drop-oldest on overflow.
+
+    Each RunInfo also holds a bounded deque of already-serialized event
+    envelopes so per-run dashboard panels can reconstruct historical state
+    on page load without touching the live SSE stream.
+    """
 
     def __init__(
         self,
         capacity: int = _DEFAULT_CAPACITY,
-        event_window: int = _DEFAULT_EVENT_WINDOW,
+        *,
+        events_per_run: int = _DEFAULT_EVENTS_PER_RUN,
     ) -> None:
         self._capacity = capacity
-        self._event_window = event_window
+        self._events_per_run = events_per_run
         self._runs: OrderedDict[str, RunInfo] = OrderedDict()
         self._type_registry = TypeRegistry()
+
+    def _new_run_info(self, run_id: str, timestamp: float) -> RunInfo:
+        return RunInfo(
+            run_id=run_id,
+            started_at=timestamp,
+            last_event_at=timestamp,
+            events=deque(maxlen=self._events_per_run),
+        )
 
     def __len__(self) -> int:
         return len(self._runs)
@@ -108,6 +120,7 @@ class RunRegistry:
         return self._runs.get(run_id)
 
     def list(self) -> list[RunInfo]:
+        # Newest first.
         return list(reversed(self._runs.values()))
 
     def all_generations(self) -> list[dict[str, Any]]:
@@ -149,7 +162,7 @@ class RunRegistry:
         }
 
     def record_envelope(self, envelope: dict[str, Any]) -> None:
-        """Absorb one SSE envelope into the per-run state."""
+        """Absorb one SSE envelope: append to history + update aggregated state."""
         run_id = envelope.get("run_id") or ""
         if not run_id:
             return
@@ -168,15 +181,48 @@ class RunRegistry:
         elif env_type == "agent_event":
             self._record_agent(info, envelope, kind)
 
+    def append_event(self, run_id: str, envelope: dict[str, Any]) -> None:
+        """Legacy: append a serialized envelope to a run's history buffer.
+
+        Kept for back-compat with routes that call this directly; delegates
+        to `record_envelope` so aggregated state stays in sync.
+        """
+        if envelope.get("run_id") != run_id:
+            envelope = {**envelope, "run_id": run_id}
+        self.record_envelope(envelope)
+
+    def iter_events(
+        self,
+        run_id: str,
+        *,
+        event_type: str | None = None,
+        kind: str | tuple[str, ...] | None = None,
+        algorithm_path: str | tuple[str, ...] | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        """Yield buffered envelopes for a run, filtered by optional fields.
+
+        `event_type` matches the envelope `"type"` (e.g. `"algo_event"`).
+        `kind` matches the envelope `"kind"`; tuple = any-of.
+        `algorithm_path` matches `"algorithm_path"` on algo envelopes; tuple = any-of.
+        """
+        info = self._runs.get(run_id)
+        if info is None:
+            return
+        kinds = _as_tuple(kind)
+        algos = _as_tuple(algorithm_path)
+        for env in info.events:
+            if event_type is not None and env.get("type") != event_type:
+                continue
+            if kinds and env.get("kind") not in kinds:
+                continue
+            if algos and env.get("algorithm_path") not in algos:
+                continue
+            yield env
+
     def _ensure(self, run_id: str, ts: float) -> RunInfo:
         info = self._runs.get(run_id)
         if info is None:
-            info = RunInfo(
-                run_id=run_id,
-                started_at=ts,
-                last_event_at=ts,
-                events=deque(maxlen=self._event_window),
-            )
+            info = self._new_run_info(run_id, ts)
             self._runs[run_id] = info
             self._evict_if_needed()
         else:
@@ -283,7 +329,7 @@ class RunRegistry:
                 if isinstance(c, int):
                     info.total_completion_tokens += c
 
-    # --- legacy facade kept so replay.py + tests continue to work ----
+    # --- legacy facade kept so existing callers continue to work ------
 
     def observe_agent_event(
         self,
@@ -323,6 +369,14 @@ class RunRegistry:
     def _evict_if_needed(self) -> None:
         while len(self._runs) > self._capacity:
             self._runs.popitem(last=False)
+
+
+def _as_tuple(value: Any) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value,)
+    return tuple(value)
 
 
 def _fallback_mermaid(graph_data: dict[str, Any]) -> str:

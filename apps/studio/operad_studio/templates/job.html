@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>operad-studio — {{ job_name }}</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header>
+    <h1><a href="/" class="home-link">operad-studio</a> / {{ job_name }}</h1>
+    <span class="badge">{{ rated }} / {{ total }} rated</span>
+  </header>
+
+  <section class="train-controls">
+    <form id="train-form" method="post" action="/jobs/{{ job_name }}/train">
+      <label>epochs <input type="number" name="epochs" value="1" min="1" max="10" /></label>
+      <label>lr <input type="number" name="lr" value="1.0" step="0.1" /></label>
+      <button type="submit" class="button primary">Train</button>
+    </form>
+    <div id="train-status" class="train-status"></div>
+  </section>
+
+  <main>
+    <ol class="rows">
+      {% for row in rows %}
+        <li class="row" data-row-id="{{ row.id }}">
+          <div class="row-meta">#{{ row.index }} · id <code>{{ row.id[:10] }}</code> · run <code>{{ row.run_id[:8] }}</code></div>
+          <div class="row-body">
+            <div class="row-col">
+              <strong>input</strong>
+              <pre>{{ row.input | tojson(indent=2) }}</pre>
+            </div>
+            <div class="row-col">
+              <strong>predicted</strong>
+              <pre>{{ row.predicted | tojson(indent=2) }}</pre>
+            </div>
+          </div>
+          <form class="row-rate" method="post" action="/jobs/{{ job_name }}/rows/{{ row.id }}">
+            <label>rating
+              <input type="range" name="rating" min="1" max="5" step="1"
+                     value="{{ row.rating or 3 }}"
+                     oninput="this.nextElementSibling.textContent=this.value" />
+              <output>{{ row.rating or 3 }}</output>
+            </label>
+            <textarea name="rationale" rows="2" placeholder="rationale">{{ row.rationale or '' }}</textarea>
+            <button type="submit" class="button">save</button>
+          </form>
+        </li>
+      {% endfor %}
+    </ol>
+  </main>
+
+  <script>
+    window.OPERAD_JOB_NAME = {{ job_name | tojson }};
+  </script>
+  <script src="/static/studio.js"></script>
+</body>
+</html>

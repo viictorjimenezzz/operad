@@ -7,7 +7,7 @@ import asyncio
 import pytest
 
 from operad import Metric
-from operad.algorithms import Candidate, Score
+from operad.agents.reasoning.schemas import Candidate, Score
 from operad.metrics import RubricCritic
 
 from ..conftest import A, FakeLeaf

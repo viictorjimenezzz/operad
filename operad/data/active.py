@@ -105,7 +105,7 @@ class UncertaintySampler:
         if self._user_fn is not None:
             return float(self._user_fn(out))
         if self._scorer is not None:
-            from ..algorithms import Candidate
+            from ..agents.reasoning.schemas import Candidate
 
             judgement = await self._scorer(
                 Candidate(input=x, output=out.response)

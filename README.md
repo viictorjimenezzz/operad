@@ -199,6 +199,49 @@ walks the runtime tape, and every `Parameter` that took blame gets
 rewritten by its optimizer. Full walkthrough in
 [TRAINING.md](TRAINING.md).
 
+## Observe and label training
+
+Two local-first apps sit on top of the training loop.
+
+**Dashboard.** Start `operad-dashboard` and navigate to
+`/runs/<run_id>` to see per-run panels wired up to the event stream:
+
+- **fitness curve** — best-so-far / population mean / spread band,
+  driven by `generation` events.
+- **mutation heatmap** — per-op success rate over generations, driven
+  by `op_success_counts` / `op_attempt_counts` on those same events.
+- **PromptDrift timeline** — epoch-wise hash delta and changed
+  parameter paths, emitted by the `PromptDrift` callback.
+- **training progress** — nested epoch + batch bars with ETA, driven
+  by `batch_start` / `batch_end` from `DataLoader` plus lifecycle
+  events from `Trainer`.
+
+```bash
+uv run operad-dashboard --port 7860 &
+uv run python examples/talker_evolution.py --dashboard
+```
+
+For terminal-side progress, register `TrainerProgressObserver`:
+
+```python
+from operad.runtime.observers import registry
+from operad.train import TrainerProgressObserver
+registry.register(TrainerProgressObserver())
+```
+
+**Studio.** A sibling app for human-in-the-loop labeling.
+`HumanFeedbackCallback` dumps `(input, predicted, rating=null)`
+rows to an NDJSON file during `Trainer.fit`; a human assigns 1-5
+ratings via Studio; clicking *Train* relaunches `Trainer.fit` with
+`HumanFeedbackLoss` against the rated file.
+
+```bash
+uv run operad-studio --port 7870 \
+  --data-dir /tmp/operad-feedback \
+  --agent-bundle /tmp/talker.json \
+  --dashboard-port 7860
+```
+
 ## Run from YAML
 
 You can run an agent end-to-end without writing Python by pointing the
