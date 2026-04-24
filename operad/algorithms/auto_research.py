@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
+from ..core.agent import Agent
 from ..agents.reasoning.schemas import (
     Answer,
     Hits,
@@ -33,7 +34,6 @@ if TYPE_CHECKING:
         Planner,
         Reasoner,
         Reflector,
-        Retriever,
     )
 
 
@@ -74,7 +74,8 @@ class AutoResearcher:
     Callers pin the leaves' generic types:
 
     - ``planner: Planner[Task, ResearchPlan]``
-    - ``retriever: Retriever`` (``Query -> Hits``, fixed)
+    - ``retriever: Agent[Query, Hits]`` (any compatible leaf — e.g.
+      ``Retriever``, ``FakeRetriever``, ``BM25Retriever``)
     - ``reasoner: Reasoner[ResearchInput, Answer]``
     - ``critic: Critic`` (``Candidate -> Score``, fixed)
     - ``reflector: Reflector`` (``ReflectionInput -> Reflection``, fixed)
@@ -82,13 +83,27 @@ class AutoResearcher:
     Each attempt is independent; under concurrency, supply distinct seeds
     via each leaf's ``Configuration.sampling.seed`` to avoid identical
     candidates.
+
+    Example::
+
+        from operad.agents.reasoning.components import FakeRetriever, Hit
+
+        ar = AutoResearcher(
+            planner=...,
+            retriever=FakeRetriever(
+                corpus=[Hit(text="Paris is the capital of France.", score=0.0)]
+            ),
+            reasoner=...,
+            critic=...,
+            reflector=...,
+        )
     """
 
     def __init__(
         self,
         *,
         planner: Planner,
-        retriever: Retriever,
+        retriever: Agent[Query, Hits],
         reasoner: Reasoner,
         critic: Critic,
         reflector: Reflector,
