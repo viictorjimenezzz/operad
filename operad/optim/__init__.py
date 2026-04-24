@@ -23,11 +23,40 @@ See `operad/optim/README.md` for the full design; see
 `.construct/optim/*.md` for the iteration-by-iteration implementation
 plan.
 
-This module is intentionally empty until the §1 tasks land — it is a
-placeholder so the import path exists and downstream tooling
-(ImportPath resolution, cassettes, docs) can reference it.
+Wave 1 slot 1-1 ships the `Parameter` data spine; later waves add
+`Agent.parameters()`, losses, backward, optimizers, and the trainer.
 """
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from operad.optim.parameter import (
+    CategoricalParameter,
+    ExampleListParameter,
+    FloatParameter,
+    ListConstraint,
+    NumericConstraint,
+    Parameter,
+    ParameterConstraint,
+    ParameterKind,
+    RuleListParameter,
+    TextConstraint,
+    TextParameter,
+    TextualGradient,
+    VocabConstraint,
+)
+
+__all__ = [
+    "CategoricalParameter",
+    "ExampleListParameter",
+    "FloatParameter",
+    "ListConstraint",
+    "NumericConstraint",
+    "Parameter",
+    "ParameterConstraint",
+    "ParameterKind",
+    "RuleListParameter",
+    "TextConstraint",
+    "TextParameter",
+    "TextualGradient",
+    "VocabConstraint",
+]

@@ -210,3 +210,20 @@ task operates on disjoint files and can safely run in parallel.
 - Yuksekgonul et al. (2024), *TextGrad: Automatic Differentiation via Text* — intellectual ancestor of the textual-gradient concept
 - Zhou et al. (2022), *Large Language Models Are Human-Level Prompt Engineers* — APE
 - Yang et al. (2023), *Large Language Models as Optimizers* — OPRO
+
+---
+
+## Implemented
+
+- **Wave 1 slot 1-1 — Parameter foundation.** `Parameter[T]`,
+  `ParameterKind`, `TextualGradient`, and the `ParameterConstraint`
+  discriminated union (`TextConstraint`, `NumericConstraint`,
+  `VocabConstraint`, `ListConstraint`) are live in
+  `operad/optim/parameter.py`. Typed subclasses: `TextParameter`,
+  `RuleListParameter`, `ExampleListParameter`, `FloatParameter`,
+  `CategoricalParameter`. `Parameter.from_agent(...)` reads via
+  dotted paths (including `rules[i]` / `examples[i]` sub-indexing)
+  and holds a weakref back to the owning agent.
+
+`Agent.parameters()` / `named_parameters()` / hooks, losses, backward,
+optimizers, and the trainer land in subsequent waves.
