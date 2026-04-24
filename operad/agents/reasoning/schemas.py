@@ -54,6 +54,48 @@ class Answer(BaseModel):
     answer: str = Field(description="Final, concise answer to the task.")
 
 
+# --- Judge edges (shared by Critic and algorithms) -------------------------
+
+
+_JIn = TypeVar("_JIn", bound=BaseModel)
+_JOut = TypeVar("_JOut", bound=BaseModel)
+
+
+class Score(BaseModel):
+    """Judge output: a real-valued score with an optional rationale."""
+
+    score: float = Field(
+        default=0.0,
+        description="Higher-is-better score assigned to the candidate.",
+    )
+    rationale: str = Field(
+        default="",
+        description="Short natural-language justification for the score.",
+    )
+
+
+class Candidate(BaseModel, Generic[_JIn, _JOut]):
+    """Typed view a judge receives: original request + candidate answer.
+
+    The fields are typed ``Optional[...]`` so that ``model_construct()``
+    (used by the symbolic tracer to mint sentinel inputs during
+    ``build()``) produces a usable Candidate. At runtime, algorithms
+    populate both slots before invoking a judge; consumers may rely on
+    that invariant.
+    """
+
+    input: _JIn | None = Field(
+        default=None,
+        description="The request that produced the candidate.",
+    )
+    output: _JOut | None = Field(
+        default=None,
+        description="A candidate answer to be judged.",
+    )
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
 # --- Reflector edges ---------------------------------------------------------
 
 
@@ -234,6 +276,7 @@ class ChatReasonerOutput(BaseModel):
 __all__ = [
     "Action",
     "Answer",
+    "Candidate",
     "ChatReasonerInput",
     "ChatReasonerOutput",
     "ChatRoute",
@@ -245,6 +288,7 @@ __all__ = [
     "Reflection",
     "ReflectionInput",
     "RouteInput",
+    "Score",
     "Task",
     "Thought",
     "ToolCall",

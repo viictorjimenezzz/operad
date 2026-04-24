@@ -11,6 +11,16 @@ the top level because they are domain-agnostic.
 from __future__ import annotations
 
 from . import safeguard  # noqa: F401
+from .debate import (
+    Critique,
+    DebateContext,
+    DebateCritic,
+    DebateRecord,
+    DebateTurn,
+    Proposal,
+    Proposer,
+    Synthesizer,
+)
 from .coding import (
     CodeReviewer,
     ContextOptimizer,
@@ -138,6 +148,11 @@ __all__ = [
     "ConversationalTalker",
     "ConversationalTalkerInput",
     "Critic",
+    "Critique",
+    "DebateContext",
+    "DebateCritic",
+    "DebateRecord",
+    "DebateTurn",
     "DiffChunk",
     "DiffSummarizer",
     "Evaluator",
@@ -164,6 +179,8 @@ __all__ = [
     "Parallel",
     "Pipeline",
     "Planner",
+    "Proposal",
+    "Proposer",
     "Query",
     "ReAct",
     "Reasoner",
@@ -183,6 +200,7 @@ __all__ = [
     "SessionOperation",
     "SessionTarget",
     "Switch",
+    "Synthesizer",
     "Task",
     "TextResponse",
     "Thought",

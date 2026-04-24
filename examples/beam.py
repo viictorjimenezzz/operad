@@ -1,14 +1,15 @@
-"""Best-of-N: generate 3 candidate answers, let a Critic pick the winner.
+"""Beam: generate 3 candidate answers, let a Critic pick the winner.
 
 Requires a local llama-server serving google/gemma-4-e4b on 127.0.0.1:9000.
 Override via OPERAD_LLAMACPP_HOST and OPERAD_LLAMACPP_MODEL.
 
-``BestOfN`` is an *algorithm* (plain class with ``run(x)``), not an
-Agent. It orchestrates a generator Agent and a judge Agent with metric
-feedback. Its ``run(x)`` returns the highest-scored candidate.
+``Beam`` is an *algorithm* (plain class with ``run(x)``), not an Agent.
+It orchestrates a generator Agent and a judge Agent with metric
+feedback. Its ``run(x)`` returns the ``top_k`` highest-scored
+candidates.
 
 Run:
-    uv run python examples/best_of_n.py [--offline]
+    uv run python examples/beam.py [--offline]
 """
 
 from __future__ import annotations
@@ -21,11 +22,11 @@ from pydantic import BaseModel, Field
 
 from operad.core.config import Sampling
 from operad.agents import Critic, Reasoner
-from operad.algorithms import BestOfN
+from operad.algorithms import Beam
 
 from _config import local_config, server_reachable
 
-_SCRIPT = "best_of_n.py"
+_SCRIPT = "beam.py"
 
 
 class Question(BaseModel):
@@ -49,15 +50,15 @@ async def main(offline: bool = False) -> None:
             file=sys.stderr,
         )
         raise SystemExit(1)
-    generator = Reasoner(config=cfg, input=Question, output=Answer)
-    judge = Critic(config=cfg)
+    beam = Beam(n=2)
+    beam.generator = Reasoner(config=cfg, input=Question, output=Answer)
+    beam.judge = Critic(config=cfg)
+    await beam.generator.abuild()
+    await beam.judge.abuild()
 
-    await generator.abuild()
-    await judge.abuild()
-
-    bon = BestOfN(generator=generator, judge=judge, n=2)
-    winner = await bon.run(Question(text="What is the tallest mountain on Earth?"))
-    print(winner.model_dump_json(indent=2))
+    winners = await beam.run(Question(text="What is the tallest mountain on Earth?"))
+    for w in winners:
+        print(w.model_dump_json(indent=2))
 
 
 if __name__ == "__main__":

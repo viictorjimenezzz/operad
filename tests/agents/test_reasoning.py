@@ -5,7 +5,7 @@ from typing import Literal
 import pytest
 from pydantic import BaseModel, Field
 from operad.agents import Action, Actor, Answer, Classifier, Critic, Evaluator, Extractor, Observation, Planner, Reasoner, Thought
-from operad.algorithms import Candidate, Score
+from operad.agents.reasoning.schemas import Candidate, Score
 from operad import Example
 from operad.agents import Critic
 from typing import Any

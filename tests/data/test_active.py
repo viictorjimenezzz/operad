@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from operad.algorithms import Candidate, Score
+from operad.agents.reasoning.schemas import Candidate, Score
 from operad.benchmark.dataset import Dataset
 from operad.benchmark.entry import Entry
 from operad.data import DataLoader, UncertaintySampler

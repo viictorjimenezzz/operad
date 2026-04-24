@@ -31,7 +31,7 @@ from typing import Iterator
 from pydantic import BaseModel
 
 from operad import Agent, Configuration, Dataset
-from operad.algorithms.judge import Candidate, Score
+from operad.agents.reasoning.schemas import Candidate, Score
 from operad.benchmark.entry import Entry
 from operad.core.config import Sampling
 from operad.data import DataLoader, random_split

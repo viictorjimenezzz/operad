@@ -105,6 +105,8 @@ def render_system(agent: "Agent[Any, Any]") -> str:
         parts.append(f"# Role\n{agent.role}")
     if agent.task:
         parts.append(f"# Task\n{agent.task}")
+    if agent.context:
+        parts.append(f"# Context\n{agent.context}")
     if agent.rules:
         parts.append("# Rules\n" + render_rules(list(agent.rules)))
     if agent.examples:

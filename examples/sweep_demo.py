@@ -49,12 +49,12 @@ async def main(offline: bool = False) -> None:
     await seed.abuild()
 
     sweep = Sweep(
-        seed,
         {
             "task": ["be terse.", "think step by step, then answer."],
             "role": ["critic", "guide"],
         },
     )
+    sweep.seed = seed
     report = await sweep.run(Question(text="capital of France?"))
     print(report.model_dump_json(indent=2))
 

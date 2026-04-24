@@ -1,11 +1,13 @@
 """Sweep: Cartesian parameter grid over a seed Agent.
 
-`Sweep` builds one cloned, re-parameterised Agent per combination of
+``Sweep`` builds one cloned, re-parameterised Agent per combination of
 the provided parameter value lists, builds them all, runs them against
 a single input under a concurrency bound, and returns a typed report.
 
-Like `BestOfN`, `Sweep` is an algorithm — a plain class with
-``run(x)``, not an ``Agent`` subclass.
+Like other algorithms, ``Sweep`` is a plain class with ``run(x)``, not
+an ``Agent`` subclass. The ``seed`` agent is a **class-level default**
+so callers only supply the grid and algorithm knobs; subclass to swap
+in a different seed.
 """
 
 from __future__ import annotations
@@ -13,10 +15,12 @@ from __future__ import annotations
 import asyncio
 import itertools
 import time
-from typing import Any, Generic
+from typing import Any, ClassVar, Generic
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..agents.reasoning.components import Reasoner
+from ..agents.reasoning.schemas import Answer, Task
 from ..core.agent import Agent, In, Out
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 from ..utils.paths import set_path
@@ -45,10 +49,10 @@ class SweepReport(BaseModel, Generic[In, Out]):
 
 
 class Sweep(Generic[In, Out]):
-    """Run a parameter grid in parallel over clones of `seed`.
+    """Run a parameter grid in parallel over clones of the class-level seed.
 
     ``parameters`` maps dotted attribute paths (e.g.
-    ``"reasoner.config.sampling.temperature"``) to lists of values. Every
+    ``"config.sampling.temperature"``) to lists of values. Every
     combination of values spawns one ``seed.clone()``; each clone is
     re-parameterised via :func:`operad.utils.paths.set_path`, rebuilt,
     and invoked with ``x``.
@@ -59,11 +63,13 @@ class Sweep(Generic[In, Out]):
     3-axis grid can reach into the thousands quickly.
     """
 
+    seed: ClassVar[Agent] = Reasoner(input=Task, output=Answer)
+
     def __init__(
         self,
-        seed: Agent[In, Out],
         parameters: dict[str, list[Any]],
         *,
+        context: str = "",
         concurrency: int = 4,
         max_combinations: int = 1024,
     ) -> None:
@@ -82,7 +88,11 @@ class Sweep(Generic[In, Out]):
                 f"max_combinations={max_combinations}; tighten the grid "
                 f"or raise the cap"
             )
-        self.seed = seed
+
+        cls = type(self)
+        self.seed = cls.seed.clone(context=context)
+
+        self.context = context
         self.parameters = parameters
         self.concurrency = concurrency
         self.max_combinations = max_combinations
@@ -167,3 +177,6 @@ def _cartesian(parameters: dict[str, list[Any]]) -> list[dict[str, Any]]:
 async def _bounded(sem: asyncio.Semaphore, coro: Any) -> Any:
     async with sem:
         return await coro
+
+
+__all__ = ["Sweep", "SweepCell", "SweepReport"]

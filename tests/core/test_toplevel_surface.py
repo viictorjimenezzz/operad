@@ -26,7 +26,7 @@ def test_all_is_trim() -> None:
 
 def test_moved_names_still_reachable() -> None:
     from operad.agents.reasoning import Reasoner  # noqa: F401
-    from operad.algorithms import BestOfN  # noqa: F401
+    from operad.algorithms import Beam  # noqa: F401
     from operad.core.models import resolve_model  # noqa: F401
     from operad.utils.ops import AppendExample  # noqa: F401
     from operad.utils.cassette import CassetteMiss  # noqa: F401

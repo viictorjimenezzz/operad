@@ -1,4 +1,4 @@
-"""End-to-end: `AutoResearcher` accepts `FakeRetriever` (any Agent[Query, Hits])."""
+"""End-to-end: `AutoResearcher` swaps in a `FakeRetriever` for offline runs."""
 
 from __future__ import annotations
 
@@ -14,18 +14,14 @@ from operad.agents.reasoning.components import (
 )
 from operad.agents.reasoning.schemas import (
     Answer,
+    Candidate,
     Hit,
     Reflection,
     ReflectionInput,
+    Score,
     Task,
 )
-from operad.algorithms import (
-    AutoResearcher,
-    Candidate,
-    ResearchInput,
-    ResearchPlan,
-    Score,
-)
+from operad.algorithms import AutoResearcher, ResearchInput, ResearchPlan
 
 
 pytestmark = pytest.mark.asyncio
@@ -85,15 +81,12 @@ async def test_auto_researcher_runs_with_fake_retriever(cfg) -> None:
     critic = await _Critic(cfg).abuild()
     reflector = await _Reflector(cfg).abuild()
 
-    ar = AutoResearcher(
-        planner=planner,
-        retriever=retriever,
-        reasoner=reasoner,
-        critic=critic,
-        reflector=reflector,
-        n=1,
-        max_iter=0,
-    )
+    ar = AutoResearcher(n=1, max_iter=0)
+    ar.planner = planner
+    ar.retriever = retriever
+    ar.reasoner = reasoner
+    ar.critic = critic
+    ar.reflector = reflector
     out = await ar.run(Task(goal="What is the capital of France?"))
 
     assert isinstance(out, Answer)

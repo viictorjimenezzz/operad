@@ -104,6 +104,43 @@ def test_render_system_joins_sections_with_blank_lines() -> None:
     out = render.render_system(_agent(role="r", task="t"))
     assert "</role>\n\n<task" in out
 
+
+def test_render_system_includes_context_when_set() -> None:
+    out = render.render_system(
+        _agent(role="r", task="t", context="user is a senior engineer")
+    )
+    assert "<context" in out
+    assert "user is a senior engineer" in out
+    # Context sits between task and rules/examples.
+    assert out.index("<task") < out.index("<context")
+
+
+def test_render_system_omits_context_when_blank() -> None:
+    out = render.render_system(_agent(role="r", task="t"))
+    assert "<context" not in out
+
+
+def test_render_system_markdown_includes_context_when_set() -> None:
+    from operad.core.render import markdown as md
+
+    out = md.render_system(_agent(role="r", task="t", context="hello"))
+    assert "# Context\nhello" in out
+
+
+def test_agent_context_survives_clone_override() -> None:
+    agent = _agent(role="r", task="t", context="initial")
+    cloned = agent.clone(context="overridden")
+    assert agent.context == "initial"
+    assert cloned.context == "overridden"
+
+
+def test_agent_context_survives_state_round_trip() -> None:
+    agent = _agent(role="r", task="t", context="keep me")
+    state = agent.state()
+    fresh = _agent(role="r", task="t")
+    fresh.load_state(state)
+    assert fresh.context == "keep me"
+
 # --- from test_renderers.py ---
 class _Question_test_renderers(BaseModel):
     """A user question."""
