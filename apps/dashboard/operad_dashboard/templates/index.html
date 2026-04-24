@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>operad-dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>operad</h1>
+    <span id="status" class="badge">connecting…</span>
+  </header>
+
+  <main class="grid">
+    <section id="panel-graph" class="panel">
+      <h2>graph</h2>
+      <div class="run-picker">
+        <label for="run-select">run:</label>
+        <select id="run-select"><option value="">— none —</option></select>
+      </div>
+      <div id="graph" class="mermaid">flowchart LR
+    placeholder["select a run"]</div>
+    </section>
+
+    <section id="panel-events" class="panel">
+      <h2>events</h2>
+      <ul id="events"></ul>
+    </section>
+
+    <section id="panel-metrics" class="panel">
+      <h2>metrics</h2>
+      <div class="card">
+        <h3>active runs</h3>
+        <table id="runs-table">
+          <thead><tr><th>run_id</th><th>state</th><th>last event</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>slot occupancy</h3>
+        <table id="slots-table">
+          <thead><tr><th>backend</th><th>host</th><th>conc</th><th>rpm</th><th>tpm</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>cost totals</h3>
+        <table id="cost-table">
+          <thead><tr><th>run_id</th><th>prompt</th><th>completion</th><th>USD</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

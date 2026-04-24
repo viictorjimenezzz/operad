@@ -17,6 +17,7 @@ operad = "operad.cli:main"
 
 [project.optional-dependencies]
 observers = ["rich>=13.0"]
+dashboard = ["operad-dashboard"]
 gemini = ["google-genai>=0.3"]
 huggingface = ["transformers>=4.40", "torch>=2.2"]
 otel = [
@@ -36,6 +37,9 @@ testpaths = ["tests"]
 markers = [
     "integration: live network test; opt-in via OPERAD_INTEGRATION env var",
 ]
+
+[tool.uv.sources]
+operad-dashboard = { path = "apps/dashboard", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["operad"]
