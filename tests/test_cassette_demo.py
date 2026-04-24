@@ -59,7 +59,7 @@ async def test_cassette_miss_raises(cfg, tmp_path) -> None:
         leaf = await DemoLeaf(config=cfg).abuild()
         with pytest.raises(CassetteMiss) as exc:
             await leaf(DemoIn(question="never recorded"))
-    assert "missing cassette key" in str(exc.value)
+    assert "no cassette entry for key" in str(exc.value)
 
 
 def test_cassette_file_has_no_secrets() -> None:

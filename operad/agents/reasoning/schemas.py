@@ -7,7 +7,7 @@ within ``operad.agents.reasoning``.
 
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -123,19 +123,29 @@ class RouteInput(BaseModel):
 # --- ToolUser edges ----------------------------------------------------------
 
 
-class ToolCall(BaseModel):
+Args = TypeVar("Args", bound=BaseModel)
+Result = TypeVar("Result", bound=BaseModel)
+
+
+class ToolCall(BaseModel, Generic[Args]):
+    """A typed request to invoke ``tool_name`` with structured args."""
+
     tool_name: str = Field(default="", description="Name of the tool to invoke.")
-    args: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Keyword arguments passed to the tool.",
+    # `args` is optional only so `model_construct()` yields a sentinel at
+    # build time. Real call sites always construct `ToolCall[Args](...)`
+    # with a concrete `args` value; `ToolUser.forward` validates it.
+    args: Args | None = Field(
+        default=None, description="Structured arguments for the tool."
     )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
-class ToolResult(BaseModel):
+class ToolResult(BaseModel, Generic[Result]):
+    """A typed tool return, success-biased."""
+
     ok: bool = Field(description="True iff the tool ran successfully.")
-    result: Any = Field(default=None, description="Tool return value when ok.")
+    result: Result | None = Field(default=None, description="Tool return value when ok.")
     error: str = Field(default="", description="Error message when not ok.")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)

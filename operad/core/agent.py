@@ -22,7 +22,7 @@ from contextvars import ContextVar
 from typing import Any, ClassVar, Generic, Self, TextIO, TYPE_CHECKING, TypeVar
 
 import strands
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from ..runtime import acquire as _acquire_slot
 from ..runtime.retry import with_retry as _with_retry
@@ -81,6 +81,23 @@ def _extract_text(result: Any) -> str:
     return "".join(
         block.get("text", "") for block in content if isinstance(block, dict)
     )
+
+
+def _extract_tokens(result: Any) -> int:
+    """Best-effort total tokens from a strands result; 0 if unknown.
+
+    The strands result shape isn't contracted in-repo; feed whatever
+    integer fields it exposes into the slot's TPM settle without
+    guessing a schema we don't own.
+    """
+    if result is None:
+        return 0
+    try:
+        p = int(getattr(result, "prompt_tokens", 0) or 0)
+        c = int(getattr(result, "completion_tokens", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+    return p + c
 
 
 class Agent(strands.Agent, Generic[In, Out]):
@@ -302,6 +319,38 @@ class Agent(strands.Agent, Generic[In, Out]):
 
         return new
 
+    # --- content addressing -------------------------------------------------
+    @property
+    def hash_content(self) -> str:
+        """16-hex-char SHA-256 over the agent's declared state.
+
+        Two agents with the same `hash_content` render to the same
+        system prompt on every leaf, regardless of object identity.
+        Stable across `.build()` (build does not mutate declared state);
+        changes after any mutation of role/task/rules/examples/config.
+        """
+        return hash_json(self.state().model_dump(mode="json"))
+
+    # --- invocation hooks (overridable) -------------------------------------
+    def forward_in(self, x: In) -> In:
+        """Runs before `forward`. Override to mutate or redact `x`."""
+        return x
+
+    def forward_out(self, x: In, y: Out) -> Out:
+        """Runs after `forward`. Override to repair or moderate `y`."""
+        return y
+
+    # --- composition --------------------------------------------------------
+    def __rshift__(self, other: "Agent[Any, Any]") -> "Agent[Any, Any]":
+        """`a >> b` constructs a `Pipeline(a, b)`; flattens when chained."""
+        from ..agents.pipeline import Pipeline
+
+        if isinstance(self, Pipeline):
+            return Pipeline(
+                *self._stages, other, input=self.input, output=other.output
+            )
+        return Pipeline(self, other, input=self.input, output=other.output)
+
     # --- message formatting (overridable) -----------------------------------
     def format_system_message(self) -> str | list[dict[str, str]]:
         """Render the agent's static contract into a system message.
@@ -430,7 +479,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         structuredio = self.config.structuredio  # type: ignore[union-attr]
         user_msg = self.format_user_message(x)
 
-        async with _acquire_slot(self.config):  # type: ignore[arg-type]
+        async with _acquire_slot(self.config) as slot:  # type: ignore[arg-type]
             async def _call() -> Any:
                 if structuredio:
                     return await super(Agent, self).invoke_async(  # type: ignore[misc]
@@ -439,13 +488,17 @@ class Agent(strands.Agent, Generic[In, Out]):
                     )
                 return await super(Agent, self).invoke_async(user_msg)  # type: ignore[misc]
 
-            result = await _with_retry(
-                _call,
-                max_retries=self.config.max_retries,
-                backoff_base=self.config.backoff_base,
-                timeout=self.config.timeout,
-                on_attempt=_record,
-            )
+            result: Any = None
+            try:
+                result = await _with_retry(
+                    _call,
+                    max_retries=self.config.max_retries,
+                    backoff_base=self.config.backoff_base,
+                    timeout=self.config.timeout,
+                    on_attempt=_record,
+                )
+            finally:
+                slot.settle(tokens=_extract_tokens(result))
         if structuredio:
             return result.structured_output  # type: ignore[return-value,no-any-return]
         text = _extract_text(result)
@@ -488,23 +541,28 @@ class Agent(strands.Agent, Generic[In, Out]):
         accumulated: list[str] = []
         idx = 0
         structured: Any = None
-        async with _acquire_slot(self.config):  # type: ignore[arg-type]
-            async for event in super().stream_async(  # type: ignore[misc]
-                self.format_user_message(x),
-                structured_output_model=self.output,
-            ):
-                if not isinstance(event, dict):
-                    continue
-                piece = event.get("data")
-                if isinstance(piece, str) and piece:
-                    accumulated.append(piece)
-                    await on_chunk(idx, piece)
-                    idx += 1
-                result = event.get("result")
-                if result is not None:
-                    maybe = getattr(result, "structured_output", None)
-                    if maybe is not None:
-                        structured = maybe
+        final_result: Any = None
+        async with _acquire_slot(self.config) as slot:  # type: ignore[arg-type]
+            try:
+                async for event in super().stream_async(  # type: ignore[misc]
+                    self.format_user_message(x),
+                    structured_output_model=self.output,
+                ):
+                    if not isinstance(event, dict):
+                        continue
+                    piece = event.get("data")
+                    if isinstance(piece, str) and piece:
+                        accumulated.append(piece)
+                        await on_chunk(idx, piece)
+                        idx += 1
+                    result = event.get("result")
+                    if result is not None:
+                        final_result = result
+                        maybe = getattr(result, "structured_output", None)
+                        if maybe is not None:
+                            structured = maybe
+            finally:
+                slot.settle(tokens=_extract_tokens(final_result))
         if structured is not None:
             return structured  # type: ignore[no-any-return]
         text = "".join(accumulated)
@@ -575,11 +633,18 @@ class Agent(strands.Agent, Generic[In, Out]):
         if tok_g is not None:
             _RUN_GRAPH_HASH.reset(tok_g)
 
-    def _check_built_and_input(self, x: In, *, entry: str) -> None:
+    def validate(self, x: In) -> None:
+        """Raise if this agent cannot accept `x`.
+
+        Checks that `build()` has been called and that `x` matches the
+        declared `input` type. Single source of truth for input
+        pre-flight validation; `invoke`/`stream` call this rather than
+        repeating the checks inline.
+        """
         if not self._built:
             raise BuildError(
                 "not_built",
-                f"call .build() before .{entry}()",
+                "call .build() before .invoke()",
                 agent=type(self).__name__,
             )
         if not isinstance(x, self.input):  # type: ignore[arg-type]
@@ -637,8 +702,10 @@ class Agent(strands.Agent, Generic[In, Out]):
                 )
             )
 
-            self._check_built_and_input(x, entry="invoke")
+            self.validate(x)
+            x = self.forward_in(x)
             y = await executor(x)
+            y = self.forward_out(x, y)
             self._check_output(y)
 
             finished = time.monotonic()
@@ -741,7 +808,8 @@ class Agent(strands.Agent, Generic[In, Out]):
                 )
             )
 
-            self._check_built_and_input(x, entry="stream")
+            self.validate(x)
+            x = self.forward_in(x)
 
             async def on_chunk(i: int, piece: str) -> None:
                 await queue.put(ChunkEvent(piece, i, path, run_id))
@@ -756,6 +824,7 @@ class Agent(strands.Agent, Generic[In, Out]):
             async def driver() -> None:
                 try:
                     y = await self._stream_forward(x, on_chunk)
+                    y = self.forward_out(x, y)
                     self._check_output(y)
                     finished = time.monotonic()
                     finished_wall = time.time()
@@ -863,6 +932,125 @@ class Agent(strands.Agent, Generic[In, Out]):
             )
         return obj
 
+    # --- presentation -------------------------------------------------------
+    def summary(self) -> str:
+        """One-paragraph overview: class, leaf/composite counts, hashes.
+
+        Format::
+
+            {ClassName}: {n_leaves} leaves, {n_composites} composites, hash_content={short}
+              graph_hash={short}  backend={...}  model={...}
+
+        The indented second line is omitted when neither `_graph` nor
+        `config` is available.
+        """
+        n_leaves, n_composites = _count_tree(self)
+        line = (
+            f"{type(self).__name__}: {n_leaves} leaves, {n_composites} composites, "
+            f"hash_content={self.hash_content[:8]}"
+        )
+        extras: list[str] = []
+        graph = self.__dict__.get("_graph")
+        if graph is not None:
+            extras.append(f"graph_hash={_compute_graph_hash(self)[:8]}")
+        if self.config is not None:
+            backend = getattr(self.config, "backend", "?")
+            model = getattr(self.config, "model", "?")
+            extras.append(f"backend={backend}")
+            extras.append(f"model={model}")
+        if not extras:
+            return line
+        return line + "\n  " + "  ".join(extras)
+
+    def __rich__(self) -> Any:
+        """Structured tree rendering for `rich.print(agent)`."""
+        from rich.tree import Tree
+
+        in_name = self.input.__name__ if self.input is not None else "?"
+        out_name = self.output.__name__ if self.output is not None else "?"
+        n_leaves, _ = _count_tree(self)
+        header = (
+            f"{type(self).__name__}[{in_name} → {out_name}] "
+            f"· {n_leaves} leaves · hash={self.hash_content[:8]}"
+        )
+        tree = Tree(header)
+        if self.role:
+            role_preview = self.role if len(self.role) <= 60 else self.role[:57] + "..."
+            tree.add(f"role: {role_preview}")
+        graph = self.__dict__.get("_graph")
+        if self._built and graph is not None:
+            tree.add(f"graph_hash={_compute_graph_hash(self)[:8]}")
+        if self.config is not None:
+            backend = getattr(self.config, "backend", "?")
+            model = getattr(self.config, "model", "?")
+            tree.add(f"backend={backend} model={model}")
+        return tree
+
+    async def explain(self, x: In) -> None:
+        """Run `x`, print scratchpad + output for every leaf in the trace.
+
+        For each default-forward leaf whose `Output` lacks a
+        `scratchpad: str` field, temporarily swaps in an augmented
+        subclass that prepends one. Prints per leaf::
+
+            === {agent_path} ===
+            scratchpad: ...
+            output: ...
+
+        Original output classes (and the cached strands `system_prompt`)
+        are restored in a `finally` block.
+        """
+        from ..runtime.observers.base import registry as _registry
+        from ..runtime.trace import TraceObserver
+
+        # Swap Output + re-render strands system_prompt on default-forward
+        # leaves so that `structured_output_model=self.output` and the
+        # cached system message both reflect the scratchpad field.
+        swaps: list[tuple[Agent[Any, Any], type[BaseModel], Any]] = []
+        try:
+            for _path, leaf in _labelled_tree(self):
+                if leaf._children:
+                    continue
+                if type(leaf).forward is not Agent.forward:
+                    continue
+                if leaf.output is None:
+                    continue
+                if "scratchpad" in leaf.output.model_fields:
+                    continue
+                original_output = leaf.output
+                original_sp = leaf.__dict__.get("system_prompt", None)
+                leaf.output = _augmented_output(original_output)
+                rendered = leaf.format_system_message()
+                leaf.system_prompt = _system_to_str(rendered) or None
+                swaps.append((leaf, original_output, original_sp))
+
+            observer = TraceObserver()
+            _registry.register(observer)
+            try:
+                await self.invoke(x)
+            finally:
+                _registry.unregister(observer)
+
+            trace = observer.last()
+            if trace is None:
+                return
+            for step in trace.steps:
+                resp = step.output.response
+                print(f"=== {step.agent_path} ===")
+                scratchpad = getattr(resp, "scratchpad", None)
+                if scratchpad is not None:
+                    print(f"scratchpad: {scratchpad}")
+                data = resp.model_dump(mode="json") if isinstance(resp, BaseModel) else {}
+                data.pop("scratchpad", None)
+                print(f"output: {data}")
+        finally:
+            for leaf, original_output, original_sp in swaps:
+                leaf.output = original_output
+                if original_sp is None:
+                    leaf.__dict__.pop("system_prompt", None)
+                else:
+                    leaf.system_prompt = original_sp
+
 
 def _attr_name_hint(parent: "Agent[Any, Any]", child: "Agent[Any, Any]") -> str | None:
     for name, value in parent._children.items():
@@ -899,6 +1087,41 @@ def _compute_graph_hash(agent: "Agent[Any, Any]") -> str:
     from .graph import to_json as _graph_to_json
 
     return hash_json(_graph_to_json(graph))
+
+
+def _count_tree(root: "Agent[Any, Any]") -> tuple[int, int]:
+    """Return `(n_leaves, n_composites)` walking children with id-dedup."""
+    seen: set[int] = set()
+    n_leaves = 0
+    n_composites = 0
+    stack: list[Agent[Any, Any]] = [root]
+    while stack:
+        node = stack.pop()
+        if id(node) in seen:
+            continue
+        seen.add(id(node))
+        if node._children:
+            n_composites += 1
+            stack.extend(node._children.values())
+        else:
+            n_leaves += 1
+    return n_leaves, n_composites
+
+
+def _augmented_output(out_cls: type[BaseModel]) -> type[BaseModel]:
+    """Return a subclass of `out_cls` with a leading `scratchpad: str` field."""
+    if "scratchpad" in out_cls.model_fields:
+        return out_cls
+    fields: dict[str, Any] = {
+        "scratchpad": (str, Field(description="Think step-by-step here first.")),
+    }
+    for name, info in out_cls.model_fields.items():
+        fields[name] = (info.annotation, info)
+    return create_model(  # type: ignore[call-overload,no-any-return]
+        f"{out_cls.__name__}WithScratchpad",
+        __base__=out_cls,
+        **fields,
+    )
 
 
 def _labelled_tree(

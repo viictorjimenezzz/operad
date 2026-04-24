@@ -16,7 +16,7 @@ import json
 from pydantic import BaseModel, Field
 
 from operad import Agent, Configuration, evaluate
-from operad.eval import EvalReport
+from operad.benchmark import EvalReport
 from operad.metrics import Contains, ExactMatch, Rouge1
 
 
