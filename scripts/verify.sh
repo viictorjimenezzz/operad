@@ -8,6 +8,7 @@ for f in \
   examples/custom_agent.py \
   examples/eval_loop.py \
   examples/evolutionary_demo.py \
+  examples/train_demo.py \
   examples/observer_demo.py \
   examples/sweep_demo.py \
   examples/sandbox_pool_demo.py \
