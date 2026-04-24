@@ -69,7 +69,7 @@ def test_missing_config_file(
 def test_run_with_dummy_agent(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    config = _write_yaml(tmp_path, agent="_cli_fixtures.DummyAgent")
+    config = _write_yaml(tmp_path, agent="_helpers.cli_fixtures.DummyAgent")
     input_path = tmp_path / "input.json"
     input_path.write_text(json.dumps({"text": "hello"}))
 
@@ -82,7 +82,7 @@ def test_run_with_dummy_agent(
 def test_run_bad_input_json(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    config = _write_yaml(tmp_path, agent="_cli_fixtures.DummyAgent")
+    config = _write_yaml(tmp_path, agent="_helpers.cli_fixtures.DummyAgent")
     input_path = tmp_path / "input.json"
     input_path.write_text("{not valid json")
 
@@ -95,7 +95,7 @@ def test_run_bad_input_json(
 def test_run_input_schema_mismatch(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    config = _write_yaml(tmp_path, agent="_cli_fixtures.DummyAgent")
+    config = _write_yaml(tmp_path, agent="_helpers.cli_fixtures.DummyAgent")
     input_path = tmp_path / "input.json"
     input_path.write_text(json.dumps({"wrong_field": 42, "text": [1, 2]}))
 

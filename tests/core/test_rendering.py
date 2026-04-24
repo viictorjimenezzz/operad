@@ -14,7 +14,7 @@ import pytest
 from operad import Configuration
 from operad.agents.reasoning.components.reasoner import Reasoner
 from operad.utils.errors import BuildError
-from .._spy_strands import StrandsSpy, install_spy
+from .._helpers.spy_strands import StrandsSpy, install_spy
 from typing import Any
 from pydantic import BaseModel
 from operad.agents.reasoning.components.classifier import Classifier
