@@ -15,6 +15,7 @@ import pytest
 from pydantic import BaseModel
 
 from operad import Agent, Configuration
+from operad.core.config import Sampling
 
 
 # --- Shared Pydantic schemas -------------------------------------------------
@@ -50,8 +51,7 @@ def cfg() -> Configuration:
         backend="llamacpp",
         host="127.0.0.1:0",
         model="test",
-        temperature=0.0,
-        max_tokens=16,
+        sampling=Sampling(temperature=0.0, max_tokens=16),
     )
 
 

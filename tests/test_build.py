@@ -124,7 +124,7 @@ async def test_build_is_idempotent_after_mutation(cfg) -> None:
     assert p._built is True
 
     p.first.task = "updated"
-    p.first.config.temperature = 0.0
+    p.first.config.sampling.temperature = 0.0
     await p.abuild()
     assert p._built is True
     assert p.first.task == "updated"

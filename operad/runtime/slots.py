@@ -292,7 +292,7 @@ def _provisional_reserve(cfg: Configuration) -> int:
     # breach TPM. The real prompt length isn't available here (it's
     # formatted in `forward` before `acquire`), so use 2 × max_tokens
     # as a cheap conservative bound. `settle()` reconciles to truth.
-    return max(1, 2 * cfg.max_tokens)
+    return max(1, 2 * cfg.sampling.max_tokens)
 
 
 @asynccontextmanager

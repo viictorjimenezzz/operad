@@ -8,6 +8,7 @@ import time
 import pytest
 
 from operad import Configuration
+from operad.core.config import Sampling
 from operad.runtime import SlotRegistry, acquire, registry
 from operad.runtime.slots import SlidingCounter
 
@@ -28,7 +29,8 @@ class FakeClock:
 
 def _cfg(host: str = "h1", *, max_tokens: int = 100) -> Configuration:
     return Configuration(
-        backend="llamacpp", host=host, model="m", max_tokens=max_tokens
+        backend="llamacpp", host=host, model="m",
+        sampling=Sampling(max_tokens=max_tokens),
     )
 
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 from .agent import Agent, In, Out
 from .example import Example
 from .build import AgentGraph, Edge, Node, abuild_agent, build_agent
-from .config import Backend, Configuration
+from .config import Backend, Configuration, IOConfig, Resilience, Runtime, Sampling
 from .diff import AgentDiff, Change
 from .freeze import freeze_agent, thaw_agent
 from .graph import from_json, to_json, to_mermaid
@@ -28,9 +28,13 @@ __all__ = [
     "Edge",
     "Example",
     "In",
+    "IOConfig",
     "Node",
     "OperadOutput",
     "Out",
+    "Resilience",
+    "Runtime",
+    "Sampling",
     "abuild_agent",
     "build_agent",
     "freeze_agent",

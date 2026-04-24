@@ -18,6 +18,7 @@ import asyncio
 from pydantic import BaseModel, Field
 
 from operad import Agent, Example
+from operad.core.config import Sampling
 
 from _config import local_config
 
@@ -55,7 +56,7 @@ class Punster(Agent[Joke, Pun]):
 
 
 async def _main() -> None:
-    agent = Punster(config=local_config(temperature=0.8, max_tokens=128))
+    agent = Punster(config=local_config(sampling=Sampling(temperature=0.8, max_tokens=128)))
     await agent.abuild()
     result = await agent(Joke(topic="databases"))
     print(result.response.model_dump_json(indent=2))

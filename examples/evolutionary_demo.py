@@ -18,6 +18,7 @@ import random
 from pydantic import BaseModel
 
 from operad import Agent, Configuration, evaluate
+from operad.core.config import Sampling
 from operad.algorithms import Evolutionary
 from operad.metrics import ExactMatch
 from operad.utils.ops import AppendRule
@@ -59,8 +60,7 @@ async def main() -> None:
         backend="llamacpp",
         host="127.0.0.1:0",
         model="demo",
-        temperature=0.0,
-        max_tokens=16,
+        sampling=Sampling(temperature=0.0, max_tokens=16),
     )
 
     seed = RuleCountLeaf(config=cfg)

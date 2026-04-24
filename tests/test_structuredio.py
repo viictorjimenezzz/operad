@@ -10,6 +10,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from operad import Configuration
+from operad.core.config import IOConfig, Sampling
 from operad.agents.reasoning.components.reasoner import Reasoner
 from operad.utils.errors import BuildError
 
@@ -37,9 +38,8 @@ async def _build(structuredio: bool) -> Reasoner:
         backend="llamacpp",
         host="127.0.0.1:0",
         model="test",
-        temperature=0.0,
-        max_tokens=16,
-        structuredio=structuredio,
+        sampling=Sampling(temperature=0.0, max_tokens=16),
+        io=IOConfig(structuredio=structuredio),
     )
     agent = Reasoner(config=cfg, input=Question, output=Answer)
     return await agent.abuild()

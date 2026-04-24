@@ -21,7 +21,7 @@ def _write_yaml(tmp_path: Path, agent: str = "operad.agents.reasoning.react.ReAc
             "backend": "llamacpp",
             "host": "127.0.0.1:0",
             "model": "test-model",
-            "temperature": 0.0,
+            "sampling": {"temperature": 0.0},
         },
     }
     p = tmp_path / "config.yaml"

@@ -16,6 +16,7 @@ import asyncio
 
 from pydantic import BaseModel, Field
 
+from operad.core.config import Sampling
 from operad.agents import Critic, Reasoner
 from operad.algorithms import BestOfN
 
@@ -32,7 +33,7 @@ class Answer(BaseModel):
 
 
 async def _main() -> None:
-    cfg = local_config(temperature=0.9, max_tokens=256)
+    cfg = local_config(sampling=Sampling(temperature=0.9, max_tokens=256))
     generator = Reasoner(config=cfg, input=Question, output=Answer)
     judge = Critic(config=cfg)
 

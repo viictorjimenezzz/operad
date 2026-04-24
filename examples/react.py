@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 
+from operad.core.config import Sampling
 from operad.agents import ReAct, Task
 from operad.core.graph import to_mermaid
 
@@ -20,7 +21,7 @@ from _config import local_config
 
 
 async def _main() -> None:
-    agent = ReAct(config=local_config(temperature=0.3, max_tokens=512))
+    agent = ReAct(config=local_config(sampling=Sampling(temperature=0.3, max_tokens=512)))
     await agent.abuild()
 
     print("--- architecture ---")
