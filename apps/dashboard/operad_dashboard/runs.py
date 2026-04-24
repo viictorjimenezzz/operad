@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Deque, Iterator, Literal
 
 from operad.core.graph import TypeRegistry, from_json, to_mermaid
 
@@ -12,6 +12,7 @@ from operad.core.graph import TypeRegistry, from_json, to_mermaid
 RunState = Literal["running", "ended", "error"]
 
 _DEFAULT_CAPACITY = 50
+_DEFAULT_EVENTS_PER_RUN = 1000
 
 
 @dataclass
@@ -21,15 +22,35 @@ class RunInfo:
     last_event_at: float
     state: RunState = "running"
     mermaid: str | None = None
+    events: Deque[dict[str, Any]] = field(default_factory=deque)
 
 
 class RunRegistry:
-    """Bounded LRU of run_id → RunInfo. Drop-oldest on overflow."""
+    """Bounded LRU of run_id → RunInfo. Drop-oldest on overflow.
 
-    def __init__(self, capacity: int = _DEFAULT_CAPACITY) -> None:
+    Each RunInfo also holds a bounded deque of already-serialized event
+    envelopes so per-run dashboard panels can reconstruct historical state
+    on page load without touching the live SSE stream.
+    """
+
+    def __init__(
+        self,
+        capacity: int = _DEFAULT_CAPACITY,
+        *,
+        events_per_run: int = _DEFAULT_EVENTS_PER_RUN,
+    ) -> None:
         self._capacity = capacity
+        self._events_per_run = events_per_run
         self._runs: OrderedDict[str, RunInfo] = OrderedDict()
         self._type_registry = TypeRegistry()
+
+    def _new_run_info(self, run_id: str, timestamp: float) -> RunInfo:
+        return RunInfo(
+            run_id=run_id,
+            started_at=timestamp,
+            last_event_at=timestamp,
+            events=deque(maxlen=self._events_per_run),
+        )
 
     def __len__(self) -> int:
         return len(self._runs)
@@ -54,7 +75,7 @@ class RunRegistry:
     ) -> None:
         info = self._runs.get(run_id)
         if info is None:
-            info = RunInfo(run_id=run_id, started_at=timestamp, last_event_at=timestamp)
+            info = self._new_run_info(run_id, timestamp)
             self._runs[run_id] = info
             self._evict_if_needed()
         else:
@@ -77,12 +98,52 @@ class RunRegistry:
     ) -> None:
         info = self._runs.get(run_id)
         if info is None:
-            info = RunInfo(run_id=run_id, started_at=timestamp, last_event_at=timestamp)
+            info = self._new_run_info(run_id, timestamp)
             self._runs[run_id] = info
             self._evict_if_needed()
         else:
             self._runs.move_to_end(run_id)
             info.last_event_at = timestamp
+
+    def append_event(self, run_id: str, envelope: dict[str, Any]) -> None:
+        """Append a serialized envelope to the run's bounded history buffer.
+
+        No-op if the run is not tracked (defensive; observe_* creates the
+        RunInfo on first event, so this rarely triggers).
+        """
+        info = self._runs.get(run_id)
+        if info is None:
+            return
+        info.events.append(envelope)
+
+    def iter_events(
+        self,
+        run_id: str,
+        *,
+        event_type: str | None = None,
+        kind: str | None = None,
+        algorithm_path: str | None = None,
+    ) -> Iterator[dict[str, Any]]:
+        """Yield buffered envelopes for a run, filtered by optional fields.
+
+        `event_type` matches the envelope `"type"` (e.g. `"algo_event"`).
+        `kind` matches the envelope `"kind"` (e.g. `"generation"`).
+        `algorithm_path` matches `"algorithm_path"` on algo envelopes.
+        """
+        info = self._runs.get(run_id)
+        if info is None:
+            return
+        for env in info.events:
+            if event_type is not None and env.get("type") != event_type:
+                continue
+            if kind is not None and env.get("kind") != kind:
+                continue
+            if (
+                algorithm_path is not None
+                and env.get("algorithm_path") != algorithm_path
+            ):
+                continue
+            yield env
 
     def _render_mermaid(self, graph_data: dict[str, Any]) -> str:
         try:

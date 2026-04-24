@@ -1,0 +1,16 @@
+<section id="panel-progress" class="panel panel-progress" data-run-id="{{ run_id }}" hidden>
+  <h2>progress</h2>
+  <div class="progress-bars">
+    <label>
+      <span class="progress-label">epoch <span data-progress="epoch-current">0</span>/<span data-progress="epoch-total">?</span></span>
+      <progress data-progress="epoch-bar" max="1" value="0"></progress>
+    </label>
+    <label>
+      <span class="progress-label">batch <span data-progress="batch-current">0</span>/<span data-progress="batch-total">?</span></span>
+      <progress data-progress="batch-bar" max="1" value="0"></progress>
+    </label>
+    <div class="progress-eta">
+      <span data-progress="rate">—</span> batch/s · ETA <span data-progress="eta">—</span>
+    </div>
+  </div>
+</section>

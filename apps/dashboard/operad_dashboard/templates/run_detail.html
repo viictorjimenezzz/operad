@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>operad-dashboard — run {{ run_id }}</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1><a href="/" class="home-link">operad</a> / run {{ run_id[:12] }}</h1>
+    <span class="badge badge-{{ state }}">{{ state }}</span>
+  </header>
+
+  <main class="run-detail">
+    {% include "partials/_progress.html" %}
+    {% include "partials/_fitness.html" %}
+    {% include "partials/_mutations.html" %}
+    {% include "partials/_drift.html" %}
+  </main>
+
+  <script>
+    window.OPERAD_RUN_ID = {{ run_id | tojson }};
+  </script>
+  <script src="/static/js/run_detail.js"></script>
+</body>
+</html>

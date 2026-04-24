@@ -286,12 +286,13 @@ per piece.
 
 Global observer `registry` receives `AgentEvent`s on every invoke.
 
-| Observer               | Output                                                |
-| ---------------------- | ----------------------------------------------------- |
-| `JsonlObserver`        | One NDJSON line per event; `save()` to a file.        |
-| `RichDashboardObserver`| Live Rich TUI; needs `[observers]`.                   |
-| `OtelObserver`         | Real OpenTelemetry spans with all operad hashes as span attributes; needs `[otel]`. |
-| `TraceObserver`        | Accumulate into a `Trace` artefact.                   |
+| Observer                 | Output                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| `JsonlObserver`          | One NDJSON line per event; `save()` to a file.                                       |
+| `RichDashboardObserver`  | Live Rich TUI; needs `[observers]`.                                                  |
+| `OtelObserver`           | Real OpenTelemetry spans with all operad hashes as span attributes; needs `[otel]`. |
+| `TraceObserver`          | Accumulate into a `Trace` artefact.                                                  |
+| `TrainerProgressObserver`| Rich nested progress bars driven by Trainer lifecycle + DataLoader batch events.     |
 
 ```python
 import operad.tracing as tracing
@@ -301,6 +302,22 @@ with tracing.watch(jsonl="run.jsonl"):   # Rich + NDJSON
 ```
 
 Replay via `uv run operad tail run.jsonl --speed=0`.
+
+### Dashboard panels (`apps/dashboard/`)
+
+`operad-dashboard` renders a run-detail page at `GET /runs/{run_id}`
+with four per-run panels wired onto the existing event stream:
+
+| Panel                 | Data source                                                  |
+| --------------------- | ------------------------------------------------------------ |
+| fitness curve         | `generation` events: best-so-far / mean / spread band        |
+| mutation heatmap      | `op_success_counts` + `op_attempt_counts` (per-op × gen)     |
+| PromptDrift timeline  | `iteration` events from the `PromptDrift` callback (hash delta + changed param paths) |
+| training progress     | `Trainer.fit` lifecycle + `DataLoader` `batch_*` events      |
+
+The dashboard keeps a bounded per-run event buffer (default 1000
+envelopes) so these panels can reconstruct historical state when a
+page is opened mid-run.
 
 ### `Trace` + `trace_diff` + schema-drift replay
 
@@ -555,14 +572,34 @@ Each sample opens its own `tape()`, computes the loss, and calls
 = max). `optimizer.step()` fires every `accumulation_steps` batches,
 with a residual flush at epoch end.
 
-| Callback              | Effect                                                            |
-| --------------------- | ----------------------------------------------------------------- |
-| `EarlyStopping`       | Halts when a monitored metric stops improving.                    |
-| `BestCheckpoint`      | Snapshots the agent's `hash_content` at the best epoch.           |
-| `GradClip`            | Clamps `TextualGradient.severity` per step.                       |
-| `PromptDrift`         | Logs per-epoch prompt hash + diff vs. seed.                       |
-| `LearningRateLogger`  | Records each group's lr at every epoch boundary.                  |
-| `MemoryRotation`      | Guards tape growth on long runs by rotating old entries.          |
+| Callback                | Effect                                                            |
+| ----------------------- | ----------------------------------------------------------------- |
+| `EarlyStopping`         | Halts when a monitored metric stops improving.                    |
+| `BestCheckpoint`        | Snapshots the agent's `hash_content` at the best epoch.           |
+| `GradClip`              | Clamps `TextualGradient.severity` per step.                       |
+| `PromptDrift`           | Per-epoch hash diff; also emits `AlgorithmEvent` rows for the dashboard's drift timeline. |
+| `LearningRateLogger`    | Records each group's lr at every epoch boundary.                  |
+| `MemoryRotation`        | Guards tape growth on long runs by rotating old entries.          |
+| `HumanFeedbackCallback` | Appends per-validation `(input, predicted)` rows to an NDJSON file for human rating. |
+
+### Human-in-the-loop training (Studio app)
+
+`HumanFeedbackCallback` + `HumanFeedbackLoss` close the labeling
+loop. The callback writes one NDJSON row per validation sample;
+`apps/studio/` is a FastAPI app that lets a single human assign
+1-5 ratings via the browser and relaunch `Trainer.fit` with
+`HumanFeedbackLoss(ratings_path)` from a saved bundle.
+
+```bash
+uv run operad-studio --port 7870 \
+  --data-dir /tmp/operad-feedback \
+  --agent-bundle /tmp/talker.json \
+  --dashboard-port 7860
+```
+
+Training events from the background `Trainer.fit` task forward to
+the running dashboard via `operad.dashboard.attach`, so both UIs
+update in sync.
 
 ### Data
 

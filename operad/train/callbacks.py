@@ -13,15 +13,19 @@ checks the flag at the end of every epoch.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import math
 import warnings
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from ..benchmark.evaluate import EvalReport
 from ..core.freeze import freeze_agent
 from ..data.loader import Batch
+from ..runtime.observers.base import _RUN_ID, emit_algorithm_event
 from .report import EpochReport, TrainingReport
 
 if TYPE_CHECKING:
@@ -204,28 +208,86 @@ class GradClip(Callback):
 
 
 class PromptDrift(Callback):
-    """Warn when ``agent.hash_content`` changes too many times in a fit."""
+    """Warn when ``agent.hash_content`` changes too many times in a fit.
 
-    def __init__(self, max_hash_changes: int = 5) -> None:
+    Also emits an `AlgorithmEvent(kind="iteration", algorithm_path="PromptDrift")`
+    every ``emit_every`` epochs so the dashboard's drift timeline panel
+    can visualise epoch-by-epoch prompt evolution. Event payload:
+
+        {
+          "epoch":          int,
+          "hash_before":    str,           # 16-hex
+          "hash_after":     str,           # 16-hex
+          "changed_params": list[str],     # dotted paths whose value mutated
+          "delta_count":    int,
+        }
+    """
+
+    def __init__(
+        self,
+        max_hash_changes: int = 5,
+        *,
+        emit_every: int = 1,
+    ) -> None:
         if max_hash_changes < 0:
             raise ValueError("max_hash_changes must be non-negative")
+        if emit_every < 1:
+            raise ValueError("emit_every must be >= 1")
         self.max_hash_changes = max_hash_changes
+        self.emit_every = emit_every
         self._last_hash: str | None = None
         self._changes: int = 0
         self._warned: bool = False
+        self._prev_values: dict[str, str] = {}
+
+    def _snapshot_values(self, trainer: "Trainer[Any, Any]") -> dict[str, str]:
+        values: dict[str, str] = {}
+        named = getattr(trainer.agent, "named_parameters", None)
+        if not callable(named):
+            return values
+        try:
+            for path, param in named():
+                values[path] = repr(getattr(param, "value", None))
+        except Exception:
+            return {}
+        return values
 
     async def on_fit_start(self, trainer: "Trainer[Any, Any]") -> None:
         self._last_hash = trainer.agent.hash_content
         self._changes = 0
         self._warned = False
+        self._prev_values = self._snapshot_values(trainer)
 
     async def on_epoch_end(
         self, trainer: "Trainer[Any, Any]", report: EpochReport
     ) -> None:
         h = report.hash_content
+        hash_before = self._last_hash or trainer.agent.hash_content
         if self._last_hash is not None and h != self._last_hash:
             self._changes += 1
         self._last_hash = h
+
+        current_values = self._snapshot_values(trainer)
+        changed_params = [
+            path
+            for path, value in current_values.items()
+            if value != self._prev_values.get(path)
+        ]
+        self._prev_values = current_values
+
+        if self.emit_every > 0 and (report.epoch % self.emit_every) == 0:
+            await emit_algorithm_event(
+                "iteration",
+                algorithm_path="PromptDrift",
+                payload={
+                    "epoch": int(report.epoch),
+                    "hash_before": hash_before,
+                    "hash_after": h,
+                    "changed_params": sorted(changed_params),
+                    "delta_count": len(changed_params),
+                },
+            )
+
         if self._changes > self.max_hash_changes and not self._warned:
             warnings.warn(
                 f"agent hash_content changed {self._changes} times, "
@@ -273,12 +335,113 @@ class MemoryRotation(Callback):
 EarlyStoppingSpec = EarlyStopping
 
 
+def _row_id(predicted: Any) -> str:
+    """Stable 16-hex key derived from sorted JSON of ``predicted``.
+
+    Both the `HumanFeedbackCallback` (which holds dicts from the eval
+    report) and the `HumanFeedbackLoss` (which holds Pydantic models)
+    must agree on this hash, so we always reduce to a dict via
+    ``model_dump(mode="json")`` before serialising with
+    ``sort_keys=True``.
+    """
+    try:
+        if hasattr(predicted, "model_dump"):
+            dumped = predicted.model_dump(mode="json")
+        else:
+            dumped = predicted
+        payload = json.dumps(dumped, sort_keys=True, default=str)
+    except Exception:
+        payload = repr(predicted)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _to_json_safe(x: Any) -> Any:
+    if x is None:
+        return None
+    if hasattr(x, "model_dump"):
+        try:
+            return x.model_dump(mode="json")
+        except Exception:
+            return str(x)
+    return str(x)
+
+
+class HumanFeedbackCallback(Callback):
+    """Dump per-row `(input, expected, predicted, run_id, agent_path)` tuples
+    to an append-only NDJSON file so a human can rate them later.
+
+    Row shape::
+
+        {
+          "id": str,                  # sha256(predicted_json)[:16]
+          "run_id": str,
+          "agent_path": str,
+          "input": dict | str,        # model_dump(mode="json") or str(x)
+          "expected": dict | str | None,
+          "predicted": dict | str | None,
+          "rating": None,             # human fills in later
+          "rationale": None,
+          "written_at": iso8601
+        }
+
+    ``on="val"`` (default) writes rows from each ``on_validation_end``
+    report. ``on="train"`` wires in via a trainer hook that is not yet
+    available; for now "train" falls through to no-op on
+    ``on_batch_end`` (the Trainer doesn't expose predicted outputs to
+    callbacks).
+    """
+
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        on: Literal["train", "val"] = "val",
+        agent_path: str = "",
+    ) -> None:
+        self.path = Path(path)
+        self.on = on
+        self.agent_path = agent_path
+        self._rows_written: int = 0
+
+    async def on_validation_end(
+        self, trainer: "Trainer[Any, Any]", report: EvalReport
+    ) -> None:
+        if self.on != "val":
+            return
+        self._append_rows(report)
+
+    def _append_rows(self, report: EvalReport) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        run_id = _RUN_ID.get() or ""
+        now = datetime.now(timezone.utc).isoformat()
+        with self.path.open("a", encoding="utf-8") as f:
+            for row in report.rows:
+                predicted_obj = row.get("predicted")
+                if predicted_obj is None:
+                    continue
+                row_id = _row_id(predicted_obj)
+                out_row = {
+                    "id": row_id,
+                    "run_id": run_id,
+                    "agent_path": self.agent_path,
+                    "input": row.get("input"),
+                    "expected": row.get("expected"),
+                    "predicted": predicted_obj,
+                    "rating": None,
+                    "rationale": None,
+                    "written_at": now,
+                }
+                f.write(json.dumps(out_row, sort_keys=True) + "\n")
+                self._rows_written += 1
+
+
 __all__ = [
     "BestCheckpoint",
     "Callback",
     "EarlyStopping",
     "EarlyStoppingSpec",
     "GradClip",
+    "HumanFeedbackCallback",
     "LearningRateLogger",
     "MemoryRotation",
     "PromptDrift",

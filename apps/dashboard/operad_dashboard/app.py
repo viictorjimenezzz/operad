@@ -19,6 +19,11 @@ from operad.runtime.observers.base import registry as operad_registry
 from operad.runtime.slots import registry as slot_registry
 
 from .observer import WebDashboardObserver, serialize_event
+from .routes import drift as drift_routes
+from .routes import fitness as fitness_routes
+from .routes import mutations as mutations_routes
+from .routes import progress as progress_routes
+from .routes import run_detail as run_detail_routes
 
 
 _PKG_DIR = Path(__file__).resolve().parent
@@ -89,6 +94,12 @@ def create_app(
     @app.get("/stream")
     async def stream(request: Request) -> EventSourceResponse:
         return EventSourceResponse(_event_stream(request, obs, cost))
+
+    app.include_router(run_detail_routes.router)
+    app.include_router(fitness_routes.router)
+    app.include_router(mutations_routes.router)
+    app.include_router(drift_routes.router)
+    app.include_router(progress_routes.router)
 
     return app
 
