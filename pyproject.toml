@@ -17,6 +17,10 @@ operad = "operad.cli:main"
 
 [project.optional-dependencies]
 observers = ["rich>=13.0"]
+otel = [
+  "opentelemetry-api>=1.24",
+  "opentelemetry-sdk>=1.24",
+]
 
 [dependency-groups]
 dev = [
