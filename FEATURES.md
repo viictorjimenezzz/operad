@@ -425,3 +425,170 @@ identical code, inputs, model, and seed hash to the same envelope:
 
 Identical fingerprints ⇒ cassette hit, `Trace.replay` match, CI-stable
 `Experiment.experiment_id` (once that Wave-3 brief lands).
+
+## 21. Training & optimization
+
+Every mutable field on an Agent is a first-class `Parameter`, and
+every `Metric` can lift into a `Loss`. `operad.optim` drives agent
+improvement with **textual gradients** — Pydantic critiques produced
+by LLM critics rather than floats — while keeping the PyTorch
+`Parameter → backward → Optimizer → Trainer` spine intact.
+
+```python
+agent.mark_trainable(role=True, task=True, rules=True)
+for path, p in agent.named_parameters():
+    print(path, type(p).__name__, p.requires_grad)
+```
+
+### `Parameter` family
+
+| Class                    | Wraps                                    |
+| ------------------------ | ---------------------------------------- |
+| `TextParameter`          | `role`, `task` — single-string fields.   |
+| `RuleListParameter`      | `rules` — `list[str]`.                   |
+| `ExampleListParameter`   | `examples` — `list[Example[In, Out]]`.   |
+| `FloatParameter`         | `temperature`, `top_p` — bounded floats. |
+| `CategoricalParameter`   | `model`, `backend`, `renderer` — vocab.  |
+
+Each carries an optional `ParameterConstraint` (bounds / vocab /
+length) which the optimizer consults before accepting an update — the
+textual-gradient analogue of gradient clipping.
+
+`Agent.parameters()` / `named_parameters()` yield handles in
+attribute-insertion order. `Agent.trainable_parameters()` is the
+`requires_grad=True` subset. `mark_trainable(...)` /
+`freeze_parameters(...)` / `unfreeze_parameters(...)` flip the
+`requires_grad` bit; each takes boolean flags (`role=True`,
+`rules=True`, ...) plus `**per_path` kwargs for descendant targeting
+(`**{"stage_0.role": True}`).
+
+### Losses
+
+| Class / protocol      | Shape                                                            |
+| --------------------- | ---------------------------------------------------------------- |
+| `Loss` (protocol)     | `compute(pred, expected) -> (score, TextualGradient)`.           |
+| `LossFromMetric`      | Lift any `Metric`; the gradient's `message` is auto-generated.   |
+| `CriticLoss(critic)`  | Wrap an `Agent[Candidate, Score]`; rationale ⇒ gradient.         |
+| `JSONShapeLoss`       | 0.0 if `pred` matches the expected Pydantic shape, 1.0 otherwise.|
+| `CompositeLoss`       | Weighted sum of child losses; merges each child's gradient.      |
+
+### Tape + `backward()`
+
+`operad.optim.tape()` is an async context manager that installs a
+`TapeObserver` on the observer registry; every `Agent.invoke` inside
+the context records a `TapeEntry`. `backward()` walks the tape in
+reverse, propagating a `TextualGradient` through each node via the
+registered `BackpropAgent`s and populating `Parameter.grad`.
+
+```python
+async with operad.optim.tape() as t:
+    out = await agent(x)
+score, grad = await loss_fn.compute(out.response, y)
+await t.backward(grad, parameters=list(agent.parameters()))
+```
+
+### Hooks + `no_grad()`
+
+```python
+handle = agent.register_forward_hook(lambda a, x, y: print(a.name, y))
+# handle.remove() detaches it.
+```
+
+`register_forward_pre_hook`, `register_forward_hook`,
+`register_backward_hook` all return a `Handle` with `.remove()`. An
+`async with operad.no_grad():` block disables tape recording for
+inference-speed runs. `operad.inference_mode()` is the same thing
+with hooks also suppressed.
+
+### Optimizer fleet
+
+| Class                      | Shape                                                                    |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `TextualGradientDescent`   | Naive per-parameter rewrite from the current `grad`.                     |
+| `MomentumTextGrad`         | Maintains a running text summary across steps via `GradSummarizer`.      |
+| `EvoGradient`              | Mutation-selection over a population; best survivor wins the step.       |
+| `OPROOptimizer`            | LLM-as-optimizer with a history window of (prompt, score) pairs.         |
+| `APEOptimizer`             | Candidate generator + ranker; samples many rewrites, keeps the best.     |
+
+Every optimizer takes a `list[Parameter] | list[ParamGroup]` with
+per-group `lr`, `momentum`, and constraint overrides. `zero_grad()`
+clears grads; `await step()` applies them. `state_dict()` /
+`load_state_dict()` are live on `Optimizer` and `LRScheduler` for
+checkpointing.
+
+### LR schedulers
+
+| Class                | When to use                                                      |
+| -------------------- | ---------------------------------------------------------------- |
+| `ConstantLR`         | Baseline; no annealing.                                          |
+| `StepLR`             | Drop lr by `gamma` every `step_size` epochs.                     |
+| `MultiStepLR`        | Drop lr at explicit epoch milestones.                            |
+| `ExponentialLR`      | Multiplicative decay `lr *= gamma` each epoch.                   |
+| `CosineExplorationLR`| Cosine anneal from `base_lr` to `eta_min` over `T_max` epochs.   |
+| `WarmupLR`           | Linear ramp-up over the first `warmup_epochs`.                   |
+| `ReduceLROnPlateau`  | Watches a validation metric; drops lr when it stalls.            |
+| `ChainedScheduler`   | Compose several schedulers that all step every epoch.            |
+| `SequentialLR`       | Hand off between schedulers at configured milestones.            |
+
+In operad, `lr` is the aggression knob the `RewriteAgent` reads: low
+`lr` nudges a parameter's value, high `lr` rewrites it.
+
+### `Trainer`
+
+```python
+trainer = Trainer(
+    agent, optimizer, loss_fn,
+    scheduler=scheduler,
+    callbacks=[EarlyStopping(...), BestCheckpoint(...)],
+    metrics=[ExactMatch()],
+    max_grad_norm=None,
+    accumulation_steps=1,
+)
+report = await trainer.fit(loader, val_ds=val, epochs=5)
+await trainer.evaluate(test_ds)          # -> EvalReport
+out = await trainer.predict(x)            # -> OperadOutput[Out]
+```
+
+Each sample opens its own `tape()`, computes the loss, and calls
+`backward()`. Per-sample gradients merge onto `Parameter.grad`
+(messages joined with `\n---\n`, `target_paths` unioned, `severity`
+= max). `optimizer.step()` fires every `accumulation_steps` batches,
+with a residual flush at epoch end.
+
+| Callback              | Effect                                                            |
+| --------------------- | ----------------------------------------------------------------- |
+| `EarlyStopping`       | Halts when a monitored metric stops improving.                    |
+| `BestCheckpoint`      | Snapshots the agent's `hash_content` at the best epoch.           |
+| `GradClip`            | Clamps `TextualGradient.severity` per step.                       |
+| `PromptDrift`         | Logs per-epoch prompt hash + diff vs. seed.                       |
+| `LearningRateLogger`  | Records each group's lr at every epoch boundary.                  |
+| `MemoryRotation`      | Guards tape growth on long runs by rotating old entries.          |
+
+### Data
+
+```python
+from operad.data import DataLoader, random_split
+train, val = random_split(dataset, [0.8, 0.2], seed=0)
+loader = DataLoader(train, batch_size=8, shuffle=True)
+```
+
+Samplers: `RandomSampler`, `SequentialSampler`,
+`WeightedRandomSampler`. Batches arrive as
+`Batch[In, Out](inputs, expected)`.
+
+### `state_dict` / `load_state_dict`
+
+Live on `Optimizer` and `LRScheduler` today (step counts, momentum
+summaries, epoch state). On `Agent` the declared-state snapshot APIs
+are `state()` / `load_state()`; PyTorch-muscle aliases
+(`state_dict` / `load_state_dict`) are tracked in stream
+`5-3-state-dict-freeze-integration` and land alongside
+`freeze()` / `thaw()` integration.
+
+## 22. PromptTraceback — planned
+
+A per-sample debugging view that links each training-loop rewrite
+back to the tape entry, critic rationale, and parameter it came
+from — the optim-layer counterpart to a Python traceback. Tracked in
+[`.conductor/optim/5-4-prompt-traceback.md`](.conductor/optim/5-4-prompt-traceback.md);
+not yet merged.

@@ -71,19 +71,26 @@ Everything else in this document is in service of that bet.
 
 The mental model deliberately mirrors `torch.nn` at every level.
 
-| PyTorch                    | operad                                                   |
-| -------------------------- | -------------------------------------------------------- |
-| `nn.Module`                | `Agent` (single class; leaves and composites)            |
-| module weights / params    | agent state (config, role, task, rules, examples, I/O types) |
-| `forward(x)`               | `forward(x: In) -> Out` (async)                          |
-| `Module.__call__`          | `Agent.__call__` / `invoke` (validates contract)         |
-| child module tracking      | `__setattr__` hook registers sub-`Agent`s                |
-| `torch.compile` / `fx`     | `build()` with symbolic tracing                          |
-| `torch.fx.Graph`           | `AgentGraph` of `Edge` + `Node` objects                  |
-| `torch.nn` library         | `agents/` (typed, composable Agent subclasses)           |
-| `torch.optim` / training   | `algorithms/` (non-Agent loops: BestOfN, Evolutionary, ...) |
-| `torchmetrics`             | `metrics/` (deterministic scorers)                       |
-| `torch.utils.data`         | `runtime/` (concurrency, dashboards)                     |
+| PyTorch                          | operad                                                       |
+| -------------------------------- | ------------------------------------------------------------ |
+| `nn.Module`                      | `Agent` (single class; leaves and composites)                |
+| module weights / params          | agent state (config, role, task, rules, examples, I/O types) |
+| `forward(x)`                     | `forward(x: In) -> Out` (async)                              |
+| `Module.__call__`                | `Agent.__call__` / `invoke` (validates contract)             |
+| child module tracking            | `__setattr__` hook registers sub-`Agent`s                    |
+| `torch.compile` / `fx`           | `build()` with symbolic tracing                              |
+| `torch.fx.Graph`                 | `AgentGraph` of `Edge` + `Node` objects                      |
+| `torch.nn` library               | `agents/` (typed, composable Agent subclasses)               |
+| `torchmetrics`                   | `metrics/` (deterministic scorers)                           |
+| `nn.Parameter`                   | `operad.optim.Parameter`                                     |
+| `loss.backward()`                | `await tape.backward(loss)` (walks the runtime tape)         |
+| `torch.optim.*`                  | `operad.optim.*` (SGD / Momentum / Evo / OPRO / APE)         |
+| `torch.optim.lr_scheduler.*`     | `operad.optim.lr_scheduler.*`                                |
+| `torch.utils.data.DataLoader`    | `operad.data.DataLoader`                                     |
+| `lightning.Trainer`              | `operad.train.Trainer`                                       |
+| `torch.no_grad()`                | `async with operad.no_grad():`                               |
+| `Module.register_forward_hook`   | `Agent.register_forward_hook`                                |
+| numerical-loop algorithms        | `algorithms/` (non-Agent loops: BestOfN, Evolutionary, …)    |
 
 Two consequences follow from taking this analogy seriously:
 
@@ -202,14 +209,15 @@ will turn this silent footgun into a hard error.
 
 ## 6. Where we are today
 
-Roughly the `torch.nn` + `torch.fx` + part of `torch.optim` skeleton;
-no `torchvision` yet.
+The full `torch.nn` + `torch.fx` + `torch.optim` + `torch.utils.data`
++ `pytorch-lightning` surface area, in operad terms.
 
 ```
 operad/
   core/
     agent.py        Agent[In, Out] with class-attribute defaults; Example;
-                    In/Out TypeVars (no Prompt wrapper)
+                    parameters() / named_parameters() / mark_trainable();
+                    register_forward_hook / pre-hook / backward hook
     config.py       Configuration, Backend
     build.py        Tracer, AgentGraph, Edge, Node, build_agent, abuild_agent
     graph.py        to_mermaid, to_json exporters
@@ -225,12 +233,30 @@ operad/
       components/   Reasoner, Actor, Extractor, Evaluator,
                     Classifier, Planner, Critic (leaf Agent subclasses)
       react.py      Reason-Act-Observe-Evaluate composition
-  algorithms/       BestOfN, Candidate, Score (non-Agent orchestrators)
-  metrics/          Metric protocol, ExactMatch / JsonValid / Latency
+  algorithms/       BestOfN, Debate, SelfRefine, VerifierLoop,
+                    Evolutionary, Sweep, AutoResearcher
+  metrics/          Metric protocol, ExactMatch / JsonValid / Latency / …
+  optim/            Parameter, TextualGradient, tape / backward,
+                    Loss + CriticLoss + LossFromMetric + CompositeLoss,
+                    Optimizer base + TextualGradientDescent +
+                    MomentumTextGrad + EvoGradient + OPROOptimizer +
+                    APEOptimizer; LR scheduler family;
+                    BackpropAgent, RewriteAgent
+  train/            Trainer (fit / evaluate / predict) + callbacks
+                    (EarlyStopping, BestCheckpoint, GradClip,
+                    PromptDrift, LearningRateLogger, MemoryRotation);
+                    EpochReport, TrainingReport
+  data/             DataLoader, Batch, Sampler family, random_split
 tests/              offline by default; `tests/integration/` opt-in via
                     OPERAD_INTEGRATION env var
 examples/           parallel.py — fan-out reasoners over a shared prompt
 ```
+
+Iteration 4 delivers the optim/train layer on top of the existing
+foundations: typed `Parameter` handles, textual-gradient propagation
+via a runtime tape, the full optimizer fleet, LR schedulers, and a
+PyTorch-Lightning-style `Trainer`. The wave-by-wave plan lives in
+[`.conductor/optim/`](.conductor/optim/).
 
 New domains slot in as sibling folders of `reasoning/`:
 
@@ -292,19 +318,22 @@ proxy closes the "composite branches on payload" footgun, and the
 observer protocol gives us a single hook point for a Rich dashboard,
 JSONL logging, cost accounting, and the eventual HTML report.
 
-Two north-star milestones we are explicitly building toward:
+One north-star milestone remains explicitly on the roadmap:
 
-1. **`Evolutionary` as a non-Agent algorithm whose output is an
-   improved Agent.** The foundations already permit this: the agent's
-   role/task/rules/examples are first-class mutable Pydantic state,
-   examples are typed `(In, Out)` pairs, and the observer protocol
-   (iteration 4) gives us a fitness signal to drive selection. The
-   moment this ships, the library is meaningfully
-   agents-optimizing-agents.
-2. **`AutoResearcher` on 8 concurrent llama-server slots**: plan →
+1. **`AutoResearcher` on 8 concurrent llama-server slots**: plan →
    retrieve → read → write → verify → reflect, all local, all
    observable in a live dashboard, with per-agent metrics feeding an
    outer best-of-N loop.
+
+The original north star — **`Evolutionary` as a non-Agent algorithm
+whose output is an improved Agent** — is now **SHIPPED**. The
+optim/train layer (`Parameter`, `backward()`, `Optimizer`, `Trainer`)
+landed in commits `368bd8a..126434b`; `EvoGradient` is a first-class
+`Optimizer` subclass that rewrites agents from textual gradients, and
+`Agent.auto_tune` wraps `Evolutionary` as the one-liner entry point.
+See [`.conductor/optim/`](.conductor/optim/) for the task plan and
+[`apps/demos/agent_evolution/run.py`](apps/demos/agent_evolution/run.py)
+for a live, fully-offline demo.
 
 ## 8. Non-goals and deliberate omissions
 
@@ -348,3 +377,27 @@ When adding to the library:
    `agents/`, `algorithms/`, `metrics/`, or `runtime/`; the
    foundations under `core/` and `utils/errors.py` should rarely
    change.
+
+## 10. Training as the next frontier
+
+The library now contains both inference and training. `operad.optim`
+is our TextGrad / OPRO / APE analogue: textual gradients are
+LLM-generated natural-language critique instead of floats, but the
+spine — `Parameter → backward → Optimizer → Trainer` — is the same
+one that `torch.optim` exposes. The gradient agents (`BackpropAgent`)
+and the rewrite agents (`RewriteAgent`) are themselves `Agent`
+subclasses, so the whole observer / cassette / hashing stack composes
+straight through a fit loop.
+
+The open research surface here is **meta-optimization**: an optimizer
+is an agent, which means its own `role`, `task`, `rules`, and
+sampling are `Parameter`s. A `Trainer` optimizing the
+`OPROOptimizer` that optimizes a `Pipeline` is the same three-level
+stack that PyTorch gets with learned optimizers — except the gradient
+language is English, not a tensor.
+
+Further reading: [TRAINING.md](TRAINING.md),
+[`operad/optim/README.md`](operad/optim/README.md),
+[`.conductor/optim/0-0-orchestration.md`](.conductor/optim/0-0-orchestration.md),
+and [`apps/demos/agent_evolution/run.py`](apps/demos/agent_evolution/run.py)
+(the flagship offline agents-optimizing-agents demo).
