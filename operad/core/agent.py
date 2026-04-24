@@ -17,7 +17,7 @@ import html as _html
 import sys
 import time
 import uuid
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
 from contextvars import ContextVar
 from typing import Any, ClassVar, Generic, Self, TextIO, TYPE_CHECKING, TypeVar
 
@@ -45,9 +45,11 @@ from ..utils.hashing import (
 )
 from .state import AgentState
 from . import render
+from .gradmode import _inference_mode_active
 
 if TYPE_CHECKING:
     from .build import Tracer
+    from ..optim.parameter import Parameter
 
 
 In = TypeVar("In", bound=BaseModel)
@@ -68,6 +70,38 @@ def _system_to_str(rendered: str | list[dict[str, str]] | None) -> str:
 # instead of validating and running `forward`. This is how `build()` performs
 # symbolic tracing without touching an LLM.
 _TRACER: ContextVar["Tracer | None"] = ContextVar("_TRACER", default=None)
+
+
+_LOCAL_FIELD_TO_PATH: dict[str, str] = {
+    "role": "role",
+    "task": "task",
+    "rules": "rules",
+    "examples": "examples",
+    "temperature": "config.sampling.temperature",
+    "top_p": "config.sampling.top_p",
+}
+
+
+class Handle:
+    """Return value of ``Agent.register_*_hook``; call ``remove()`` to unregister.
+
+    Idempotent: a second ``remove()`` is a no-op, as is removal after the
+    underlying callback list has already been cleared (e.g. by ``clone()``).
+    """
+
+    def __init__(self, bucket: list[Callable[..., Any]], fn: Callable[..., Any]) -> None:
+        self._bucket = bucket
+        self._fn = fn
+        self._removed = False
+
+    def remove(self) -> None:
+        if self._removed:
+            return
+        try:
+            self._bucket.remove(self._fn)
+        except ValueError:
+            pass
+        self._removed = True
 
 
 def _extract_text(result: Any) -> str:
@@ -155,6 +189,10 @@ class Agent(strands.Agent, Generic[In, Out]):
         object.__setattr__(self, "_children", {})
         object.__setattr__(self, "_built", False)
         object.__setattr__(self, "_graph", None)
+        object.__setattr__(self, "_requires_grad_overrides", {})
+        object.__setattr__(self, "_forward_pre_hooks", [])
+        object.__setattr__(self, "_forward_hooks", [])
+        object.__setattr__(self, "_backward_hooks", [])
 
         cls = type(self)
         in_cls = input if input is not None else cls.input
@@ -285,6 +323,10 @@ class Agent(strands.Agent, Generic[In, Out]):
         object.__setattr__(new, "_children", {})
         object.__setattr__(new, "_built", False)
         object.__setattr__(new, "_graph", None)
+        object.__setattr__(new, "_requires_grad_overrides", {})
+        object.__setattr__(new, "_forward_pre_hooks", [])
+        object.__setattr__(new, "_forward_hooks", [])
+        object.__setattr__(new, "_backward_hooks", [])
 
         new.role = self.role
         new.task = self.task
@@ -313,6 +355,8 @@ class Agent(strands.Agent, Generic[In, Out]):
             _known = {
                 "role", "task", "rules", "examples", "config", "input", "output",
                 "_children", "_built", "_graph",
+                "_requires_grad_overrides",
+                "_forward_pre_hooks", "_forward_hooks", "_backward_hooks",
             }
             for name, value in self.__dict__.items():
                 if name in _known or isinstance(value, Agent):
@@ -341,6 +385,290 @@ class Agent(strands.Agent, Generic[In, Out]):
     def forward_out(self, x: In, y: Out) -> Out:
         """Runs after `forward`. Override to repair or moderate `y`."""
         return y
+
+    # --- parameter surface --------------------------------------------------
+    def _iter_declared_parameters(
+        self, *, element_wise: bool = False
+    ) -> Iterator[tuple[str, "Parameter[Any]"]]:
+        """Yield `(local_path, Parameter)` pairs for this agent's trainable fields.
+
+        Single source of truth for the default parameter set. List-valued
+        fields (`rules`, `examples`) yield a single list-level param by
+        default; pass ``element_wise=True`` to yield one param per element.
+
+        Parameters are constructed fresh on each call (they are thin read-
+        through views). ``requires_grad`` is populated from
+        ``_requires_grad_overrides`` when the exact local path is present.
+        """
+        from ..optim.parameter import (
+            CategoricalParameter,
+            ExampleListParameter,
+            FloatParameter,
+            Parameter,
+            RuleListParameter,
+            TextParameter,
+        )
+
+        overrides: dict[str, bool] = self._requires_grad_overrides
+
+        def _mk(path: str, ctor: Any, kind: str) -> tuple[str, "Parameter[Any]"]:
+            p = ctor.from_agent(self, path, kind)
+            if path in overrides:
+                p.requires_grad = overrides[path]
+            return path, p
+
+        yield _mk("role", TextParameter, "role")
+        yield _mk("task", TextParameter, "task")
+
+        if element_wise:
+            for i in range(len(self.rules)):
+                yield _mk(f"rules[{i}]", TextParameter, "rule_i")
+        else:
+            yield _mk("rules", RuleListParameter, "rules")
+
+        if element_wise:
+            for i in range(len(self.examples)):
+                yield _mk(f"examples[{i}]", Parameter, "example_i")
+        else:
+            yield _mk("examples", ExampleListParameter, "examples")
+
+        if self.config is not None:
+            yield _mk("config.sampling.temperature", FloatParameter, "temperature")
+            if self.config.sampling.top_p is not None:
+                yield _mk("config.sampling.top_p", FloatParameter, "top_p")
+            yield _mk("config.model", CategoricalParameter, "model")
+            yield _mk("config.backend", CategoricalParameter, "backend")
+            yield _mk("config.io.renderer", CategoricalParameter, "renderer")
+
+    def parameters(
+        self, *, recurse: bool = True, element_wise: bool = False
+    ) -> Iterator["Parameter[Any]"]:
+        """Iterate over this agent's `Parameter`s (and descendants' when recursing).
+
+        Children are walked in attribute-insertion order (the order they
+        were assigned onto the composite).
+        """
+        for _, p in self._iter_declared_parameters(element_wise=element_wise):
+            yield p
+        if recurse:
+            for child in self._children.values():
+                yield from child.parameters(recurse=True, element_wise=element_wise)
+
+    def named_parameters(
+        self, *, recurse: bool = True, element_wise: bool = False
+    ) -> Iterator[tuple[str, "Parameter[Any]"]]:
+        """Iterate `(qualified_path, Parameter)` pairs over self and descendants.
+
+        Recursion prefixes each child's paths with the attribute name it was
+        attached under, dot-separated (e.g. ``stage_0.role``).
+        """
+        for path, p in self._iter_declared_parameters(element_wise=element_wise):
+            yield path, p
+        if recurse:
+            for child_name, child in self._children.items():
+                for sub_path, p in child.named_parameters(
+                    recurse=True, element_wise=element_wise
+                ):
+                    yield f"{child_name}.{sub_path}", p
+
+    def trainable_parameters(self) -> Iterator["Parameter[Any]"]:
+        """Subset of `parameters()` where ``requires_grad`` is ``True``."""
+        for p in self.parameters():
+            if p.requires_grad:
+                yield p
+
+    def _apply_field_flag(
+        self, field: str, value: bool, *, strict: bool
+    ) -> None:
+        """Write ``_requires_grad_overrides[path] = value`` for a local field.
+
+        Sampling fields (``temperature``, ``top_p``) require ``config`` to
+        be set. ``strict=True`` raises ``KeyError`` when it isn't; ``False``
+        silently skips (used for broadcast recursion over composites).
+        """
+        path = _LOCAL_FIELD_TO_PATH[field]
+        if field in ("temperature", "top_p") and self.config is None:
+            if strict:
+                raise KeyError(
+                    f"{field!r}: {type(self).__name__} has no config"
+                )
+            return
+        self._requires_grad_overrides[path] = value
+
+    def _set_requires_grad(
+        self,
+        value: bool,
+        *,
+        role: bool = False,
+        task: bool = False,
+        rules: bool = False,
+        examples: bool = False,
+        temperature: bool = False,
+        top_p: bool = False,
+        recurse: bool = True,
+        _strict: bool = True,
+        **per_path: bool,
+    ) -> None:
+        """Shared core for `mark_trainable` / `freeze_parameters`.
+
+        Boolean kwargs select which local fields to write; ``value`` (the
+        method's target — ``True`` for `mark_trainable`, ``False`` for
+        `freeze_parameters`) is written into ``_requires_grad_overrides``
+        for each selected path. Per-path kwargs supplied via ``**per_path``
+        use the same truthy-selects convention: the key names an absolute
+        path from ``self`` to a descendant's local field, and a truthy
+        value marks it as selected. The method's ``value`` is applied.
+        When ``recurse=True``, the boolean-kwarg set is broadcast to every
+        descendant; per-path selections apply only at their target and are
+        evaluated after broadcast (so they win when both hit the same
+        path).
+        """
+        flags = {
+            "role": role, "task": task, "rules": rules, "examples": examples,
+            "temperature": temperature, "top_p": top_p,
+        }
+        for field, on in flags.items():
+            if on:
+                self._apply_field_flag(field, value, strict=_strict)
+
+        if recurse:
+            for child in self._children.values():
+                child._set_requires_grad(
+                    value,
+                    role=role, task=task, rules=rules, examples=examples,
+                    temperature=temperature, top_p=top_p,
+                    recurse=True, _strict=False,
+                )
+
+        for path, selected in per_path.items():
+            if selected:
+                self._apply_per_path(path, value)
+
+    def _apply_per_path(self, path: str, value: bool) -> None:
+        if "." in path:
+            prefix, rest = path.split(".", 1)
+            if prefix in self._children:
+                self._children[prefix]._apply_per_path(rest, value)
+                return
+            raise KeyError(
+                f"unknown per-path {path!r}: no child named {prefix!r} on "
+                f"{type(self).__name__}"
+            )
+        if path not in _LOCAL_FIELD_TO_PATH:
+            raise KeyError(
+                f"unknown per-path field {path!r}; expected one of "
+                f"{sorted(_LOCAL_FIELD_TO_PATH)}"
+            )
+        self._apply_field_flag(path, value, strict=True)
+
+    def mark_trainable(
+        self,
+        *,
+        role: bool = False,
+        task: bool = False,
+        rules: bool = False,
+        examples: bool = False,
+        temperature: bool = False,
+        top_p: bool = False,
+        recurse: bool = True,
+        **per_path: bool,
+    ) -> None:
+        """Flip selected fields to ``requires_grad=True``.
+
+        Field-name kwargs (``role=True``, ``task=True``, ...) write to this
+        agent's override table. Per-path kwargs passed via ``**per_path``
+        (e.g. ``**{"stage_0.role": True}``) name a specific descendant
+        field; a truthy value selects it. ``recurse=True`` broadcasts the
+        selected field names to every descendant (silently skipping fields
+        that don't apply, e.g. ``temperature`` on a composite with no
+        ``config``).
+        """
+        self._set_requires_grad(
+            True,
+            role=role, task=task, rules=rules, examples=examples,
+            temperature=temperature, top_p=top_p, recurse=recurse,
+            **per_path,
+        )
+
+    def freeze_parameters(
+        self,
+        *,
+        role: bool = False,
+        task: bool = False,
+        rules: bool = False,
+        examples: bool = False,
+        temperature: bool = False,
+        top_p: bool = False,
+        recurse: bool = True,
+        **per_path: bool,
+    ) -> None:
+        """Flip selected fields to ``requires_grad=False`` (same kwargs as
+        `mark_trainable`)."""
+        self._set_requires_grad(
+            False,
+            role=role, task=task, rules=rules, examples=examples,
+            temperature=temperature, top_p=top_p, recurse=recurse,
+            **per_path,
+        )
+
+    def unfreeze_parameters(
+        self,
+        *,
+        role: bool = False,
+        task: bool = False,
+        rules: bool = False,
+        examples: bool = False,
+        temperature: bool = False,
+        top_p: bool = False,
+        recurse: bool = True,
+        **per_path: bool,
+    ) -> None:
+        """Alias for `mark_trainable` — included for PyTorch muscle memory."""
+        self.mark_trainable(
+            role=role, task=task, rules=rules, examples=examples,
+            temperature=temperature, top_p=top_p, recurse=recurse,
+            **per_path,
+        )
+
+    # --- forward / backward hooks (registered) ------------------------------
+    def register_forward_pre_hook(
+        self, fn: Callable[["Agent[Any, Any]", Any], Any]
+    ) -> Handle:
+        """Register a synchronous callback run before ``forward``.
+
+        Signature: ``fn(agent, input) -> input | None``. If the return is
+        not ``None``, it replaces the input that ``forward`` will see.
+        Runs *before* the overridable ``forward_in`` hook. Multiple hooks
+        fire in registration order. Hooks do not run when an
+        ``inference_mode()`` context is active, nor during ``build()``
+        symbolic tracing.
+        """
+        self._forward_pre_hooks.append(fn)
+        return Handle(self._forward_pre_hooks, fn)
+
+    def register_forward_hook(
+        self, fn: Callable[["Agent[Any, Any]", Any, Any], None]
+    ) -> Handle:
+        """Register a synchronous callback run after ``forward``.
+
+        Signature: ``fn(agent, input, output) -> None``. Any return value
+        is ignored. Runs *after* the overridable ``forward_out`` hook.
+        Skipped under ``inference_mode()`` and during symbolic tracing.
+        """
+        self._forward_hooks.append(fn)
+        return Handle(self._forward_hooks, fn)
+
+    def register_backward_hook(
+        self, fn: Callable[["Agent[Any, Any]", Any], Any]
+    ) -> Handle:
+        """Register a synchronous callback for gradient propagation.
+
+        Signature: ``fn(agent, grad) -> TextualGradient | None``. Wave 3-1
+        will invoke these during ``tape.backward()``; this wave stores the
+        callbacks only.
+        """
+        self._backward_hooks.append(fn)
+        return Handle(self._backward_hooks, fn)
 
     # --- composition --------------------------------------------------------
     def __rshift__(self, other: "Agent[Any, Any]") -> "Agent[Any, Any]":
@@ -705,9 +1033,18 @@ class Agent(strands.Agent, Generic[In, Out]):
             )
 
             self.validate(x)
+            run_hooks = not _inference_mode_active()
+            if run_hooks:
+                for fn in tuple(self._forward_pre_hooks):
+                    result = fn(self, x)
+                    if result is not None:
+                        x = result
             x = self.forward_in(x)
             y = await executor(x)
             y = self.forward_out(x, y)
+            if run_hooks:
+                for fn in tuple(self._forward_hooks):
+                    fn(self, x, y)
             self._check_output(y)
 
             finished = time.monotonic()

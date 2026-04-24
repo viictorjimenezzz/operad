@@ -29,6 +29,7 @@ Wave 1 slot 1-1 ships the `Parameter` data spine; later waves add
 
 from __future__ import annotations
 
+from operad.optim.context import inference_mode, no_grad
 from operad.optim.grad_agent import (
     PARAMETER_GRAD_AGENTS,
     BackpropAgent,
@@ -134,6 +135,8 @@ __all__ = [
     "VocabConstraint",
     "apply_rewrite",
     "enabled",
+    "inference_mode",
+    "no_grad",
     "parameter_grad",
     "parameter_grad_for",
     "propagate",
