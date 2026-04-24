@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Generic, Iterable, Iterator, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from ..metrics.base import Metric
 from ..utils.hashing import hash_json
@@ -14,6 +14,41 @@ from .entry import Entry
 
 In = TypeVar("In", bound=BaseModel)
 Out = TypeVar("Out", bound=BaseModel)
+
+
+def _validate_row(
+    entry: "Entry",
+    index: int,
+    in_cls: type[BaseModel] | None,
+    out_cls: type[BaseModel] | None,
+) -> None:
+    """Validate one Entry's input/expected_output; raise ValueError on failure.
+
+    When ``in_cls`` / ``out_cls`` are provided, enforce the schemas via
+    ``model_validate``. Otherwise, round-trip through
+    ``model_dump(mode="json")`` to catch malformed Pydantic state early
+    (e.g. tuples that bypassed field validators via `model_construct`).
+    """
+    try:
+        if in_cls is not None:
+            in_cls.model_validate(entry.input)
+        else:
+            entry.input.model_dump(mode="json")
+    except (ValidationError, AttributeError, TypeError) as err:
+        raise ValueError(
+            f"Dataset row {index}: input failed validation: {err}"
+        ) from err
+    if entry.expected_output is None:
+        return
+    try:
+        if out_cls is not None:
+            out_cls.model_validate(entry.expected_output)
+        else:
+            entry.expected_output.model_dump(mode="json")
+    except (ValidationError, AttributeError, TypeError) as err:
+        raise ValueError(
+            f"Dataset row {index}: expected_output failed validation: {err}"
+        ) from err
 
 
 class Dataset(Generic[In, Out]):
@@ -25,14 +60,29 @@ class Dataset(Generic[In, Out]):
         *,
         name: str = "",
         version: str = "",
+        in_cls: type[In] | None = None,
+        out_cls: type[Out] | None = None,
     ) -> None:
         coerced: list[Entry[In, Out]] = []
-        for e in entries:
+        for i, e in enumerate(entries):
             if isinstance(e, Entry):
-                coerced.append(e)
+                entry = e
             else:
-                inp, exp = e
-                coerced.append(Entry(input=inp, expected_output=exp))
+                try:
+                    inp, exp = e
+                except (TypeError, ValueError) as err:
+                    raise ValueError(
+                        f"Dataset row {i}: expected Entry or (input, "
+                        f"expected_output) tuple, got {type(e).__name__}"
+                    ) from err
+                try:
+                    entry = Entry(input=inp, expected_output=exp)
+                except ValidationError as err:
+                    raise ValueError(
+                        f"Dataset row {i}: could not construct Entry: {err}"
+                    ) from err
+            _validate_row(entry, i, in_cls, out_cls)
+            coerced.append(entry)
         self._entries: list[Entry[In, Out]] = coerced
         self.name = name
         self.version = version

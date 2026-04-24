@@ -29,6 +29,13 @@ Wave 1 slot 1-1 ships the `Parameter` data spine; later waves add
 
 from __future__ import annotations
 
+from operad.optim.loss import (
+    CompositeLoss,
+    CriticLoss,
+    JSONShapeLoss,
+    Loss,
+    LossFromMetric,
+)
 from operad.optim.parameter import (
     CategoricalParameter,
     ExampleListParameter,
@@ -57,15 +64,27 @@ from operad.optim.rewrite import (
     apply_rewrite,
     rewriter_for,
 )
+from operad.optim.tape import (
+    Tape,
+    TapeEntry,
+    TapeObserver,
+    enabled,
+    tape,
+)
 
 __all__ = [
     "CategoricalParameter",
     "CategoricalRewriter",
+    "CompositeLoss",
+    "CriticLoss",
     "ExampleListParameter",
     "ExampleListRewriter",
     "FloatParameter",
     "FloatRewriter",
+    "JSONShapeLoss",
     "ListConstraint",
+    "Loss",
+    "LossFromMetric",
     "NumericConstraint",
     "Parameter",
     "ParameterConstraint",
@@ -76,11 +95,16 @@ __all__ = [
     "RewriteResponse",
     "RuleListParameter",
     "RuleListRewriter",
+    "Tape",
+    "TapeEntry",
+    "TapeObserver",
     "TextConstraint",
     "TextParameter",
     "TextRewriter",
     "TextualGradient",
     "VocabConstraint",
     "apply_rewrite",
+    "enabled",
     "rewriter_for",
+    "tape",
 ]

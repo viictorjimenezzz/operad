@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import time
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Iterator, Literal, Protocol, runtime_checkable
+from uuid import uuid4
 
 from pydantic import BaseModel
+
+from ..events import AlgorithmEvent, AlgoKind
 
 if TYPE_CHECKING:
     from ...core.agent import Agent
@@ -25,9 +30,12 @@ class AgentEvent:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+Event = AgentEvent | AlgorithmEvent
+
+
 @runtime_checkable
 class Observer(Protocol):
-    async def on_event(self, event: AgentEvent) -> None: ...
+    async def on_event(self, event: Event) -> None: ...
 
 
 class ObserverRegistry:
@@ -49,7 +57,7 @@ class ObserverRegistry:
     def __len__(self) -> int:
         return len(self._observers)
 
-    async def notify(self, event: AgentEvent) -> None:
+    async def notify(self, event: Event) -> None:
         for observer in list(self._observers):
             try:
                 await observer.on_event(event)
@@ -76,3 +84,44 @@ _PATH_STACK: ContextVar[tuple["Agent[Any, Any]", str] | None] = ContextVar(
 _RETRY_META: ContextVar[dict[str, Any] | None] = ContextVar(
     "_RETRY_META", default=None
 )
+
+
+@contextmanager
+def _enter_algorithm_run() -> Iterator[str]:
+    """Reuse the enclosing run_id if one is set; otherwise mint a new one
+    for the duration of the scope so nested `AgentEvent`s share it."""
+    existing = _RUN_ID.get()
+    if existing is not None:
+        yield existing
+        return
+    rid = uuid4().hex
+    tok = _RUN_ID.set(rid)
+    try:
+        yield rid
+    finally:
+        _RUN_ID.reset(tok)
+
+
+async def emit_algorithm_event(
+    kind: AlgoKind,
+    *,
+    algorithm_path: str,
+    payload: dict[str, Any],
+    started_at: float | None = None,
+    finished_at: float | None = None,
+) -> None:
+    """Fire one `AlgorithmEvent` on the global registry using the current run_id.
+
+    The caller must run inside `_enter_algorithm_run()` so a run_id exists.
+    """
+    now = time.time()
+    await registry.notify(
+        AlgorithmEvent(
+            run_id=_RUN_ID.get() or "",
+            algorithm_path=algorithm_path,
+            kind=kind,
+            payload=payload,
+            started_at=started_at if started_at is not None else now,
+            finished_at=finished_at,
+        )
+    )

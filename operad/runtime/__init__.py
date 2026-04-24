@@ -9,6 +9,26 @@ would produce a circular import during ``operad.core.agent`` init.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from .slots import SlotOccupancy, SlotRegistry, acquire, registry, set_limit
 
-__all__ = ["SlotOccupancy", "SlotRegistry", "acquire", "registry", "set_limit"]
+if TYPE_CHECKING:
+    from .cost import CostObserver
+
+__all__ = [
+    "CostObserver",
+    "SlotOccupancy",
+    "SlotRegistry",
+    "acquire",
+    "registry",
+    "set_limit",
+]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "CostObserver":
+        from .cost import CostObserver as _CostObserver
+
+        return _CostObserver
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
