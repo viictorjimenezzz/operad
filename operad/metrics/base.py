@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel
@@ -41,4 +42,8 @@ class MetricBase:
     async def score_batch(
         self, pairs: list[tuple[BaseModel, BaseModel]]
     ) -> list[float]:
-        return [await self.score(p, e) for p, e in pairs]
+        # Fan the per-row coroutines out so sync/CPU-bound scorers run
+        # sequentially (their await is trivial) but async scorers that
+        # suspend on I/O can overlap without each subclass having to
+        # override this method.
+        return list(await asyncio.gather(*(self.score(p, e) for p, e in pairs)))

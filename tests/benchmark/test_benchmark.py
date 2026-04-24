@@ -198,6 +198,40 @@ async def test_evaluate_raises_when_not_built(cfg) -> None:
     assert exc.value.reason == "not_built"
 
 
+async def test_evaluate_captures_row_errors_without_tanking_run(cfg) -> None:
+    # A leaf that raises on the poisoned input but succeeds elsewhere.
+    class FlakyLeaf(FakeLeaf):
+        async def forward(self, x):  # type: ignore[override]
+            if x.text == "poison":
+                raise RuntimeError("simulated failure")
+            return self.output.model_construct(**self.canned)
+
+    agent = FlakyLeaf(config=cfg, input=A, output=A, canned={"text": "hello"})
+    await agent.abuild()
+
+    dataset = [
+        (A(text="q1"), A(text="hello")),
+        (A(text="poison"), A(text="hello")),
+        (A(text="q3"), A(text="hello")),
+    ]
+    report = await evaluate(agent, dataset, [ExactMatch()])
+
+    assert len(report.rows) == 3
+    assert report.rows[0]["predicted"] == {"text": "hello"}
+    assert report.rows[0]["exact_match"] == 1.0
+    assert report.rows[1]["predicted"] is None
+    assert report.rows[1]["error"]["type"] == "RuntimeError"
+    assert "simulated failure" in report.rows[1]["error"]["message"]
+    assert "exact_match" not in report.rows[1]
+    assert report.rows[2]["predicted"] == {"text": "hello"}
+    assert report.rows[2]["exact_match"] == 1.0
+    # Summary is computed over successful rows only.
+    assert report.summary["exact_match"] == pytest.approx(1.0)
+    assert len(report.row_errors) == 1
+    assert report.row_errors[0]["index"] == 1
+    assert report.row_errors[0]["type"] == "RuntimeError"
+
+
 async def test_evaluate_respects_concurrency_bound(cfg) -> None:
     inflight = 0
     max_inflight = 0

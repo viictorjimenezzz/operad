@@ -90,7 +90,7 @@ class _BatchOverride(MetricBase):
         return [42.0 for _ in pairs]
 
 
-async def test_default_score_batch_loops_score() -> None:
+async def test_default_score_batch_preserves_order() -> None:
     pairs = [(A(text="x"), A(text="x")), (A(text="y"), A(text="z"))]
     scores = await _ScoreOnly().score_batch(pairs)
     assert scores == [1.0, 0.0]
@@ -100,6 +100,26 @@ async def test_override_wins_over_default() -> None:
     pairs = [(A(text="x"), A(text="x")), (A(text="y"), A(text="y"))]
     scores = await _BatchOverride().score_batch(pairs)
     assert scores == [42.0, 42.0]
+
+
+async def test_default_score_batch_overlaps_async_waits() -> None:
+    # Each score sleeps 0.05s. Serial would cost ~0.25s for 5 pairs;
+    # gather overlap puts the batch under 0.15s on any healthy runtime.
+    class _Sleepy(MetricBase):
+        name = "sleepy"
+
+        async def score(self, predicted, expected) -> float:
+            await asyncio.sleep(0.05)
+            return 1.0
+
+    pairs = [(A(text="x"), A(text="x")) for _ in range(5)]
+    import time
+
+    t0 = time.perf_counter()
+    scores = await _Sleepy().score_batch(pairs)
+    elapsed = time.perf_counter() - t0
+    assert scores == [1.0] * 5
+    assert elapsed < 0.15, f"score_batch did not overlap: took {elapsed:.3f}s"
 
 # --- from test_metrics_contains.py ---
 pytestmark = pytest.mark.asyncio

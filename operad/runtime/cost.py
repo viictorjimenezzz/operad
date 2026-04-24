@@ -1,24 +1,36 @@
-"""Cost / token estimation for a completed `Trace`.
+"""Cost / token estimation — live tracker and post-hoc trace estimator.
 
-Free function, not a method on `Trace`: keeps pricing strictly a view
-concern. Uses per-step `OperadOutput.prompt_tokens` /
-`completion_tokens` when the provider populated them; otherwise falls
-back to a rough `len(text) // 4` heuristic over the rendered prompt
-(no response text is available post-hoc from the trace alone).
+Two consumer shapes share one pricing table and helpers:
+
+- ``cost_estimate(trace, ...)``: a free function that walks a completed
+  ``Trace`` and returns a ``CostReport``. Uses each step's
+  ``OperadOutput.prompt_tokens`` / ``completion_tokens`` when the
+  provider populated them; otherwise falls back to a rough
+  ``len(text) // 4`` heuristic.
+- ``CostTracker``: an observer-style accumulator keyed by ``run_id``.
+  Its ``on_event`` method accepts the transitional ``_CostEvent`` stub
+  below. Once the Wave-4 algorithm events land, the tracker will read
+  tokens and ``backend``/``model`` directly off the real
+  ``AgentEvent`` — the surface here stays stable.
+
+``CostTracker`` is also re-exported from ``operad.metrics`` so existing
+callers (and the docs) keep working.
 """
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 from pydantic import BaseModel
 
 from .trace import Trace
 
 
-# Dollars per 1k tokens; (prompt_rate, completion_rate) per backend:model.
-# Keep tiny and boring; callers supply `pricing=` to extend.
+# Dollars per 1k tokens; (prompt_rate, completion_rate) per "backend:model".
+# Keep tiny and boring; callers can supply `pricing=` to extend.
 PRICE_TABLE: dict[str, tuple[float, float]] = {
     "llamacpp:default": (0.0, 0.0),
     "anthropic:claude-haiku-4-5": (0.001, 0.005),
@@ -105,14 +117,16 @@ def cost_estimate(
     )
 
 
-def _pricing_key_for_step(_out: object) -> str:
-    """Placeholder until `OperadOutput` carries `backend`/`model` directly.
+def _pricing_key_for_step(out: Any) -> str:
+    """Build the ``"backend:model"`` key for one step's envelope.
 
-    The reproducibility hashes carry `hash_model` but not the raw
-    `backend:model` string; surface that as a follow-up and return a
-    neutral key that always misses the table (free fallback).
+    Reads ``backend`` / ``model`` directly off ``OperadOutput``. Empty
+    values fall back to ``"unknown:unknown"`` — those rows price to
+    zero under the default table.
     """
-    return "unknown:unknown"
+    backend = getattr(out, "backend", "") or "unknown"
+    model = getattr(out, "model", "") or "unknown"
+    return f"{backend}:{model}"
 
 
 def _lookup_rate(
@@ -126,4 +140,66 @@ def _lookup_rate(
     return Pricing(prompt_per_1k=0.0, completion_per_1k=0.0)
 
 
-__all__ = ["CostReport", "PRICE_TABLE", "Pricing", "cost_estimate"]
+@dataclass
+class _CostEvent:
+    """Transitional event shape consumed by ``CostTracker``.
+
+    Carries the minimum surface CostTracker needs — ``run_id``,
+    ``backend``, ``model``, and raw text for char-based tokenization.
+    The live algorithm-event schema landing later in Wave 4 will
+    supersede this stub; ``CostTracker.on_event`` reads only these
+    attributes so the swap is one-sided.
+    """
+
+    run_id: str
+    backend: str
+    model: str
+    prompt_text: str = ""
+    completion_text: str = ""
+
+
+def _price(backend: str, model: str, prompt_tokens: int, completion_tokens: int) -> float:
+    rate = _lookup_rate(None, f"{backend}:{model}")
+    return (
+        prompt_tokens * rate.prompt_per_1k + completion_tokens * rate.completion_per_1k
+    ) / 1000.0
+
+
+@dataclass
+class CostTracker:
+    """Accumulates token and cost totals keyed by ``run_id``.
+
+    Not itself a ``Metric`` — exposes ``totals()`` for reporting.
+    Register ``on_event`` on the observer registry to accumulate in
+    real time.
+    """
+
+    _totals: dict[str, dict[str, float]] = field(
+        default_factory=lambda: defaultdict(
+            lambda: {"prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0}
+        )
+    )
+
+    async def on_event(self, event: Any) -> None:
+        prompt_tokens = _default_tokenizer(getattr(event, "prompt_text", "") or "")
+        completion_tokens = _default_tokenizer(
+            getattr(event, "completion_text", "") or ""
+        )
+        cost = _price(event.backend, event.model, prompt_tokens, completion_tokens)
+        bucket = self._totals[event.run_id]
+        bucket["prompt_tokens"] += prompt_tokens
+        bucket["completion_tokens"] += completion_tokens
+        bucket["cost_usd"] += cost
+
+    def totals(self) -> dict[str, dict[str, float]]:
+        return {run_id: dict(v) for run_id, v in self._totals.items()}
+
+
+__all__ = [
+    "CostReport",
+    "CostTracker",
+    "PRICE_TABLE",
+    "Pricing",
+    "_CostEvent",
+    "cost_estimate",
+]

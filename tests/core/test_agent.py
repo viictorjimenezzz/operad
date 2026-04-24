@@ -534,6 +534,41 @@ async def test_load_state_resets_built_flag(cfg) -> None:
     assert leaf._graph is None
 
 
+async def test_state_survives_build_on_default_forward_leaf(cfg) -> None:
+    # strands.Agent.__init__ sets `self.state = AgentState(...)` which
+    # otherwise shadows operad's `state()` method. Verify the rescue in
+    # `_init_strands` keeps the method accessible and hash_content, diff,
+    # and clone-after-build continue to work.
+    leaf = _DefaultLeaf(config=cfg, role="persona", task="do the thing")
+    await leaf.abuild()
+
+    s = leaf.state()
+    assert isinstance(s, AgentState)
+    assert s.role == "persona"
+    assert s.task == "do the thing"
+    assert isinstance(leaf.hash_content, str)
+    d = leaf.diff(leaf.clone())
+    assert isinstance(d, AgentDiff)
+    # Strands' own state bag is preserved under a safe slot.
+    assert hasattr(leaf, "_strands_state")
+
+
+async def test_clone_build_clone_cycle_on_default_forward_leaves(cfg) -> None:
+    leaf1 = _DefaultLeaf(config=cfg, input=A, output=B, task="t1")
+    leaf2 = _DefaultLeaf(config=cfg, input=B, output=C, task="t2")
+    p = Pipeline(leaf1, leaf2, input=A, output=C)
+
+    await p.abuild()
+    first = p.clone()
+    await first.abuild()
+    second = first.clone()
+    # state() must walk children without hitting the strands shadow.
+    s = second.state()
+    assert set(s.children.keys()) == {"stage_0", "stage_1"}
+    assert s.children["stage_0"].task == "t1"
+    assert s.children["stage_1"].task == "t2"
+
+
 def test_state_nests_children_under_attribute_names(cfg) -> None:
     leaf1 = FakeLeaf(config=cfg, input=A, output=B)
     leaf2 = FakeLeaf(config=cfg, input=B, output=C)
