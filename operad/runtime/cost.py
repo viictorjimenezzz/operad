@@ -19,6 +19,7 @@ callers (and the docs) keep working.
 
 from __future__ import annotations
 
+import warnings
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -157,6 +158,14 @@ class _CostEvent:
     prompt_text: str = ""
     completion_text: str = ""
 
+    def __post_init__(self) -> None:
+        warnings.warn(
+            "_CostEvent is deprecated; use CostObserver with the live "
+            "AgentEvent stream. _CostEvent will be removed in Wave 5.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
 
 def _price(backend: str, model: str, prompt_tokens: int, completion_tokens: int) -> float:
     rate = _lookup_rate(None, f"{backend}:{model}")
@@ -195,7 +204,45 @@ class CostTracker:
         return {run_id: dict(v) for run_id, v in self._totals.items()}
 
 
+@dataclass
+class CostObserver:
+    """Observer that accumulates token + USD spend per ``run_id``.
+
+    Reads ``backend``, ``model``, ``prompt_tokens``, ``completion_tokens``
+    directly off ``AgentEvent.output`` on ``kind == "end"`` events; other
+    event kinds (and those lacking an envelope, e.g. algorithm events)
+    are ignored. Delegates storage to an internal ``CostTracker``; expose
+    ``totals()`` for read-through. Register with
+    ``operad.runtime.observers.registry.register(obs)``.
+    """
+
+    tracker: CostTracker = field(default_factory=CostTracker)
+    pricing: dict[str, Pricing] | None = None
+
+    async def on_event(self, event: Any) -> None:
+        if getattr(event, "kind", None) != "end":
+            return
+        out = getattr(event, "output", None)
+        if out is None:
+            return
+        p = getattr(out, "prompt_tokens", None) or 0
+        c = getattr(out, "completion_tokens", None) or 0
+        backend = getattr(out, "backend", "") or "unknown"
+        model = getattr(out, "model", "") or "unknown"
+        rate = _lookup_rate(self.pricing, f"{backend}:{model}")
+        cost = (p * rate.prompt_per_1k + c * rate.completion_per_1k) / 1000.0
+        run_id = getattr(out, "run_id", "") or getattr(event, "run_id", "")
+        bucket = self.tracker._totals[run_id]
+        bucket["prompt_tokens"] += p
+        bucket["completion_tokens"] += c
+        bucket["cost_usd"] += cost
+
+    def totals(self) -> dict[str, dict[str, float]]:
+        return self.tracker.totals()
+
+
 __all__ = [
+    "CostObserver",
     "CostReport",
     "CostTracker",
     "PRICE_TABLE",
