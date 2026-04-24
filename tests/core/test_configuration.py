@@ -9,6 +9,7 @@ import yaml
 from operad.agents.reasoning.react import ReAct
 from operad.configs import ConfigError, RunConfig, instantiate, load
 from operad.configs.loader import _import_by_path
+from operad.core.config import Resilience, Runtime, Sampling
 
 
 # --- from test_configuration.py ---
@@ -17,8 +18,8 @@ def test_configuration_minimal_llamacpp() -> None:
     assert cfg.backend == "llamacpp"
     assert cfg.host == "127.0.0.1:9000"
     assert cfg.model == "gemma"
-    assert cfg.temperature == 0.7
-    assert cfg.max_tokens == 2048
+    assert cfg.sampling.temperature == 0.7
+    assert cfg.sampling.max_tokens == 2048
 
 
 def test_configuration_openai_forbids_host() -> None:
@@ -36,10 +37,10 @@ def test_configuration_extra_goes_through_extra_field() -> None:
         backend="llamacpp",
         host="127.0.0.1:9000",
         model="x",
-        extra={"grammar": "root ::= .", "custom_param": 42},
+        runtime=Runtime(extra={"grammar": "root ::= .", "custom_param": 42}),
     )
-    assert cfg.extra["grammar"] == "root ::= ."
-    assert cfg.extra["custom_param"] == 42
+    assert cfg.runtime.extra["grammar"] == "root ::= ."
+    assert cfg.runtime.extra["custom_param"] == 42
 
 
 def test_configuration_forbids_unknown_top_level_fields() -> None:
@@ -54,28 +55,26 @@ def test_configuration_forbids_unknown_top_level_fields() -> None:
 
 def test_configuration_is_mutable() -> None:
     cfg = Configuration(backend="openai", model="gpt-4o")
-    cfg.temperature = 0.2
-    assert cfg.temperature == 0.2
+    cfg.sampling.temperature = 0.2
+    assert cfg.sampling.temperature == 0.2
 
 
 def test_configuration_new_fields_round_trip() -> None:
     cfg = Configuration(
         backend="openai",
         model="gpt-4o",
-        timeout=1.5,
-        max_retries=3,
-        backoff_base=1.0,
+        resilience=Resilience(timeout=1.5, max_retries=3, backoff_base=1.0),
     )
-    assert cfg.timeout == 1.5
-    assert cfg.max_retries == 3
-    assert cfg.backoff_base == 1.0
+    assert cfg.resilience.timeout == 1.5
+    assert cfg.resilience.max_retries == 3
+    assert cfg.resilience.backoff_base == 1.0
 
 
 def test_configuration_new_fields_defaults() -> None:
     cfg = Configuration(backend="openai", model="gpt-4o")
-    assert cfg.timeout is None
-    assert cfg.max_retries == 0
-    assert cfg.backoff_base == 0.5
+    assert cfg.resilience.timeout is None
+    assert cfg.resilience.max_retries == 0
+    assert cfg.resilience.backoff_base == 0.5
 
 
 def test_configuration_anthropic_forbids_host() -> None:
@@ -92,11 +91,11 @@ def test_configuration_anthropic_accepts_api_key() -> None:
         backend="anthropic",
         model="claude-haiku-4-5",
         api_key="sk-ant-test",
-        reasoning_tokens=512,
+        sampling=Sampling(reasoning_tokens=512),
     )
     assert cfg.backend == "anthropic"
     assert cfg.api_key == "sk-ant-test"
-    assert cfg.reasoning_tokens == 512
+    assert cfg.sampling.reasoning_tokens == 512
 
 
 def test_configuration_still_forbids_unknown_after_new_fields() -> None:
@@ -104,8 +103,7 @@ def test_configuration_still_forbids_unknown_after_new_fields() -> None:
         Configuration(
             backend="openai",
             model="gpt-4o",
-            timeout=1.0,
-            max_retries=2,
+            resilience=Resilience(timeout=1.0, max_retries=2),
             totally_unknown=True,  # type: ignore[call-arg]
         )
 
@@ -116,7 +114,7 @@ VALID_YAML = {
         "backend": "llamacpp",
         "host": "127.0.0.1:8080",
         "model": "test-model",
-        "temperature": 0.3,
+        "sampling": {"temperature": 0.3},
     },
     "runtime": {
         "slots": [

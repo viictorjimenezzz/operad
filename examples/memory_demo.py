@@ -14,6 +14,7 @@ import argparse
 import asyncio
 import sys
 
+from operad.core.config import Sampling
 from operad.agents import (
     Belief,
     BeliefExtractor,
@@ -28,7 +29,7 @@ _SCRIPT = "memory_demo.py"
 
 
 async def main(offline: bool = False) -> None:
-    cfg = local_config(temperature=0.0, max_tokens=512)
+    cfg = local_config(sampling=Sampling(temperature=0.0, max_tokens=512))
     print(f"[{_SCRIPT}] backend={cfg.backend} host={cfg.host} model={cfg.model}")
     if offline:
         print(f"[{_SCRIPT}] --offline not supported for this example (needs a real model); exiting 0 as no-op.")

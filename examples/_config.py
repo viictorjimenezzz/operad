@@ -18,7 +18,13 @@ DEFAULT_MODEL = "google/gemma-4-e4b"
 
 
 def local_config(**overrides) -> Configuration:
-    """Build a Configuration for the canonical local llama-server."""
+    """Build a Configuration for the canonical local llama-server.
+
+    Accepts nested sub-model kwargs (``sampling=Sampling(...)``,
+    ``resilience=Resilience(...)``, ``io=IOConfig(...)``,
+    ``runtime=Runtime(...)``) as well as the top-level fields
+    ``backend``, ``model``, ``host``, ``api_key``, ``batch``.
+    """
     base: dict = dict(
         backend="llamacpp",
         host=os.environ.get("OPERAD_LLAMACPP_HOST", DEFAULT_HOST),

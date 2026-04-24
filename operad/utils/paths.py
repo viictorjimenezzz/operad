@@ -4,7 +4,7 @@ Two flavours coexist:
 
 - ``resolve_parent`` / ``set_path`` walk plain Python attribute access,
   used by ``Sweep`` to address nested fields like
-  ``"reasoner.config.temperature"``.
+  ``"reasoner.config.sampling.temperature"``.
 - ``_resolve`` walks an Agent's ``_children`` dict by attribute name,
   used by the mutation ops in ``operad.utils.ops``. An empty path
   returns the root; a missing child raises ``BuildError``.
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 def resolve_parent(root: Any, path: str) -> tuple[Any, str]:
     """Walk `path` on `root` and return ``(parent, final_segment)``.
 
-    ``resolve_parent(agent, "reasoner.config.temperature")`` returns
+    ``resolve_parent(agent, "reasoner.config.sampling.temperature")`` returns
     ``(agent.reasoner.config, "temperature")``. Raises ``KeyError`` if
     any intermediate segment is missing, naming the segment and the
     prefix that failed.

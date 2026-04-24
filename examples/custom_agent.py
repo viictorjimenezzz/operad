@@ -21,6 +21,7 @@ import sys
 from pydantic import BaseModel, Field
 
 from operad import Agent, Configuration, Example
+from operad.core.config import Sampling
 
 from _config import local_config, server_reachable
 
@@ -82,7 +83,7 @@ async def main(offline: bool = False) -> None:
         )
         agent: Agent[Joke, Pun] = _OfflinePunster(config=cfg)
     else:
-        cfg = local_config(temperature=0.8, max_tokens=128)
+        cfg = local_config(sampling=Sampling(temperature=0.8, max_tokens=128))
         print(f"[{script}] backend={cfg.backend} host={cfg.host} model={cfg.model}")
         if not server_reachable(cfg.host):
             print(
@@ -91,6 +92,7 @@ async def main(offline: bool = False) -> None:
             )
             raise SystemExit(1)
         agent = Punster(config=cfg)
+
 
     await agent.abuild()
     result = await agent(Joke(topic="databases"))

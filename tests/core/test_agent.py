@@ -69,10 +69,10 @@ async def test_leaf_returning_wrong_type_raises_output_mismatch(cfg) -> None:
 async def test_prompt_fields_mutable_before_build(cfg) -> None:
     leaf = FakeLeaf(config=cfg, input=A, output=B, task="v1")
     leaf.task = "v2"
-    leaf.config.temperature = 0.1
+    leaf.config.sampling.temperature = 0.1
     await leaf.abuild()
     assert leaf.task == "v2"
-    assert leaf.config.temperature == 0.1
+    assert leaf.config.sampling.temperature == 0.1
 
 
 async def test_invoke_after_build_returns_correct_type(cfg) -> None:
@@ -345,8 +345,8 @@ def test_diff_detects_examples_add_and_remove(cfg: Configuration) -> None:
 def test_diff_detects_config_field_changes(cfg: Configuration) -> None:
     a = FakeLeaf(config=cfg, input=A, output=B)
     b = a.clone()
-    b.config.temperature = 0.9
-    b.config.max_tokens = 512
+    b.config.sampling.temperature = 0.9
+    b.config.sampling.max_tokens = 512
 
     d = a.diff(b)
     cfg_changes = [c for c in d.changes if c.kind == "config"]
@@ -501,7 +501,7 @@ def test_state_captures_declared_fields(cfg) -> None:
     assert s.output_type_name == "B"
     assert s.examples == [{"input": {"text": "x"}, "output": {"value": 1}}]
     assert s.config is not None
-    assert s.config.temperature == 0.0
+    assert s.config.sampling.temperature == 0.0
     assert s.children == {}
 
 
@@ -520,7 +520,7 @@ def test_load_state_roundtrip_is_noop_on_field_values(cfg) -> None:
     assert len(leaf.examples) == 1
     assert leaf.examples[0].input.text == "x"
     assert leaf.examples[0].output.value == 1
-    assert leaf.config.temperature == 0.0
+    assert leaf.config.sampling.temperature == 0.0
 
 
 async def test_load_state_resets_built_flag(cfg) -> None:
@@ -597,12 +597,12 @@ def test_clone_independence_on_simple_fields(cfg) -> None:
     clone = leaf.clone()
     clone.task = "v2"
     clone.rules.append("r2")
-    clone.config.temperature = 0.9
+    clone.config.sampling.temperature = 0.9
 
     assert leaf.task == "v1"
     assert leaf.rules == ["r1"]
-    assert leaf.config.temperature == 0.0
-    assert clone.config.temperature == 0.9
+    assert leaf.config.sampling.temperature == 0.0
+    assert clone.config.sampling.temperature == 0.9
 
 
 def test_clone_deep_copies_examples(cfg) -> None:

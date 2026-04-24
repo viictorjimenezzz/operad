@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from operad import Agent, Configuration
+from operad.core.config import Resilience, Sampling
 from operad.runtime.observers import AgentEvent
 from operad.core.build import _TRACER
 from operad.runtime.observers import registry as obs_registry
@@ -175,9 +176,9 @@ class _RetryLeaf(Agent[Any, Any]):
 
         return await with_retry(
             self._fn,
-            max_retries=self.config.max_retries,
-            backoff_base=self.config.backoff_base,
-            timeout=self.config.timeout,
+            max_retries=self.config.resilience.max_retries,
+            backoff_base=self.config.resilience.backoff_base,
+            timeout=self.config.resilience.timeout,
             on_attempt=_record,
         )
 
@@ -187,10 +188,8 @@ async def test_end_event_reports_retry_count() -> None:
         backend="llamacpp",
         host="127.0.0.1:0",
         model="test",
-        temperature=0.0,
-        max_tokens=16,
-        max_retries=3,
-        backoff_base=0.0,
+        sampling=Sampling(temperature=0.0, max_tokens=16),
+        resilience=Resilience(max_retries=3, backoff_base=0.0),
     )
     calls = {"n": 0}
 
@@ -219,10 +218,8 @@ async def test_end_event_has_zero_retries_on_first_success() -> None:
         backend="llamacpp",
         host="127.0.0.1:0",
         model="test",
-        temperature=0.0,
-        max_tokens=16,
-        max_retries=3,
-        backoff_base=0.0,
+        sampling=Sampling(temperature=0.0, max_tokens=16),
+        resilience=Resilience(max_retries=3, backoff_base=0.0),
     )
 
     async def fn() -> B:
@@ -245,10 +242,8 @@ async def test_error_event_reports_retry_count_on_exhaustion() -> None:
         backend="llamacpp",
         host="127.0.0.1:0",
         model="test",
-        temperature=0.0,
-        max_tokens=16,
-        max_retries=2,
-        backoff_base=0.0,
+        sampling=Sampling(temperature=0.0, max_tokens=16),
+        resilience=Resilience(max_retries=2, backoff_base=0.0),
     )
 
     async def fn() -> B:

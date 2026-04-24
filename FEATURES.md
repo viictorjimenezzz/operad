@@ -222,16 +222,16 @@ a list of per-row scores via `mean`/`median`/`min`/`max`/`sum`.
 ## 10. Configuration & model backends
 
 `Configuration` describes a single model call: backend, model, host,
-key, and all sampling / resilience / rendering knobs in one flat
-object.
+key at the top level, and sampling / resilience / io / runtime knobs
+in four nested sub-models.
 
 ```python
 cfg = Configuration(
     backend="openai", model="gpt-4o-mini", api_key="…",
-    temperature=0.7, max_tokens=2048, top_p=None, seed=None,
-    timeout=30.0, max_retries=2, backoff_base=0.5,
-    stream=False, structuredio=True, renderer="xml",
     batch=False,
+    sampling=Sampling(temperature=0.7, max_tokens=2048, top_p=None, seed=None),
+    resilience=Resilience(timeout=30.0, max_retries=2, backoff_base=0.5),
+    io=IOConfig(stream=False, structuredio=True, renderer="xml"),
 )
 ```
 
@@ -269,7 +269,7 @@ Precedence: class-level `renderer: ClassVar[str]` beats
 ## 12. Streaming
 
 ```python
-cfg = Configuration(…, stream=True)
+cfg = Configuration(…, io=IOConfig(stream=True))
 leaf = await MyLeaf(config=cfg).abuild()
 async for item in leaf.stream(x):
     if isinstance(item, ChunkEvent):
@@ -328,7 +328,7 @@ existing semaphore bound.
 
 ### Retry / backoff
 
-`Configuration(timeout=..., max_retries=2, backoff_base=0.5)` wraps
+`Configuration(resilience=Resilience(timeout=..., max_retries=2, backoff_base=0.5))` wraps
 the provider call inside `Agent.forward`. Retries are NOT triggered
 for contract errors (`BuildError`, `pydantic.ValidationError`) or
 cancellation. Each invocation's envelope records

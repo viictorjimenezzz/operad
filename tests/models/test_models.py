@@ -7,6 +7,7 @@ sampling params threaded through — no silent drops.
 from __future__ import annotations
 import pytest
 from operad import Configuration
+from operad.core.config import Runtime, Sampling
 from operad.core.models import resolve_model
 import importlib
 
@@ -17,13 +18,15 @@ def test_llamacpp_resolver_threads_params() -> None:
         backend="llamacpp",
         host="127.0.0.1:9000",
         model="gemma-3-27b",
-        temperature=0.1,
-        max_tokens=128,
-        top_p=0.9,
-        top_k=40,
-        seed=7,
-        stop=["</end>"],
-        extra={"mirostat": 2},
+        sampling=Sampling(
+            temperature=0.1,
+            max_tokens=128,
+            top_p=0.9,
+            top_k=40,
+            seed=7,
+            stop=["</end>"],
+        ),
+        runtime=Runtime(extra={"mirostat": 2}),
     )
     model = resolve_model(cfg)
     assert model.__class__.__name__ == "LlamaCppModel"
@@ -44,7 +47,7 @@ def test_lmstudio_resolver_appends_v1() -> None:
         backend="lmstudio",
         host="127.0.0.1:1234",
         model="qwen",
-        temperature=0.2,
+        sampling=Sampling(temperature=0.2),
     )
     model = resolve_model(cfg)
     assert model.__class__.__name__ == "OpenAIModel"
@@ -70,10 +73,12 @@ def test_ollama_resolver_uses_flat_kwargs() -> None:
         backend="ollama",
         host="127.0.0.1:11434",
         model="llama3",
-        temperature=0.3,
-        max_tokens=512,
-        top_p=0.8,
-        stop=["STOP"],
+        sampling=Sampling(
+            temperature=0.3,
+            max_tokens=512,
+            top_p=0.8,
+            stop=["STOP"],
+        ),
     )
     model = resolve_model(cfg)
     assert model.__class__.__name__ == "OllamaModel"
@@ -91,7 +96,7 @@ def test_openai_resolver_threads_api_key() -> None:
         backend="openai",
         model="gpt-4o",
         api_key="sk-test",
-        temperature=0.0,
+        sampling=Sampling(temperature=0.0),
     )
     model = resolve_model(cfg)
     assert model.__class__.__name__ == "OpenAIModel"

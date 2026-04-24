@@ -13,6 +13,7 @@ import argparse
 import asyncio
 import sys
 
+from operad.core.config import Sampling
 from operad.agents import DiffChunk, PRDiff, PRReviewer
 from operad.runtime import set_limit
 
@@ -43,7 +44,7 @@ async def _fake_read(path: str) -> str:
 
 
 async def main(offline: bool = False) -> None:
-    cfg = local_config(temperature=0.2, max_tokens=1024)
+    cfg = local_config(sampling=Sampling(temperature=0.2, max_tokens=1024))
     print(f"[{_SCRIPT}] backend={cfg.backend} host={cfg.host} model={cfg.model}")
     if offline:
         print(f"[{_SCRIPT}] --offline not supported for this example (needs a real model); exiting 0 as no-op.")

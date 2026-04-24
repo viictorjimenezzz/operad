@@ -18,6 +18,7 @@ import json
 from pydantic import BaseModel, Field
 
 from operad import Agent, Configuration, evaluate
+from operad.core.config import Sampling
 from operad.benchmark import EvalReport
 from operad.metrics import Contains, ExactMatch, Rouge1
 
@@ -46,7 +47,8 @@ class CannedAgent(Agent[Question, Answer]):
 
 async def main(offline: bool = False) -> None:
     cfg = Configuration(
-        backend="llamacpp", host="127.0.0.1:0", model="offline", temperature=0.0,
+        backend="llamacpp", host="127.0.0.1:0", model="offline",
+        sampling=Sampling(temperature=0.0),
     )
     agent = CannedAgent(
         config=cfg,

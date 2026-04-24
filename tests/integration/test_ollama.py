@@ -17,6 +17,7 @@ import pytest
 from pydantic import BaseModel
 
 from operad import Agent, Configuration
+from operad.core.config import Sampling
 
 
 pytestmark = [
@@ -45,8 +46,7 @@ async def test_leaf_against_real_ollama_server() -> None:
         backend="ollama",
         host=os.environ.get("OPERAD_OLLAMA_HOST", "127.0.0.1:11434"),
         model=os.environ.get("OPERAD_OLLAMA_MODEL", "llama3.2"),
-        temperature=0.0,
-        max_tokens=64,
+        sampling=Sampling(temperature=0.0, max_tokens=64),
     )
 
     class Echoer(Agent[_Greeting, _Echo]):

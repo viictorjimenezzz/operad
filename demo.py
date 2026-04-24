@@ -25,6 +25,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from operad import Pipeline
+from operad.core.config import Sampling
 from operad.agents import Classifier, Reasoner
 from operad.core.graph import to_mermaid
 from operad.runtime.observers import RichDashboardObserver, registry as observers
@@ -54,7 +55,7 @@ class Verdict(BaseModel):
 
 
 def _build_agent() -> Pipeline:
-    cfg = local_config(temperature=0.2, max_tokens=128)
+    cfg = local_config(sampling=Sampling(temperature=0.2, max_tokens=128))
     answerer = Reasoner(
         config=cfg,
         input=Question,

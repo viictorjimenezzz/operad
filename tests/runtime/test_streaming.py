@@ -56,7 +56,9 @@ async def test_stream_off_single_envelope(cfg: Configuration) -> None:
 async def test_stream_on_three_chunks(
     cfg: Configuration, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    cfg_stream = cfg.model_copy(update={"stream": True})
+    cfg_stream = cfg.model_copy(
+        update={"io": cfg.io.model_copy(update={"stream": True})}
+    )
     events = [
         {"data": "foo"},
         {"data": "bar"},
@@ -83,7 +85,9 @@ async def test_stream_on_three_chunks(
 async def test_stream_observers_receive_chunk_events(
     cfg: Configuration, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    cfg_stream = cfg.model_copy(update={"stream": True})
+    cfg_stream = cfg.model_copy(
+        update={"io": cfg.io.model_copy(update={"stream": True})}
+    )
     events = [
         {"data": "a"},
         {"data": "b"},
@@ -119,7 +123,9 @@ async def test_stream_observers_receive_chunk_events(
 async def test_stream_structured_parsing_from_text(
     cfg: Configuration, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    cfg_stream = cfg.model_copy(update={"stream": True})
+    cfg_stream = cfg.model_copy(
+        update={"io": cfg.io.model_copy(update={"stream": True})}
+    )
     payload = json.dumps({"value": 99})
     events = [{"data": payload[:4]}, {"data": payload[4:]}]
     monkeypatch.setattr(
@@ -136,7 +142,9 @@ async def test_stream_structured_parsing_from_text(
 async def test_stream_invoke_still_returns_envelope(
     cfg: Configuration, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    cfg_stream = cfg.model_copy(update={"stream": True})
+    cfg_stream = cfg.model_copy(
+        update={"io": cfg.io.model_copy(update={"stream": True})}
+    )
     events = [
         {"data": "x"},
         {"result": SimpleNamespace(structured_output=B(value=3))},
@@ -155,7 +163,9 @@ async def test_stream_invoke_still_returns_envelope(
 async def test_stream_parse_failure_raises_output_mismatch(
     cfg: Configuration, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    cfg_stream = cfg.model_copy(update={"stream": True})
+    cfg_stream = cfg.model_copy(
+        update={"io": cfg.io.model_copy(update={"stream": True})}
+    )
     events = [{"data": "not json at all"}]
     monkeypatch.setattr(
         strands.Agent, "stream_async", _make_fake_stream_async(events)

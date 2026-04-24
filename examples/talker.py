@@ -17,6 +17,7 @@ import argparse
 import asyncio
 import sys
 
+from operad.core.config import Sampling
 from operad.agents import Talker, Utterance
 from operad.runtime import set_limit
 
@@ -33,7 +34,7 @@ TURNS: list[str] = [
 
 
 async def main(offline: bool = False) -> None:
-    cfg = local_config(temperature=0.3, max_tokens=512)
+    cfg = local_config(sampling=Sampling(temperature=0.3, max_tokens=512))
     print(f"[{_SCRIPT}] backend={cfg.backend} host={cfg.host} model={cfg.model}")
     if offline:
         print(f"[{_SCRIPT}] --offline not supported for this example (needs a real model); exiting 0 as no-op.")

@@ -15,6 +15,7 @@ from typing import Iterator
 import pytest
 
 from operad import Configuration
+from operad.core.config import Sampling
 
 from ._helpers.fake_leaf import (  # noqa: F401
     A,
@@ -38,8 +39,7 @@ def cfg() -> Configuration:
         backend="llamacpp",
         host="127.0.0.1:0",
         model="test",
-        temperature=0.0,
-        max_tokens=16,
+        sampling=Sampling(temperature=0.0, max_tokens=16),
     )
 
 

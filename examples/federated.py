@@ -30,6 +30,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from operad import Configuration, Parallel
+from operad.core.config import Sampling
 from operad.agents import Classifier, Reasoner
 from operad.runtime import set_limit
 
@@ -72,7 +73,7 @@ SAMPLE = (
 
 
 async def main(offline: bool = False) -> None:
-    local = local_config(temperature=0.0)
+    local = local_config(sampling=Sampling(temperature=0.0))
     print(f"[{_SCRIPT}] backend={local.backend} host={local.host} model={local.model}")
     if offline:
         print(f"[{_SCRIPT}] --offline not supported for this example (needs a real model); exiting 0 as no-op.")
@@ -87,7 +88,7 @@ async def main(offline: bool = False) -> None:
         backend="openai",
         model=os.environ.get("OPERAD_OPENAI_MODEL", "gpt-4o-mini"),
         api_key=os.environ["OPENAI_API_KEY"],
-        temperature=0.3,
+        sampling=Sampling(temperature=0.3),
     )
 
     set_limit(backend="llamacpp", host=local.host, concurrency=8)

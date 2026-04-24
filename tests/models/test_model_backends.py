@@ -11,6 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from operad import Configuration
+from operad.core.config import Sampling
 from operad.core.models import BatchHandle, resolve_model
 from operad.utils.hashing import hash_config
 
@@ -51,9 +52,7 @@ def test_gemini_resolver_returns_gemini_model(
         backend="gemini",
         model="gemini-1.5-pro",
         api_key="sk-fake",
-        temperature=0.2,
-        max_tokens=64,
-        top_p=0.9,
+        sampling=Sampling(temperature=0.2, max_tokens=64, top_p=0.9),
     )
     model = resolve_model(cfg)
     assert model.__class__.__name__ == "GeminiModel"
@@ -105,9 +104,7 @@ def test_huggingface_resolver_returns_wrapper(
     cfg = Configuration(
         backend="huggingface",
         model="sshleifer/tiny-gpt2",
-        temperature=0.0,
-        max_tokens=8,
-        seed=42,
+        sampling=Sampling(temperature=0.0, max_tokens=8, seed=42),
     )
     model = resolve_model(cfg)
     assert model.__class__.__name__ == "_HuggingFaceModel"
