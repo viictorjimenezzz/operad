@@ -9,11 +9,13 @@ the defaults ad hoc.
 from __future__ import annotations
 
 from .actor import Actor
+from .bm25_retriever import BM25Retriever
 from .chat_reasoner import ChatReasoner
 from .classifier import Classifier
 from .critic import Critic
 from .evaluator import Evaluator
 from .extractor import Extractor
+from .fake_retriever import FakeRetriever
 from .planner import Planner
 from .reasoner import Reasoner
 from .reflector import Reflection, ReflectionInput, Reflector
@@ -23,12 +25,14 @@ from .tool_user import Tool, ToolCall, ToolResult, ToolUser
 
 __all__ = [
     "Actor",
+    "BM25Retriever",
     "ChatReasoner",
     "Choice",
     "Classifier",
     "Critic",
     "Evaluator",
     "Extractor",
+    "FakeRetriever",
     "Hit",
     "Hits",
     "Planner",
