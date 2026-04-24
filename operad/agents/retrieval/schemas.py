@@ -96,10 +96,12 @@ class CitationGistInput(BaseModel):
     target_language: str = Field(
         default="",
         description="Target language for the gists.",
+        json_schema_extra={"operad": {"system": True}},
     )
     assistant_context: str = Field(
         default="",
         description="Background context the assistant relied on.",
+        json_schema_extra={"operad": {"system": True}},
     )
     utterance_beyond_facts: bool = Field(
         default=False,

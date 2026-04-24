@@ -38,9 +38,9 @@ class Extractor(Agent[In, Out]):
         "schemas from unstructured input without inventing facts."
     )
     task = (
-        "Read the input carefully and fill in every field of the output "
-        "schema. If a field's value is not present in the input, use the "
-        "field's natural empty value (empty string, empty list, null)."
+        "Populate every declared output field from the input. If a "
+        "field's value is not present, use its natural empty value "
+        "(empty string, empty list, null)."
     )
     rules = (
         "Never invent information not supported by the input.",

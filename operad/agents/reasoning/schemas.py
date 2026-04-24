@@ -160,22 +160,27 @@ class ChatReasonerInput(BaseModel):
     context: str = Field(
         default="",
         description="Assistant identity profile — persona, expertise, tone, audience.",
+        json_schema_extra={"operad": {"system": True}},
     )
     interaction_context: str = Field(
         default="",
         description="Schema descriptions for InteractionContext fields.",
+        json_schema_extra={"operad": {"system": True}},
     )
     session_context: str = Field(
         default="",
         description="Schema descriptions for SessionContext fields.",
+        json_schema_extra={"operad": {"system": True}},
     )
     workspace_guide: str = Field(
         default="",
         description="Concise overview of the knowledge base content and themes.",
+        json_schema_extra={"operad": {"system": True}},
     )
     user_information: str = Field(
         default="",
         description="Structured information about the user extracted from prior turns.",
+        json_schema_extra={"operad": {"system": True}},
     )
     beliefs_json: str = Field(
         default="",
