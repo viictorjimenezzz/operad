@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import random
+import statistics
 import warnings
 from typing import Any, Iterable
 
@@ -27,8 +28,15 @@ from operad.core.agent import Agent
 from operad.metrics.base import Metric
 from operad.optim.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import Parameter
+from operad.runtime.observers.base import (
+    _enter_algorithm_run,
+    emit_algorithm_event,
+)
 from operad.utils.errors import BuildError
 from operad.utils.ops import Op
+
+
+_IDENTITY_OP = "identity"
 
 
 class EvoGradient(Optimizer):
@@ -53,6 +61,7 @@ class EvoGradient(Optimizer):
         population_size: int = 8,
         rng: random.Random | None = None,
         max_mutation_retries: int = 3,
+        max_mutation_entries: int = 200,
     ) -> None:
         if population_size < 2:
             raise ValueError(
@@ -72,10 +81,19 @@ class EvoGradient(Optimizer):
         self._dataset = list(dataset)
         self._population_size = int(population_size)
         self._max_mutation_retries = int(max_mutation_retries)
+        self._max_mutation_entries = int(max_mutation_entries)
         self._rng = rng or random.Random()
         self._population: list[Agent[Any, Any]] | None = None
         self._generation = 0
         self._root = self._discover_root()
+        # Tracks (individual→op_name) via id() of each agent in the
+        # current population so attribution survives across generations
+        # (survivors keep their creation op).
+        self._origin_ops: dict[int, str] = {}
+        # Scores evaluated during the most recent step(), used to compute
+        # the "improved vs previous generation median" flag on the next
+        # emission. Seeded from a one-off root eval on the first step.
+        self._last_scores: list[float] | None = None
 
     def _discover_root(self) -> Agent[Any, Any]:
         for group in self.param_groups:
@@ -85,7 +103,7 @@ class EvoGradient(Optimizer):
 
     async def _attempt_mutate_and_build(
         self, parent: Agent[Any, Any]
-    ) -> Agent[Any, Any] | None:
+    ) -> tuple[Agent[Any, Any], str] | None:
         candidate = parent.clone()
         op = copy.deepcopy(self._rng.choice(self._mutations))
         op.apply(candidate)
@@ -94,14 +112,16 @@ class EvoGradient(Optimizer):
         except BuildError:
             op.undo(candidate)
             return None
-        return candidate
+        return candidate, op.name
 
     async def _fresh_individual(
         self, parent: Agent[Any, Any]
     ) -> Agent[Any, Any]:
         for _ in range(self._max_mutation_retries):
-            candidate = await self._attempt_mutate_and_build(parent)
-            if candidate is not None:
+            outcome = await self._attempt_mutate_and_build(parent)
+            if outcome is not None:
+                candidate, op_name = outcome
+                self._origin_ops[id(candidate)] = op_name
                 return candidate
         warnings.warn(
             "EvoGradient: all mutation attempts failed to build after "
@@ -111,10 +131,20 @@ class EvoGradient(Optimizer):
         )
         fallback = parent.clone()
         await fallback.abuild()
+        self._origin_ops[id(fallback)] = _IDENTITY_OP
         return fallback
 
     async def step(self) -> None:
         if self._population is None:
+            # Seed-score baseline drives the first-generation `improved`
+            # comparisons: every initial individual is judged against
+            # how the unmutated root scored on the same dataset.
+            seed_report = await evaluate(
+                self._root, self._dataset, [self._metric]
+            )
+            self._last_scores = [
+                float(seed_report.summary[self._metric.name])
+            ]
             self._population = list(
                 await asyncio.gather(
                     *(
@@ -130,6 +160,9 @@ class EvoGradient(Optimizer):
                 for a in self._population
             )
         )
+        scores = [
+            float(r.summary[self._metric.name]) for r in reports
+        ]
         ranked = sorted(
             enumerate(reports),
             key=lambda ir: -ir[1].summary[self._metric.name],
@@ -137,6 +170,12 @@ class EvoGradient(Optimizer):
         half = max(1, self._population_size // 2)
         survivor_indices = [i for i, _ in ranked[:half]]
         survivors = [self._population[i] for i in survivor_indices]
+
+        await self._emit_generation_event(
+            population=self._population,
+            scores=scores,
+            survivor_indices=survivor_indices,
+        )
 
         refill_parents = [
             survivors[i % len(survivors)]
@@ -147,11 +186,61 @@ class EvoGradient(Optimizer):
                 *(self._fresh_individual(p) for p in refill_parents)
             )
         )
-        self._population = survivors + refills
+        new_population = survivors + refills
+        # Drop provenance for individuals that did not survive into the
+        # next generation so the dict does not leak across many steps.
+        kept_ids = {id(a) for a in new_population}
+        self._origin_ops = {
+            k: v for k, v in self._origin_ops.items() if k in kept_ids
+        }
+        self._population = new_population
 
         best = survivors[0]
         await self._write_back(best)
+        self._last_scores = scores
         self._generation += 1
+
+    async def _emit_generation_event(
+        self,
+        *,
+        population: list[Agent[Any, Any]],
+        scores: list[float],
+        survivor_indices: list[int],
+    ) -> None:
+        baseline = self._last_scores or []
+        median = statistics.median(baseline) if baseline else float("-inf")
+        ops = [
+            self._origin_ops.get(id(a), _IDENTITY_OP) for a in population
+        ]
+        improved = [s > median for s in scores]
+        mutations: list[dict[str, Any]] = [
+            {
+                "individual_id": i,
+                "op": ops[i],
+                "improved": bool(improved[i]),
+            }
+            for i in range(len(population))
+        ]
+        attempt_counts: dict[str, int] = {}
+        success_counts: dict[str, int] = {}
+        for i, op_name in enumerate(ops):
+            attempt_counts[op_name] = attempt_counts.get(op_name, 0) + 1
+            if improved[i]:
+                success_counts[op_name] = success_counts.get(op_name, 0) + 1
+        payload: dict[str, Any] = {
+            "gen_index": self._generation,
+            "population_scores": scores,
+            "survivor_indices": list(survivor_indices),
+            "mutations": mutations[: self._max_mutation_entries],
+            "op_attempt_counts": attempt_counts,
+            "op_success_counts": success_counts,
+        }
+        with _enter_algorithm_run():
+            await emit_algorithm_event(
+                "generation",
+                algorithm_path=type(self).__name__,
+                payload=payload,
+            )
 
     async def _write_back(self, best: Agent[Any, Any]) -> None:
         """Copy `best`'s declared state onto the root and refresh tracked params."""

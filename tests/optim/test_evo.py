@@ -10,8 +10,10 @@ from pydantic import BaseModel
 from operad import Agent
 from operad.metrics.base import MetricBase
 from operad.optim import EvoGradient
+from operad.runtime.events import AlgorithmEvent
+from operad.runtime.observers import registry as obs_registry
 from operad.utils.errors import BuildError
-from operad.utils.ops import AppendRule
+from operad.utils.ops import AppendRule, TweakRole
 
 
 pytestmark = pytest.mark.asyncio
@@ -148,6 +150,109 @@ async def test_evo_gradient_rollback_on_build_failure(cfg) -> None:
     # Every mutation attempts to append "POISON" — rollback + fallback
     # guarantees no surviving agent (and therefore the root) carries it.
     assert "POISON" not in seed.rules
+
+
+class _AlgoCollector:
+    def __init__(self) -> None:
+        self.events: list[AlgorithmEvent] = []
+
+    async def on_event(self, event: object) -> None:
+        if isinstance(event, AlgorithmEvent):
+            self.events.append(event)
+
+
+@pytest.fixture
+def _algo_collector():
+    col = _AlgoCollector()
+    obs_registry.register(col)
+    try:
+        yield col
+    finally:
+        obs_registry.unregister(col)
+
+
+async def test_generation_event_carries_mutation_attribution(
+    cfg, _algo_collector: _AlgoCollector
+) -> None:
+    seed = _RuleCountLeaf(config=cfg)
+    seed.rules = []
+    await seed.abuild()
+
+    dataset = [(Q(text="x"), R(value=3))]
+    optimizer = EvoGradient(
+        list(seed.parameters()),
+        mutations=[
+            AppendRule(path="", rule="helpful"),
+            TweakRole(path="", role="friendly"),
+        ],
+        metric=_RuleCountMetric(target=3),
+        dataset=dataset,
+        population_size=4,
+        rng=random.Random(0),
+    )
+
+    await optimizer.step()
+
+    gen_events = [e for e in _algo_collector.events if e.kind == "generation"]
+    assert len(gen_events) == 1
+    payload = gen_events[0].payload
+    assert payload["gen_index"] == 0
+    assert len(payload["population_scores"]) == 4
+    assert len(payload["survivor_indices"]) == 2  # top half of size-4 pop
+    muts = payload["mutations"]
+    assert len(muts) == 4
+    valid_ops = {"append_rule", "tweak_role", "identity"}
+    assert all(m["op"] in valid_ops for m in muts)
+    assert sum(payload["op_attempt_counts"].values()) == 4
+    for op, successes in payload["op_success_counts"].items():
+        assert successes <= payload["op_attempt_counts"][op]
+
+
+async def test_generation_events_across_multiple_steps(
+    cfg, _algo_collector: _AlgoCollector
+) -> None:
+    seed = _RuleCountLeaf(config=cfg)
+    seed.rules = []
+    await seed.abuild()
+
+    optimizer = EvoGradient(
+        list(seed.parameters()),
+        mutations=[AppendRule(path="", rule="helpful")],
+        metric=_RuleCountMetric(target=3),
+        dataset=[(Q(), R(value=3))],
+        population_size=4,
+        rng=random.Random(1),
+    )
+    for _ in range(3):
+        await optimizer.step()
+
+    gens = [e for e in _algo_collector.events if e.kind == "generation"]
+    assert [g.payload["gen_index"] for g in gens] == [0, 1, 2]
+    # Every generation emits one event with a populated mutations list.
+    for g in gens:
+        assert len(g.payload["mutations"]) == 4
+
+
+async def test_mutation_entry_soft_cap(cfg, _algo_collector: _AlgoCollector) -> None:
+    seed = _RuleCountLeaf(config=cfg)
+    seed.rules = []
+    await seed.abuild()
+
+    optimizer = EvoGradient(
+        list(seed.parameters()),
+        mutations=[AppendRule(path="", rule="helpful")],
+        metric=_RuleCountMetric(target=3),
+        dataset=[(Q(), R(value=3))],
+        population_size=4,
+        rng=random.Random(2),
+        max_mutation_entries=2,
+    )
+    await optimizer.step()
+
+    gen = [e for e in _algo_collector.events if e.kind == "generation"][0]
+    assert len(gen.payload["mutations"]) == 2
+    # Aggregate counts still reflect the full population (4), not the cap.
+    assert sum(gen.payload["op_attempt_counts"].values()) == 4
 
 
 async def test_evo_gradient_rollback_preserves_population_size(cfg) -> None:

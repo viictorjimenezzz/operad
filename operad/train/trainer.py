@@ -17,20 +17,27 @@ brief; `Momentum` optimizers fold the merged grad into their summary.
 
 from __future__ import annotations
 
+import json
 import time
-from typing import Any, Generic
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Generic
 
 from ..benchmark.dataset import Dataset
 from ..benchmark.evaluate import EvalReport, evaluate
 from ..core.agent import Agent, In, Out
-from ..core.output import OperadOutput
+from ..core.freeze import freeze_agent, thaw_pair
+from ..core.output import OPERAD_VERSION_HASH, PYTHON_VERSION_HASH, OperadOutput
 from ..data.loader import Batch, DataLoader
 from ..metrics.base import Metric
 from ..optim.backward import backward
+from ..optim.context import no_grad
 from ..optim.loss import Loss
+from ..optim.lr_scheduler import LRScheduler
 from ..optim.optimizer import Optimizer
 from ..optim.parameter import Parameter, TextualGradient
 from ..optim.tape import tape
+from ..runtime.events import set_current_epoch
 from ..utils.errors import BuildError
 from .callbacks import Callback, EarlyStopping, GradClip
 from .report import EpochReport, TrainingReport
@@ -116,6 +123,7 @@ class Trainer(Generic[In, Out]):
             self._callbacks.append(GradClip(max_severity=max_grad_norm))
         self._should_stop: bool = False
         self._last_batch_tape_entries: int = 0
+        self._last_report: TrainingReport | None = None
 
         # Optional wave-4 optimizer hook: OPRO/APE need an evaluator closure.
         if getattr(optimizer, "needs_evaluator", False):
@@ -157,37 +165,46 @@ class Trainer(Generic[In, Out]):
             for cb in cbs:
                 await cb.on_epoch_start(self, epoch)
 
-            t0 = time.monotonic()
-            epoch_loss_sum = 0.0
-            epoch_sample_count = 0
+            set_current_epoch(epoch)
+            try:
+                sampler = getattr(loader, "_sampler", None)
+                if sampler is not None and hasattr(sampler, "refresh"):
+                    async with no_grad():
+                        await sampler.refresh()
 
-            async for batch in loader:
-                step = batch_counter
-                for cb in cbs:
-                    await cb.on_batch_start(self, batch, step)
+                t0 = time.monotonic()
+                epoch_loss_sum = 0.0
+                epoch_sample_count = 0
 
-                batch_loss, n = await self._run_batch(batch)
-                epoch_loss_sum += batch_loss * n
-                epoch_sample_count += n
+                async for batch in loader:
+                    step = batch_counter
+                    for cb in cbs:
+                        await cb.on_batch_start(self, batch, step)
 
-                for cb in cbs:
-                    await cb.on_batch_end(self, batch, step, batch_loss)
+                    batch_loss, n = await self._run_batch(batch)
+                    epoch_loss_sum += batch_loss * n
+                    epoch_sample_count += n
 
-                batch_counter += 1
-                if batch_counter % self.accumulation_steps == 0:
+                    for cb in cbs:
+                        await cb.on_batch_end(self, batch, step, batch_loss)
+
+                    batch_counter += 1
+                    if batch_counter % self.accumulation_steps == 0:
+                        await self.optimizer.step()
+                        self.optimizer.zero_grad()
+
+                # Residual flush: some accumulated grads may still be on params.
+                if self._has_pending_grad():
                     await self.optimizer.step()
                     self.optimizer.zero_grad()
 
-            # Residual flush: some accumulated grads may still be on params.
-            if self._has_pending_grad():
-                await self.optimizer.step()
-                self.optimizer.zero_grad()
-
-            val_report: EvalReport | None = None
-            if val_ds is not None:
-                val_report = await self.evaluate(val_ds)
-                for cb in cbs:
-                    await cb.on_validation_end(self, val_report)
+                val_report: EvalReport | None = None
+                if val_ds is not None:
+                    val_report = await self.evaluate(val_ds)
+                    for cb in cbs:
+                        await cb.on_validation_end(self, val_report)
+            finally:
+                set_current_epoch(None)
 
             if self.scheduler is not None:
                 self.scheduler.step()
@@ -232,7 +249,87 @@ class Trainer(Generic[In, Out]):
         for cb in cbs:
             await cb.on_fit_end(self, training)
 
+        self._last_report = training
         return training
+
+    def save(self, path: str | Path) -> None:
+        """Persist agent + optimizer + scheduler + report to a single JSON file.
+
+        Reuses `freeze_agent(optimizer=)` for the agent/optimizer bundle,
+        then merges in the scheduler state, the last `TrainingReport`
+        (if any), and a small metadata block (operad/python version
+        hashes, UTC ISO timestamp). API keys are scrubbed by
+        `freeze_agent`'s existing redaction path.
+        """
+        out = Path(path)
+        freeze_agent(self.agent, out, optimizer=self.optimizer)
+        data = json.loads(out.read_text(encoding="utf-8"))
+        data["scheduler_state"] = (
+            self.scheduler.state_dict()
+            if isinstance(self.scheduler, LRScheduler)
+            else None
+        )
+        data["report"] = (
+            self._last_report.model_dump(mode="json")
+            if self._last_report is not None
+            else None
+        )
+        data["metadata"] = {
+            "operad_version": OPERAD_VERSION_HASH,
+            "python_version": PYTHON_VERSION_HASH,
+            "saved_at_iso": datetime.now(timezone.utc).isoformat(),
+        }
+        out.write_text(
+            json.dumps(data, sort_keys=True, indent=2), encoding="utf-8"
+        )
+
+    @classmethod
+    def load(
+        cls,
+        path: str | Path,
+        *,
+        loss_fn: Loss,
+        optimizer_factory: Callable[[Agent[Any, Any]], Optimizer],
+        agent: Agent[Any, Any] | None = None,
+        scheduler_factory: Callable[[Optimizer], LRScheduler] | None = None,
+        callbacks: list[Callback] | None = None,
+    ) -> "Trainer[Any, Any]":
+        """Restore a Trainer from a `save()` bundle.
+
+        `loss_fn` and `optimizer_factory` are required: losses and
+        optimizers typically hold references to rewriter / critic agents
+        and closures, which cannot be safely round-tripped through JSON.
+        When `agent` is provided, it is used verbatim (overlay mode) and
+        the frozen agent bundle is discarded; otherwise the agent is
+        thawed from `path`.
+        """
+        bundle_path = Path(path)
+        data = json.loads(bundle_path.read_text(encoding="utf-8"))
+        loaded_agent, opt_state = thaw_pair(bundle_path)
+        actual_agent = agent if agent is not None else loaded_agent
+
+        optimizer = optimizer_factory(actual_agent)
+        if opt_state is not None:
+            optimizer.load_state_dict(opt_state)
+
+        scheduler: LRScheduler | None = None
+        if scheduler_factory is not None:
+            scheduler = scheduler_factory(optimizer)
+            sd = data.get("scheduler_state")
+            if sd is not None:
+                scheduler.load_state_dict(sd)
+
+        trainer = cls(
+            actual_agent,
+            optimizer,
+            loss_fn,
+            scheduler=scheduler,
+            callbacks=callbacks,
+        )
+        report_data = data.get("report")
+        if report_data is not None:
+            trainer._last_report = TrainingReport.model_validate(report_data)
+        return trainer
 
     async def evaluate(self, ds: Dataset[In, Out]) -> EvalReport:
         metrics: list[Metric] = [self.loss_fn, *self.metrics]  # type: ignore[list-item]

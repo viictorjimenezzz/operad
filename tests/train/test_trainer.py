@@ -21,6 +21,7 @@ from operad.data.loader import DataLoader
 from operad.metrics.base import MetricBase
 from operad.optim.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import Parameter, TextualGradient
+from operad.runtime.events import AlgorithmEvent, get_current_epoch
 from operad.runtime.observers import registry as obs_registry
 from operad.train import (
     BestCheckpoint,
@@ -228,6 +229,33 @@ async def test_training_report_tracks_hash_content(cfg: Any) -> None:
     assert len({*hashes}) > 1  # mutated across epochs
     # Each epoch_end hash equals agent.hash_content after that epoch.
     assert hashes[-1] == leaf.hash_content
+
+
+class _EpochEventCollector:
+    def __init__(self) -> None:
+        self.batch_starts: list[int | None] = []
+
+    async def on_event(self, event: object) -> None:
+        if isinstance(event, AlgorithmEvent) and event.kind == "batch_start":
+            self.batch_starts.append(event.payload.get("epoch"))
+
+
+async def test_fit_propagates_epoch_via_context_var(cfg: Any) -> None:
+    leaf = await _built_leaf(cfg)
+    loss = StubLoss()
+    opt = StubOptimizer(list(leaf.parameters()))
+    trainer = Trainer(leaf, opt, loss)
+
+    col = _EpochEventCollector()
+    obs_registry.register(col)
+    try:
+        await trainer.fit(_loader(_dataset(n=2)), epochs=2)
+    finally:
+        obs_registry.unregister(col)
+
+    assert set(col.batch_starts) == {0, 1}
+    # After fit, the ContextVar resets to None.
+    assert get_current_epoch() is None
 
 
 async def test_validation_runs_when_val_ds_supplied(cfg: Any) -> None:

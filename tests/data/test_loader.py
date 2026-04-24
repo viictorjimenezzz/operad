@@ -8,6 +8,8 @@ from pydantic import BaseModel
 from operad.benchmark.dataset import Dataset
 from operad.benchmark.entry import Entry
 from operad.data import Batch, DataLoader
+from operad.runtime.events import AlgorithmEvent, set_current_epoch
+from operad.runtime.observers import registry as obs_registry
 
 
 class _In(BaseModel):
@@ -111,6 +113,91 @@ def test_sampler_and_shuffle_conflict_raises() -> None:
     ds = _make_dataset(4)
     with pytest.raises(ValueError):
         DataLoader(ds, batch_size=2, shuffle=True, sampler=SequentialSampler(4))
+
+
+class _EventCollector:
+    def __init__(self) -> None:
+        self.events: list[AlgorithmEvent] = []
+
+    async def on_event(self, event: object) -> None:
+        if isinstance(event, AlgorithmEvent):
+            self.events.append(event)
+
+
+@pytest.fixture
+def _collector():
+    col = _EventCollector()
+    obs_registry.register(col)
+    try:
+        yield col
+    finally:
+        obs_registry.unregister(col)
+        set_current_epoch(None)
+
+
+async def test_batch_events_fire_in_order(_collector: _EventCollector) -> None:
+    ds = _make_dataset(8)
+    loader = DataLoader(ds, batch_size=2)
+    batches = await _collect(loader)
+    kinds = [e.kind for e in _collector.events]
+    assert len(batches) == 4
+    # Expect alternating start/end pairs for every batch.
+    assert kinds == [
+        "batch_start", "batch_end",
+        "batch_start", "batch_end",
+        "batch_start", "batch_end",
+        "batch_start", "batch_end",
+    ]
+
+
+async def test_batch_start_hash_batch_matches(_collector: _EventCollector) -> None:
+    ds = _make_dataset(6)
+    loader = DataLoader(ds, batch_size=2)
+    batches = await _collect(loader)
+    starts = [e for e in _collector.events if e.kind == "batch_start"]
+    for start, batch in zip(starts, batches):
+        assert start.payload["hash_batch"] == batch.hash_batch
+        assert start.payload["batch_index"] == batches.index(batch)
+        assert start.payload["batch_size"] == len(batch.inputs)
+        assert start.payload["epoch"] is None
+
+
+async def test_batch_end_duration_nonneg(_collector: _EventCollector) -> None:
+    ds = _make_dataset(4)
+    loader = DataLoader(ds, batch_size=2)
+    await _collect(loader)
+    ends = [e for e in _collector.events if e.kind == "batch_end"]
+    assert len(ends) == 2
+    for e in ends:
+        assert 0.0 <= e.payload["duration_ms"] < 10_000.0
+
+
+async def test_batch_events_include_epoch_when_set(
+    _collector: _EventCollector,
+) -> None:
+    ds = _make_dataset(4)
+    loader = DataLoader(ds, batch_size=2)
+    set_current_epoch(7)
+    try:
+        await _collect(loader)
+    finally:
+        set_current_epoch(None)
+    epochs = {e.payload["epoch"] for e in _collector.events}
+    assert epochs == {7}
+
+
+async def test_custom_collate_has_empty_hash_batch(
+    _collector: _EventCollector,
+) -> None:
+    ds = _make_dataset(4)
+
+    def collate(entries: list[Entry[_In, _Out]]) -> list[int]:
+        return [e.input.i for e in entries]
+
+    loader = DataLoader(ds, batch_size=2, collate_fn=collate)
+    _ = [r async for r in loader]
+    starts = [e for e in _collector.events if e.kind == "batch_start"]
+    assert all(e.payload["hash_batch"] == "" for e in starts)
 
 
 async def test_metric_override_preserved() -> None:
