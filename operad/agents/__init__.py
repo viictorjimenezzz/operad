@@ -48,6 +48,7 @@ from .memory import (
     UserModel,
     UserModelExtractor,
 )
+from . import safeguard  # noqa: F401
 from .parallel import Parallel
 from .pipeline import Pipeline
 from .reasoning import (

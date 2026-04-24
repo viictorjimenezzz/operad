@@ -29,7 +29,7 @@ TURNS: list[str] = [
 
 async def _main() -> None:
     cfg = local_config(temperature=0.3, max_tokens=512)
-    set_limit(backend="llamacpp", host=cfg.host, limit=4)
+    set_limit(backend="llamacpp", host=cfg.host, concurrency=4)
 
     talker = Talker(config=cfg)
     await talker.abuild()

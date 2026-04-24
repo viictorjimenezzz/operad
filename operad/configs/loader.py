@@ -85,4 +85,4 @@ def instantiate(rc: RunConfig) -> Agent[Any, Any]:
 def apply_runtime(rc: RunConfig) -> None:
     """Configure per-endpoint concurrency slots from the YAML `runtime` block."""
     for s in rc.runtime.slots:
-        set_limit(backend=s.backend, host=s.host, limit=s.limit)
+        set_limit(backend=s.backend, host=s.host, concurrency=s.limit)

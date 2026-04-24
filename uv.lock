@@ -1122,6 +1122,10 @@ huggingface = [
 observers = [
     { name = "rich" },
 ]
+otel = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-sdk" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -1133,6 +1137,8 @@ dev = [
 requires-dist = [
     { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=0.3" },
     { name = "openai", specifier = ">=2.30.0" },
+    { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.24" },
+    { name = "opentelemetry-sdk", marker = "extra == 'otel'", specifier = ">=1.24" },
     { name = "pydantic", specifier = ">=2.8" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", marker = "extra == 'observers'", specifier = ">=13.0" },
@@ -1140,7 +1146,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'huggingface'", specifier = ">=2.2" },
     { name = "transformers", marker = "extra == 'huggingface'", specifier = ">=4.40" },
 ]
-provides-extras = ["observers", "gemini", "huggingface"]
+provides-extras = ["observers", "gemini", "huggingface", "otel"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -36,13 +36,84 @@ Mode = Literal["record", "replay"]
 
 
 class CassetteMiss(KeyError):
-    """Raised in replay mode when the requested key is not in the cassette."""
+    """Raised in replay mode when the requested key is not in the cassette.
+
+    Carries structured per-segment match counts so callers can tell which
+    hash segment drifted (prompt, input, or config) and act accordingly.
+    """
+
+    def __init__(
+        self,
+        key: str,
+        *,
+        hash_model: str,
+        hash_prompt: str,
+        hash_input: str,
+        matches: dict[str, int],
+        path: Path,
+    ) -> None:
+        self.key = key
+        self.hash_model = hash_model
+        self.hash_prompt = hash_prompt
+        self.hash_input = hash_input
+        self.matches = matches
+        self.path = path
+        super().__init__(str(self))
+
+    def _cause(self) -> str:
+        m = self.matches
+        drifted = [k for k, v in m.items() if v == 0]
+        if m["hash_model"] == 0 and m["hash_prompt"] == 0 and m["hash_input"] == 0:
+            return "Cassette is empty; record first"
+        if len(drifted) >= 2:
+            return "multiple segments drifted; review each"
+        if drifted == ["hash_prompt"]:
+            return "prompt drift"
+        if drifted == ["hash_input"]:
+            return "input drift"
+        if drifted == ["hash_model"]:
+            return "config drift"
+        return "unknown"
+
+    def __str__(self) -> str:
+        def _mark(name: str, h: str) -> str:
+            n = self.matches[name]
+            if n > 0:
+                suffix = f"(✓ {n} {'entry matches' if n == 1 else 'entries match'})"
+            else:
+                suffix = "(✗ not in cassette)"
+            return f"  {name:<11} = {h}   {suffix}"
+
+        lines = [
+            f"CassetteMiss: no cassette entry for key {self.key}",
+            _mark("hash_model", self.hash_model),
+            _mark("hash_prompt", self.hash_prompt),
+            _mark("hash_input", self.hash_input),
+            "",
+            f"Most likely: {self._cause()}. If intentional, re-record with",
+            f"  OPERAD_CASSETTE=record uv run pytest {self.path} -v",
+            f"(at {self.path})",
+        ]
+        return "\n".join(lines)
 
 
 def _compose_key(h_model: str, h_prompt: str, h_input: str) -> str:
     return hashlib.sha256(
         f"{h_model}|{h_prompt}|{h_input}".encode("utf-8")
     ).hexdigest()[:16]
+
+
+def _miss_diff(
+    entries: dict[str, dict[str, Any]],
+    *,
+    h_m: str,
+    h_p: str,
+    h_i: str,
+) -> dict[str, int]:
+    by_model = sum(1 for e in entries.values() if e.get("hash_model") == h_m)
+    by_prompt = sum(1 for e in entries.values() if e.get("hash_prompt") == h_p)
+    by_input = sum(1 for e in entries.values() if e.get("hash_input") == h_i)
+    return {"hash_model": by_model, "hash_prompt": by_prompt, "hash_input": by_input}
 
 
 def _load(path: Path) -> dict[str, dict[str, Any]]:
@@ -96,9 +167,14 @@ def cassette_context(path: Path, mode: Mode = "replay") -> Iterator[None]:
             return self.output.model_validate_json(hit["response_json"])  # type: ignore[union-attr,return-value]
 
         if mode == "replay":
+            matches = _miss_diff(entries, h_m=h_m, h_p=h_p, h_i=h_i)
             raise CassetteMiss(
-                f"missing cassette key for {key} "
-                f"(model={h_m}, prompt={h_p}, input={h_i}) at {path}"
+                key,
+                hash_model=h_m,
+                hash_prompt=h_p,
+                hash_input=h_i,
+                matches=matches,
+                path=path,
             )
 
         # record mode

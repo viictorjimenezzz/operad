@@ -75,8 +75,8 @@ async def _main() -> None:
         temperature=0.3,
     )
 
-    set_limit(backend="llamacpp", host=local.host, limit=8)
-    set_limit(backend="openai", limit=2)
+    set_limit(backend="llamacpp", host=local.host, concurrency=8)
+    set_limit(backend="openai", concurrency=2)
 
     root = Parallel(
         {
