@@ -6,6 +6,7 @@ from .aggregated import AggregatedMetric, Reducer
 from .dataset import Dataset
 from .entry import Entry
 from .evaluate import EvalReport, evaluate
+from .regression import RegressionReport, regression_check
 from .sensitivity import SensitivityCell, SensitivityReport, sensitivity
 
 __all__ = [
@@ -14,8 +15,10 @@ __all__ = [
     "Entry",
     "EvalReport",
     "Reducer",
+    "RegressionReport",
     "SensitivityCell",
     "SensitivityReport",
     "evaluate",
+    "regression_check",
     "sensitivity",
 ]
