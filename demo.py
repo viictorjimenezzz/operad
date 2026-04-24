@@ -136,8 +136,8 @@ async def main(offline: bool = False) -> int:
                 border_style="cyan",
             ))
 
-    # Stage 5 — mutation + diff (built on a fresh unbuilt copy, since
-    # `diff` reads declared state and `build()` rewrites children).
+    # Stage 5 — mutation + diff. Fresh unbuilt copies keep the panel
+    # focused on declared state; `.diff()` works on built agents too.
     base = _build_agent()
     mutated = _build_agent()
     AppendRule(path="", rule="Be terse.").apply(mutated)

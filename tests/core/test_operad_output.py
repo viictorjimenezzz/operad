@@ -64,6 +64,8 @@ async def test_envelope_is_populated_by_invoke(cfg) -> None:
     assert out.response.value == 3
     assert out.run_id
     assert out.agent_path == "FakeLeaf"
+    assert out.backend == cfg.backend
+    assert out.model == cfg.model
     assert out.hash_operad_version
     assert out.hash_python_version
     assert out.hash_graph

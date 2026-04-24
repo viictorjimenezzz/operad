@@ -35,6 +35,27 @@ def test_cost_estimate_sums_tokens_and_defaults_cost_zero() -> None:
     assert report.cost_usd == 0.0  # unknown backend:model → free
 
 
+def test_cost_estimate_uses_envelope_backend_and_model() -> None:
+    env = OperadOutput[B].model_construct(
+        response=B(value=1),
+        run_id="r",
+        agent_path="X",
+        backend="openai",
+        model="gpt-4o-mini",
+        prompt_tokens=1000,
+        completion_tokens=500,
+    )
+    t = Trace(
+        run_id="r",
+        steps=[TraceStep(agent_path="X", output=env)],
+        root_output={"value": 1},
+    )
+    report = cost_estimate(t)
+    # openai:gpt-4o-mini → 0.00015/1k prompt + 0.0006/1k completion
+    expected = (1000 * 0.00015 + 500 * 0.0006) / 1000.0
+    assert report.cost_usd == pytest.approx(expected)
+
+
 def test_cost_estimate_honours_custom_pricing() -> None:
     t = _trace_with_tokens(prompt=1000, completion=500)
     pricing = {"unknown:unknown": Pricing(prompt_per_1k=0.01, completion_per_1k=0.02)}
