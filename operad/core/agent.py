@@ -83,6 +83,23 @@ def _extract_text(result: Any) -> str:
     )
 
 
+def _extract_tokens(result: Any) -> int:
+    """Best-effort total tokens from a strands result; 0 if unknown.
+
+    The strands result shape isn't contracted in-repo; feed whatever
+    integer fields it exposes into the slot's TPM settle without
+    guessing a schema we don't own.
+    """
+    if result is None:
+        return 0
+    try:
+        p = int(getattr(result, "prompt_tokens", 0) or 0)
+        c = int(getattr(result, "completion_tokens", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+    return p + c
+
+
 class Agent(strands.Agent, Generic[In, Out]):
     """Typed, composable agent.
 
@@ -462,7 +479,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         structuredio = self.config.structuredio  # type: ignore[union-attr]
         user_msg = self.format_user_message(x)
 
-        async with _acquire_slot(self.config):  # type: ignore[arg-type]
+        async with _acquire_slot(self.config) as slot:  # type: ignore[arg-type]
             async def _call() -> Any:
                 if structuredio:
                     return await super(Agent, self).invoke_async(  # type: ignore[misc]
@@ -471,13 +488,17 @@ class Agent(strands.Agent, Generic[In, Out]):
                     )
                 return await super(Agent, self).invoke_async(user_msg)  # type: ignore[misc]
 
-            result = await _with_retry(
-                _call,
-                max_retries=self.config.max_retries,
-                backoff_base=self.config.backoff_base,
-                timeout=self.config.timeout,
-                on_attempt=_record,
-            )
+            result: Any = None
+            try:
+                result = await _with_retry(
+                    _call,
+                    max_retries=self.config.max_retries,
+                    backoff_base=self.config.backoff_base,
+                    timeout=self.config.timeout,
+                    on_attempt=_record,
+                )
+            finally:
+                slot.settle(tokens=_extract_tokens(result))
         if structuredio:
             return result.structured_output  # type: ignore[return-value,no-any-return]
         text = _extract_text(result)
@@ -520,23 +541,28 @@ class Agent(strands.Agent, Generic[In, Out]):
         accumulated: list[str] = []
         idx = 0
         structured: Any = None
-        async with _acquire_slot(self.config):  # type: ignore[arg-type]
-            async for event in super().stream_async(  # type: ignore[misc]
-                self.format_user_message(x),
-                structured_output_model=self.output,
-            ):
-                if not isinstance(event, dict):
-                    continue
-                piece = event.get("data")
-                if isinstance(piece, str) and piece:
-                    accumulated.append(piece)
-                    await on_chunk(idx, piece)
-                    idx += 1
-                result = event.get("result")
-                if result is not None:
-                    maybe = getattr(result, "structured_output", None)
-                    if maybe is not None:
-                        structured = maybe
+        final_result: Any = None
+        async with _acquire_slot(self.config) as slot:  # type: ignore[arg-type]
+            try:
+                async for event in super().stream_async(  # type: ignore[misc]
+                    self.format_user_message(x),
+                    structured_output_model=self.output,
+                ):
+                    if not isinstance(event, dict):
+                        continue
+                    piece = event.get("data")
+                    if isinstance(piece, str) and piece:
+                        accumulated.append(piece)
+                        await on_chunk(idx, piece)
+                        idx += 1
+                    result = event.get("result")
+                    if result is not None:
+                        final_result = result
+                        maybe = getattr(result, "structured_output", None)
+                        if maybe is not None:
+                            structured = maybe
+            finally:
+                slot.settle(tokens=_extract_tokens(final_result))
         if structured is not None:
             return structured  # type: ignore[no-any-return]
         text = "".join(accumulated)

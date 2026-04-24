@@ -39,7 +39,7 @@ async def _fake_read(path: str) -> str:
 
 async def _main() -> None:
     cfg = local_config(temperature=0.2, max_tokens=1024)
-    set_limit(backend="llamacpp", host=cfg.host, limit=2)
+    set_limit(backend="llamacpp", host=cfg.host, concurrency=2)
 
     reviewer = PRReviewer(config=cfg, read_file=_fake_read)
     await reviewer.abuild()
