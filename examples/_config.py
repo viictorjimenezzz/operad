@@ -26,7 +26,7 @@ def local_config(**overrides) -> Configuration:
     ``backend``, ``model``, ``host``, ``api_key``, ``batch``.
     """
     base: dict = dict(
-        backend="llamacpp",
+        backend=os.environ.get("OPERAD_BACKEND", "llamacpp"),
         host=os.environ.get("OPERAD_LLAMACPP_HOST", DEFAULT_HOST),
         model=os.environ.get("OPERAD_LLAMACPP_MODEL", DEFAULT_MODEL),
     )

@@ -38,7 +38,7 @@ class Answer(BaseModel):
 
 
 async def main(offline: bool = False) -> None:
-    cfg = local_config(sampling=Sampling(temperature=0.9, max_tokens=256))
+    cfg = local_config(sampling=Sampling(temperature=0.4, max_tokens=2048))
     print(f"[{_SCRIPT}] backend={cfg.backend} host={cfg.host} model={cfg.model}")
     if offline:
         print(f"[{_SCRIPT}] --offline not supported for this example (needs a real model); exiting 0 as no-op.")
@@ -55,7 +55,7 @@ async def main(offline: bool = False) -> None:
     await generator.abuild()
     await judge.abuild()
 
-    bon = BestOfN(generator=generator, judge=judge, n=3)
+    bon = BestOfN(generator=generator, judge=judge, n=2)
     winner = await bon.run(Question(text="What is the tallest mountain on Earth?"))
     print(winner.model_dump_json(indent=2))
 
