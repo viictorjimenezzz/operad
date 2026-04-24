@@ -12,6 +12,7 @@ rewrite-agents (slot 2-3).
 
 from __future__ import annotations
 
+from inspect import cleandoc
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -126,11 +127,11 @@ class BackpropAgent(Agent[PropagateInput, PropagateOutput]):
     output = PropagateOutput
 
     role = "You are a rigorous error-attribution analyst for a chain of agents."
-    task = (
-        "Given one agent's forward record and the critique from the downstream "
-        "layer, produce the critique on THIS agent's output — what this node "
-        "should have emitted differently."
-    )
+    task = cleandoc("""
+        Produce the critique on THIS agent's output — what this node
+        should have emitted differently — given its forward record and
+        the downstream critique.
+    """)
     rules = (
         "Do not fabricate facts about the node's input or output — work only from the strings provided.",
         "If the output is already correct with respect to the downstream gradient, return severity=0.0 and an empty message.",
@@ -161,10 +162,10 @@ class ParameterGradAgent(Agent[ParameterGradInput, ParameterGradOutput]):
     output = ParameterGradOutput
 
     role = "You are a parameter-attribution analyst."
-    task = (
-        "Given the critique on a node's output, identify how THIS specific "
-        "parameter should change to close the gap."
-    )
+    task = cleandoc("""
+        Identify how THIS specific parameter should change to close
+        the gap indicated by the critique on the node's output.
+    """)
     rules = (
         "Attribute only to this parameter; other parameters are critiqued in separate calls.",
         "If this parameter is not implicated by the output critique, return severity=0.0 with empty message.",
@@ -203,51 +204,54 @@ class ParameterGradAgent(Agent[ParameterGradInput, ParameterGradOutput]):
 class TextParameterGrad(ParameterGradAgent):
     """Gradient agent for free-text parameters (`role`, `task`, single rule)."""
 
-    task = (
-        "Critique a free-text parameter (role, task, or single rule). "
-        "Describe what the text should convey to produce a better output. "
-        "Keep the critique concise, unambiguous, and model-agnostic."
-    )
+    task = cleandoc("""
+        Critique a free-text parameter (role, task, or single rule).
+        Describe what the text should convey to produce a better
+        output. Keep the critique concise, unambiguous, and
+        model-agnostic.
+    """)
 
 
 class RuleListParameterGrad(ParameterGradAgent):
     """Gradient agent for the `rules` list."""
 
-    task = (
-        "Critique a list of rules that constrain an agent. Identify which "
-        "rules to add, remove, or rewrite. Prefer orthogonal rules and a "
-        "short list over redundant or overlapping rules."
-    )
+    task = cleandoc("""
+        Critique a list of rules that constrain an agent. Identify
+        which rules to add, remove, or rewrite. Prefer orthogonal
+        rules and a short list over redundant or overlapping rules.
+    """)
 
 
 class ExampleListParameterGrad(ParameterGradAgent):
     """Gradient agent for the `examples` list (or a single example)."""
 
-    task = (
-        "Critique a list of (input, output) examples that prime an agent. "
-        "Identify examples to add, remove, or edit so the set better covers "
-        "the observed failure modes without contradicting the types."
-    )
+    task = cleandoc("""
+        Critique a list of (input, output) examples that prime an
+        agent. Identify examples to add, remove, or edit so the set
+        better covers the observed failure modes without contradicting
+        the types.
+    """)
 
 
 class FloatParameterGrad(ParameterGradAgent):
     """Gradient agent for numeric sampling knobs (`temperature`, `top_p`, `top_k`)."""
 
-    task = (
-        "Critique a numeric sampling knob (temperature, top_p, top_k). "
-        "Describe the direction (increase / decrease) and relative magnitude "
-        "that would produce a better output, not a specific number."
-    )
+    task = cleandoc("""
+        Critique a numeric sampling knob (temperature, top_p, top_k).
+        Describe the direction (increase / decrease) and relative
+        magnitude that would produce a better output, not a specific
+        number.
+    """)
 
 
 class CategoricalParameterGrad(ParameterGradAgent):
     """Gradient agent for categorical choices (`model`, `backend`, `renderer`)."""
 
-    task = (
-        "Critique a categorical choice (model, backend, renderer). Describe "
-        "what property the current choice lacks; stay within the allowed "
-        "vocabulary."
-    )
+    task = cleandoc("""
+        Critique a categorical choice (model, backend, renderer).
+        Describe what property the current choice lacks; stay within
+        the allowed vocabulary.
+    """)
 
 
 # ---------------------------------------------------------------------------

@@ -24,14 +24,16 @@ class ContextInput(BaseModel):
     context: str = Field(
         default="",
         description="Agent's domain, role, purpose, and topics — the master identity profile.",
-    )
-    recent_chat_history: str = Field(
-        default="",
-        description="Recent user/agent turns, rendered as a flat string.",
+        json_schema_extra={"operad": {"system": True}},
     )
     exit_strategy: str = Field(
         default="",
         description="Conditions under which the conversation should terminate.",
+        json_schema_extra={"operad": {"system": True}},
+    )
+    recent_chat_history: str = Field(
+        default="",
+        description="Recent user/agent turns, rendered as a flat string.",
     )
     message: str = Field(
         default="",
@@ -63,29 +65,33 @@ class ContextOutput(BaseModel):
 class TalkerInput(BaseModel):
     """Inputs for generating a user-facing response to a blocked message."""
 
-    target_language: str = Field(
-        default="",
-        description="Optional language code (e.g. 'en', 'de', 'fr') for the reply.",
-    )
     context: str = Field(
         default="",
         description="Assistant identity, expertise, purpose, and behavioral constraints.",
+        json_schema_extra={"operad": {"system": True}},
     )
     workspace_guide: str = Field(
         default="",
         description="High-level overview of the workspace's knowledge-base themes.",
+        json_schema_extra={"operad": {"system": True}},
     )
     interaction_context: str = Field(
         default="",
         description="Schema descriptions for InteractionContext fields.",
-    )
-    recent_chat_history: str = Field(
-        default="",
-        description="Recent conversation turns for context.",
+        json_schema_extra={"operad": {"system": True}},
     )
     exit_strategy: str = Field(
         default="",
         description="Conditions under which the conversation terminates.",
+        json_schema_extra={"operad": {"system": True}},
+    )
+    target_language: str = Field(
+        default="",
+        description="Optional language code (e.g. 'en', 'de', 'fr') for the reply.",
+    )
+    recent_chat_history: str = Field(
+        default="",
+        description="Recent conversation turns for context.",
     )
     safeguard_reason: str = Field(
         default="",

@@ -14,6 +14,7 @@ import asyncio
 import inspect
 import warnings
 from collections.abc import Awaitable
+from inspect import cleandoc
 from typing import Any, Callable, Iterable
 
 from pydantic import BaseModel, Field
@@ -63,12 +64,12 @@ class CandidateGenerator(Agent[APEInput, APEOutput]):
     output = APEOutput
 
     role = "You are a diversifying candidate generator for a parameter value."
-    task = (
-        "Propose a single `candidate` value that might improve on "
-        "`current_value` while respecting `constraint_hint`. Use "
-        "`seed_index` as a diversification hint so distinct indices "
-        "produce distinct candidates."
-    )
+    task = cleandoc("""
+        Propose a single `candidate` value that might improve on
+        `current_value` while respecting `constraint_hint`. Use
+        `seed_index` as a diversification hint so distinct indices
+        produce distinct candidates.
+    """)
     rules = (
         "The `candidate` must satisfy `constraint_hint`; a violation is a hard failure.",
         "Distinct `seed_index` values should yield distinct candidates; do not repeat the previous sample.",

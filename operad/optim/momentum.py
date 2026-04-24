@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Awaitable
+from inspect import cleandoc
 from typing import Any, Callable, Iterable
 
 from pydantic import BaseModel, Field
@@ -50,12 +51,12 @@ class GradSummarizer(Agent[MomentumInput, TextualGradient]):
     output = TextualGradient
 
     role = "You are a disciplined synthesiser of recent parameter critiques."
-    task = (
-        "Given a chronological list of gradients for one parameter, emit "
-        "a single gradient that captures the consistent, actionable signal "
-        "across them. Weight recent entries more heavily; discard "
-        "contradictions superseded by later critiques."
-    )
+    task = cleandoc("""
+        Emit a single gradient that captures the consistent,
+        actionable signal across the chronological list of past
+        gradients for one parameter. Weight recent entries more
+        heavily; discard contradictions superseded by later critiques.
+    """)
     rules = (
         "Do not introduce new critiques — only synthesise what the history contains.",
         "If the history is empty or entirely zero-severity, return severity=0.0 with an empty message.",

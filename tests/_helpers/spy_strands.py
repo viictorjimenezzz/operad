@@ -19,6 +19,7 @@ class StrandsSpy:
     """Captures the last call to ``strands.Agent.invoke_async``."""
 
     calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = field(default_factory=list)
+    system_prompts: list[str | None] = field(default_factory=list)
     canned_text: str = "{}"
     canned_structured: Any = None
 
@@ -29,6 +30,10 @@ class StrandsSpy:
     @property
     def last_kwargs(self) -> dict[str, Any]:
         return self.calls[-1][1]
+
+    @property
+    def last_system_prompt(self) -> str | None:
+        return self.system_prompts[-1]
 
     def _result(self) -> AgentResult:
         message = {"role": "assistant", "content": [{"text": self.canned_text}]}
@@ -49,6 +54,7 @@ def install_spy(monkeypatch: Any, spy: StrandsSpy) -> StrandsSpy:
         self: Any, *args: Any, **kwargs: Any
     ) -> AgentResult:
         spy.calls.append((args, kwargs))
+        spy.system_prompts.append(getattr(self, "system_prompt", None))
         return spy._result()
 
     monkeypatch.setattr(strands.Agent, "invoke_async", _fake_invoke_async)

@@ -15,6 +15,7 @@ Downstream consumer is slot 3-2 (`Optimizer.step()`).
 from __future__ import annotations
 
 import json
+from inspect import cleandoc
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -147,11 +148,10 @@ class RewriteAgent(Agent[RewriteRequest, RewriteResponse]):
     output = RewriteResponse
 
     role = "You are a disciplined rewriter of agent-parameter values."
-    task = (
-        "Read `old_value`, `gradient`, `constraint_hint`, and `lr`. "
-        "Produce a `new_value` that addresses the gradient, respects "
-        "the constraint, and whose edit magnitude matches `lr`."
-    )
+    task = cleandoc("""
+        Produce a `new_value` that addresses the `gradient`, respects
+        `constraint_hint`, and whose edit magnitude matches `lr`.
+    """)
     rules = _BASE_RULES
     examples = (
         Example[RewriteRequest, RewriteResponse](
@@ -180,10 +180,10 @@ class TextRewriter(RewriteAgent):
     """
 
     role = "You are a focused prompt engineer rewriting a single string field."
-    task = (
-        "Given an old string value and a gradient, produce a new string "
-        "that resolves the gradient while respecting `constraint_hint`."
-    )
+    task = cleandoc("""
+        Produce a new string in `new_value` that resolves the
+        `gradient` while respecting `constraint_hint`.
+    """)
     rules = _BASE_RULES + (
         "Return a single string in `new_value` — no surrounding quotes, "
         "no JSON, no bullet points.",
@@ -215,10 +215,10 @@ class RuleListRewriter(RewriteAgent):
     """
 
     role = "You are a careful editor of prompt rule lists."
-    task = (
-        "Given a JSON-encoded list of rules and a gradient, produce a "
-        "revised JSON-encoded list that addresses the gradient."
-    )
+    task = cleandoc("""
+        Produce a revised JSON-encoded list of rules in `new_value`
+        that addresses the `gradient`.
+    """)
     rules = _BASE_RULES + (
         "`new_value` must be valid JSON — a JSON array of strings.",
         "Each rule must be short, imperative, and orthogonal to the "
@@ -261,12 +261,12 @@ class ExampleListRewriter(RewriteAgent):
     """
 
     role = "You are a careful editor of few-shot example sets."
-    task = (
-        "Given a JSON-encoded list of `{input, output}` example pairs "
-        "and a gradient, produce a revised JSON-encoded list. Each "
-        "example's `input` must validate against the Input schema in "
-        "`constraint_hint`; each `output` against the Output schema."
-    )
+    task = cleandoc("""
+        Produce a revised JSON-encoded list of `{input, output}`
+        example pairs in `new_value`. Each example's `input` must
+        validate against the Input schema in `constraint_hint`; each
+        `output` against the Output schema.
+    """)
     rules = _BASE_RULES + (
         "`new_value` must be a JSON array of `{\"input\": ..., "
         "\"output\": ...}` objects.",
@@ -285,12 +285,11 @@ class FloatRewriter(RewriteAgent):
     """
 
     role = "You are a precise tuner of numeric sampling knobs."
-    task = (
-        "Given the old numeric value as a string and a gradient, "
-        "produce a new numeric value — as a bare number in `new_value` "
-        "— that resolves the gradient within the numeric bounds in "
-        "`constraint_hint`."
-    )
+    task = cleandoc("""
+        Produce a new numeric value — as a bare number in `new_value`
+        — that resolves the `gradient` within the numeric bounds
+        defined in `constraint_hint`.
+    """)
     rules = _BASE_RULES + (
         "`new_value` must be a single base-10 number (e.g. `0.7`), "
         "with no units, no prefix, and no trailing text.",
@@ -322,10 +321,11 @@ class CategoricalRewriter(RewriteAgent):
     """
 
     role = "You are a decisive picker of a single vocabulary token."
-    task = (
-        "Given the old token and a gradient, pick a replacement token "
-        "from the allowed vocabulary enumerated in `constraint_hint`."
-    )
+    task = cleandoc("""
+        Pick a replacement token in `new_value` from the allowed
+        vocabulary enumerated in `constraint_hint`, responding to the
+        `gradient`.
+    """)
     rules = _BASE_RULES + (
         "`new_value` must be exactly one of the allowed tokens — no "
         "punctuation, no paraphrase, no explanation.",

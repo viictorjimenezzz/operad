@@ -16,6 +16,7 @@ from .xml import (
     render_output_schema,
     render_rules,
     render_system,
+    render_system_input,
 )
 
 __all__ = [
@@ -27,5 +28,6 @@ __all__ = [
     "render_output_schema",
     "render_rules",
     "render_system",
+    "render_system_input",
     "xml",
 ]

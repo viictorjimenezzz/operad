@@ -714,10 +714,51 @@ class Agent(strands.Agent, Generic[In, Out]):
         """Render a per-call input into the user-message string.
 
         Default: ``<input>`` block with one ``<field>`` per Pydantic
-        field, carrying the field's ``description`` so the model
-        understands each field's role.
+        field *without* the ``operad.system`` marker. Fields tagged as
+        system (see :mod:`operad.core.fields`) are routed to
+        :meth:`format_system_input` instead so they can be appended to
+        the cached system prompt.
         """
         return render.render_input(x)
+
+    def format_system_input(self, x: In) -> str:
+        """Render system-flagged input fields for the per-call system prompt.
+
+        Returns ``""`` when no field on ``x`` carries the
+        ``operad.system`` marker — which is the full back-compat case.
+        The renderer is selected the same way as
+        :meth:`format_system_message` (class-level ``renderer`` override
+        or ``config.io.renderer``). Chat mode returns the single content
+        string extracted from its message list so the composer stays
+        textual.
+        """
+        mode = type(self).renderer or (
+            self.config.io.renderer if self.config is not None else "xml"
+        )
+        if mode == "markdown":
+            return render.markdown.render_system_input(x)
+        if mode == "chat":
+            msgs = render.chat.render_system_input(x)
+            return "\n\n".join(m.get("content", "") for m in msgs)
+        return render.xml.render_system_input(x)
+
+    def _compose_system_for_call(self, x: In) -> str:
+        """Compose the per-call system prompt: static base + system-input block.
+
+        Returns the static base verbatim when no field is system-flagged
+        — so inputs without the marker produce byte-identical bytes to
+        pre-refactor behaviour. Otherwise appends ``"\\n\\n"`` + the
+        system-input block. The prefix up to ``len(base)`` stays stable
+        across calls that share the same static contract, which is what
+        provider prompt caching hashes.
+        """
+        base = _system_to_str(self.format_system_message())
+        extra = self.format_system_input(x)
+        if not extra:
+            return base
+        if not base:
+            return extra
+        return f"{base}\n\n{extra}"
 
     # --- introspection ------------------------------------------------------
     def operad(self, *, file: TextIO | None = None) -> None:
@@ -816,6 +857,7 @@ class Agent(strands.Agent, Generic[In, Out]):
 
         structuredio = self.config.io.structuredio  # type: ignore[union-attr]
         user_msg = self.format_user_message(x)
+        self.system_prompt = self._compose_system_for_call(x) or None
 
         async with _acquire_slot(self.config) as slot:  # type: ignore[arg-type]
             async def _call() -> Any:
@@ -880,6 +922,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         idx = 0
         structured: Any = None
         final_result: Any = None
+        self.system_prompt = self._compose_system_for_call(x) or None
         async with _acquire_slot(self.config) as slot:  # type: ignore[arg-type]
             try:
                 async for event in super().stream_async(  # type: ignore[misc]
@@ -1105,7 +1148,7 @@ class Agent(strands.Agent, Generic[In, Out]):
             hash_python_version=PYTHON_VERSION_HASH,
             hash_model=hash_config(self.config),
             hash_prompt=hash_str(
-                _system_to_str(self.format_system_message())
+                self._compose_system_for_call(x)
                 + "\n\n"
                 + self.format_user_message(x)
             ),

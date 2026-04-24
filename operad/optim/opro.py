@@ -14,6 +14,7 @@ from __future__ import annotations
 import inspect
 import math
 from collections.abc import Awaitable
+from inspect import cleandoc
 from typing import Any, Callable, Iterable
 
 from pydantic import BaseModel, Field
@@ -85,11 +86,11 @@ class OPROAgent(Agent[OPROInput, OPROOutput]):
     output = OPROOutput
 
     role = "You are an LLM acting as an optimizer over parameter values."
-    task = (
-        "Read the scored history of past candidate values and propose a "
-        "`new_value` whose objective-metric score is expected to beat "
-        "every score in `history`. Respect `constraint_hint` exactly."
-    )
+    task = cleandoc("""
+        Propose a `new_value` whose objective-metric score is expected
+        to beat every score in `history`. Respect `constraint_hint`
+        exactly.
+    """)
     rules = (
         "The `new_value` must satisfy `constraint_hint`; a violation is a hard failure.",
         "Do not repeat a value that already appears in `history` unless you have a concrete "

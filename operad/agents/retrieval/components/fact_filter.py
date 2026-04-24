@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from inspect import cleandoc
+
 from ....core.agent import Agent, Example
 from ..schemas import FactFilterInput, FactFilterOutput
 
@@ -12,36 +14,33 @@ class FactFilter(Agent[FactFilterInput, FactFilterOutput]):
     input = FactFilterInput
     output = FactFilterOutput
 
-    role = (
-        "You are a relevance filter for a retrieval-augmented QA system.\n"
-        "You do NOT answer the query and you do NOT produce claims.\n"
-        "You ONLY decide which retrieved facts are relevant enough to be "
-        "passed to the downstream evidence planner."
-    )
-    task = (
-        "You will receive:\n"
-        "  - \"facts\": a plain-text block where each fact is formatted as:\n\n"
-        "      fact_id: <integer>\n"
-        "      text: <fact text>\n\n"
-        "    Facts are separated by a blank line.\n"
-        "  - \"query\": the user question.\n\n"
-        "Your job is to select the subset of `fact_id`s whose text is "
-        "directly relevant to answering the query.\n\n"
-        "Selection principles:\n"
-        "  - KEEP a fact if it contains information that could plausibly "
-        "support, refute, define, quantify, exemplify, or otherwise "
-        "directly inform an answer to the query.\n"
-        "  - DROP a fact if it is off-topic, generic boilerplate, "
-        "tangential metadata, navigational text, or only "
-        "weakly/associatively related.\n"
-        "  - When in doubt between 'weakly related' and 'clearly "
-        "relevant', prefer to DROP it — the downstream planner is "
-        "expensive and benefits from a tight, high-signal set.\n"
-        "  - Do NOT deduplicate semantically similar facts here; keep all "
-        "relevant facts even if they overlap. The downstream planner "
-        "handles evidence selection.\n"
-        "  - Do NOT invent fact_ids. Only return IDs that appear in the input."
-    )
+    role = cleandoc("""
+        You are a relevance filter for a retrieval-augmented QA
+        system. You do NOT answer the query and you do NOT produce
+        claims. You ONLY decide which retrieved facts are relevant
+        enough to be passed to the downstream evidence planner.
+    """)
+    task = cleandoc("""
+        Select the subset of fact_ids whose text is directly relevant
+        to answering the query.
+
+        Selection principles:
+
+        - KEEP a fact if it contains information that could plausibly
+          support, refute, define, quantify, exemplify, or otherwise
+          directly inform an answer to the query.
+        - DROP a fact if it is off-topic, generic boilerplate,
+          tangential metadata, navigational text, or only
+          weakly/associatively related.
+        - When in doubt between "weakly related" and "clearly
+          relevant", prefer to DROP — the downstream planner is
+          expensive and benefits from a tight, high-signal set.
+        - Do NOT deduplicate semantically similar facts here; keep all
+          relevant facts even if they overlap. The downstream planner
+          handles evidence selection.
+        - Do NOT invent fact_ids. Only return IDs that appear in the
+          input.
+    """)
     rules = (
         "'fact_ids' MUST contain only integers that appear as fact_id values in the input.",
         "'fact_ids' MAY be empty if no fact is relevant.",

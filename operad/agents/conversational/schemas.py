@@ -8,29 +8,34 @@ from pydantic import BaseModel, Field
 class TalkerInput(BaseModel):
     """Inputs for the persona-styled conversational responder."""
 
-    target_language: str = Field(
+    context: str = Field(
         default="",
-        description="Optional language code for the answer (e.g. 'en', 'de', 'fr').",
+        description="Assistant identity, expertise, purpose, and behavioral constraints.",
+        json_schema_extra={"operad": {"system": True}},
     )
     workspace_guide: str = Field(
         default="",
         description="High-level overview of the workspace knowledge base.",
-    )
-    context: str = Field(
-        default="",
-        description="Assistant identity, expertise, purpose, and behavioral constraints.",
+        json_schema_extra={"operad": {"system": True}},
     )
     interaction_context: str = Field(
         default="",
         description="Schema descriptions for InteractionContext fields.",
+        json_schema_extra={"operad": {"system": True}},
     )
     session_context: str = Field(
         default="",
         description="Schema descriptions for SessionContext fields.",
+        json_schema_extra={"operad": {"system": True}},
     )
     user_information: str = Field(
         default="",
         description="Structured context about the user extracted from earlier turns.",
+        json_schema_extra={"operad": {"system": True}},
+    )
+    target_language: str = Field(
+        default="",
+        description="Optional language code for the answer (e.g. 'en', 'de', 'fr').",
     )
     beliefs: str = Field(
         default="",
@@ -52,6 +57,7 @@ class ConversationTitlerInput(BaseModel):
     target_language: str = Field(
         default="",
         description="Optional language code controlling the title language.",
+        json_schema_extra={"operad": {"system": True}},
     )
     message: str = Field(
         default="",
@@ -71,6 +77,7 @@ class InteractionTitlerInput(BaseModel):
     target_language: str = Field(
         default="",
         description="Optional language code controlling the title language.",
+        json_schema_extra={"operad": {"system": True}},
     )
     message: str = Field(
         default="",

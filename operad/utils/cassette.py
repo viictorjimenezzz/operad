@@ -155,7 +155,7 @@ def cassette_context(path: Path, mode: Mode = "replay") -> Iterator[None]:
                 "cassette wrapper requires self.config; default-leaf "
                 "agents must be constructed with a Configuration"
             )
-        system = self.format_system_message()
+        system = self._compose_system_for_call(x)
         user = self.format_user_message(x)
         h_m = hash_model(self.config)
         h_p = hash_prompt(system, user)

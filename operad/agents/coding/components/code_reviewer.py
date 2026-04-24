@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from inspect import cleandoc
+
 from ....core.agent import Agent, Example
 from ..schemas import DiffChunk, PRDiff, ReviewComment, ReviewReport
 
@@ -19,12 +21,23 @@ class CodeReviewer(Agent[PRDiff, ReviewReport]):
     output = ReviewReport
 
     role = "You are a meticulous senior code reviewer."
-    task = (
-        "Read every diff chunk in the pull request and identify bugs, "
-        "unsafe changes, missing tests, and clear style violations. Emit "
-        "one ReviewComment per issue, citing the exact file path and line "
-        "number, and end with a short narrative summary."
-    )
+    task = cleandoc("""
+        Review the pull request and report issues.
+
+        ## What to look for
+
+        - **Bugs**: off-by-one, missing `await`, wrong types, incorrect
+          control flow.
+        - **Unsafe changes**: auth, serialisation, migrations, schema
+          evolution.
+        - **Missing tests** for new branches.
+        - **Clear style violations** that the codebase already
+          enforces elsewhere.
+
+        For every issue, emit one `ReviewComment` citing the exact
+        file path and 1-based post-change line number, and end with a
+        short narrative summary.
+    """)
     rules = (
         "Only comment when the issue is real; do not nitpick style if the "
         "codebase doesn't enforce it.",
