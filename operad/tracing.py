@@ -23,13 +23,17 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
+from .runtime.cost import CostObserver
 from .runtime.observers import JsonlObserver, registry
 
 
 @contextmanager
 def watch(
-    *, jsonl: str | Path | None = None, rich: bool = True
-) -> Iterator[None]:
+    *,
+    jsonl: str | Path | None = None,
+    rich: bool = True,
+    cost: bool = False,
+) -> Iterator[CostObserver | None]:
     """Attach default observers for the duration of the block.
 
     Parameters
@@ -40,6 +44,10 @@ def watch(
         When true and the ``rich`` extra is installed, show a live TUI
         tree of in-flight agents. Degrades to a warning + no TUI when
         ``rich`` is missing.
+    cost:
+        When true, attach a :class:`CostObserver` that accumulates token
+        and USD spend per ``run_id``. The observer is yielded so callers
+        can read ``.totals()`` from inside the block.
     """
     added: list[object] = []
 
@@ -47,6 +55,12 @@ def watch(
         obs = JsonlObserver(jsonl)
         registry.register(obs)
         added.append(obs)
+
+    cost_obs: CostObserver | None = None
+    if cost:
+        cost_obs = CostObserver()
+        registry.register(cost_obs)
+        added.append(cost_obs)
 
     rich_obs = None
     if rich:
@@ -65,7 +79,7 @@ def watch(
             added.append(rich_obs)
 
     try:
-        yield
+        yield cost_obs
     finally:
         for obs in added:
             registry.unregister(obs)  # type: ignore[arg-type]

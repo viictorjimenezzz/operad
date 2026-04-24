@@ -1,37 +1,40 @@
-"""Memory domain: typed shapes, extractor leaves, and a memory store.
-
-Mirrors the ``reasoning/`` layout — leaves live under ``components/``,
-typed shapes live in ``schemas.py``, and a plain-class data primitive
-(``MemoryStore``) sits alongside. Future composed memory patterns
-(e.g. a consolidator algorithm) would live at this package root.
-"""
+"""Memory domain: belief-state manager and session-memory updater."""
 
 from __future__ import annotations
 
-from .components import (
-    BeliefExtractor,
-    EpisodicSummarizer,
-    UserModelExtractor,
-)
+from .components import Beliefs, User
 from .schemas import (
-    Belief,
-    Beliefs,
-    Conversation,
-    Summary,
-    Turn,
-    UserModel,
+    BeliefItem,
+    BeliefOp,
+    BeliefOperation,
+    BeliefsInput,
+    BeliefsOutput,
+    SessionItem,
+    SessionNamespace,
+    SessionOp,
+    SessionOperation,
+    SessionStatus,
+    SessionTarget,
+    UserInput,
+    UserOutput,
 )
 from .store import MemoryStore
 
 __all__ = [
-    "Belief",
-    "BeliefExtractor",
+    "BeliefItem",
+    "BeliefOp",
+    "BeliefOperation",
     "Beliefs",
-    "Conversation",
-    "EpisodicSummarizer",
+    "BeliefsInput",
+    "BeliefsOutput",
     "MemoryStore",
-    "Summary",
-    "Turn",
-    "UserModel",
-    "UserModelExtractor",
+    "SessionItem",
+    "SessionNamespace",
+    "SessionOp",
+    "SessionOperation",
+    "SessionStatus",
+    "SessionTarget",
+    "User",
+    "UserInput",
+    "UserOutput",
 ]

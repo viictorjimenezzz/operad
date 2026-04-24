@@ -33,7 +33,7 @@ class Retriever(Agent[Query, Hits]):
     )
     examples = (
         Example[Query, Hits](
-            input=Query(text="what is TCP?", k=2),
+            input=Query(text="what is TCP?", top_k=2),
             output=Hits(
                 items=[
                     Hit(text="TCP is a reliable transport protocol.",

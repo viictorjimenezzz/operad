@@ -133,6 +133,103 @@ def test_coding_types_deprecated_shim() -> None:
         assert getattr(old_mod, name) is getattr(new_mod, name)
 
 
+# --- dead sampling knob warnings (M-2) --------------------------------------
+
+
+def _collect_dead_knob_warnings(cfg: Configuration) -> list[str]:
+    from operad.core.models import _warn_dead_sampling_knobs
+    import warnings as _w
+
+    with _w.catch_warnings(record=True) as records:
+        _w.simplefilter("always")
+        _warn_dead_sampling_knobs(cfg)
+    return [str(r.message) for r in records if "does not consume" in str(r.message)]
+
+
+def test_ollama_warns_on_reasoning_tokens() -> None:
+    cfg = Configuration(
+        backend="ollama",
+        host="127.0.0.1:11434",
+        model="llama3",
+        sampling=Sampling(reasoning_tokens=1024),
+    )
+    msgs = _collect_dead_knob_warnings(cfg)
+    assert len(msgs) == 1
+    assert "reasoning_tokens" in msgs[0] and "'ollama'" in msgs[0]
+
+
+def test_ollama_warns_on_top_k_and_seed() -> None:
+    cfg = Configuration(
+        backend="ollama",
+        host="127.0.0.1:11434",
+        model="llama3",
+        sampling=Sampling(top_k=40, seed=7),
+    )
+    msgs = _collect_dead_knob_warnings(cfg)
+    assert any("top_k" in m for m in msgs)
+    assert any("seed" in m for m in msgs)
+
+
+def test_anthropic_warns_on_seed() -> None:
+    cfg = Configuration(
+        backend="anthropic",
+        model="claude-3-5-sonnet",
+        api_key="k",
+        sampling=Sampling(seed=42),
+    )
+    msgs = _collect_dead_knob_warnings(cfg)
+    assert len(msgs) == 1
+    assert "seed" in msgs[0] and "'anthropic'" in msgs[0]
+
+
+def test_bedrock_warns_on_reasoning_tokens() -> None:
+    cfg = Configuration(
+        backend="bedrock",
+        model="anthropic.claude-3-sonnet",
+        sampling=Sampling(reasoning_tokens=512),
+    )
+    msgs = _collect_dead_knob_warnings(cfg)
+    assert len(msgs) == 1
+    assert "reasoning_tokens" in msgs[0] and "'bedrock'" in msgs[0]
+
+
+def test_anthropic_does_not_warn_on_reasoning_tokens() -> None:
+    cfg = Configuration(
+        backend="anthropic",
+        model="claude-3-5-sonnet",
+        api_key="k",
+        sampling=Sampling(reasoning_tokens=1024),
+    )
+    assert _collect_dead_knob_warnings(cfg) == []
+
+
+def test_default_sampling_emits_no_warnings() -> None:
+    cfg = Configuration(
+        backend="ollama",
+        host="127.0.0.1:11434",
+        model="llama3",
+    )
+    assert _collect_dead_knob_warnings(cfg) == []
+
+
+def test_resolve_model_emits_dead_knob_warning() -> None:
+    # End-to-end smoke: the warning fires via resolve_model for a backend
+    # we know resolves offline (llamacpp already in the offline test set).
+    cfg = Configuration(
+        backend="llamacpp",
+        host="127.0.0.1:9000",
+        model="test-model",
+        sampling=Sampling(temperature=0.1),  # no dead knobs
+    )
+    import warnings as _w
+
+    with _w.catch_warnings(record=True) as records:
+        _w.simplefilter("always")
+        resolve_model(cfg)
+    dead = [r for r in records if "does not consume" in str(r.message)]
+    assert dead == []
+
+
 def test_memory_shapes_deprecated_shim() -> None:
     import operad.agents.memory.shapes as old_mod
     import operad.agents.memory.schemas as new_mod

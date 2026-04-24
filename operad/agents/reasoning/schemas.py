@@ -7,7 +7,7 @@ within ``operad.agents.reasoning``.
 
 from __future__ import annotations
 
-from typing import Generic, TypeVar
+from typing import Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -86,8 +86,8 @@ class Hit(BaseModel):
 
 
 class Query(BaseModel):
-    text: str = Field(description="The search query.")
-    k: int = Field(default=5, description="Maximum number of hits to return.")
+    text: str = Field(default="", description="The search query.")
+    top_k: int = Field(default=5, description="Maximum number of hits to return.")
 
 
 class Hits(BaseModel):
@@ -151,9 +151,87 @@ class ToolResult(BaseModel, Generic[Result]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
+# --- ChatReasoner edges (chat-pipeline routing / rewriting) -----------------
+
+
+class ChatReasonerInput(BaseModel):
+    """Inputs for the chat-pipeline Reasoner (reference resolution + routing)."""
+
+    context: str = Field(
+        default="",
+        description="Assistant identity profile — persona, expertise, tone, audience.",
+    )
+    interaction_context: str = Field(
+        default="",
+        description="Schema descriptions for InteractionContext fields.",
+    )
+    session_context: str = Field(
+        default="",
+        description="Schema descriptions for SessionContext fields.",
+    )
+    workspace_guide: str = Field(
+        default="",
+        description="Concise overview of the knowledge base content and themes.",
+    )
+    user_information: str = Field(
+        default="",
+        description="Structured information about the user extracted from prior turns.",
+    )
+    beliefs_json: str = Field(
+        default="",
+        description="JSON array of active structured beliefs.",
+    )
+    belief_summary: str = Field(
+        default="",
+        description="Narrative digest of claims previously shared with the user.",
+    )
+    chat_history: str = Field(
+        default="",
+        description="Previous user-assistant interactions as a flat string.",
+    )
+    user_message: str = Field(
+        default="",
+        description="The latest message from the user.",
+    )
+
+
+ChatRoute = Literal["RAG_NEEDED", "DIRECT_ANSWER"]
+
+
+class ChatReasonerOutput(BaseModel):
+    """Reference-resolved message, routing decision, and search-optimized query."""
+
+    scratchpad: str = Field(
+        default="",
+        description="Chain-of-thought: belief overlap, pattern classification, and routing rationale.",
+    )
+    rewritten_message: str = Field(
+        default="",
+        description="Standalone, reference-resolved version of the user's message.",
+    )
+    route: ChatRoute = Field(
+        default="RAG_NEEDED",
+        description="'RAG_NEEDED' for retrieval path; 'DIRECT_ANSWER' for conversational path.",
+    )
+    route_reasoning: str = Field(
+        default="",
+        description="Brief explanation of the routing decision.",
+    )
+    downstream_message: str = Field(
+        default="",
+        description=(
+            "Operational message for the chosen path: search-optimized when RAG_NEEDED, "
+            "equal to rewritten_message when DIRECT_ANSWER."
+        ),
+    )
+
+
 __all__ = [
     "Action",
     "Answer",
+    "ChatReasonerInput",
+    "ChatReasonerOutput",
+    "ChatRoute",
     "Choice",
     "Hit",
     "Hits",
