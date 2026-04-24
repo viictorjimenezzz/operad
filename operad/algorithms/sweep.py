@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import time
 from typing import Any, Generic
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..core.agent import Agent, In, Out
+from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 from ..utils.paths import set_path
 
 
@@ -86,29 +88,72 @@ class Sweep(Generic[In, Out]):
         self.max_combinations = max_combinations
 
     async def run(self, x: In) -> SweepReport[In, Out]:
-        combos = list(_cartesian(self.parameters))
-        if not combos:
-            return SweepReport[In, Out](cells=[])
+        algo_path = type(self).__name__
+        started = time.time()
+        with _enter_algorithm_run():
+            await emit_algorithm_event(
+                "algo_start",
+                algorithm_path=algo_path,
+                payload={"concurrency": self.concurrency, "axes": list(self.parameters)},
+                started_at=started,
+            )
+            try:
+                combos = list(_cartesian(self.parameters))
+                if not combos:
+                    await emit_algorithm_event(
+                        "algo_end",
+                        algorithm_path=algo_path,
+                        payload={"cells": 0},
+                        started_at=started,
+                        finished_at=time.time(),
+                    )
+                    return SweepReport[In, Out](cells=[])
 
-        agents: list[Agent[In, Out]] = []
-        for combo in combos:
-            agent = self.seed.clone()
-            for path, value in combo.items():
-                set_path(agent, path, value)
-            agents.append(agent)
+                agents: list[Agent[In, Out]] = []
+                for combo in combos:
+                    agent = self.seed.clone()
+                    for dotted, value in combo.items():
+                        set_path(agent, dotted, value)
+                    agents.append(agent)
 
-        await asyncio.gather(*(a.abuild() for a in agents))
+                await asyncio.gather(*(a.abuild() for a in agents))
 
-        sem = asyncio.Semaphore(self.concurrency)
-        outputs = await asyncio.gather(
-            *(_bounded(sem, a(x)) for a in agents)
-        )
+                sem = asyncio.Semaphore(self.concurrency)
+                outputs = await asyncio.gather(
+                    *(_bounded(sem, a(x)) for a in agents)
+                )
 
-        cells = [
-            SweepCell[In, Out](parameters=combo, output=out.response)
-            for combo, out in zip(combos, outputs)
-        ]
-        return SweepReport[In, Out](cells=cells)
+                cells = [
+                    SweepCell[In, Out](parameters=combo, output=out.response)
+                    for combo, out in zip(combos, outputs)
+                ]
+                for i, combo in enumerate(combos):
+                    await emit_algorithm_event(
+                        "cell",
+                        algorithm_path=algo_path,
+                        payload={
+                            "cell_index": i,
+                            "parameters": combo,
+                            "score": None,
+                        },
+                    )
+                await emit_algorithm_event(
+                    "algo_end",
+                    algorithm_path=algo_path,
+                    payload={"cells": len(cells)},
+                    started_at=started,
+                    finished_at=time.time(),
+                )
+                return SweepReport[In, Out](cells=cells)
+            except Exception as e:
+                await emit_algorithm_event(
+                    "algo_error",
+                    algorithm_path=algo_path,
+                    payload={"type": type(e).__name__, "message": str(e)},
+                    started_at=started,
+                    finished_at=time.time(),
+                )
+                raise
 
 
 def _cartesian(parameters: dict[str, list[Any]]) -> list[dict[str, Any]]:

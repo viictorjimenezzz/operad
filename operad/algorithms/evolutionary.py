@@ -21,12 +21,14 @@ from __future__ import annotations
 import asyncio
 import copy
 import random
+import time
 import warnings
 from typing import Generic
 
 from ..benchmark import evaluate
 from ..core.agent import Agent, In, Out
 from ..metrics.base import Metric
+from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 from ..utils.errors import BuildError
 from ..utils.ops import Op
 
@@ -120,43 +122,89 @@ class Evolutionary(Generic[In, Out]):
         return fallback
 
     async def run(self) -> Agent[In, Out]:
-        population: list[Agent[In, Out]] = list(
-            await asyncio.gather(
-                *(
-                    self._fresh_individual(self.seed)
-                    for _ in range(self.population_size)
+        path = type(self).__name__
+        started = time.time()
+        with _enter_algorithm_run():
+            await emit_algorithm_event(
+                "algo_start",
+                algorithm_path=path,
+                payload={
+                    "population_size": self.population_size,
+                    "generations": self.generations,
+                    "metric": self.metric.name,
+                },
+                started_at=started,
+            )
+            try:
+                population: list[Agent[In, Out]] = list(
+                    await asyncio.gather(
+                        *(
+                            self._fresh_individual(self.seed)
+                            for _ in range(self.population_size)
+                        )
+                    )
                 )
-            )
-        )
-        for _ in range(self.generations):
-            reports = await asyncio.gather(
-                *(
-                    evaluate(a, self.dataset, [self.metric])
-                    for a in population
-                )
-            )
-            scored = sorted(
-                zip(reports, population),
-                key=lambda pr: -pr[0].summary[self.metric.name],
-            )
-            half = max(1, self.population_size // 2)
-            survivors = [a for _, a in scored[:half]]
-            refill_parents = [
-                survivors[i % len(survivors)]
-                for i in range(self.population_size - len(survivors))
-            ]
-            refills = list(
-                await asyncio.gather(
-                    *(self._fresh_individual(p) for p in refill_parents)
-                )
-            )
-            population = survivors + refills
+                for gen_index in range(self.generations):
+                    reports = await asyncio.gather(
+                        *(
+                            evaluate(a, self.dataset, [self.metric])
+                            for a in population
+                        )
+                    )
+                    indexed_sorted = sorted(
+                        enumerate(reports),
+                        key=lambda ir: -ir[1].summary[self.metric.name],
+                    )
+                    half = max(1, self.population_size // 2)
+                    survivor_indices = [i for i, _ in indexed_sorted[:half]]
+                    population_scores = [
+                        r.summary[self.metric.name] for r in reports
+                    ]
+                    await emit_algorithm_event(
+                        "generation",
+                        algorithm_path=path,
+                        payload={
+                            "gen_index": gen_index,
+                            "population_scores": population_scores,
+                            "survivor_indices": survivor_indices,
+                        },
+                    )
+                    survivors = [population[i] for i in survivor_indices]
+                    refill_parents = [
+                        survivors[i % len(survivors)]
+                        for i in range(self.population_size - len(survivors))
+                    ]
+                    refills = list(
+                        await asyncio.gather(
+                            *(self._fresh_individual(p) for p in refill_parents)
+                        )
+                    )
+                    population = survivors + refills
 
-        final_reports = await asyncio.gather(
-            *(evaluate(a, self.dataset, [self.metric]) for a in population)
-        )
-        best_idx = max(
-            range(len(population)),
-            key=lambda i: final_reports[i].summary[self.metric.name],
-        )
-        return population[best_idx]
+                final_reports = await asyncio.gather(
+                    *(evaluate(a, self.dataset, [self.metric]) for a in population)
+                )
+                best_idx = max(
+                    range(len(population)),
+                    key=lambda i: final_reports[i].summary[self.metric.name],
+                )
+                await emit_algorithm_event(
+                    "algo_end",
+                    algorithm_path=path,
+                    payload={
+                        "best_index": best_idx,
+                        "score": final_reports[best_idx].summary[self.metric.name],
+                    },
+                    started_at=started,
+                    finished_at=time.time(),
+                )
+                return population[best_idx]
+            except Exception as e:
+                await emit_algorithm_event(
+                    "algo_error",
+                    algorithm_path=path,
+                    payload={"type": type(e).__name__, "message": str(e)},
+                    started_at=started,
+                    finished_at=time.time(),
+                )
+                raise

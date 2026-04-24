@@ -12,7 +12,8 @@ from typing import Any
 
 from ...core.output import OperadOutput
 from ...utils.hashing import hash_json
-from .base import AgentEvent
+from ..events import AlgorithmEvent
+from .base import AgentEvent, Event
 
 
 _INSTALL_HINT = (
@@ -27,6 +28,11 @@ class OtelObserver:
     Chunk events bump a per-span counter flushed as `operad.chunks`
     on `end`. Errors record the exception and set span status ERROR.
     Only hashes are attached as attributes — never raw payloads.
+
+    Algorithm events open a parallel span per `algo_start`/`algo_end`
+    pair, keyed by `(run_id, algorithm_path)`. Per-boundary events
+    (`generation`, `round`, ...) attach as span events on the
+    enclosing algorithm span.
     """
 
     def __init__(self, *, tracer_name: str = "operad") -> None:
@@ -42,8 +48,13 @@ class OtelObserver:
         self._spans: dict[tuple[str, str], Any] = {}
         self._chunks: dict[tuple[str, str], int] = {}
         self._tokens: dict[tuple[str, str], Any] = {}
+        self._algo_spans: dict[tuple[str, str], Any] = {}
+        self._algo_tokens: dict[tuple[str, str], Any] = {}
 
-    async def on_event(self, event: AgentEvent) -> None:
+    async def on_event(self, event: Event) -> None:
+        if isinstance(event, AlgorithmEvent):
+            self._on_algorithm_event(event)
+            return
         key = (event.run_id, event.agent_path)
         if event.kind == "start":
             self._on_start(key, event)
@@ -111,6 +122,56 @@ class OtelObserver:
                 self._context.detach(token)
             span.end()
 
+    def _on_algorithm_event(self, event: AlgorithmEvent) -> None:
+        key = (event.run_id, event.algorithm_path)
+        if event.kind == "algo_start":
+            span = self._tracer.start_span(event.algorithm_path)
+            token = self._context.attach(self._trace.set_span_in_context(span))
+            self._algo_spans[key] = span
+            self._algo_tokens[key] = token
+            span.set_attribute("operad.run_id", event.run_id)
+            span.set_attribute("operad.algorithm_path", event.algorithm_path)
+            for k, v in _otel_attrs(event.payload).items():
+                span.set_attribute(k, v)
+        elif event.kind == "algo_end":
+            span = self._algo_spans.pop(key, None)
+            token = self._algo_tokens.pop(key, None)
+            if span is None:
+                return
+            try:
+                for k, v in _otel_attrs(event.payload).items():
+                    span.set_attribute(f"end.{k}", v)
+                from opentelemetry.trace import Status, StatusCode
+
+                span.set_status(Status(StatusCode.OK))
+            finally:
+                if token is not None:
+                    self._context.detach(token)
+                span.end()
+        elif event.kind == "algo_error":
+            span = self._algo_spans.pop(key, None)
+            token = self._algo_tokens.pop(key, None)
+            inline = False
+            if span is None:
+                span = self._tracer.start_span(event.algorithm_path)
+                inline = True
+            try:
+                for k, v in _otel_attrs(event.payload).items():
+                    span.set_attribute(f"error.{k}", v)
+                from opentelemetry.trace import Status, StatusCode
+
+                desc = str(event.payload.get("type", "error"))
+                span.set_status(Status(StatusCode.ERROR, description=desc))
+            finally:
+                if token is not None and not inline:
+                    self._context.detach(token)
+                span.end()
+        else:
+            span = self._algo_spans.get(key)
+            if span is None:
+                return
+            span.add_event(event.kind, attributes=_otel_attrs(event.payload))
+
     def _set_envelope_attributes(self, span: Any, out: OperadOutput) -> None:
         span.set_attribute("operad.hash_operad_version", out.hash_operad_version)
         span.set_attribute("operad.hash_python_version", out.hash_python_version)
@@ -124,3 +185,24 @@ class OtelObserver:
             span.set_attribute("operad.prompt_tokens", out.prompt_tokens)
         if out.completion_tokens is not None:
             span.set_attribute("operad.completion_tokens", out.completion_tokens)
+
+
+def _otel_attrs(payload: dict[str, Any]) -> dict[str, Any]:
+    """Sanitise payload keys into OTel-compatible attribute values.
+
+    OTel attributes accept str, bool, int, float, or sequences thereof.
+    Non-conforming values are stringified.
+    """
+    out: dict[str, Any] = {}
+    for k, v in payload.items():
+        if v is None:
+            out[k] = ""
+        elif isinstance(v, (str, bool, int, float)):
+            out[k] = v
+        elif isinstance(v, (list, tuple)) and all(
+            isinstance(x, (str, bool, int, float)) for x in v
+        ):
+            out[k] = list(v)
+        else:
+            out[k] = str(v)
+    return out

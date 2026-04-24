@@ -9,11 +9,13 @@ reads the accumulated `DebateRecord` and emits the final answer.
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any, Generic
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..core.agent import Agent, In, Out
+from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 
 
 class Proposal(BaseModel):
@@ -86,17 +88,55 @@ class Debate(Generic[In, Out]):
         self.rounds = rounds
 
     async def run(self, x: In) -> Out:
-        raw_proposals = await asyncio.gather(*(p(x) for p in self.proposers))
-        proposals: list[Proposal] = [r.response for r in raw_proposals]
-        record: DebateRecord[In] = DebateRecord(
-            request=x, proposals=proposals, critiques=[]
-        )
-        for _ in range(self.rounds):
-            raw_critiques = await asyncio.gather(
-                *(
-                    self.critic(DebateTurn(record=record, focus=p))
-                    for p in proposals
-                )
+        path = type(self).__name__
+        started = time.time()
+        with _enter_algorithm_run():
+            await emit_algorithm_event(
+                "algo_start",
+                algorithm_path=path,
+                payload={"proposers": len(self.proposers), "rounds": self.rounds},
+                started_at=started,
             )
-            record.critiques.extend(r.response for r in raw_critiques)
-        return (await self.synthesizer(record)).response
+            try:
+                raw_proposals = await asyncio.gather(*(p(x) for p in self.proposers))
+                proposals: list[Proposal] = [r.response for r in raw_proposals]
+                record: DebateRecord[In] = DebateRecord(
+                    request=x, proposals=proposals, critiques=[]
+                )
+                for round_index in range(self.rounds):
+                    raw_critiques = await asyncio.gather(
+                        *(
+                            self.critic(DebateTurn(record=record, focus=p))
+                            for p in proposals
+                        )
+                    )
+                    new_critiques = [r.response for r in raw_critiques]
+                    await emit_algorithm_event(
+                        "round",
+                        algorithm_path=path,
+                        payload={
+                            "round_index": round_index,
+                            "proposals": [p.model_dump(mode="json") for p in proposals],
+                            "critiques": [c.model_dump(mode="json") for c in new_critiques],
+                            "scores": [c.score for c in new_critiques],
+                        },
+                    )
+                    record.critiques.extend(new_critiques)
+                result = (await self.synthesizer(record)).response
+                await emit_algorithm_event(
+                    "algo_end",
+                    algorithm_path=path,
+                    payload={"rounds": self.rounds},
+                    started_at=started,
+                    finished_at=time.time(),
+                )
+                return result
+            except Exception as e:
+                await emit_algorithm_event(
+                    "algo_error",
+                    algorithm_path=path,
+                    payload={"type": type(e).__name__, "message": str(e)},
+                    started_at=started,
+                    finished_at=time.time(),
+                )
+                raise
