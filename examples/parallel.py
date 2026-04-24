@@ -46,7 +46,7 @@ TASKS: dict[str, tuple[str, str]] = {
 
 async def _main() -> None:
     cfg = local_config(temperature=0.7, max_tokens=512)
-    set_limit(backend="llamacpp", host=cfg.host, limit=len(TASKS))
+    set_limit(backend="llamacpp", host=cfg.host, concurrency=len(TASKS))
 
     children = {
         name: Reasoner(
