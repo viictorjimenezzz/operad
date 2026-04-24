@@ -1,4 +1,4 @@
-"""`Evolutionary` evolving a seed against a 5-row dataset.
+"""`EvoGradient` evolving a seed against a 5-row dataset.
 
 Runs offline — no model server required. The seed leaf's output depends
 deterministically on its rule count, so applying `AppendRule` across
@@ -20,9 +20,8 @@ from pydantic import BaseModel
 
 from operad import Agent, Configuration, evaluate
 from operad.core.config import Sampling
-from operad.algorithms import Evolutionary
-from operad.metrics import ExactMatch
 from operad.metrics.base import MetricBase
+from operad.optim import EvoGradient
 from operad.utils.ops import AppendRule
 
 
@@ -75,21 +74,22 @@ async def main(offline: bool = False) -> None:
     seed_report = await evaluate(seed, dataset, [metric])
     print(f"seed rule_count={len(seed.rules)}, score={seed_report.summary[metric.name]:.3f}")
 
-    evo = Evolutionary(
-        seed=seed,
+    generations = 4
+    optimizer = EvoGradient(
+        list(seed.parameters()),
         mutations=[AppendRule(path="", rule="be helpful")],
         metric=metric,
         dataset=dataset,
         population_size=6,
-        generations=4,
         rng=random.Random(0),
     )
-    best = await evo.run()
+    for _ in range(generations):
+        await optimizer.step()
 
-    best_report = await evaluate(best, dataset, [metric])
-    print(f"best rule_count={len(best.rules)}, score={best_report.summary[metric.name]:.3f}")
+    best_report = await evaluate(seed, dataset, [metric])
+    print(f"best rule_count={len(seed.rules)}, score={best_report.summary[metric.name]:.3f}")
     print("best.rules:")
-    for i, r in enumerate(best.rules):
+    for i, r in enumerate(seed.rules):
         print(f"  {i}: {r}")
 
 

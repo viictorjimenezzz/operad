@@ -1263,35 +1263,38 @@ class Agent(strands.Agent, Generic[In, Out]):
     ) -> "Agent[In, Out]":
         """Evolve a copy of this agent to improve `metric` on `dataset`.
 
-        A thin wrapper around `operad.algorithms.Evolutionary`. Clones
-        `self` so the caller's agent is never mutated, picks a small
-        default mutation set when `mutations` is None, and returns the
-        best agent found in the final generation.
+        A thin wrapper around `operad.optim.EvoGradient`. Clones `self`
+        so the caller's agent is never mutated, picks a small default
+        mutation set when `mutations` is None, runs `generations` steps
+        of the population loop, and returns the evolved clone (whose
+        declared state is the best individual's).
 
         `dataset` may be a `Dataset`, an iterable of `Entry` objects, or
         an iterable of `(input, expected_output)` tuples.
 
         For custom observers, recombination strategies, or fine-grained
-        control over the population, use `operad.algorithms.Evolutionary`
+        control over the population, drive `operad.optim.EvoGradient`
         directly.
         """
-        from ..algorithms import Evolutionary
+        from ..optim.evo import EvoGradient
         from ..utils.ops import default_mutations
 
         seed = self.clone()
+        await seed.abuild()
         ops = mutations if mutations is not None else default_mutations(seed)
         pairs = _coerce_eval_pairs(dataset)
 
-        algo = Evolutionary(
-            seed=seed,
+        optimizer = EvoGradient(
+            list(seed.parameters()),
             mutations=ops,
             metric=metric,
             dataset=pairs,
             population_size=population_size,
-            generations=generations,
             rng=rng,
         )
-        return await algo.run()
+        for _ in range(max(1, int(generations))):
+            await optimizer.step()
+        return seed
 
     # --- freeze / thaw ------------------------------------------------------
     def freeze(self, path: str) -> None:

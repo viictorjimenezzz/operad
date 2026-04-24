@@ -6,10 +6,7 @@ run a small offline scenario, and assert the event sequence.
 
 from __future__ import annotations
 
-import random
-
 import pytest
-from pydantic import BaseModel
 
 from operad import Agent
 from operad.agents import Reflection, ReflectionInput
@@ -29,7 +26,6 @@ from operad.algorithms import (
     Debate,
     DebateRecord,
     DebateTurn,
-    Evolutionary,
     Proposal,
     RefinementInput,
     ResearchInput,
@@ -39,11 +35,9 @@ from operad.algorithms import (
     Sweep,
     VerifierLoop,
 )
-from operad.metrics.base import MetricBase
 from operad.runtime.events import AlgorithmEvent
 from operad.runtime.observers import AgentEvent, Event
 from operad.runtime.observers import registry as obs_registry
-from operad.utils.ops import AppendRule
 
 from ..conftest import A, B
 
@@ -131,61 +125,6 @@ async def test_run_id_shared_with_agent_events(cfg, col) -> None:
     leaf_ids = {e.run_id for e in col.events if isinstance(e, AgentEvent)}
     assert len(algo_ids) == 1
     assert algo_ids == leaf_ids
-
-
-# ----- evolutionary -----------------------------------------------------
-
-
-class Q(BaseModel):
-    text: str = ""
-
-
-class R(BaseModel):
-    value: int = 0
-
-
-class _RuleCountLeaf(Agent[Q, R]):
-    input = Q
-    output = R
-
-    async def forward(self, x: Q) -> R:  # type: ignore[override]
-        return R.model_construct(value=len(self.rules))
-
-
-class _RuleCountMetric(MetricBase):
-    name = "rule_count"
-
-    def __init__(self, target: int) -> None:
-        self.target = target
-
-    async def score(self, predicted: BaseModel, expected: BaseModel) -> float:
-        pv = getattr(predicted, "value", 0)
-        return 1.0 - min(abs(pv - self.target), self.target) / self.target
-
-
-async def test_evolutionary_emits_one_event_per_generation(cfg, col) -> None:
-    seed = _RuleCountLeaf(config=cfg)
-    seed.rules = []
-    await seed.abuild()
-
-    evo = Evolutionary(
-        seed=seed,
-        mutations=[AppendRule(path="", rule="x")],
-        metric=_RuleCountMetric(target=3),
-        dataset=[(Q(text="a"), R(value=3))],
-        population_size=4,
-        generations=2,
-        rng=random.Random(0),
-    )
-    await evo.run()
-
-    kinds = _algo_kinds(col.events)
-    assert kinds == ["algo_start", "generation", "generation", "algo_end"]
-    gens = [e for e in _algo_events(col.events) if e.kind == "generation"]
-    assert [e.payload["gen_index"] for e in gens] == [0, 1]
-    for g in gens:
-        assert len(g.payload["population_scores"]) == 4
-        assert len(g.payload["survivor_indices"]) == 2  # half of 4
 
 
 # ----- debate -----------------------------------------------------------

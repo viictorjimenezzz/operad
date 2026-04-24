@@ -1,0 +1,171 @@
+"""`EvoGradient` — population-based optimizer for an agent tree.
+
+Each `step()` runs one generation: clone + mutate + build the current
+population, evaluate every individual on a held-out dataset using a
+single `Metric`, keep the top half, refill the empty slots by mutating
+survivors, then copy the best agent's declared state back onto the
+optimizer's root. The population is cached across `step()` calls so
+multi-generation runs accumulate progress.
+
+Unlike `TextualGradientDescent`, `EvoGradient` ignores
+`Parameter.grad` entirely — it drives selection via discrete `Op`
+mutations plus metric feedback, not textual gradients. Opting into
+`EvoGradient` means opting out of the textual-gradient flow for its
+lifetime.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import copy
+import random
+import warnings
+from typing import Any, Iterable
+
+from operad.benchmark.evaluate import evaluate
+from operad.core.agent import Agent
+from operad.metrics.base import Metric
+from operad.optim.optimizer import Optimizer, ParamGroup
+from operad.optim.parameter import Parameter
+from operad.utils.errors import BuildError
+from operad.utils.ops import Op
+
+
+class EvoGradient(Optimizer):
+    """Evolutionary optimizer that mutates the whole agent tree.
+
+    The brief for this class lives at
+    `.conductor/optim/4-1-optimizer-fleet.md`. Each `step()` runs one
+    generation; callers loop `step()` to run a full run. After every
+    step the best individual's declared state is written back to the
+    root via `Agent.load_state`, so the root agent the caller passed in
+    tracks the best-so-far.
+    """
+
+    def __init__(
+        self,
+        params: Iterable[Parameter[Any]] | Iterable[dict[str, Any]],
+        lr: float = 1.0,
+        *,
+        mutations: list[Op],
+        metric: Metric,
+        dataset: list[tuple[Any, Any]],
+        population_size: int = 8,
+        rng: random.Random | None = None,
+        max_mutation_retries: int = 3,
+    ) -> None:
+        if population_size < 2:
+            raise ValueError(
+                f"population_size must be >= 2, got {population_size}"
+            )
+        if not mutations:
+            raise ValueError("mutations must not be empty")
+        if not dataset:
+            raise ValueError("dataset must not be empty")
+        if max_mutation_retries < 1:
+            raise ValueError(
+                f"max_mutation_retries must be >= 1, got {max_mutation_retries}"
+            )
+        super().__init__(params, defaults={"lr": lr, "momentum": 0.0})
+        self._mutations = list(mutations)
+        self._metric = metric
+        self._dataset = list(dataset)
+        self._population_size = int(population_size)
+        self._max_mutation_retries = int(max_mutation_retries)
+        self._rng = rng or random.Random()
+        self._population: list[Agent[Any, Any]] | None = None
+        self._generation = 0
+        self._root = self._discover_root()
+
+    def _discover_root(self) -> Agent[Any, Any]:
+        for group in self.param_groups:
+            for p in group.params:
+                return p._agent()
+        raise ValueError("EvoGradient got no parameters with attached agents")
+
+    async def _attempt_mutate_and_build(
+        self, parent: Agent[Any, Any]
+    ) -> Agent[Any, Any] | None:
+        candidate = parent.clone()
+        op = copy.deepcopy(self._rng.choice(self._mutations))
+        op.apply(candidate)
+        try:
+            await candidate.abuild()
+        except BuildError:
+            op.undo(candidate)
+            return None
+        return candidate
+
+    async def _fresh_individual(
+        self, parent: Agent[Any, Any]
+    ) -> Agent[Any, Any]:
+        for _ in range(self._max_mutation_retries):
+            candidate = await self._attempt_mutate_and_build(parent)
+            if candidate is not None:
+                return candidate
+        warnings.warn(
+            "EvoGradient: all mutation attempts failed to build after "
+            f"{self._max_mutation_retries} retries; using unmutated clone",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        fallback = parent.clone()
+        await fallback.abuild()
+        return fallback
+
+    async def step(self) -> None:
+        if self._population is None:
+            self._population = list(
+                await asyncio.gather(
+                    *(
+                        self._fresh_individual(self._root)
+                        for _ in range(self._population_size)
+                    )
+                )
+            )
+
+        reports = await asyncio.gather(
+            *(
+                evaluate(a, self._dataset, [self._metric])
+                for a in self._population
+            )
+        )
+        ranked = sorted(
+            enumerate(reports),
+            key=lambda ir: -ir[1].summary[self._metric.name],
+        )
+        half = max(1, self._population_size // 2)
+        survivor_indices = [i for i, _ in ranked[:half]]
+        survivors = [self._population[i] for i in survivor_indices]
+
+        refill_parents = [
+            survivors[i % len(survivors)]
+            for i in range(self._population_size - len(survivors))
+        ]
+        refills = list(
+            await asyncio.gather(
+                *(self._fresh_individual(p) for p in refill_parents)
+            )
+        )
+        self._population = survivors + refills
+
+        best = survivors[0]
+        await self._write_back(best)
+        self._generation += 1
+
+    async def _write_back(self, best: Agent[Any, Any]) -> None:
+        """Copy `best`'s declared state onto the root and refresh tracked params."""
+        self._root.load_state(best.state())
+        await self._root.abuild()
+        for _, p in self.named_parameters():
+            p.read()
+
+    async def _apply_param_update(
+        self, param: Parameter[Any], group: ParamGroup
+    ) -> None:
+        raise NotImplementedError(
+            "EvoGradient overrides step() and does not use per-parameter updates"
+        )
+
+
+__all__ = ["EvoGradient"]
