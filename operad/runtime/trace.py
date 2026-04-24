@@ -10,14 +10,22 @@ registry and snapshots the run at the root's terminal event.
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..core.graph import TypeRegistry, from_json as _graph_from_json
 from ..core.output import OperadOutput
+from ..utils.errors import BuildError
+from ..utils.hashing import hash_schema
 from .observers.base import AgentEvent
+
+if TYPE_CHECKING:
+    from ..core.agent import Agent
+    from ..eval import EvalReport
+    from ..metrics.base import Metric
 
 
 class TraceStep(BaseModel):
@@ -70,9 +78,19 @@ class Trace(BaseModel):
 
     @classmethod
     def load(
-        cls, path: str | Path, *, type_registry: TypeRegistry | None = None
+        cls,
+        path: str | Path,
+        *,
+        type_registry: TypeRegistry | None = None,
+        agent: "Agent[Any, Any] | None" = None,
     ) -> "Trace":
-        """Load a trace written by `save`. Auto-detects JSON vs NDJSON."""
+        """Load a trace written by `save`. Auto-detects JSON vs NDJSON.
+
+        When ``agent`` is supplied, compares each step's recorded
+        ``hash_output_schema`` against the current schema hash of the
+        agent subtree at the same path and emits a ``UserWarning`` if
+        any step has drifted.
+        """
         p = Path(path)
         text = p.read_text(encoding="utf-8")
         stripped = text.lstrip()
@@ -87,11 +105,98 @@ class Trace(BaseModel):
         # type_registry is accepted for symmetry and future typed rehydration;
         # OperadOutput[Any] already round-trips via Pydantic's model_validate.
         _ = type_registry
-        return cls.model_validate(data)
+        trace = cls.model_validate(data)
+        if agent is not None:
+            drift = _collect_drift(trace, agent)
+            if drift:
+                paths = ", ".join(d[0] for d in drift)
+                warnings.warn(
+                    f"schema_drift: {len(drift)} step(s) differ from current agent "
+                    f"output schema ({paths})",
+                    category=UserWarning,
+                    stacklevel=2,
+                )
+        return trace
 
     def rehydrate_graph(self, registry: TypeRegistry | None = None) -> Any:
         """Rebuild the `AgentGraph` from the stored dict."""
         return _graph_from_json(self.graph, registry)
+
+    async def replay(
+        self,
+        agent: "Agent[Any, Any]",
+        metrics: "list[Metric]",
+        *,
+        strict: bool = True,
+        expected: "BaseModel | None" = None,
+        predicted_cls: "type[BaseModel] | None" = None,
+        expected_cls: "type[BaseModel] | None" = None,
+    ) -> "EvalReport":
+        """Re-score this trace against ``agent``'s ``metrics`` with a drift gate.
+
+        Raises ``BuildError("schema_drift", …)`` when any step's recorded
+        ``hash_output_schema`` differs from the corresponding leaf's
+        current schema. Pass ``strict=False`` to downgrade to a warning
+        and tag the returned report with ``summary["schema_drift"] = 1.0``.
+        """
+        from .replay import replay as _replay
+
+        drift = _collect_drift(self, agent)
+        if drift:
+            paths = ", ".join(d[0] for d in drift)
+            message = (
+                f"output schema changed since trace was captured "
+                f"({len(drift)} step(s): {paths})"
+            )
+            if strict:
+                raise BuildError(
+                    "schema_drift", message, agent=type(agent).__name__
+                )
+            warnings.warn(
+                f"schema_drift: {message}",
+                category=UserWarning,
+                stacklevel=2,
+            )
+        report = await _replay(
+            self,
+            metrics,
+            expected=expected,
+            predicted_cls=predicted_cls,
+            expected_cls=expected_cls,
+        )
+        if drift:
+            report.summary["schema_drift"] = 1.0
+        return report
+
+
+def _collect_drift(
+    trace: "Trace", agent: "Agent[Any, Any]"
+) -> list[tuple[str, str, str]]:
+    """Return ``(agent_path, recorded_hash, current_hash)`` for drifted steps.
+
+    Steps whose recorded hash is empty (error placeholders) are skipped,
+    as are steps resolving to an agent without an ``output`` attribute
+    (mid-graph composites with no ``Output`` to hash).
+    """
+    from ..core.agent import _labelled_tree
+
+    index = {path: node for path, node in _labelled_tree(agent)}
+    drifted: list[tuple[str, str, str]] = []
+    for step in trace.steps:
+        recorded = step.output.hash_output_schema
+        if not recorded:
+            continue
+        resolved = index.get(step.agent_path)
+        if resolved is None:
+            drifted.append((step.agent_path, recorded, ""))
+            continue
+        out_cls = getattr(resolved, "output", None)
+        if out_cls is None or not isinstance(out_cls, type):
+            continue
+        current = hash_schema(out_cls)
+        if current != recorded:
+            drifted.append((step.agent_path, recorded, current))
+    return drifted
 
 
 # --- observer ---------------------------------------------------------------
