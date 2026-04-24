@@ -8,13 +8,47 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from .base import AgentEvent
+from ..events import AlgorithmEvent
+from .base import AgentEvent, Event
 
 
 def _dump_payload(x: BaseModel | None) -> Any:
     if x is None:
         return None
     return x.model_dump(mode="json")
+
+
+def _agent_event_to_dict(event: AgentEvent) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "event": "agent",
+        "run_id": event.run_id,
+        "agent_path": event.agent_path,
+        "kind": event.kind,
+        "input": _dump_payload(event.input),
+        "output": _dump_payload(event.output),
+        "started_at": event.started_at,
+        "finished_at": event.finished_at,
+        "metadata": event.metadata,
+    }
+    if event.error is not None:
+        record["error"] = {
+            "type": type(event.error).__name__,
+            "message": str(event.error),
+        }
+    return record
+
+
+def _algorithm_event_to_dict(event: AlgorithmEvent) -> dict[str, Any]:
+    return {
+        "event": "algorithm",
+        "run_id": event.run_id,
+        "algorithm_path": event.algorithm_path,
+        "kind": event.kind,
+        "payload": event.payload,
+        "started_at": event.started_at,
+        "finished_at": event.finished_at,
+        "metadata": event.metadata,
+    }
 
 
 class JsonlObserver:
@@ -25,23 +59,12 @@ class JsonlObserver:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._fh = self.path.open("a", encoding="utf-8")
 
-    async def on_event(self, event: AgentEvent) -> None:
-        record: dict[str, Any] = {
-            "run_id": event.run_id,
-            "agent_path": event.agent_path,
-            "kind": event.kind,
-            "input": _dump_payload(event.input),
-            "output": _dump_payload(event.output),
-            "started_at": event.started_at,
-            "finished_at": event.finished_at,
-            "metadata": event.metadata,
-        }
-        if event.error is not None:
-            record["error"] = {
-                "type": type(event.error).__name__,
-                "message": str(event.error),
-            }
-        self._fh.write(json.dumps(record) + "\n")
+    async def on_event(self, event: Event) -> None:
+        if isinstance(event, AlgorithmEvent):
+            record = _algorithm_event_to_dict(event)
+        else:
+            record = _agent_event_to_dict(event)
+        self._fh.write(json.dumps(record, default=str) + "\n")
         self._fh.flush()
 
     def close(self) -> None:
