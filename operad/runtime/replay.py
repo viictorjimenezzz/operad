@@ -14,7 +14,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from ..eval import EvalReport
+from ..benchmark.evaluate import EvalReport
 from ..metrics.base import Metric
 from .trace import Trace
 

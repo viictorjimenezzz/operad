@@ -16,8 +16,7 @@ from .core import (
     build_agent,
 )
 from .agents import Parallel, Pipeline
-from .datasets import Dataset
-from .eval import evaluate
+from .benchmark import Dataset, evaluate
 from .metrics import Metric
 from .runtime.trace import Trace
 from .utils.errors import BuildError, BuildReason
