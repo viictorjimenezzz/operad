@@ -1,24 +1,25 @@
-"""Conversational domain: turn-level leaves + composed conversational patterns.
-
-Leaves live under ``components/``; composed patterns sit at the domain
-root, mirroring ``operad.agents.reasoning``. ``Talker`` is the canonical
-end-to-end composition: a safeguarded, persona-styled response.
-"""
+"""Conversational domain: turn-level talker and titlers."""
 
 from __future__ import annotations
 
-from .components import Persona, Safeguard, TurnTaker
-from .schemas import SafeguardVerdict, StyledUtterance, TurnChoice, Utterance
-from .talker import RefusalLeaf, Talker
+from .components import ConversationTitler, InteractionTitler, Talker
+from .schemas import (
+    ConversationTitlerInput,
+    ConversationTitlerOutput,
+    InteractionTitlerInput,
+    InteractionTitlerOutput,
+    TalkerInput,
+    TextResponse,
+)
 
 __all__ = [
-    "Persona",
-    "RefusalLeaf",
-    "Safeguard",
-    "SafeguardVerdict",
-    "StyledUtterance",
+    "ConversationTitler",
+    "ConversationTitlerInput",
+    "ConversationTitlerOutput",
+    "InteractionTitler",
+    "InteractionTitlerInput",
+    "InteractionTitlerOutput",
     "Talker",
-    "TurnChoice",
-    "TurnTaker",
-    "Utterance",
+    "TalkerInput",
+    "TextResponse",
 ]

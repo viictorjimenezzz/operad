@@ -1,5 +1,5 @@
-"""Memory-domain demo: extract beliefs from a two-turn conversation
-and store them in a typed ``MemoryStore[Belief]``.
+"""Memory-domain demo: extract beliefs from an assistant utterance
+and store them in a typed ``MemoryStore[BeliefItem]``.
 
 Requires a local llama-server serving google/gemma-4-e4b on 127.0.0.1:9000.
 Override via OPERAD_LLAMACPP_HOST and OPERAD_LLAMACPP_MODEL.
@@ -16,11 +16,10 @@ import sys
 
 from operad.core.config import Sampling
 from operad.agents import (
-    Belief,
-    BeliefExtractor,
-    Conversation,
+    BeliefItem,
+    Beliefs,
+    BeliefsInput,
     MemoryStore,
-    Turn,
 )
 
 from _config import local_config, server_reachable
@@ -41,30 +40,39 @@ async def main(offline: bool = False) -> None:
         )
         raise SystemExit(1)
 
-    extractor = BeliefExtractor(config=cfg)
+    extractor = Beliefs(config=cfg)
     await extractor.abuild()
 
-    conversation = Conversation(
-        turns=[
-            Turn(speaker="user", text="I live in Berlin and I work as an ML researcher."),
-            Turn(speaker="user", text="I usually prefer tea over coffee."),
-        ]
+    utterance = (
+        "Climate change significantly impacts marine biodiversity. "
+        "Rising sea temperatures drive coral bleaching and shifting fish "
+        "migration routes."
     )
 
-    beliefs = (await extractor(conversation)).response
+    result = (
+        await extractor(
+            BeliefsInput(
+                current_beliefs_json="[]",
+                current_beliefs_summary="",
+                turn_id=1,
+                utterance=utterance,
+            )
+        )
+    ).response
 
-    store: MemoryStore[Belief] = MemoryStore(schema=Belief)
-    for b in beliefs.items:
-        store.add(b)
+    store: MemoryStore[BeliefItem] = MemoryStore(schema=BeliefItem)
+    for op in result.operations:
+        if op.op == "add" and op.item is not None:
+            store.add(op.item)
 
     print(f"extracted {len(store.all())} beliefs:")
     for b in store.all():
-        print(f"  - ({b.subject}, {b.predicate}, {b.object})  conf={b.confidence:.2f}")
+        print(f"  - [{b.topic_key}] {b.claim_text}  salience={b.salience_score:.2f}")
 
-    high_conf = store.filter(lambda b: b.confidence > 0.7)
-    print(f"\n{len(high_conf)} with confidence > 0.7:")
-    for b in high_conf:
-        print(f"  - ({b.subject}, {b.predicate}, {b.object})")
+    high_salience = store.filter(lambda b: b.salience_score > 0.7)
+    print(f"\n{len(high_salience)} with salience > 0.7:")
+    for b in high_salience:
+        print(f"  - [{b.topic_key}] {b.claim_text}")
 
 
 if __name__ == "__main__":

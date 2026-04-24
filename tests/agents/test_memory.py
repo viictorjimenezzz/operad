@@ -1,19 +1,30 @@
-"""Tests for the memory extractor leaves."""
+"""Tests for the memory extractor leaves and the MemoryStore primitive."""
 
 from __future__ import annotations
-import pytest
-from operad import Example
-from operad.agents import Belief, BeliefExtractor, Beliefs, Conversation, EpisodicSummarizer, Summary, Turn, UserModel, UserModelExtractor
+
 from pathlib import Path
+
+import pytest
 from pydantic import BaseModel
-from operad.agents import Belief, MemoryStore
+
+from operad import Example
+from operad.agents import (
+    BeliefItem,
+    BeliefOperation,
+    Beliefs,
+    BeliefsInput,
+    BeliefsOutput,
+    MemoryStore,
+    User,
+    UserInput,
+    UserOutput,
+)
 
 
 # --- from test_memory_components.py ---
 LEAF_SPECS = [
-    (BeliefExtractor, Conversation, Beliefs),
-    (UserModelExtractor, Conversation, UserModel),
-    (EpisodicSummarizer, Conversation, Summary),
+    (Beliefs, BeliefsInput, BeliefsOutput),
+    (User, UserInput, UserOutput),
 ]
 
 
@@ -48,54 +59,46 @@ async def _patched(self, x):
 
 
 @pytest.mark.asyncio
-async def test_belief_extractor_invoke_with_canned_forward(cfg) -> None:
-    leaf = BeliefExtractor(config=cfg)
-    leaf._canned = Beliefs(
-        items=[
-            Belief(
-                subject="user",
-                predicate="likes",
-                object="jazz",
-                confidence=0.8,
+async def test_beliefs_invoke_with_canned_forward(cfg) -> None:
+    leaf = Beliefs(config=cfg)
+    leaf._canned = BeliefsOutput(
+        operations=[
+            BeliefOperation(
+                op="add",
+                item=BeliefItem(
+                    topic_key="user_music_preference",
+                    claim_text="User likes jazz.",
+                    salience_score=0.8,
+                ),
+                reason="Stated preference.",
             ),
-        ]
+        ],
+        updated_summary="User likes jazz.",
     )
     type(leaf).forward = _patched  # type: ignore[method-assign]
     try:
         await leaf.abuild()
-        out = await leaf(Conversation(turns=[Turn(speaker="user", text="I love jazz.")]))
-        assert isinstance(out.response, Beliefs)
-        assert out.response.items[0].object == "jazz"
+        out = await leaf(BeliefsInput(utterance="I love jazz."))
+        assert isinstance(out.response, BeliefsOutput)
+        assert out.response.operations[0].item is not None
+        assert out.response.operations[0].item.claim_text == "User likes jazz."
     finally:
         del type(leaf).forward
 
 
 @pytest.mark.asyncio
-async def test_user_model_extractor_invoke_with_canned_forward(cfg) -> None:
-    leaf = UserModelExtractor(config=cfg)
-    leaf._canned = UserModel(attributes={"name": "Ada"})
+async def test_user_invoke_with_canned_forward(cfg) -> None:
+    leaf = User(config=cfg)
+    leaf._canned = UserOutput(operations=[])
     type(leaf).forward = _patched  # type: ignore[method-assign]
     try:
         await leaf.abuild()
-        out = await leaf(Conversation(turns=[Turn(speaker="user", text="I'm Ada.")]))
-        assert isinstance(out.response, UserModel)
-        assert out.response.attributes == {"name": "Ada"}
+        out = await leaf(UserInput(user_message="hello"))
+        assert isinstance(out.response, UserOutput)
+        assert out.response.operations == []
     finally:
         del type(leaf).forward
 
-
-@pytest.mark.asyncio
-async def test_episodic_summarizer_invoke_with_canned_forward(cfg) -> None:
-    leaf = EpisodicSummarizer(config=cfg)
-    leaf._canned = Summary(title="Hi", text="A short greeting.")
-    type(leaf).forward = _patched  # type: ignore[method-assign]
-    try:
-        await leaf.abuild()
-        out = await leaf(Conversation(turns=[Turn(speaker="user", text="hello")]))
-        assert isinstance(out.response, Summary)
-        assert out.response.title == "Hi"
-    finally:
-        del type(leaf).forward
 
 # --- from test_memory_store.py ---
 class _Note(BaseModel):
@@ -123,7 +126,7 @@ def test_add_rejects_wrong_type() -> None:
 def test_add_rejects_other_pydantic_type() -> None:
     store: MemoryStore[_Note] = MemoryStore(schema=_Note)
     with pytest.raises(TypeError):
-        store.add(Belief(subject="x", predicate="y", object="z"))  # type: ignore[arg-type]
+        store.add(BeliefItem(topic_key="x", claim_text="y"))  # type: ignore[arg-type]
 
 
 def test_persistence_roundtrip(tmp_path: Path) -> None:
