@@ -114,6 +114,7 @@ from operad.optim.tape import (
     enabled,
     tape,
 )
+from operad.optim.traceback import PromptTraceback, TracebackFrame, traceback
 
 __all__ = [
     "APEInput",
@@ -162,6 +163,7 @@ __all__ = [
     "ParameterGradInput",
     "ParameterGradOutput",
     "ParameterKind",
+    "PromptTraceback",
     "PropagateInput",
     "PropagateOutput",
     "ReduceLROnPlateau",
@@ -182,6 +184,7 @@ __all__ = [
     "TextRewriter",
     "TextualGradient",
     "TextualGradientDescent",
+    "TracebackFrame",
     "VocabConstraint",
     "WarmupLR",
     "apply_rewrite",
@@ -195,4 +198,5 @@ __all__ = [
     "register_backward_rule",
     "rewriter_for",
     "tape",
+    "traceback",
 ]
