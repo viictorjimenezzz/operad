@@ -6,7 +6,9 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from operad import Trace, TraceDiff, TraceStep, trace_diff
+from operad import Trace
+from operad.runtime.trace import TraceStep
+from operad.runtime.trace_diff import TraceDiff, trace_diff
 from operad.core.output import OperadOutput
 
 

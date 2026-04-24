@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from operad import Hit, Hits, Query, Retriever
+from operad.agents import Hit, Hits, Query, Retriever
 
 
 pytestmark = pytest.mark.asyncio

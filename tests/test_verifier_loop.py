@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from operad import Agent, Candidate, Score, VerifierLoop
+from operad import Agent
+from operad.algorithms import Candidate, Score, VerifierLoop
 
 from .conftest import A, B
 

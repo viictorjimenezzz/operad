@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from operad import Agent, Reflection, ReflectionInput, RefinementInput, SelfRefine
+from operad import Agent
+from operad.agents import Reflection, ReflectionInput
+from operad.algorithms import RefinementInput, SelfRefine
 
 from .conftest import A, B
 

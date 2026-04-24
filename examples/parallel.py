@@ -17,7 +17,9 @@ import asyncio
 
 from pydantic import BaseModel, Field
 
-from operad import Parallel, Reasoner, set_limit
+from operad import Parallel
+from operad.agents import Reasoner
+from operad.runtime import set_limit
 
 from _config import local_config
 

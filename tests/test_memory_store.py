@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from operad import Belief, MemoryStore
+from operad.agents import Belief, MemoryStore
 
 
 class _Note(BaseModel):

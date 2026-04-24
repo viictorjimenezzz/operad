@@ -15,7 +15,8 @@ import asyncio
 
 from pydantic import BaseModel, Field
 
-from operad import Agent, Configuration, Sweep
+from operad import Agent, Configuration
+from operad.algorithms import Sweep
 
 
 class Question(BaseModel):

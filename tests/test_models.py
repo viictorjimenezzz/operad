@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from operad import Configuration, resolve_model
+from operad import Configuration
+from operad.core.models import resolve_model
 
 
 def test_llamacpp_resolver_threads_params() -> None:

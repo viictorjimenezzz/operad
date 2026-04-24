@@ -13,7 +13,7 @@ from typing import Generic, Iterable, Iterator, TypeVar
 
 from pydantic import BaseModel
 
-from .core.output import hash_json
+from .utils.hashing import hash_json
 
 In = TypeVar("In", bound=BaseModel)
 Out = TypeVar("Out", bound=BaseModel)

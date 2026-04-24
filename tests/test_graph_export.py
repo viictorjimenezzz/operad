@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from operad import Pipeline, to_json, to_mermaid
+from operad import Pipeline
+from operad.core.graph import to_json, to_mermaid
 
 from .conftest import A, B, C, FakeLeaf
 

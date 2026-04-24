@@ -6,7 +6,8 @@ from typing import Any
 
 import pytest
 
-from operad import Agent, Reflection, ReflectionInput, Reflector
+from operad import Agent
+from operad.agents import Reflection, ReflectionInput, Reflector
 
 
 pytestmark = pytest.mark.asyncio

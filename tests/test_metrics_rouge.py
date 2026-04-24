@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from operad import Metric, Rouge1
+from operad import Metric
+from operad.metrics import Rouge1
 
 from .conftest import A
 

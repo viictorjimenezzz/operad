@@ -7,11 +7,9 @@ import random
 import pytest
 from pydantic import BaseModel
 
-from operad import (
-    Agent,
-    AppendRule,
-    Evolutionary,
-)
+from operad import Agent
+from operad.algorithms import Evolutionary
+from operad.utils.ops import AppendRule
 
 
 pytestmark = pytest.mark.asyncio
@@ -40,7 +38,7 @@ class _RuleCountLeaf(Agent[Q, R]):
         return R.model_construct(value=len(self.rules))
 
 
-from operad import MetricBase
+from operad.metrics.base import MetricBase
 
 
 class _RuleCountMetric(MetricBase):

@@ -7,7 +7,8 @@ the flattest possible call site.
 
 from __future__ import annotations
 
-from .agent import Agent, Example, In, Out
+from .agent import Agent, In, Out
+from .example import Example
 from .build import AgentGraph, Edge, Node, abuild_agent, build_agent
 from .config import Backend, Configuration
 from .diff import AgentDiff, Change

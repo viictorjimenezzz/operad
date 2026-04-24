@@ -3,6 +3,15 @@
 from __future__ import annotations
 
 from .errors import BuildError, BuildReason
+from .hashing import (
+    hash_config,
+    hash_input,
+    hash_json,
+    hash_model,
+    hash_prompt,
+    hash_schema,
+    hash_str,
+)
 from .ops import (
     AppendExample,
     AppendRule,
@@ -35,4 +44,11 @@ __all__ = [
     "SetTemperature",
     "TweakRole",
     "_resolve",
+    "hash_config",
+    "hash_input",
+    "hash_json",
+    "hash_model",
+    "hash_prompt",
+    "hash_schema",
+    "hash_str",
 ]

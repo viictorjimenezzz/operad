@@ -12,7 +12,13 @@ from typing import Any
 
 import pytest
 
-from operad import Agent, AgentState, BuildError, Example, Pipeline
+from operad import (
+    Agent,
+    AgentState,
+    BuildError,
+    Example,
+    Pipeline,
+)
 
 from .conftest import A, B, C, FakeLeaf
 

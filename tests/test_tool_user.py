@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from operad import ToolCall, ToolResult, ToolUser
+from operad.agents import ToolCall, ToolResult, ToolUser
 
 
 pytestmark = pytest.mark.asyncio

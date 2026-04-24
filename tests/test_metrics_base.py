@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from operad import MetricBase
+from operad.metrics.base import MetricBase
 
 from .conftest import A
 

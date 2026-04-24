@@ -6,7 +6,8 @@ import asyncio
 
 import pytest
 
-from operad import ExactMatch, JsonValid, Latency, Metric
+from operad import Metric
+from operad.metrics import ExactMatch, JsonValid, Latency
 
 from .conftest import A, B
 

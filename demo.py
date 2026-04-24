@@ -23,16 +23,12 @@ from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.panel import Panel
 
-from operad import (
-    AppendRule,
-    Classifier,
-    Pipeline,
-    Reasoner,
-    RichDashboardObserver,
-    TraceObserver,
-    observers,
-    to_mermaid,
-)
+from operad import Pipeline
+from operad.agents import Classifier, Reasoner
+from operad.core.graph import to_mermaid
+from operad.runtime.observers import RichDashboardObserver, observers
+from operad.runtime.trace import TraceObserver
+from operad.utils.ops import AppendRule
 
 sys.path.insert(0, str(Path(__file__).parent / "examples"))
 from _config import DEFAULT_HOST, DEFAULT_MODEL, local_config  # noqa: E402

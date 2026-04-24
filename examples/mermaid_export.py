@@ -15,7 +15,9 @@ import asyncio
 
 from pydantic import BaseModel, Field
 
-from operad import Configuration, Extractor, Pipeline, Reasoner, to_mermaid
+from operad import Configuration, Pipeline
+from operad.agents import Extractor, Reasoner
+from operad.core.graph import to_mermaid
 
 
 class Sentence(BaseModel):

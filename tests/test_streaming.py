@@ -9,7 +9,8 @@ from typing import Any
 import pytest
 import strands
 
-from operad import Agent, ChunkEvent, Configuration, OperadOutput
+from operad import Agent, Configuration, OperadOutput
+from operad.runtime.streaming import ChunkEvent
 from operad.runtime.observers import base as _obs
 from operad.utils.errors import BuildError
 

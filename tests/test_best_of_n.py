@@ -6,7 +6,8 @@ from typing import Any
 
 import pytest
 
-from operad import Agent, BestOfN, Candidate, Score
+from operad import Agent
+from operad.algorithms import BestOfN, Candidate, Score
 
 from .conftest import A, B
 

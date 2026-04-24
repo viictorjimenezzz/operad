@@ -6,10 +6,10 @@ from typing import Any
 
 import pytest
 
-from operad import (
+from operad import Agent
+from operad.agents import (
     Action,
     Actor,
-    Agent,
     Answer,
     Evaluator,
     Extractor,

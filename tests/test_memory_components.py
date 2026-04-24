@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from operad import (
+from operad import Example
+from operad.agents import (
     Belief,
     BeliefExtractor,
     Beliefs,
     Conversation,
     EpisodicSummarizer,
-    Example,
     Summary,
     Turn,
     UserModel,

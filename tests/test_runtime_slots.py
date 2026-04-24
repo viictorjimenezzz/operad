@@ -6,7 +6,8 @@ import asyncio
 
 import pytest
 
-from operad import Configuration, SlotRegistry
+from operad import Configuration
+from operad.runtime import SlotRegistry
 from operad.runtime import acquire, registry
 
 
