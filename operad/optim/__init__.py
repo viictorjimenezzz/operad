@@ -29,6 +29,23 @@ Wave 1 slot 1-1 ships the `Parameter` data spine; later waves add
 
 from __future__ import annotations
 
+from operad.optim.grad_agent import (
+    PARAMETER_GRAD_AGENTS,
+    BackpropAgent,
+    CategoricalParameterGrad,
+    ExampleListParameterGrad,
+    FloatParameterGrad,
+    ParameterGradAgent,
+    ParameterGradInput,
+    ParameterGradOutput,
+    PropagateInput,
+    PropagateOutput,
+    RuleListParameterGrad,
+    TextParameterGrad,
+    parameter_grad,
+    parameter_grad_for,
+    propagate,
+)
 from operad.optim.loss import (
     CompositeLoss,
     CriticLoss,
@@ -60,11 +77,16 @@ from operad.optim.tape import (
 )
 
 __all__ = [
+    "PARAMETER_GRAD_AGENTS",
+    "BackpropAgent",
     "CategoricalParameter",
+    "CategoricalParameterGrad",
     "CompositeLoss",
     "CriticLoss",
     "ExampleListParameter",
+    "ExampleListParameterGrad",
     "FloatParameter",
+    "FloatParameterGrad",
     "JSONShapeLoss",
     "ListConstraint",
     "Loss",
@@ -72,15 +94,25 @@ __all__ = [
     "NumericConstraint",
     "Parameter",
     "ParameterConstraint",
+    "ParameterGradAgent",
+    "ParameterGradInput",
+    "ParameterGradOutput",
     "ParameterKind",
+    "PropagateInput",
+    "PropagateOutput",
     "RuleListParameter",
+    "RuleListParameterGrad",
     "Tape",
     "TapeEntry",
     "TapeObserver",
     "TextConstraint",
     "TextParameter",
+    "TextParameterGrad",
     "TextualGradient",
     "VocabConstraint",
     "enabled",
+    "parameter_grad",
+    "parameter_grad_for",
+    "propagate",
     "tape",
 ]
