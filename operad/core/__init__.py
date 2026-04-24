@@ -12,7 +12,7 @@ from .example import Example
 from .build import AgentGraph, Edge, Node, abuild_agent, build_agent
 from .config import Backend, Configuration, IOConfig, Resilience, Runtime, Sampling
 from .diff import AgentDiff, Change
-from .freeze import freeze_agent, thaw_agent
+from .freeze import freeze_agent, thaw_agent, thaw_pair
 from .graph import from_json, to_json, to_mermaid
 from .output import OperadOutput
 from .state import AgentState
@@ -40,6 +40,7 @@ __all__ = [
     "freeze_agent",
     "from_json",
     "thaw_agent",
+    "thaw_pair",
     "to_json",
     "to_mermaid",
 ]

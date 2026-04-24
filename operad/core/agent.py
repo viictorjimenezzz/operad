@@ -305,6 +305,14 @@ class Agent(strands.Agent, Generic[In, Out]):
         object.__setattr__(self, "_built", False)
         object.__setattr__(self, "_graph", None)
 
+    def state_dict(self) -> AgentState:
+        """PyTorch-style alias for :meth:`state`."""
+        return self.state()
+
+    def load_state_dict(self, sd: AgentState) -> None:
+        """PyTorch-style alias for :meth:`load_state`."""
+        self.load_state(sd)
+
     def clone(self) -> Self:
         """Return a fresh, unbuilt deep copy of this agent.
 

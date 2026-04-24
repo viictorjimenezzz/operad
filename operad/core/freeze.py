@@ -26,7 +26,9 @@ import json
 import pickle
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel
 
 from ..utils.errors import BuildError
 from .agent import Agent, _labelled_tree, _system_to_str
@@ -34,6 +36,9 @@ from .example import Example
 from .graph import from_json, to_json
 from .output import OPERAD_VERSION_HASH, PYTHON_VERSION_HASH
 from .state import AgentState
+
+if TYPE_CHECKING:
+    from ..optim.optimizer import Optimizer
 
 
 _KNOWN_AGENT_ATTRS: frozenset[str] = frozenset(
@@ -188,10 +193,103 @@ def _redact_state(state: AgentState) -> AgentState:
     )
 
 
-def freeze_agent(agent: Agent, path: str | Path) -> None:
+def _serialize_optimizer_state(sd: dict[str, Any]) -> dict[str, Any]:
+    """JSON-safe view of `Optimizer.state_dict()`.
+
+    Walks recursively: ``BaseModel`` leaves are ``.model_dump(mode="json")``,
+    any ``"api_key"`` key is scrubbed to ``None``, and non-JSON-native
+    values (callables, sets, custom classes, bytes, ...) raise a loud
+    ``BuildError`` — silent drops would corrupt resume.
+
+    Note: ``TextualGradientDescent._cache`` is intentionally not exposed
+    by ``state_dict()`` and thus not scrubbed here; rewriters rebuild
+    lazily post-thaw. If a subclass ever adds `RewriteAgent` instances
+    to ``state_dict``, extend this walker before shipping that change.
+    """
+
+    def _walk(value: Any, path: str) -> Any:
+        if isinstance(value, BaseModel):
+            return value.model_dump(mode="json")
+        if value is None or isinstance(value, (bool, int, float, str)):
+            return value
+        if isinstance(value, dict):
+            out: dict[str, Any] = {}
+            for k, v in value.items():
+                if not isinstance(k, str):
+                    raise BuildError(
+                        "not_built",
+                        f"cannot freeze optimizer state at {path}: "
+                        f"dict key {k!r} is not a string",
+                    )
+                if k == "api_key":
+                    out[k] = None
+                    continue
+                out[k] = _walk(v, f"{path}.{k}")
+            return out
+        if isinstance(value, (list, tuple)):
+            return [_walk(v, f"{path}[{i}]") for i, v in enumerate(value)]
+        raise BuildError(
+            "not_built",
+            f"cannot freeze optimizer state at {path}: value of type "
+            f"{type(value).__name__} is not JSON-serializable",
+        )
+
+    result = _walk(sd, "optimizer_state")
+    if not isinstance(result, dict):
+        raise BuildError(
+            "not_built",
+            f"optimizer.state_dict() must return a dict, got {type(sd).__name__}",
+        )
+    return result
+
+
+def _deserialize_optimizer_state(data: Any) -> dict[str, Any] | None:
+    """Rehydrate optimizer state for ``Optimizer.load_state_dict``.
+
+    The only typed Pydantic leaf in the base-class ``state_dict`` is
+    ``param_groups[i].constraint_override``; we rehydrate that via the
+    ``ParameterConstraint`` discriminated union so the reloaded
+    optimizer's ``state_dict()`` matches the original. Everything else
+    is plain dicts/lists/primitives.
+    """
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise BuildError(
+            "not_built",
+            f"optimizer_state must be a dict, got {type(data).__name__}",
+        )
+
+    from pydantic import TypeAdapter
+
+    from ..optim.parameter import ParameterConstraint
+
+    adapter: TypeAdapter[Any] = TypeAdapter(ParameterConstraint | None)
+
+    groups = data.get("param_groups")
+    if isinstance(groups, list):
+        for group in groups:
+            if not isinstance(group, dict):
+                continue
+            co = group.get("constraint_override")
+            if co is not None:
+                group["constraint_override"] = adapter.validate_python(co)
+
+    return data
+
+
+def freeze_agent(
+    agent: Agent,
+    path: str | Path,
+    *,
+    optimizer: "Optimizer | None" = None,
+) -> None:
     """Persist a built `agent` to `path` as a single JSON file.
 
     See module docstring for the format and v1 limitations.
+
+    If `optimizer` is provided, its `state_dict()` is captured under an
+    ``"optimizer_state"`` key for resume via :func:`thaw_pair`.
     """
     if not agent._built:
         raise BuildError(
@@ -231,7 +329,7 @@ def freeze_agent(agent: Agent, path: str | Path) -> None:
     state = _redact_state(agent.state())
     graph_json = to_json(agent._graph) if agent._graph is not None else None
 
-    payload = {
+    payload: dict[str, Any] = {
         "operad_version_hash": OPERAD_VERSION_HASH,
         "python_version_hash": PYTHON_VERSION_HASH,
         "agent_class": _qualified_class_name(type(agent)),
@@ -241,6 +339,11 @@ def freeze_agent(agent: Agent, path: str | Path) -> None:
         "prompts": prompts,
         "routing": routing,
     }
+
+    if optimizer is not None:
+        payload["optimizer_state"] = _serialize_optimizer_state(
+            optimizer.state_dict()
+        )
 
     Path(path).write_text(
         json.dumps(payload, sort_keys=True, indent=2), encoding="utf-8"
@@ -347,11 +450,8 @@ def _restore_extra(
         _restore_extra(child, f"{qual_path}.{attr}", routing)
 
 
-def thaw_agent(path: str | Path) -> Agent:
-    """Reconstitute a built agent previously written with `freeze_agent`."""
-    raw = Path(path).read_text(encoding="utf-8")
-    data = json.loads(raw)
-
+def _thaw_from_data(data: dict[str, Any]) -> Agent:
+    """Reconstruct a built Agent from an already-parsed frozen payload."""
     if data.get("operad_version_hash") != OPERAD_VERSION_HASH:
         raise BuildError(
             "not_built",
@@ -397,4 +497,30 @@ def thaw_agent(path: str | Path) -> Agent:
     return root
 
 
-__all__ = ["freeze_agent", "thaw_agent"]
+def thaw_agent(path: str | Path) -> Agent:
+    """Reconstitute a built agent previously written with `freeze_agent`.
+
+    Any persisted optimizer state is silently ignored; use
+    :func:`thaw_pair` to recover it for resume.
+    """
+    raw = Path(path).read_text(encoding="utf-8")
+    data = json.loads(raw)
+    return _thaw_from_data(data)
+
+
+def thaw_pair(path: str | Path) -> tuple[Agent, dict[str, Any] | None]:
+    """Thaw an agent and recover any persisted optimizer state.
+
+    Returns ``(agent, optimizer_state)``. ``optimizer_state`` is
+    ``None`` when the artefact was written without ``optimizer=...``.
+    Pass the dict to ``optimizer.load_state_dict(...)`` to resume
+    training.
+    """
+    raw = Path(path).read_text(encoding="utf-8")
+    data = json.loads(raw)
+    agent = _thaw_from_data(data)
+    opt_state = _deserialize_optimizer_state(data.get("optimizer_state"))
+    return agent, opt_state
+
+
+__all__ = ["freeze_agent", "thaw_agent", "thaw_pair"]
