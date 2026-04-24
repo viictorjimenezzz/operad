@@ -8,12 +8,15 @@ the Switch dispatches to the matching Reasoner branch. Every edge is
 typed; ``abuild()`` verifies that the Router's narrow ``Choice`` label
 set covers every branch.
 
-    uv run python examples/router_switch.py
+Run:
+    uv run python examples/router_switch.py [--offline]
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
+import sys
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -27,7 +30,9 @@ from operad.agents import (
     Switch,
 )
 
-from _config import local_config
+from _config import local_config, server_reachable
+
+_SCRIPT = "router_switch.py"
 
 
 class Reply(BaseModel):
@@ -38,8 +43,18 @@ class Label(Choice[Literal["greet", "factoid"]]):
     pass
 
 
-async def _main() -> None:
+async def main(offline: bool = False) -> None:
     cfg = local_config(sampling=Sampling(temperature=0.3, max_tokens=256))
+    print(f"[{_SCRIPT}] backend={cfg.backend} host={cfg.host} model={cfg.model}")
+    if offline:
+        print(f"[{_SCRIPT}] --offline not supported for this example (needs a real model); exiting 0 as no-op.")
+        return
+    if not server_reachable(cfg.host):
+        print(
+            f"[{_SCRIPT}] cannot reach {cfg.host} — start llama-server or pass --offline",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
 
     router = Router(
         config=cfg,
@@ -76,4 +91,11 @@ async def _main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(_main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Run without contacting any LLM server.",
+    )
+    args = parser.parse_args()
+    asyncio.run(main(offline=args.offline))

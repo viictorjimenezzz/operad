@@ -6,11 +6,13 @@ Uses a hand-rolled leaf that echoes its own `task` length. Shows the
 shape of a `SweepReport` and the ``(parameters, output)`` layout of
 each cell.
 
-    uv run python examples/sweep_demo.py
+Run:
+    uv run python examples/sweep_demo.py [--offline]
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 
 from pydantic import BaseModel, Field
@@ -36,7 +38,7 @@ class _EchoLeaf(Agent[Question, Answer]):
         return Answer.model_construct(length=len(self.task))
 
 
-async def _main() -> None:
+async def main(offline: bool = False) -> None:
     cfg = Configuration(
         backend="llamacpp",
         host="127.0.0.1:0",
@@ -58,4 +60,11 @@ async def _main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(_main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Run without contacting any LLM server.",
+    )
+    args = parser.parse_args()
+    asyncio.run(main(offline=args.offline))

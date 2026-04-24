@@ -57,7 +57,7 @@ async def sensitivity(
     """Rank configuration parameters by the metric shift they induce.
 
     The agent must be built. ``perturbations`` maps dotted attribute paths
-    (e.g. ``"config.temperature"``) to absolute values to try. If omitted,
+    (e.g. ``"config.sampling.temperature"``) to absolute values to try. If omitted,
     a default set probes common sampling knobs derived from the agent's
     current configuration.
 
@@ -164,7 +164,14 @@ def _default_perturbations(agent: Agent) -> dict[str, list[Any]]:
 
     result: dict[str, list[Any]] = {}
 
-    temperature = getattr(config, "temperature", None)
+    sampling = getattr(config, "sampling", None)
+    if sampling is None:
+        raise ValueError(
+            "sensitivity: agent.config has no sampling block; provide "
+            "explicit perturbations"
+        )
+
+    temperature = getattr(sampling, "temperature", None)
     if temperature is not None:
         candidates = [
             round(max(0.0, min(2.0, temperature - 0.2)), 4),
@@ -172,9 +179,9 @@ def _default_perturbations(agent: Agent) -> dict[str, list[Any]]:
         ]
         values = _dedup_excluding(candidates, temperature)
         if values:
-            result["config.temperature"] = values
+            result["config.sampling.temperature"] = values
 
-    top_p = getattr(config, "top_p", None)
+    top_p = getattr(sampling, "top_p", None)
     if top_p is not None:
         candidates = [
             round(max(0.01, min(1.0, top_p - 0.1)), 4),
@@ -182,21 +189,21 @@ def _default_perturbations(agent: Agent) -> dict[str, list[Any]]:
         ]
         values = _dedup_excluding(candidates, top_p)
         if values:
-            result["config.top_p"] = values
+            result["config.sampling.top_p"] = values
 
-    top_k = getattr(config, "top_k", None)
+    top_k = getattr(sampling, "top_k", None)
     if top_k is not None:
         candidates = [max(1, top_k - 10), top_k + 10]
         values = _dedup_excluding(candidates, top_k)
         if values:
-            result["config.top_k"] = values
+            result["config.sampling.top_k"] = values
 
-    max_tokens = getattr(config, "max_tokens", None)
+    max_tokens = getattr(sampling, "max_tokens", None)
     if max_tokens is not None:
         candidates = [max(1, max_tokens - 256), max_tokens + 256]
         values = _dedup_excluding(candidates, max_tokens)
         if values:
-            result["config.max_tokens"] = values
+            result["config.sampling.max_tokens"] = values
 
     if not result:
         raise ValueError(

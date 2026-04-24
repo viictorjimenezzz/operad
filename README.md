@@ -117,7 +117,11 @@ uv run --extra observers python demo.py
 ```
 
 `demo.py` is a ~30-second, Rich-formatted showcase: rendered prompts,
-Mermaid graph, live invocation, trace dump, and a mutation diff.
+Mermaid graph, live invocation, trace dump, and a mutation diff. Pass
+`--offline` to run only the schema-only stages (rendered prompts,
+Mermaid graph, mutation diff) with no server. To exercise the full
+offline surface — the test suite plus every offline-capable example
+plus `demo.py --offline` — run `bash scripts/verify.sh`.
 
 Every network-backed example in `examples/` uses the same canonical
 target via `examples/_config.py` — set `OPERAD_LLAMACPP_HOST` and

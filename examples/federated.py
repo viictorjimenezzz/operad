@@ -13,15 +13,18 @@ llamacpp calls share one semaphore while the OpenAI call runs on an
 independent one (see ``operad/runtime/slots.py`` line 37-38). Call
 ``set_limit`` before ``abuild()`` — semaphores cache on first use.
 
-    uv run python examples/federated.py
+Run:
+    uv run python examples/federated.py [--offline]
 
 Costs money on the OpenAI side.
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import os
+import sys
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -31,7 +34,9 @@ from operad.core.config import Sampling
 from operad.agents import Classifier, Reasoner
 from operad.runtime import set_limit
 
-from _config import local_config
+from _config import local_config, server_reachable
+
+_SCRIPT = "federated.py"
 
 
 class Post(BaseModel):
@@ -67,8 +72,18 @@ SAMPLE = (
 )
 
 
-async def _main() -> None:
+async def main(offline: bool = False) -> None:
     local = local_config(sampling=Sampling(temperature=0.0))
+    print(f"[{_SCRIPT}] backend={local.backend} host={local.host} model={local.model}")
+    if offline:
+        print(f"[{_SCRIPT}] --offline not supported for this example (needs a real model); exiting 0 as no-op.")
+        return
+    if not server_reachable(local.host):
+        print(
+            f"[{_SCRIPT}] cannot reach {local.host} — start llama-server or pass --offline",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
     hosted = Configuration(
         backend="openai",
         model=os.environ.get("OPERAD_OPENAI_MODEL", "gpt-4o-mini"),
@@ -99,4 +114,11 @@ async def _main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(_main())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Run without contacting any LLM server.",
+    )
+    args = parser.parse_args()
+    asyncio.run(main(offline=args.offline))
