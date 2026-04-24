@@ -18,4 +18,7 @@ done
 
 uv run --extra observers python demo.py --offline
 
+echo "== apps/demos/agent_evolution/run.py =="
+uv run python apps/demos/agent_evolution/run.py --offline --generations 2 --population 4 --seed 0
+
 echo "✅ verify complete."
