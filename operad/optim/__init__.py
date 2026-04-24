@@ -29,8 +29,10 @@ Wave 1 slot 1-1 ships the `Parameter` data spine; later waves add
 
 from __future__ import annotations
 
+from operad.optim.ape import APEInput, APEOptimizer, APEOutput, CandidateGenerator
 from operad.optim.backward import backward, register_backward_rule
 from operad.optim.context import inference_mode, no_grad
+from operad.optim.evo import EvoGradient
 from operad.optim.grad_agent import (
     PARAMETER_GRAD_AGENTS,
     BackpropAgent,
@@ -54,6 +56,14 @@ from operad.optim.loss import (
     JSONShapeLoss,
     Loss,
     LossFromMetric,
+)
+from operad.optim.momentum import GradSummarizer, MomentumInput, MomentumTextGrad
+from operad.optim.opro import (
+    OPROAgent,
+    OPROHistoryEntry,
+    OPROInput,
+    OPROOptimizer,
+    OPROOutput,
 )
 from operad.optim.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import (
@@ -94,25 +104,38 @@ from operad.optim.tape import (
 )
 
 __all__ = [
+    "APEInput",
+    "APEOptimizer",
+    "APEOutput",
     "PARAMETER_GRAD_AGENTS",
     "REWRITE_AGENTS",
     "BackpropAgent",
+    "CandidateGenerator",
     "CategoricalParameter",
     "CategoricalParameterGrad",
     "CategoricalRewriter",
     "CompositeLoss",
     "CriticLoss",
+    "EvoGradient",
     "ExampleListParameter",
     "ExampleListParameterGrad",
     "ExampleListRewriter",
     "FloatParameter",
     "FloatParameterGrad",
     "FloatRewriter",
+    "GradSummarizer",
     "JSONShapeLoss",
     "ListConstraint",
     "Loss",
     "LossFromMetric",
+    "MomentumInput",
+    "MomentumTextGrad",
     "NumericConstraint",
+    "OPROAgent",
+    "OPROHistoryEntry",
+    "OPROInput",
+    "OPROOptimizer",
+    "OPROOutput",
     "Optimizer",
     "ParamGroup",
     "Parameter",
