@@ -1,4 +1,4 @@
-"""Schemas for the task-agnostic safeguard domain."""
+"""Typed edges for the safeguard domain."""
 
 from __future__ import annotations
 
@@ -7,48 +7,106 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-class ModerationVerdict(BaseModel):
-    """A binary allow/block verdict with a short rationale."""
+SafeguardCategory = Literal[
+    "in_scope",
+    "exit",
+    "separate_domain",
+    "mixed_scope",
+    "dangerous_or_illegal",
+    "sexual_disallowed",
+    "distress_self_harm",
+]
 
-    label: Literal["allow", "block"] = Field(
-        default="allow",
-        description="Whether the payload is safe to release downstream.",
+
+class ContextInput(BaseModel):
+    """Inputs for the conversation-scope safeguard classifier."""
+
+    context: str = Field(
+        default="",
+        description="Agent's domain, role, purpose, and topics — the master identity profile.",
     )
+    recent_chat_history: str = Field(
+        default="",
+        description="Recent user/agent turns, rendered as a flat string.",
+    )
+    exit_strategy: str = Field(
+        default="",
+        description="Conditions under which the conversation should terminate.",
+    )
+    message: str = Field(
+        default="",
+        description="The latest user message to classify.",
+    )
+
+
+class ContextOutput(BaseModel):
+    """Decision and semantic category for a user message."""
+
     reason: str = Field(
         default="",
-        description="Short rationale for the verdict (at most two sentences).",
+        description="Concise explanation for the decision.",
     )
-    categories: list[str] = Field(
-        default_factory=list,
+    continue_field: Literal["yes", "no", "exit"] = Field(
+        default="yes",
+        description="'yes' accepts the message; 'no' blocks it; 'exit' ends the conversation.",
+    )
+    category: SafeguardCategory = Field(
+        default="in_scope",
         description=(
-            "Optional policy categories triggered by the payload "
-            "(e.g. 'pii', 'toxicity')."
+            "Semantic class of the decision: 'in_scope', 'exit', 'separate_domain', "
+            "'mixed_scope', 'dangerous_or_illegal', 'sexual_disallowed', "
+            "or 'distress_self_harm'."
         ),
     )
 
 
-class SanitizerPolicy(BaseModel):
-    """Declarative sanitisation rules consumed by `InputSanitizer`."""
+class TalkerInput(BaseModel):
+    """Inputs for generating a user-facing response to a blocked message."""
 
-    strip_pii: bool = Field(
-        default=True,
-        description=(
-            "When True, apply a minimal set of PII regexes "
-            "(SSN-style, email, phone) before any custom redaction."
-        ),
+    target_language: str = Field(
+        default="",
+        description="Optional language code (e.g. 'en', 'de', 'fr') for the reply.",
     )
-    max_chars: int | None = Field(
-        default=None,
-        description="Truncate string fields to this many characters when set.",
+    context: str = Field(
+        default="",
+        description="Assistant identity, expertise, purpose, and behavioral constraints.",
     )
-    redact_pattern: str | None = Field(
-        default=None,
-        description=(
-            "Regex; every match in every string field is replaced "
-            "with '[REDACTED]'."
-        ),
+    workspace_guide: str = Field(
+        default="",
+        description="High-level overview of the workspace's knowledge-base themes.",
     )
-    lowercase: bool = Field(
-        default=False,
-        description="Lowercase every string field after redaction/truncation.",
+    interaction_context: str = Field(
+        default="",
+        description="Schema descriptions for InteractionContext fields.",
     )
+    recent_chat_history: str = Field(
+        default="",
+        description="Recent conversation turns for context.",
+    )
+    exit_strategy: str = Field(
+        default="",
+        description="Conditions under which the conversation terminates.",
+    )
+    safeguard_reason: str = Field(
+        default="",
+        description="Why the safeguard flagged the message, plus the rejection category.",
+    )
+    message: str = Field(
+        default="",
+        description="The user's decontextualized message.",
+    )
+
+
+class TextResponse(BaseModel):
+    """A plain-text response produced by a talker-style agent."""
+
+    text: str = Field(default="", description="The response body as raw text.")
+
+
+__all__ = [
+    "ContextInput",
+    "ContextOutput",
+    "SafeguardCategory",
+    "TalkerInput",
+    "TextResponse",
+]

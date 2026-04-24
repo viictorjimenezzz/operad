@@ -2,65 +2,99 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
 
-class Utterance(BaseModel):
-    """A single user turn together with the prior conversation."""
+class TalkerInput(BaseModel):
+    """Inputs for the persona-styled conversational responder."""
 
-    user_message: str = Field(
-        default="", description="The latest user message, verbatim."
-    )
-    history: str = Field(
+    target_language: str = Field(
         default="",
-        description="Prior conversation rendered as a flat string (v1; a "
-        "structured transcript is Stream I's concern).",
+        description="Optional language code for the answer (e.g. 'en', 'de', 'fr').",
     )
-
-
-class SafeguardVerdict(BaseModel):
-    """Policy outcome for a user utterance."""
-
-    label: Literal["allow", "block"] = Field(
-        default="allow",
-        description="'allow' lets the conversation proceed; 'block' triggers "
-        "a polite refusal with no further model calls.",
-    )
-    reason: str = Field(
+    workspace_guide: str = Field(
         default="",
-        description="Short justification for the label; shown to the user "
-        "when the label is 'block'.",
+        description="High-level overview of the workspace knowledge base.",
     )
-
-
-class TurnChoice(BaseModel):
-    """What the assistant should do on this turn."""
-
-    action: Literal["respond", "clarify", "defer"] = Field(
-        default="respond",
-        description="'respond' answers now, 'clarify' asks a question, "
-        "'defer' explains that the model cannot address this yet.",
-    )
-    prompt: str = Field(
+    context: str = Field(
         default="",
-        description="Clarifying question (when action='clarify') or deferral "
-        "rationale (when action='defer').",
+        description="Assistant identity, expertise, purpose, and behavioral constraints.",
+    )
+    interaction_context: str = Field(
+        default="",
+        description="Schema descriptions for InteractionContext fields.",
+    )
+    session_context: str = Field(
+        default="",
+        description="Schema descriptions for SessionContext fields.",
+    )
+    user_information: str = Field(
+        default="",
+        description="Structured context about the user extracted from earlier turns.",
+    )
+    beliefs: str = Field(
+        default="",
+        description="Serialised list of structured beliefs from the active rolling window.",
+    )
+    belief_summary: str = Field(
+        default="",
+        description="Narrative summary of claims previously shared with the user.",
+    )
+    message: str = Field(
+        default="",
+        description="The user's decontextualized message.",
     )
 
 
-class StyledUtterance(BaseModel):
-    """The assistant's final, user-facing reply."""
+class ConversationTitlerInput(BaseModel):
+    """Inputs for generating a conversation-level title."""
 
-    response: str = Field(
-        default="", description="The assistant's reply, ready to show."
+    target_language: str = Field(
+        default="",
+        description="Optional language code controlling the title language.",
     )
+    message: str = Field(
+        default="",
+        description="The first user message in the conversation.",
+    )
+
+
+class ConversationTitlerOutput(BaseModel):
+    """Short, descriptive conversation title."""
+
+    title: str = Field(default="", description="The title of the conversation.")
+
+
+class InteractionTitlerInput(BaseModel):
+    """Inputs for generating a per-interaction noun-phrase title."""
+
+    target_language: str = Field(
+        default="",
+        description="Optional language code controlling the title language.",
+    )
+    message: str = Field(
+        default="",
+        description="A single user message (one interaction), already decontextualized.",
+    )
+
+
+class InteractionTitlerOutput(BaseModel):
+    """Short, noun-phrase topic label for a single interaction."""
+
+    title: str = Field(default="", description="The title of the interaction.")
+
+
+class TextResponse(BaseModel):
+    """A plain-text response produced by a talker-style agent."""
+
+    text: str = Field(default="", description="The response body as raw text.")
 
 
 __all__ = [
-    "SafeguardVerdict",
-    "StyledUtterance",
-    "TurnChoice",
-    "Utterance",
+    "ConversationTitlerInput",
+    "ConversationTitlerOutput",
+    "InteractionTitlerInput",
+    "InteractionTitlerOutput",
+    "TalkerInput",
+    "TextResponse",
 ]

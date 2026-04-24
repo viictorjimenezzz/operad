@@ -142,3 +142,100 @@ def test_op_missing_path_raises_build_error(cfg) -> None:
     a = _Composite(cfg)
     with pytest.raises(BuildError):
         AppendRule(path="nope", rule="r").apply(a)
+
+
+# ---------------------------------------------------------------------------
+# Op.undo() round-trip tests
+# ---------------------------------------------------------------------------
+
+
+def _undo_roundtrip(agent, op) -> None:
+    before = agent.leaf.state()
+    op.apply(agent)
+    after_apply = agent.leaf.state()
+    assert after_apply != before, f"{type(op).__name__}.apply did not change state"
+    op.undo(agent)
+    assert agent.leaf.state() == before, (
+        f"{type(op).__name__}.undo did not restore state"
+    )
+
+
+def test_append_rule_undo(cfg) -> None:
+    _undo_roundtrip(_Composite(cfg), AppendRule(path="leaf", rule="l2"))
+
+
+def test_replace_rule_undo(cfg) -> None:
+    _undo_roundtrip(_Composite(cfg), ReplaceRule(path="leaf", index=0, rule="new"))
+
+
+def test_drop_rule_undo(cfg) -> None:
+    _undo_roundtrip(_Composite(cfg), DropRule(path="leaf", index=0))
+
+
+def test_edit_task_undo(cfg) -> None:
+    _undo_roundtrip(_Composite(cfg), EditTask(path="leaf", task="new-task"))
+
+
+def test_tweak_role_undo(cfg) -> None:
+    _undo_roundtrip(_Composite(cfg), TweakRole(path="leaf", role="new-role"))
+
+
+def test_drop_example_undo(cfg) -> None:
+    _undo_roundtrip(_Composite(cfg), DropExample(path="leaf", index=0))
+
+
+def test_append_example_undo(cfg) -> None:
+    ex = Example(input=A(text="q"), output=B(value=2))
+    _undo_roundtrip(_Composite(cfg), AppendExample(path="leaf", example=ex))
+
+
+def test_set_temperature_undo(cfg) -> None:
+    _undo_roundtrip(_Composite(cfg), SetTemperature(path="leaf", temperature=0.9))
+
+
+def test_set_model_undo(cfg) -> None:
+    _undo_roundtrip(_Composite(cfg), SetModel(path="leaf", model="gpt-99"))
+
+
+def test_set_backend_undo(cfg) -> None:
+    _undo_roundtrip(
+        _Composite(cfg),
+        SetBackend(path="leaf", backend="ollama", host="127.0.0.1:0"),
+    )
+
+
+def test_compound_op_undo_reverses_all(cfg) -> None:
+    a = _Composite(cfg)
+    before = a.leaf.state()
+    op = CompoundOp(
+        ops=[
+            AppendRule(path="leaf", rule="x"),
+            EditTask(path="leaf", task="done"),
+        ]
+    )
+    op.apply(a)
+    assert a.leaf.rules == ["l0", "l1", "x"]
+    assert a.leaf.task == "done"
+    op.undo(a)
+    assert a.leaf.state() == before
+
+
+def test_undo_before_apply_raises(cfg) -> None:
+    a = _Composite(cfg)
+    for op in [
+        AppendRule(path="leaf", rule="x"),
+        ReplaceRule(path="leaf", index=0, rule="x"),
+        DropRule(path="leaf", index=0),
+        EditTask(path="leaf", task="x"),
+        TweakRole(path="leaf", role="x"),
+        DropExample(path="leaf", index=0),
+        AppendExample(
+            path="leaf", example=Example(input=A(text="q"), output=B(value=2))
+        ),
+        SetTemperature(path="leaf", temperature=0.1),
+        SetModel(path="leaf", model="m"),
+        SetBackend(path="leaf", backend="ollama"),
+        CompoundOp(ops=[AppendRule(path="leaf", rule="y")]),
+    ]:
+        with pytest.raises(RuntimeError, match="undo"):
+            op.undo(a)

@@ -358,6 +358,17 @@ async def test_switch_is_config_less_composite() -> None:
     assert s.config is None
     assert s._children  # composite
 
+
+async def test_switch_build_warns_side_effect_during_trace() -> None:
+    from operad.utils.errors import SideEffectDuringTrace
+
+    with pytest.warns(SideEffectDuringTrace) as records:
+        await _build_switch(label="a").abuild()
+    trace_warnings = [
+        r for r in records if issubclass(r.category, SideEffectDuringTrace)
+    ]
+    assert len(trace_warnings) == 1
+
 # --- from test_deep_nesting.py ---
 pytestmark = pytest.mark.asyncio
 

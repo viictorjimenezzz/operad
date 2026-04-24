@@ -209,6 +209,130 @@ async def test_payload_branch_raises_in_nested_composite(cfg) -> None:
     assert exc.value.agent == "Outer.inner"
 
 
+async def test_payload_branch_bool_dunder(cfg) -> None:
+    class Bool(Agent):
+        input = A
+        output = B
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+            self.a = FakeLeaf(config=cfg, input=A, output=B)
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            if x:
+                return (await self.a(x)).response
+            return (await self.a(x)).response
+
+    with pytest.raises(BuildError) as exc:
+        await Bool().abuild()
+    assert exc.value.reason == "payload_branch"
+    assert "__bool__" in str(exc.value)
+    assert "test_build.py" in str(exc.value)
+
+
+async def test_payload_branch_eq_dunder(cfg) -> None:
+    class Eq(Agent):
+        input = A
+        output = B
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+            self.a = FakeLeaf(config=cfg, input=A, output=B)
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            if x == A(text="z"):
+                return (await self.a(x)).response
+            return (await self.a(x)).response
+
+    with pytest.raises(BuildError) as exc:
+        await Eq().abuild()
+    assert exc.value.reason == "payload_branch"
+    assert "__eq__" in str(exc.value)
+
+
+async def test_payload_branch_iter_dunder(cfg) -> None:
+    class Iter(Agent):
+        input = A
+        output = B
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+            self.a = FakeLeaf(config=cfg, input=A, output=B)
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            for _item in x:  # type: ignore[attr-defined]
+                pass
+            return (await self.a(x)).response
+
+    with pytest.raises(BuildError) as exc:
+        await Iter().abuild()
+    assert exc.value.reason == "payload_branch"
+    assert "__iter__" in str(exc.value)
+
+
+async def test_payload_branch_len_dunder(cfg) -> None:
+    class Len(Agent):
+        input = A
+        output = B
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+            self.a = FakeLeaf(config=cfg, input=A, output=B)
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            if len(x) > 0:  # type: ignore[arg-type]
+                return (await self.a(x)).response
+            return (await self.a(x)).response
+
+    with pytest.raises(BuildError) as exc:
+        await Len().abuild()
+    assert exc.value.reason == "payload_branch"
+    assert "__len__" in str(exc.value)
+
+
+async def test_payload_branch_field_read_has_line_info(cfg) -> None:
+    class FieldRead(Agent):
+        input = A
+        output = B
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+            self.a = FakeLeaf(config=cfg, input=A, output=B)
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            _ = x.text
+            return (await self.a(x)).response
+
+    with pytest.raises(BuildError) as exc:
+        await FieldRead().abuild()
+    assert exc.value.reason == "payload_branch"
+    assert "text" in str(exc.value)
+    assert "test_build.py" in str(exc.value)
+
+
+async def test_payload_branch_exec_defined_degrades_gracefully(cfg) -> None:
+    source = (
+        "class ExecComposite(Agent):\n"
+        "    input = A\n"
+        "    output = B\n"
+        "    def __init__(self):\n"
+        "        super().__init__(config=None, input=A, output=B)\n"
+        "        self.a = FakeLeaf(config=cfg, input=A, output=B)\n"
+        "    async def forward(self, x):\n"
+        "        if x:\n"
+        "            return (await self.a(x)).response\n"
+        "        return (await self.a(x)).response\n"
+    )
+    ns: dict = {"Agent": Agent, "A": A, "B": B, "FakeLeaf": FakeLeaf, "cfg": cfg}
+    exec(source, ns)
+    composite = ns["ExecComposite"]()
+
+    with pytest.raises(BuildError) as exc:
+        await composite.abuild()
+    assert exc.value.reason == "payload_branch"
+    assert "__bool__" in str(exc.value)
+
+
 async def test_init_strands_skipped_on_trace_failure(cfg, monkeypatch) -> None:
     from operad.core import build as build_mod
 
