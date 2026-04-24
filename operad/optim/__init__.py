@@ -29,6 +29,23 @@ Wave 1 slot 1-1 ships the `Parameter` data spine; later waves add
 
 from __future__ import annotations
 
+from operad.optim.grad_agent import (
+    PARAMETER_GRAD_AGENTS,
+    BackpropAgent,
+    CategoricalParameterGrad,
+    ExampleListParameterGrad,
+    FloatParameterGrad,
+    ParameterGradAgent,
+    ParameterGradInput,
+    ParameterGradOutput,
+    PropagateInput,
+    PropagateOutput,
+    RuleListParameterGrad,
+    TextParameterGrad,
+    parameter_grad,
+    parameter_grad_for,
+    propagate,
+)
 from operad.optim.parameter import (
     CategoricalParameter,
     ExampleListParameter,
@@ -46,17 +63,32 @@ from operad.optim.parameter import (
 )
 
 __all__ = [
+    "PARAMETER_GRAD_AGENTS",
+    "BackpropAgent",
     "CategoricalParameter",
+    "CategoricalParameterGrad",
     "ExampleListParameter",
+    "ExampleListParameterGrad",
     "FloatParameter",
+    "FloatParameterGrad",
     "ListConstraint",
     "NumericConstraint",
     "Parameter",
     "ParameterConstraint",
+    "ParameterGradAgent",
+    "ParameterGradInput",
+    "ParameterGradOutput",
     "ParameterKind",
+    "PropagateInput",
+    "PropagateOutput",
     "RuleListParameter",
+    "RuleListParameterGrad",
     "TextConstraint",
     "TextParameter",
+    "TextParameterGrad",
     "TextualGradient",
     "VocabConstraint",
+    "parameter_grad",
+    "parameter_grad_for",
+    "propagate",
 ]
