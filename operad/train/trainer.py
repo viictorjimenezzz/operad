@@ -1,0 +1,364 @@
+"""`Trainer` — the PyTorch-Lightning-style `fit / evaluate / predict` loop.
+
+Composes `DataLoader`, `Loss`, `Optimizer`, optional `scheduler`, and a
+list of `Callback`s. Each training sample opens its own `tape()`,
+computes the loss, and calls `backward()`; per-sample gradients are
+merged onto each `Parameter.grad` before `optimizer.step()` fires
+(every ``accumulation_steps`` batches, with a residual flush at
+epoch end).
+
+Textual-gradient accumulation semantics: when ``N`` samples touch the
+same `Parameter`, their gradients are folded into one — messages
+concatenated (``\\n---\\n``), ``target_paths`` unioned, ``by_field``
+entries concatenated, ``severity`` taken as the maximum. This matches
+the "pick one clear semantics and document" requirement in the stream
+brief; `Momentum` optimizers fold the merged grad into their summary.
+"""
+
+from __future__ import annotations
+
+import time
+from typing import Any, Generic
+
+from ..benchmark.dataset import Dataset
+from ..benchmark.evaluate import EvalReport, evaluate
+from ..core.agent import Agent, In, Out
+from ..core.output import OperadOutput
+from ..data.loader import Batch, DataLoader
+from ..metrics.base import Metric
+from ..optim.backward import backward
+from ..optim.loss import Loss
+from ..optim.optimizer import Optimizer
+from ..optim.parameter import Parameter, TextualGradient
+from ..optim.tape import tape
+from ..utils.errors import BuildError
+from .callbacks import Callback, EarlyStopping, GradClip
+from .report import EpochReport, TrainingReport
+
+
+def _merge_grads(grads: list[TextualGradient]) -> TextualGradient:
+    """Fold a list of `TextualGradient`s into one.
+
+    - ``message`` values joined with ``\\n---\\n``.
+    - ``target_paths`` de-duplicated preserving order.
+    - ``by_field`` values concatenated per key with the same separator.
+    - ``severity`` becomes the max over the inputs.
+    """
+    if not grads:
+        return TextualGradient.null_gradient()
+    if len(grads) == 1:
+        return grads[0]
+    messages = [g.message for g in grads if g.message]
+    merged_message = "\n---\n".join(messages)
+    paths: list[str] = []
+    seen: set[str] = set()
+    for g in grads:
+        for p in g.target_paths:
+            if p not in seen:
+                seen.add(p)
+                paths.append(p)
+    by_field: dict[str, list[str]] = {}
+    for g in grads:
+        for k, v in g.by_field.items():
+            by_field.setdefault(k, []).append(v)
+    merged_by_field = {k: "\n---\n".join(v) for k, v in by_field.items()}
+    severity = max(g.severity for g in grads)
+    return TextualGradient(
+        message=merged_message,
+        by_field=merged_by_field,
+        severity=severity,
+        target_paths=paths,
+    )
+
+
+def _flatten_params(optimizer: Optimizer) -> list[Parameter[Any]]:
+    """Flatten every parameter across every group into a list."""
+    out: list[Parameter[Any]] = []
+    for group in optimizer.param_groups:
+        out.extend(group.params)
+    return out
+
+
+class Trainer(Generic[In, Out]):
+    """Orchestrates fit / evaluate / predict over a built `Agent`.
+
+    The trainer never auto-builds the agent (same rule as
+    `benchmark.evaluate`). Callbacks are invoked in insertion order
+    for every lifecycle hook; a callback can halt training by setting
+    ``trainer._should_stop = True``.
+    """
+
+    def __init__(
+        self,
+        agent: Agent[In, Out],
+        optimizer: Optimizer,
+        loss_fn: Loss,
+        *,
+        scheduler: Any | None = None,
+        callbacks: list[Callback] | None = None,
+        metrics: list[Metric] | None = None,
+        max_grad_norm: float | None = None,
+        accumulation_steps: int = 1,
+    ) -> None:
+        if accumulation_steps < 1:
+            raise ValueError("accumulation_steps must be >= 1")
+        if max_grad_norm is not None and max_grad_norm <= 0:
+            raise ValueError("max_grad_norm must be positive")
+        self.agent = agent
+        self.optimizer = optimizer
+        self.loss_fn = loss_fn
+        self.scheduler = scheduler
+        self.metrics: list[Metric] = list(metrics or [])
+        self.accumulation_steps = accumulation_steps
+        self.max_grad_norm = max_grad_norm
+        self._callbacks: list[Callback] = list(callbacks or [])
+        if max_grad_norm is not None:
+            self._callbacks.append(GradClip(max_severity=max_grad_norm))
+        self._should_stop: bool = False
+        self._last_batch_tape_entries: int = 0
+
+        # Optional wave-4 optimizer hook: OPRO/APE need an evaluator closure.
+        if getattr(optimizer, "needs_evaluator", False):
+            optimizer.evaluator = self._quick_evaluator  # type: ignore[attr-defined]
+
+    # --- public API -------------------------------------------------------
+
+    async def fit(
+        self,
+        loader: DataLoader[In, Out],
+        val_ds: Dataset[In, Out] | None = None,
+        *,
+        epochs: int,
+        early_stopping: EarlyStopping | None = None,
+    ) -> TrainingReport:
+        if not self.agent._built:
+            raise BuildError(
+                "not_built",
+                "call .build() before Trainer.fit()",
+                agent=type(self.agent).__name__,
+            )
+        if epochs < 1:
+            raise ValueError("epochs must be >= 1")
+
+        cbs = list(self._callbacks)
+        if early_stopping is not None:
+            cbs.append(early_stopping)
+        self._callbacks = cbs
+        self._should_stop = False
+
+        seed_hash = self.agent.hash_content
+        epoch_reports: list[EpochReport] = []
+        batch_counter = 0
+
+        for cb in cbs:
+            await cb.on_fit_start(self)
+
+        for epoch in range(epochs):
+            for cb in cbs:
+                await cb.on_epoch_start(self, epoch)
+
+            t0 = time.monotonic()
+            epoch_loss_sum = 0.0
+            epoch_sample_count = 0
+
+            async for batch in loader:
+                step = batch_counter
+                for cb in cbs:
+                    await cb.on_batch_start(self, batch, step)
+
+                batch_loss, n = await self._run_batch(batch)
+                epoch_loss_sum += batch_loss * n
+                epoch_sample_count += n
+
+                for cb in cbs:
+                    await cb.on_batch_end(self, batch, step, batch_loss)
+
+                batch_counter += 1
+                if batch_counter % self.accumulation_steps == 0:
+                    await self.optimizer.step()
+                    self.optimizer.zero_grad()
+
+            # Residual flush: some accumulated grads may still be on params.
+            if self._has_pending_grad():
+                await self.optimizer.step()
+                self.optimizer.zero_grad()
+
+            val_report: EvalReport | None = None
+            if val_ds is not None:
+                val_report = await self.evaluate(val_ds)
+                for cb in cbs:
+                    await cb.on_validation_end(self, val_report)
+
+            if self.scheduler is not None:
+                self.scheduler.step()
+
+            train_loss = (
+                epoch_loss_sum / epoch_sample_count
+                if epoch_sample_count > 0
+                else 0.0
+            )
+            val_loss = (
+                float(val_report.summary.get(self.loss_fn.name, float("nan")))
+                if val_report is not None
+                else None
+            )
+            val_metrics = dict(val_report.summary) if val_report is not None else {}
+
+            report = EpochReport(
+                epoch=epoch,
+                train_loss=train_loss,
+                train_metrics={},
+                val_loss=val_loss,
+                val_metrics=val_metrics,
+                lr=[g.lr for g in self.optimizer.param_groups],
+                duration_s=time.monotonic() - t0,
+                hash_content=self.agent.hash_content,
+            )
+            epoch_reports.append(report)
+
+            for cb in cbs:
+                await cb.on_epoch_end(self, report)
+
+            if self._should_stop:
+                break
+
+        training = self._build_training_report(
+            epoch_reports,
+            seed_hash=seed_hash,
+            es_monitor=early_stopping.monitor if early_stopping else None,
+            es_mode=early_stopping.mode if early_stopping else None,
+        )
+
+        for cb in cbs:
+            await cb.on_fit_end(self, training)
+
+        return training
+
+    async def evaluate(self, ds: Dataset[In, Out]) -> EvalReport:
+        metrics: list[Metric] = [self.loss_fn, *self.metrics]  # type: ignore[list-item]
+        return await evaluate(self.agent, ds, metrics=metrics)
+
+    async def predict(self, x: In) -> OperadOutput[Out]:
+        return await self.agent(x)
+
+    # --- internals --------------------------------------------------------
+
+    async def _run_batch(self, batch: Batch[In, Out]) -> tuple[float, int]:
+        """Process every sample in ``batch``; return (mean loss, count).
+
+        Each sample gets its own tape + backward; per-sample grads are
+        folded onto each parameter's ``.grad`` slot so `optimizer.step`
+        sees a single merged gradient per parameter.
+        """
+        params = _flatten_params(self.optimizer)
+        per_sample: dict[int, list[TextualGradient]] = {id(p): [] for p in params}
+        loss_sum = 0.0
+        sample_count = 0
+        tape_entries_total = 0
+
+        for x, y in zip(batch.inputs, batch.expected):
+            async with tape() as t:
+                output = await self.agent(x)
+            tape_entries_total += len(t.entries)
+            score, grad = await self.loss_fn.compute(output.response, y)
+            loss_sum += score
+            sample_count += 1
+            if grad.severity <= 0:
+                continue
+            await backward(t, grad, parameters=params)
+            for p in params:
+                if p.grad is not None and p.grad.severity > 0:
+                    per_sample[id(p)].append(p.grad)
+                    p.grad = None
+
+        self._last_batch_tape_entries = tape_entries_total
+
+        for p in params:
+            grads = per_sample[id(p)]
+            if not grads:
+                continue
+            pending = [p.grad] if p.grad is not None else []
+            p.grad = _merge_grads(grads + pending)
+
+        mean_loss = loss_sum / sample_count if sample_count > 0 else 0.0
+        return mean_loss, sample_count
+
+    def _has_pending_grad(self) -> bool:
+        for group in self.optimizer.param_groups:
+            for p in group.params:
+                if p.grad is not None and p.grad.severity > 0:
+                    return True
+        return False
+
+    def _build_training_report(
+        self,
+        epochs: list[EpochReport],
+        *,
+        seed_hash: str,
+        es_monitor: str | None,
+        es_mode: str | None,
+    ) -> TrainingReport:
+        """Assemble the final report; pick the best epoch by val_loss.
+
+        If early stopping supplied a monitor, use that; otherwise fall
+        back to ``val_loss`` (lower is better). If no val data ran, use
+        the last epoch.
+        """
+        if not epochs:
+            return TrainingReport(
+                epochs=[],
+                best_epoch=-1,
+                best_val_metric=float("nan"),
+                best_hash_content="",
+                seed_hash_content=seed_hash,
+            )
+
+        monitor = es_monitor or "val_loss"
+        mode = es_mode or "min"
+
+        def _value(r: EpochReport) -> float:
+            if monitor == "val_loss":
+                return (
+                    r.val_loss if r.val_loss is not None else float("nan")
+                )
+            return float(r.val_metrics.get(monitor, float("nan")))
+
+        best_idx = 0
+        best_val: float = _value(epochs[0])
+        for i, r in enumerate(epochs[1:], start=1):
+            v = _value(r)
+            if _is_better(v, best_val, mode):
+                best_idx = i
+                best_val = v
+
+        best_epoch = epochs[best_idx]
+        return TrainingReport(
+            epochs=epochs,
+            best_epoch=best_epoch.epoch,
+            best_val_metric=best_val,
+            best_hash_content=best_epoch.hash_content,
+            seed_hash_content=seed_hash,
+        )
+
+    async def _quick_evaluator(self, param: Any, value: Any) -> float:
+        """Single-input evaluator closure for OPRO/APE-style optimizers.
+
+        Wave 4-1 defines the exact contract; for now this is a no-op
+        fallback returning NaN so the attribute exists even if no wave-4
+        optimizer ever calls it.
+        """
+        del param, value
+        return float("nan")
+
+
+def _is_better(a: float, b: float, mode: str) -> bool:
+    import math as _math
+
+    if _math.isnan(a):
+        return False
+    if _math.isnan(b):
+        return True
+    return a < b if mode == "min" else a > b
+
+
+__all__ = ["Trainer"]
