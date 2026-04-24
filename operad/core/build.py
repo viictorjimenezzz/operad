@@ -150,10 +150,28 @@ class Tracer:
                 "prompt_incomplete", "missing input/output type", agent=callee
             )
         if not isinstance(x, child.input):
+            from .graph import to_mermaid_edge
+
+            caller_io = (
+                (parent_agent.input, parent_agent.output)
+                if parent_agent.input is not None
+                and parent_agent.output is not None
+                else None
+            )
             raise BuildError(
                 "input_mismatch",
                 f"expected {child.input.__name__}, got {type(x).__name__}",
                 agent=callee,
+                mermaid=to_mermaid_edge(
+                    parent_name,
+                    callee,
+                    (child.input, child.output),
+                    caller_io=caller_io,
+                    note=(
+                        f"got {type(x).__name__}, "
+                        f"expected {child.input.__name__}"
+                    ),
+                ),
             )
 
         self.graph.nodes.append(
@@ -180,6 +198,8 @@ class Tracer:
                 try:
                     out = await child.forward(sentinel)
                 except _PayloadBranchAccess as exc:
+                    from .graph import to_mermaid_node
+
                     raise BuildError(
                         "payload_branch",
                         f"composite {type(child).__name__}.forward read "
@@ -187,13 +207,31 @@ class Tracer:
                         "route on a child's typed output (e.g. Switch over a "
                         "Literal choice) instead of the payload value",
                         agent=callee,
+                        mermaid=to_mermaid_node(
+                            callee,
+                            (child.input, child.output),
+                            note=(
+                                f"read {exc.cls_name}.{exc.field_name} "
+                                "during trace"
+                            ),
+                        ),
                     ) from exc
                 if not isinstance(out, child.output):
+                    from .graph import to_mermaid_node
+
                     raise BuildError(
                         "output_mismatch",
                         f"forward returned {type(out).__name__}, "
                         f"expected {child.output.__name__}",
                         agent=callee,
+                        mermaid=to_mermaid_node(
+                            callee,
+                            (child.input, child.output),
+                            note=(
+                                f"returned {type(out).__name__}, "
+                                f"expected {child.output.__name__}"
+                            ),
+                        ),
                     )
             finally:
                 self._stack.pop()
@@ -245,12 +283,18 @@ def _validate(a: Agent[Any, Any]) -> None:
         )
 
 
-def _init_strands(a: Agent[Any, Any]) -> None:
+def _init_strands(
+    a: Agent[Any, Any], *, cached_prompt: str | None = None
+) -> None:
     """Initialize the strands.Agent half for default-forward leaves only.
 
     Composites (agents that override ``forward``) don't need strands
     wiring; they route calls to their children and never invoke the model
     themselves.
+
+    When `cached_prompt` is provided, `format_system_message()` is skipped
+    and the cached string is used directly — the thaw path exercises this
+    so a loaded agent doesn't re-render every leaf's system message.
     """
     if not _is_default_forward(a):
         return
@@ -258,12 +302,17 @@ def _init_strands(a: Agent[Any, Any]) -> None:
         from strands.types.agent import ConcurrentInvocationMode
 
         model = resolve_model(a.config)  # type: ignore[arg-type]
-        rendered = a.format_system_message()
-        if isinstance(rendered, list):
-            rendered = "\n\n".join(
-                m.get("content", "") for m in rendered if m.get("role") == "system"
-            )
-        system_prompt = rendered or None
+        if cached_prompt is None:
+            rendered = a.format_system_message()
+            if isinstance(rendered, list):
+                rendered = "\n\n".join(
+                    m.get("content", "")
+                    for m in rendered
+                    if m.get("role") == "system"
+                )
+            system_prompt = rendered or None
+        else:
+            system_prompt = cached_prompt or None
         strands.Agent.__init__(
             a,
             model=model,
@@ -316,6 +365,8 @@ async def _trace(root: Agent[Any, Any], tracer: Tracer) -> Any:
             try:
                 return await root.forward(sentinel)
             except _PayloadBranchAccess as exc:
+                from .graph import to_mermaid_node
+
                 raise BuildError(
                     "payload_branch",
                     f"composite {type(root).__name__}.forward read "
@@ -323,6 +374,14 @@ async def _trace(root: Agent[Any, Any], tracer: Tracer) -> Any:
                     "route on a child's typed output (e.g. Switch over a "
                     "Literal choice) instead of the payload value",
                     agent=type(root).__name__,
+                    mermaid=to_mermaid_node(
+                        type(root).__name__,
+                        (root.input, root.output),  # type: ignore[arg-type]
+                        note=(
+                            f"read {exc.cls_name}.{exc.field_name} "
+                            "during trace"
+                        ),
+                    ),
                 ) from exc
         sentinel = root.input.model_construct()  # type: ignore[union-attr]
         return await root.forward(sentinel)
@@ -356,11 +415,21 @@ async def abuild_agent(root: Agent[Any, Any]) -> Agent[Any, Any]:
             ) from e
 
         if not isinstance(out, root.output):  # type: ignore[arg-type]
+            from .graph import to_mermaid_node
+
             raise BuildError(
                 "output_mismatch",
                 f"{type(root).__name__}.forward returned {type(out).__name__}, "
                 f"expected {root.output.__name__}",  # type: ignore[union-attr]
                 agent=type(root).__name__,
+                mermaid=to_mermaid_node(
+                    type(root).__name__,
+                    (root.input, root.output),  # type: ignore[arg-type]
+                    note=(
+                        f"returned {type(out).__name__}, expected "
+                        f"{root.output.__name__}"  # type: ignore[union-attr]
+                    ),
+                ),
             )
     else:
         # Default-forward leaf root: trace is skipped (there's no graph to
