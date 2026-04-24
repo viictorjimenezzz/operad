@@ -8,7 +8,8 @@ is the whole mental model — hence the name.
 ```python
 import asyncio
 from pydantic import BaseModel, Field
-from operad import Configuration, Parallel, Reasoner
+from operad import Configuration, Parallel, Pipeline
+from operad.agents.reasoning import Reasoner
 
 class Q(BaseModel): text: str = Field(default="", description="The user's question.")
 class A(BaseModel): answer: str = Field(default="", description="Concise answer.")
@@ -47,7 +48,8 @@ The system prompt is rendered from each Agent's `role`, `task`, `rules`,
 `examples`, and — DSPy-style — every `Field(description=...)` on your `In`
 and `Out` classes gets threaded into the model's context.
 
-For the full design rationale, see [VISION.md](VISION.md).
+For the full feature catalog see [FEATURES.md](FEATURES.md). For the
+design rationale see [VISION.md](VISION.md).
 
 ## Why the name
 
@@ -59,40 +61,6 @@ associativity laws. That is precisely what this library builds: every
 them together; `build()` captures the resulting tree as a first-class
 object you can inspect, export, mutate, and run.
 
-## Status
-
-Foundations + runtime + first components (iterations 1–3):
-
-- `Agent[In, Out]` with class-level defaults (`role`, `task`, `rules`,
-  `examples`, `input`, `output`) — a single class, no separate `Prompt`
-  wrapper.
-- Typed `Example[In, Out]` few-shot pairs.
-- XML-tagged prompt renderer that surfaces `Field(description=...)` from
-  user-defined `In` and `Out` and from library-internal section metadata.
-- `operad.agents` — the `torch.nn`-style library, organized by domain:
-  structural operators (`Pipeline`, `Parallel`) at the top level and
-  per-domain subfolders for leaves + composed patterns. Ships the
-  `reasoning/` domain with seven leaves (`Reasoner`, `Actor`,
-  `Extractor`, `Evaluator`, `Classifier`, `Planner`, `Critic`) and the
-  `ReAct` composition.
-- `operad.algorithms` — `BestOfN` (plain class with `run(x)`),
-  `Candidate`, `Score`. *Algorithms are not Agents*: they orchestrate
-  agents with metric feedback; their API shape is whatever the
-  algorithm needs.
-- `operad.models` — per-backend resolvers: `llamacpp`, `lmstudio`,
-  `ollama`, `openai`, `bedrock`, `anthropic`.
-- `operad.runtime.slots` — per-endpoint concurrency limits.
-- `operad.metrics` — `Metric` protocol, `ExactMatch`, `JsonValid`,
-  `Latency`.
-- `operad.core.graph` — `to_mermaid`, `to_json`.
-- Offline test suite, opt-in integration test against a real
-  llama-server.
-
-What's **not** here yet (see [VISION.md §7](VISION.md#7-where-were-going)):
-runtime observers + Rich dashboard, build-time sentinel proxy,
-dataset-level `evaluate(...)`, more algorithms (`Debate`,
-`VerifierLoop`, `Evolutionary`), tools / memory / retrieval.
-
 ## Install
 
 ```bash
@@ -101,8 +69,9 @@ uv sync
 
 Python 3.12+. Runtime deps are
 [strands-agents](https://strandsagents.com/), pydantic v2, and the
-`openai` SDK (pulled in by Strands' OpenAI-compatible adapters for
-llama-server / LM Studio / Ollama / OpenAI).
+`openai` SDK (pulled in by Strands' OpenAI-compatible adapters).
+Optional extras: `[observers]` (Rich TUI), `[otel]` (OpenTelemetry),
+`[gemini]`, `[huggingface]`.
 
 ## Core ideas
 
@@ -126,43 +95,23 @@ always win.
 
 **`build()` symbolically traces the architecture**, type-checking every
 parent-to-child handoff before any model is contacted. Out pops an
-`AgentGraph`.
+`AgentGraph`. Built graphs can be `freeze()`-ed to disk and `thaw()`-ed
+elsewhere to skip the symbolic trace (useful for CLIs, Lambdas, tests).
 
 **Components compose; algorithms orchestrate.** Everything in
 `operad.agents` is an `Agent[In, Out]` that nests freely. Everything
 in `operad.algorithms` is a plain class that takes Agents as parameters
-and closes a loop over their outputs.
+and closes a loop over their outputs (`BestOfN`, `Debate`, `SelfRefine`,
+`VerifierLoop`, `Evolutionary`, `Sweep`, `AutoResearcher`).
 
 **Metrics are either pure Python or Agents.** A rubric-driven LLM
 judge is a `Critic`, which is an `Agent[Candidate[In, Out], Score]` —
 the same `build()` story applies.
 
-## Configuration
-
-Every leaf carries a `Configuration` describing its backend, model, and
-sampling. Three fields control runtime resilience against flaky
-endpoints:
-
-- `timeout: float | None = None` — per-attempt wall-clock budget, in
-  seconds. `None` disables the timeout.
-- `max_retries: int = 0` — number of retries after the initial attempt.
-  `max_retries=N` permits up to `N+1` total attempts.
-- `backoff_base: float = 0.5` — base delay, in seconds. The delay
-  before retry `i` (1-indexed) is `backoff_base * 2**(i-1)` plus a
-  uniform jitter in `[0, backoff_base)` to avoid synchronized retry
-  storms across sibling agents.
-
-Retries wrap the provider call inside `Agent.forward` and do NOT retry
-contract errors (`BuildError`, `pydantic.ValidationError`) or
-cancellation (`asyncio.CancelledError`). Each invocation's terminal
-event records `metadata["retries"]` (count) and `metadata["last_error"]`
-(the final exception's `repr`, or `None`), so a `TraceObserver` surfaces
-retry activity in every saved run.
-
 ## Run the demo
 
 ```bash
-# 1. Start a local llama-server on 127.0.0.1:9000 serving google/gemma-4-e4b.
+# 1. Start a local llama-server on 127.0.0.1:9000 serving your model.
 # 2. Then:
 uv run --extra observers python demo.py
 ```
@@ -198,84 +147,32 @@ runtime:
 uv run operad run   examples/config-react.yaml --input examples/task.json
 uv run operad trace examples/config-react.yaml
 uv run operad graph examples/config-react.yaml --format json
+uv run operad tail  run.jsonl --speed=0
 ```
 
 `run` validates the input JSON against the agent's `input` model, builds
 the graph, invokes, and prints the `Out` as JSON. `trace` prints the
-Mermaid rendering of the built graph; `graph` dumps it as JSON.
+Mermaid rendering of the built graph; `graph` dumps it as JSON;
+`tail` replays a recorded NDJSON trace.
 
 ## Examples
 
 One narrative example per major abstraction, in `examples/`:
 
-- `parallel.py` — fan-out over specialized `Reasoner`s with a combine step.
-- `federated.py` — `Parallel` over heterogeneous backends (llamacpp + OpenAI) with per-endpoint slot budgets.
-- `pipeline.py` — three-stage `Pipeline` (`Extractor -> Planner -> Evaluator`) with typed edges.
-- `react.py` — standalone `ReAct`; prints the Mermaid graph before running.
-- `best_of_n.py` — `BestOfN` algorithm over a `Reasoner` generator and `Critic` judge.
-- `custom_agent.py` — minimal user-defined `Agent[In, Out]` subclass with seeded `examples=`.
-- `mermaid_export.py` — **offline** demo: `build()` a small composite and print its Mermaid graph.
+- `parallel.py`, `pipeline.py`, `federated.py` — structural composition.
+- `react.py`, `router_switch.py` — reasoning patterns.
+- `best_of_n.py`, `evolutionary_demo.py`, `sweep_demo.py` — algorithms.
+- `talker.py`, `pr_reviewer.py`, `memory_demo.py` — per-domain composites.
+- `custom_agent.py` — minimal user-defined `Agent[In, Out]` subclass.
+- `sandbox_tooluser.py`, `sandbox_add_tool.py`, `sandbox_pool_demo.py` —
+  isolated process-pool tool execution.
+- `observer_demo.py` — trace + Rich dashboard observers in action.
+- `eval_loop.py` — `evaluate(agent, dataset, metrics)` end-to-end.
+- `mermaid_export.py` — **offline** demo: `build()` a small composite
+  and print its Mermaid graph.
 
 All network-requiring examples read `OPERAD_LLAMACPP_HOST` /
 `OPERAD_LLAMACPP_MODEL`; `mermaid_export.py` runs without a model.
-
-## Streaming
-
-Set `Configuration(stream=True)` to consume token-level chunks from the
-backend as they arrive. `agent.stream(x)` is an async iterator that
-yields `ChunkEvent`s for each mid-run piece and terminates with the
-same `OperadOutput[Out]` envelope you get from `await agent(x)`:
-
-```python
-from operad import Configuration, ChunkEvent, OperadOutput
-
-cfg = Configuration(backend="llamacpp", host="127.0.0.1:8080",
-                    model="qwen2.5-7b-instruct", stream=True)
-leaf = await MyLeaf(config=cfg).abuild()
-
-async for item in leaf.stream(MyIn(question="...")):
-    if isinstance(item, ChunkEvent):
-        print(item.text, end="", flush=True)
-    else:
-        final: OperadOutput = item
-```
-
-`await agent(x)` still returns a single `OperadOutput` when
-`stream=True` — it consumes the stream internally and returns the
-envelope. Observers receive a new `"chunk"` event kind for each piece;
-`RichDashboardObserver` updates the agent's line in place. Backends
-that do not support streaming fall back to a single-envelope yield.
-
-## Renderers
-
-`Agent.format_system_message` supports three wire formats. XML is the
-default; switch per-agent or per-configuration when a model prefers a
-different shape.
-
-| Renderer | Output | When to use |
-| --- | --- | --- |
-| `"xml"` | `<role>`, `<task>`, `<rules>`, `<examples>`, `<output_schema>` | Default; Anthropic-documented format, portable across backends. |
-| `"markdown"` | `# Role` / `# Task` / `# Rules` / `# Output schema` (table) | Models that follow Markdown better than tag soup. |
-| `"chat"` | `list[{"role","content"}]` | Backends with native chat templates (llama.cpp `--chat-template`, Ollama, LM Studio) — v1 emits `[{"role":"system","content": ...}]`. |
-
-Selection precedence: class-level `renderer: ClassVar[str] = "..."`
-override wins, then `Configuration.renderer`, then XML.
-
-```python
-from typing import ClassVar
-from operad import Agent, Configuration
-
-# per-configuration
-cfg = Configuration(backend="llamacpp", host="127.0.0.1:8080",
-                    model="gemma", renderer="markdown")
-
-# per-class
-class MarkdownReasoner(Reasoner):
-    renderer: ClassVar[str] = "markdown"
-```
-
-`Field(description=...)` on `In` and `Out` surfaces in all three
-renderers.
 
 ## Tests
 
@@ -288,95 +185,48 @@ uv run pytest tests/
 Gated by `OPERAD_INTEGRATION=<backend>`; never run in CI by default. One
 backend at a time — each test skips unless its specific value is set.
 
-| Backend  | `OPERAD_INTEGRATION` | Required env   | Optional env (with defaults)                                          |
-| -------- | -------------------- | -------------- | --------------------------------------------------------------------- |
-| llamacpp | `llamacpp`           | —              | `OPERAD_LLAMACPP_HOST` (`127.0.0.1:8080`), `OPERAD_LLAMACPP_MODEL` (`default`)   |
-| openai   | `openai`             | `OPENAI_API_KEY` | `OPERAD_OPENAI_MODEL` (`gpt-4o-mini`)                               |
-| ollama   | `ollama`             | —              | `OPERAD_OLLAMA_HOST` (`127.0.0.1:11434`), `OPERAD_OLLAMA_MODEL` (`llama3.2`)      |
-| lmstudio | `lmstudio`           | —              | `OPERAD_LMSTUDIO_HOST` (`127.0.0.1:1234`), `OPERAD_LMSTUDIO_MODEL` (`default`)    |
-| anthropic| `anthropic`          | `ANTHROPIC_API_KEY` | `OPERAD_ANTHROPIC_MODEL` (`claude-haiku-4-5`)                    |
-
-```bash
-OPERAD_INTEGRATION=llamacpp \
-OPERAD_LLAMACPP_HOST=127.0.0.1:8080 \
-OPERAD_LLAMACPP_MODEL=qwen2.5-7b-instruct \
-uv run pytest tests/integration -v
-
-OPERAD_INTEGRATION=openai OPENAI_API_KEY=sk-... \
-uv run pytest tests/integration/test_openai.py -v
-
-OPERAD_INTEGRATION=ollama \
-uv run pytest tests/integration/test_ollama.py -v
-
-OPERAD_INTEGRATION=lmstudio \
-uv run pytest tests/integration/test_lmstudio.py -v
-```
-
-## Structured vs. textual I/O
-
-Leaves default to native structured output: the `Out` class is passed
-to strands as `structured_output_model`, and the provider parses the
-response. Flip `structuredio=False` on the `Configuration` to send the
-rendered XML as a plain user message and parse the model's textual
-JSON response against `Out` yourself. A parse failure raises
-`BuildError("output_mismatch", ...)`.
-
-```python
-cfg = Configuration(
-    backend="llamacpp", host="127.0.0.1:8080", model="your-model",
-    structuredio=False,
-)
-```
-
-Both modes feed the model the same per-field `Field(description=...)`
-metadata and the `<output_schema>` block, so prompts are identical; the
-difference is only whether strands or your leaf does the parse.
-
-## Tracing
-
-```python
-import operad.tracing as tracing
-
-with tracing.watch(jsonl="run.jsonl"):
-    out = await agent(x)
-```
-
-`watch()` attaches a Rich TUI (when the `observers` extra is installed)
-and, if `jsonl=...` is given, an NDJSON event log. Setting
-`OPERAD_TRACE=/tmp/run.jsonl` at import time auto-attaches the JSONL
-writer with zero code changes. Replay post-mortem with
-`uv run operad tail run.jsonl --speed=0`.
+| Backend     | `OPERAD_INTEGRATION` | Required env        | Optional env (with defaults)                                                   |
+| ----------- | -------------------- | ------------------- | ------------------------------------------------------------------------------ |
+| llamacpp    | `llamacpp`           | —                   | `OPERAD_LLAMACPP_HOST` (`127.0.0.1:8080`), `OPERAD_LLAMACPP_MODEL` (`default`) |
+| lmstudio    | `lmstudio`           | —                   | `OPERAD_LMSTUDIO_HOST` (`127.0.0.1:1234`), `OPERAD_LMSTUDIO_MODEL` (`default`) |
+| ollama      | `ollama`             | —                   | `OPERAD_OLLAMA_HOST` (`127.0.0.1:11434`), `OPERAD_OLLAMA_MODEL` (`llama3.2`)   |
+| openai      | `openai`             | `OPENAI_API_KEY`    | `OPERAD_OPENAI_MODEL` (`gpt-4o-mini`)                                          |
+| anthropic   | `anthropic`          | `ANTHROPIC_API_KEY` | `OPERAD_ANTHROPIC_MODEL` (`claude-haiku-4-5`)                                  |
+| gemini      | `gemini`             | `GEMINI_API_KEY`    | `OPERAD_GEMINI_MODEL` (`gemini-1.5-flash`)                                     |
+| huggingface | `huggingface`        | —                   | `OPERAD_HF_MODEL` (`HuggingFaceTB/SmolLM2-135M`)                               |
+| batch       | `batch`              | `OPENAI_API_KEY`    | `OPERAD_OPENAI_MODEL`                                                          |
 
 ## Layout
 
 ```
 operad/
-  core/              Agent, Example, Configuration, build, graph, render
-  utils/errors.py    BuildError + BuildReason
-  models/            resolve_model dispatcher + per-backend adapters
-  runtime/slots.py   per-endpoint concurrency semaphores
-  agents/            the torch.nn-style library, organized by domain:
+  core/              Agent, Example, Configuration, build, freeze, graph,
+                     models (all backend adapters), render, state
+  utils/             errors, hashing, ops (typed in-place mutations),
+                     paths, cassette (record/replay)
+  runtime/           slots (concurrency + RPM/TPM), trace, trace_diff,
+                     replay, streaming, retry, observers (Rich/OTel/JSONL),
+                     launchers (subprocess + pool)
+  agents/            the torch.nn-style library, organised by domain:
     pipeline.py      structural operators (domain-agnostic)
     parallel.py
-    reasoning/
-      components/    Reasoner, Actor, Extractor, Evaluator,
-                     Classifier, Planner, Critic
-      react.py       Reason-Act-Observe-Evaluate composition
-    # future: coding/, conversational/, memory/ ...
-  algorithms/        BestOfN (plain class), Candidate, Score
-  metrics/           Metric protocol, deterministic scorers
+    reasoning/       Reasoner, Actor, Extractor, Evaluator, Classifier,
+                     Planner, Critic, Reflector, Retriever, Router,
+                     ToolUser + ReAct composition
+    coding/          CodeReviewer, DiffSummarizer, PRReviewer, ContextOptimizer
+    conversational/  Persona, Safeguard, TurnTaker, Talker, RefusalLeaf
+    memory/          BeliefExtractor, EpisodicSummarizer, UserModelExtractor
+    safeguard/       InputSanitizer, OutputModerator (task-agnostic)
+  algorithms/        AutoResearcher, BestOfN, Debate, SelfRefine,
+                     VerifierLoop, Evolutionary, Sweep
+  benchmark/         Dataset, Entry, AggregatedMetric, evaluate, EvalReport
+  metrics/           Metric protocol, ExactMatch, JsonValid, Latency,
+                     Contains, RegexMatch, Rouge1, RubricCritic, CostTracker
+  cli.py             operad run/trace/graph/tail
+  tracing.py         watch() context manager + OPERAD_TRACE env
 tests/               offline tests + opt-in integration
 examples/
-  parallel.py
 ```
-
-New domains drop in as sibling folders: `coding/` for PR reviewers,
-`conversational/` for safeguarded chat flows, `memory/` for belief /
-user-info extractors, and so on. Each follows the same shape —
-`<domain>/components/` for leaves, `<domain>/*.py` for composed
-patterns — and can freely pull components from sibling domains
-(`ReAct`'s `Reasoner` comes straight from
-`reasoning/components/reasoner.py`).
 
 ## License
 
