@@ -2,57 +2,253 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>operad-dashboard</title>
+  <title>operad · dashboard</title>
   <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='5' fill='%2346a7ff'/></svg>" />
   <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 </head>
 <body>
-  <header>
-    <h1>operad</h1>
-    <span id="status" class="badge">connecting…</span>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span class="brand-name">operad</span>
+      <span class="brand-sub">dashboard</span>
+    </div>
+    <div class="globals" id="globals">
+      <div class="global-stat"><label>runs</label><b id="g-runs">0</b></div>
+      <div class="global-stat"><label>live</label><b id="g-live">0</b></div>
+      <div class="global-stat"><label>ended</label><b id="g-ended">0</b></div>
+      <div class="global-stat"><label>errors</label><b id="g-error">0</b></div>
+      <div class="global-stat"><label>events</label><b id="g-events">0</b></div>
+      <div class="global-stat"><label>tokens</label><b id="g-tokens">0</b></div>
+      <div class="global-stat"><label>cost</label><b id="g-cost">$0.00</b></div>
+    </div>
+    <div class="status-group">
+      <span id="subs" class="muted" title="browser SSE subscribers"></span>
+      <span id="status" class="badge">connecting…</span>
+    </div>
   </header>
 
-  <main class="grid">
-    <section id="panel-graph" class="panel">
-      <h2>graph</h2>
-      <div class="run-picker">
-        <label for="run-select">run:</label>
-        <select id="run-select"><option value="">— none —</option></select>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <h2>runs</h2>
+        <div class="sidebar-filters" id="filters">
+          <button data-filter="all" class="chip active">all</button>
+          <button data-filter="algorithms" class="chip">algorithms</button>
+          <button data-filter="agents" class="chip">agents</button>
+        </div>
       </div>
-      <div id="graph" class="mermaid">flowchart LR
-    placeholder["select a run"]</div>
-    </section>
+      <ul id="runs-list" class="runs-list"></ul>
+      <div class="sidebar-footer">
+        <span id="runs-count" class="muted">—</span>
+        <label class="follow-toggle">
+          <input type="checkbox" id="auto-follow" checked />
+          <span>follow newest</span>
+        </label>
+      </div>
+    </aside>
 
-    <section id="panel-events" class="panel">
-      <h2>events</h2>
-      <ul id="events"></ul>
-    </section>
+    <main class="main">
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="overview">overview</button>
+        <button class="tab" data-tab="evolution">evolution</button>
+        <button class="tab" data-tab="graph">graph</button>
+        <button class="tab" data-tab="events">events</button>
+        <button class="tab" data-tab="io">i/o</button>
+        <button class="tab" data-tab="metrics">metrics</button>
+        <button class="tab" data-tab="raw">raw</button>
+      </nav>
 
-    <section id="panel-metrics" class="panel">
-      <h2>metrics</h2>
-      <div class="card">
-        <h3>active runs</h3>
-        <table id="runs-table">
-          <thead><tr><th>run_id</th><th>state</th><th>last event</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="card">
-        <h3>slot occupancy</h3>
-        <table id="slots-table">
-          <thead><tr><th>backend</th><th>host</th><th>conc</th><th>rpm</th><th>tpm</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="card">
-        <h3>cost totals</h3>
-        <table id="cost-table">
-          <thead><tr><th>run_id</th><th>prompt</th><th>completion</th><th>USD</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
-  </main>
+      <section class="tab-panes">
+        <!-- overview -->
+        <div id="pane-overview" class="pane active">
+          <div id="overview-empty" class="empty-state">
+            <h3>pick a run from the sidebar</h3>
+            <p class="muted">or start one — run <code>uv run python apps/demos/agent_evolution/run.py --offline --dashboard</code> in another terminal.</p>
+            <div id="overview-global">
+              <h4>live activity</h4>
+              <div id="overview-global-chart" class="mini-chart-slot"></div>
+            </div>
+          </div>
+          <div id="overview-body" hidden>
+            <div class="overview-grid">
+              <div class="card kpi" id="kpi-status">
+                <label>status</label>
+                <b><span id="ov-status">—</span></b>
+                <small id="ov-duration" class="muted">—</small>
+              </div>
+              <div class="card kpi">
+                <label>events</label>
+                <b id="ov-events">0</b>
+                <small id="ov-events-breakdown" class="muted">—</small>
+              </div>
+              <div class="card kpi">
+                <label>tokens</label>
+                <b id="ov-tokens">0</b>
+                <small id="ov-token-split" class="muted">prompt + completion</small>
+              </div>
+              <div class="card kpi">
+                <label>cost</label>
+                <b id="ov-cost">$0.00</b>
+                <small id="ov-cost-sub" class="muted">—</small>
+              </div>
+            </div>
+            <div class="cards-row">
+              <div class="card wide">
+                <h4>fitness</h4>
+                <div id="ov-fitness" class="chart-slot">
+                  <p class="empty-inline muted">no algorithm events yet for this run</p>
+                </div>
+              </div>
+              <div class="card">
+                <h4>meta</h4>
+                <dl class="meta-list" id="ov-meta"></dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- evolution -->
+        <div id="pane-evolution" class="pane">
+          <div class="evolution-head">
+            <div class="evolution-scope">
+              <label>source:</label>
+              <select id="evo-scope">
+                <option value="run">selected run</option>
+                <option value="global" selected>all runs (live)</option>
+              </select>
+            </div>
+            <div class="evolution-stats" id="evo-stats"></div>
+          </div>
+          <div class="card">
+            <h4>fitness over generations</h4>
+            <div id="evo-chart" class="chart-slot">
+              <p class="empty-inline muted">waiting for generation events…</p>
+            </div>
+          </div>
+          <div class="cards-row">
+            <div class="card">
+              <h4>population scatter</h4>
+              <div id="evo-scatter" class="chart-slot short">
+                <p class="empty-inline muted">waiting…</p>
+              </div>
+            </div>
+            <div class="card">
+              <h4>mutation operators</h4>
+              <table id="evo-ops" class="ops-table">
+                <thead><tr><th>op</th><th>attempts</th><th>successes</th><th>rate</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <h4>generations</h4>
+            <table id="evo-gens" class="gens-table">
+              <thead><tr><th>#</th><th>best</th><th>mean</th><th>population</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- graph -->
+        <div id="pane-graph" class="pane">
+          <div class="graph-toolbar">
+            <span id="graph-title" class="muted">no run selected</span>
+            <button id="graph-refresh" class="chip">refresh</button>
+          </div>
+          <div id="graph-container" class="graph-container">
+            <div id="graph" class="mermaid">flowchart LR
+  placeholder["select a run"]</div>
+          </div>
+        </div>
+
+        <!-- events -->
+        <div id="pane-events" class="pane">
+          <div class="events-toolbar">
+            <div class="events-filters">
+              <button class="chip active" data-kind="all">all</button>
+              <button class="chip" data-kind="agent">agent</button>
+              <button class="chip" data-kind="algo">algo</button>
+              <button class="chip" data-kind="error">errors</button>
+            </div>
+            <input id="events-search" type="search" placeholder="search path…" />
+            <label class="follow-toggle">
+              <input type="checkbox" id="events-follow" checked />
+              <span>follow</span>
+            </label>
+          </div>
+          <div class="events-split">
+            <ul id="events" class="events-list"></ul>
+            <aside id="event-detail" class="event-detail">
+              <h4>event detail</h4>
+              <p class="muted small">click any event to inspect</p>
+            </aside>
+          </div>
+        </div>
+
+        <!-- io (last input/output) -->
+        <div id="pane-io" class="pane">
+          <div class="io-grid">
+            <div class="card">
+              <h4>last input</h4>
+              <pre id="io-input" class="json-view">—</pre>
+            </div>
+            <div class="card">
+              <h4>last output</h4>
+              <pre id="io-output" class="json-view">—</pre>
+            </div>
+          </div>
+          <div class="card">
+            <h4>all root invocations</h4>
+            <table id="io-table" class="io-table">
+              <thead><tr><th>kind</th><th>agent</th><th>started</th><th>dur (ms)</th><th>tokens</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- metrics -->
+        <div id="pane-metrics" class="pane">
+          <div class="cards-row">
+            <div class="card">
+              <h4>slot occupancy</h4>
+              <table id="slots-table" class="metrics-table">
+                <thead><tr><th>backend</th><th>host</th><th>conc</th><th>rpm</th><th>tpm</th></tr></thead>
+                <tbody><tr><td colspan="5" class="muted">waiting…</td></tr></tbody>
+              </table>
+            </div>
+            <div class="card">
+              <h4>cost totals</h4>
+              <table id="cost-table" class="metrics-table">
+                <thead><tr><th>run_id</th><th>prompt</th><th>completion</th><th>USD</th></tr></thead>
+                <tbody><tr><td colspan="4" class="muted">waiting…</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <h4>all runs</h4>
+            <table id="runs-table" class="metrics-table">
+              <thead><tr><th>run_id</th><th>state</th><th>kind</th><th>events</th><th>duration</th><th>last</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- raw -->
+        <div id="pane-raw" class="pane">
+          <div class="card">
+            <h4>latest envelope</h4>
+            <pre id="raw-latest" class="json-view">no events yet</pre>
+          </div>
+          <div class="card">
+            <h4>run summary (json)</h4>
+            <pre id="raw-summary" class="json-view">select a run</pre>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>

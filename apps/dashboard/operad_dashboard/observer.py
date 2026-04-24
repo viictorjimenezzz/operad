@@ -109,23 +109,22 @@ class WebDashboardObserver:
         return len(self._subscribers)
 
     async def on_event(self, event: Event) -> None:
-        if isinstance(event, AlgorithmEvent):
-            self.registry.observe_algorithm_event(
-                run_id=event.run_id, timestamp=event.started_at
-            )
-        elif isinstance(event, AgentEvent):
-            self.registry.observe_agent_event(
-                run_id=event.run_id,
-                kind=event.kind,
-                timestamp=event.started_at,
-                metadata=event.metadata,
-            )
         envelope = serialize_event(event)
-        self.registry.append_event(event.run_id, envelope)
-        await self.broadcast(envelope)
+        self.registry.record_envelope(envelope)
+        await self.broadcast(envelope, record=False)
 
-    async def broadcast(self, envelope: dict[str, Any]) -> None:
-        """Push one envelope to every subscriber; drop oldest on overflow."""
+    async def broadcast(
+        self, envelope: dict[str, Any], *, record: bool = True
+    ) -> None:
+        """Push one envelope to every subscriber; drop oldest on overflow.
+
+        `record=True` (the default, used by the HTTP /_ingest and replay
+        paths) also feeds the envelope into the run registry so summaries
+        stay consistent across in-process and HTTP-attached producers.
+        Set to False when the caller already recorded the envelope.
+        """
+        if record:
+            self.registry.record_envelope(envelope)
         for q in list(self._subscribers):
             _put_drop_oldest(q, envelope)
 

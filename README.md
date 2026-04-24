@@ -82,9 +82,25 @@ uv run python apps/demos/agent_evolution/run.py --offline
 ```
 
 A seed agent evolves over a handful of generations; the fitness curve
-climbs; the before/after diff prints at the end. Add `--dashboard`
-(after starting `operad-dashboard --port 7860` in another terminal)
-to watch it live. See
+climbs; the before/after diff prints at the end.
+
+**Watch it live.** In one terminal:
+
+```bash
+uv run operad-dashboard --port 7860
+```
+
+In another:
+
+```bash
+uv run python apps/demos/agent_evolution/run.py --offline --dashboard
+```
+
+Your browser opens http://127.0.0.1:7860 automatically. The dashboard
+shows the live event stream, the rendered Mermaid graph, a fitness
+chart per generation (best + mean), a population scatter, mutation
+operator success rates, cost totals, slot occupancy, and raw
+per-event input/output drill-downs. See
 [apps/demos/agent_evolution/README.md](apps/demos/agent_evolution/README.md)
 for the story.
 
