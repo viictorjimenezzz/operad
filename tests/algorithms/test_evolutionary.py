@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from operad import Agent
 from operad.algorithms import Evolutionary
+from operad.utils.errors import BuildError
 from operad.utils.ops import AppendRule
 
 
@@ -117,3 +118,75 @@ async def test_evolutionary_rejects_small_population(cfg) -> None:
             dataset=[(Q(), R())],
             population_size=1,
         )
+
+
+class _PoisonableLeaf(_RuleCountLeaf):
+    """`_RuleCountLeaf` whose `abuild` refuses to build when poisoned."""
+
+    async def abuild(self):  # type: ignore[override]
+        if "POISON" in self.rules:
+            raise BuildError(
+                "prompt_incomplete",
+                "poisoned by sentinel rule",
+                agent=type(self).__name__,
+            )
+        return await super().abuild()
+
+
+async def test_evolutionary_rollback_on_build_failure(cfg) -> None:
+    seed = _PoisonableLeaf(config=cfg)
+    seed.rules = []
+    await seed.abuild()
+    seed_state_before = seed.state()
+
+    dataset = [(Q(text="a"), R(value=3))]
+    poison_mutations = [AppendRule(path="", rule="POISON")]
+    metric = _RuleCountMetric(target=3)
+
+    evo = Evolutionary(
+        seed=seed,
+        mutations=poison_mutations,
+        metric=metric,
+        dataset=dataset,
+        population_size=4,
+        generations=2,
+        rng=random.Random(0),
+        max_mutation_retries=2,
+    )
+
+    with pytest.warns(RuntimeWarning, match="mutation attempts failed"):
+        best = await evo.run()
+
+    # Seed is untouched — all mutations ran on clones.
+    assert seed.state() == seed_state_before
+    # Every mutation would have added "POISON" — rollback + fallback
+    # guarantees no surviving agent carries it.
+    assert "POISON" not in best.rules
+
+
+async def test_evolutionary_rollback_preserves_population_size(cfg) -> None:
+    """With a mixed pool (some poison, some not), population size holds."""
+    seed = _PoisonableLeaf(config=cfg)
+    seed.rules = []
+    await seed.abuild()
+
+    dataset = [(Q(text="a"), R(value=3))]
+    mutations = [
+        AppendRule(path="", rule="POISON"),
+        AppendRule(path="", rule="helpful"),
+    ]
+    metric = _RuleCountMetric(target=3)
+
+    evo = Evolutionary(
+        seed=seed,
+        mutations=mutations,
+        metric=metric,
+        dataset=dataset,
+        population_size=4,
+        generations=3,
+        rng=random.Random(7),
+        max_mutation_retries=5,
+    )
+    best = await evo.run()
+    assert "POISON" not in best.rules
+    assert isinstance(best, _PoisonableLeaf)
