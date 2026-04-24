@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from .observer import WebDashboardObserver
-from .runs import RunRegistry
 
 
 def load_records(path: str | Path) -> Iterator[dict[str, Any]]:
@@ -61,25 +60,6 @@ def record_to_envelope(record: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def _update_registry_from_record(
-    registry: RunRegistry, record: dict[str, Any]
-) -> None:
-    """Mirror the live observer's registry side-effects during replay."""
-    run_id = record.get("run_id") or ""
-    if not run_id:
-        return
-    timestamp = float(record.get("started_at") or 0.0)
-    if record.get("event") == "agent":
-        registry.observe_agent_event(
-            run_id=run_id,
-            kind=record.get("kind") or "",
-            timestamp=timestamp,
-            metadata=record.get("metadata") or {},
-        )
-    elif record.get("event") == "algorithm":
-        registry.observe_algorithm_event(run_id=run_id, timestamp=timestamp)
-
-
 async def replay_file(
     path: str | Path,
     observer: WebDashboardObserver,
@@ -105,7 +85,6 @@ async def replay_file(
                     await asyncio.sleep(gap)
             if isinstance(ts, (int, float)):
                 prev_ts = float(ts)
-        _update_registry_from_record(observer.registry, record)
         await observer.broadcast(envelope)
         count += 1
     return count

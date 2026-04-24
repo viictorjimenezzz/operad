@@ -78,24 +78,33 @@ def _server_up(host: str, port: int, timeout: float = 0.5) -> bool:
         return False
 
 
-def _attach_dashboard(target: str) -> None:
+def _attach_dashboard(target: str, *, open_browser: bool = True) -> bool:
     host, port = _parse_dashboard_target(target)
     if not _server_up(host, port):
         print(
             f"[dashboard] no server at {host}:{port} — "
             "start one with `operad-dashboard --port 7860` then re-run with --dashboard"
         )
-        return
+        return False
     from operad.dashboard import attach
 
     attach(host=host, port=port)
-    print(f"[dashboard] attached → http://{host}:{port}")
+    url = f"http://{host}:{port}"
+    print(f"[dashboard] attached → {url}")
+    if open_browser:
+        try:
+            import webbrowser
+            webbrowser.open_new_tab(url)
+        except Exception:
+            pass
+    return True
 
 
 async def main(args: argparse.Namespace) -> None:
     registry.register(FitnessTraceObserver(TRACE_PATH))
+    attached = False
     if args.dashboard is not None:
-        _attach_dashboard(args.dashboard)
+        attached = _attach_dashboard(args.dashboard, open_browser=not args.no_open)
 
     seed = build_seed()
     await seed.abuild()
@@ -119,6 +128,9 @@ async def main(args: argparse.Namespace) -> None:
     print(seed.diff(improved))
     print("=" * 60)
     print(f"fitness trace → {TRACE_PATH}")
+    if attached:
+        host, port = _parse_dashboard_target(args.dashboard)
+        print(f"dashboard still live at http://{host}:{port}  (ctrl+c the dashboard server to stop)")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -140,6 +152,11 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--generations", type=int, default=4)
     parser.add_argument("--population", type=int, default=6)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--no-open",
+        action="store_true",
+        help="Do not open the browser when --dashboard attaches.",
+    )
     return parser.parse_args()
 
 

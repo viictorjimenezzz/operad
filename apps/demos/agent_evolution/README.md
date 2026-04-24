@@ -30,7 +30,7 @@ The fitness curve is written to `/tmp/agent-evolution-trace.jsonl`
 In one terminal:
 
 ```bash
-operad-dashboard --port 7860
+uv run operad-dashboard --port 7860
 ```
 
 In another:
@@ -39,8 +39,11 @@ In another:
 uv run python apps/demos/agent_evolution/run.py --offline --dashboard
 ```
 
-Then open http://127.0.0.1:7860 — algorithm events stream in as each
-generation completes.
+The demo opens http://127.0.0.1:7860 in your browser automatically
+(pass `--no-open` to skip). Algorithm events stream in as each
+generation completes; the **Evolution** tab shows the fitness curve
+and population scatter building up generation-by-generation, and the
+**Graph** tab renders the Mermaid graph of the seed agent.
 
 ## What this demonstrates
 

@@ -26,6 +26,7 @@ _TEMPLATES_DIR = _PKG_DIR / "templates"
 _STATIC_DIR = _PKG_DIR / "static"
 
 _SNAPSHOT_INTERVAL_SECONDS = 2.0
+_MAX_EVENTS_PER_REQUEST = 500
 
 
 def create_app(
@@ -59,17 +60,22 @@ def create_app(
 
     @app.get("/runs")
     async def runs() -> JSONResponse:
-        items = [
-            {
-                "run_id": r.run_id,
-                "started_at": r.started_at,
-                "last_event_at": r.last_event_at,
-                "state": r.state,
-                "has_graph": r.mermaid is not None,
-            }
-            for r in obs.registry.list()
-        ]
+        items = [r.summary() for r in obs.registry.list()]
         return JSONResponse(items)
+
+    @app.get("/stats")
+    async def stats() -> JSONResponse:
+        s = obs.registry.global_stats()
+        s["subscribers"] = obs.subscriber_count
+        try:
+            s["cost_totals"] = cost.totals()
+        except Exception:
+            s["cost_totals"] = {}
+        return JSONResponse(s)
+
+    @app.get("/evolution")
+    async def evolution() -> JSONResponse:
+        return JSONResponse({"generations": obs.registry.all_generations()})
 
     @app.get("/graph/{run_id}")
     async def graph(run_id: str) -> JSONResponse:
@@ -79,6 +85,25 @@ def create_app(
         if info.mermaid is None:
             raise HTTPException(status_code=404, detail="no graph captured for run")
         return JSONResponse({"mermaid": info.mermaid})
+
+    @app.get("/runs/{run_id}/summary")
+    async def run_summary(run_id: str) -> JSONResponse:
+        info = obs.registry.get(run_id)
+        if info is None:
+            raise HTTPException(status_code=404, detail="unknown run_id")
+        totals = cost.totals().get(run_id, {})
+        data = info.summary()
+        data["cost"] = totals
+        return JSONResponse(data)
+
+    @app.get("/runs/{run_id}/events")
+    async def run_events(run_id: str, limit: int = 200) -> JSONResponse:
+        info = obs.registry.get(run_id)
+        if info is None:
+            raise HTTPException(status_code=404, detail="unknown run_id")
+        limit = max(1, min(limit, _MAX_EVENTS_PER_REQUEST))
+        events = list(info.events)[-limit:]
+        return JSONResponse({"run_id": run_id, "events": events})
 
     @app.post("/_ingest")
     async def ingest(envelope: dict[str, Any]) -> JSONResponse:
@@ -99,7 +124,7 @@ async def _event_stream(
     cost: CostObserver,
 ) -> AsyncIterator[dict[str, str]]:
     queue = obs.subscribe()
-    snapshot_task = asyncio.create_task(_seed_snapshots(queue, cost))
+    snapshot_task = asyncio.create_task(_seed_snapshots(queue, obs, cost))
     try:
         while True:
             if await request.is_disconnected():
@@ -117,9 +142,11 @@ async def _event_stream(
 
 
 async def _seed_snapshots(
-    queue: asyncio.Queue[dict[str, Any]], cost: CostObserver
+    queue: asyncio.Queue[dict[str, Any]],
+    obs: WebDashboardObserver,
+    cost: CostObserver,
 ) -> None:
-    """Periodically push slot occupancy + cost snapshots into one subscriber's queue."""
+    """Periodically push slot occupancy, cost, and global stats snapshots."""
     while True:
         try:
             occupancy = [asdict(s) for s in slot_registry.occupancy()]
@@ -129,15 +156,18 @@ async def _seed_snapshots(
             totals = cost.totals()
         except Exception:
             totals = {}
+        try:
+            stats_snapshot = obs.registry.global_stats()
+        except Exception:
+            stats_snapshot = {}
         for envelope in (
             {"type": "slot_occupancy", "snapshot": occupancy},
             {"type": "cost_update", "totals": totals},
+            {"type": "stats_update", "stats": stats_snapshot},
         ):
             try:
                 queue.put_nowait(envelope)
             except asyncio.QueueFull:
-                # Don't block snapshot emission if the subscriber is slow;
-                # drop oldest and retry once.
                 try:
                     queue.get_nowait()
                     queue.put_nowait(envelope)
