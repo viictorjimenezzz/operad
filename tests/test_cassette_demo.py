@@ -15,7 +15,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from operad import Agent
-from operad.testing.cassette import CassetteMiss
+from operad.utils.cassette import CassetteMiss
 
 from .conftest import cfg as cfg_fixture  # noqa: F401  (used as fixture)
 
@@ -52,7 +52,7 @@ async def test_cassette_replays_recorded_answer(cassette, cfg) -> None:
 
 @pytest.mark.asyncio
 async def test_cassette_miss_raises(cfg, tmp_path) -> None:
-    from operad.testing.cassette import cassette_context
+    from operad.utils.cassette import cassette_context
 
     empty = tmp_path / "empty.jsonl"
     with cassette_context(empty, mode="replay"):

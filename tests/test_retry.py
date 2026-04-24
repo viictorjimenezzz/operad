@@ -7,7 +7,8 @@ from typing import Any
 
 import pytest
 
-from operad import Agent, AgentEvent, Configuration
+from operad import Agent, Configuration
+from operad.runtime.observers import AgentEvent
 from operad.core.build import _TRACER
 from operad.runtime.observers import registry as obs_registry
 from operad.runtime.observers.base import _RETRY_META

@@ -63,7 +63,7 @@ def cassette(request: pytest.FixtureRequest) -> Iterator[None]:
     Set ``OPERAD_CASSETTE=record`` against a real backend to refresh the
     file at ``<testfile_dir>/cassettes/<test_name>.jsonl``.
     """
-    from operad.testing.cassette import cassette_context
+    from operad.utils.cassette import cassette_context
 
     mode = os.environ.get("OPERAD_CASSETTE", "replay")
     if mode not in ("record", "replay"):

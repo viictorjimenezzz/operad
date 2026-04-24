@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import asyncio
 
-from operad import Talker, Utterance, set_limit
+from operad.agents import Talker, Utterance
+from operad.runtime import set_limit
 
 from _config import local_config
 

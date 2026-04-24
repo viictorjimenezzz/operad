@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from operad import (
-    Agent,
+from operad import Agent, Example
+from operad.utils.ops import (
     AppendExample,
     AppendRule,
     CompoundOp,
     DropExample,
     DropRule,
     EditTask,
-    Example,
     ReplaceRule,
     SetBackend,
     SetModel,

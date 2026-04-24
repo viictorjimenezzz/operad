@@ -18,7 +18,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from operad import (
+from operad.agents import (
     Choice,
     Reasoner,
     RouteInput,

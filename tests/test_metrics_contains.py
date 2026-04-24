@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from operad import Contains, Metric
+from operad import Metric
+from operad.metrics import Contains
 
 from .conftest import A
 

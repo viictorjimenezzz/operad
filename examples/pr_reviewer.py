@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import asyncio
 
-from operad import DiffChunk, PRDiff, PRReviewer, set_limit
+from operad.agents import DiffChunk, PRDiff, PRReviewer
+from operad.runtime import set_limit
 
 from _config import local_config
 

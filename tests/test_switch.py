@@ -6,14 +6,8 @@ from typing import Any, Literal
 
 import pytest
 
-from operad import (
-    Agent,
-    BuildError,
-    Choice,
-    RouteInput,
-    Router,
-    Switch,
-)
+from operad import Agent, BuildError
+from operad.agents import Choice, RouteInput, Router, Switch
 from tests.conftest import A, B
 
 

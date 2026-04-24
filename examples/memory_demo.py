@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 
-from operad import (
+from operad.agents import (
     Belief,
     BeliefExtractor,
     Conversation,

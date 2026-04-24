@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 import pytest
 
-from operad import Choice, RouteInput, Router
+from operad.agents import Choice, RouteInput, Router
 
 
 pytestmark = pytest.mark.asyncio

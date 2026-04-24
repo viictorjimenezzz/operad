@@ -123,7 +123,7 @@ class AppendExample(_OpBase):
     name: str = "append_example"
 
     def apply(self, agent: "Agent[Any, Any]") -> None:
-        from ..core.agent import Example
+        from ..core.example import Example
 
         if not isinstance(self.example, Example):
             raise ValueError(

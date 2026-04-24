@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from operad import Configuration, OperadOutput
-from operad.core.output import hash_config, hash_json, hash_schema, hash_str
+from operad.utils.hashing import hash_config, hash_json, hash_schema, hash_str
 from operad.runtime.observers import base as _obs
 
 from tests.conftest import A, B, FakeLeaf

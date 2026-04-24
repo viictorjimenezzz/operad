@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from operad import Metric, RegexMatch
+from operad import Metric
+from operad.metrics import RegexMatch
 
 from .conftest import A
 

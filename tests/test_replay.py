@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from operad import ExactMatch, TraceObserver
+from operad.metrics import ExactMatch
+from operad.runtime.trace import TraceObserver
 from operad.runtime.observers import base as _obs
 from operad.runtime.replay import replay
 

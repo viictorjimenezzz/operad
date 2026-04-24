@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from operad import Agent, Parallel, Pipeline, to_json, to_mermaid
+from operad import Agent, Parallel, Pipeline
+from operad.core.graph import to_json, to_mermaid
 
 from .conftest import A, FakeLeaf
 

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from operad import Agent, Sweep, SweepReport
+from operad import Agent
+from operad.algorithms import Sweep, SweepReport
 
 from .conftest import A, B, FakeLeaf
 

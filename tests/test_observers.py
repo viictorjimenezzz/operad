@@ -8,7 +8,8 @@ from typing import Any
 
 import pytest
 
-from operad import Agent, AgentEvent, JsonlObserver
+from operad import Agent
+from operad.runtime.observers import AgentEvent, JsonlObserver
 from operad.runtime.observers import registry as obs_registry
 
 from .conftest import A, B, C, FakeLeaf

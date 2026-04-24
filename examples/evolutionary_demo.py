@@ -17,14 +17,10 @@ import random
 
 from pydantic import BaseModel
 
-from operad import (
-    Agent,
-    AppendRule,
-    Configuration,
-    Evolutionary,
-    ExactMatch,
-    evaluate,
-)
+from operad import Agent, Configuration, evaluate
+from operad.algorithms import Evolutionary
+from operad.metrics import ExactMatch
+from operad.utils.ops import AppendRule
 
 
 class Q(BaseModel):

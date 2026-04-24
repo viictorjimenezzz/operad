@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import asyncio
 
-from operad import ReAct, Task, to_mermaid
+from operad.agents import ReAct, Task
+from operad.core.graph import to_mermaid
 
 from _config import local_config
 

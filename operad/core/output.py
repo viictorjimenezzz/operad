@@ -4,21 +4,22 @@ Wraps the user's declared `Out` with reproducibility (`hash_*`) and run
 metadata (`run_id`, `agent_path`, timings, optional token/cost usage).
 The `hash_*` cluster is SHA-256 truncated to 16 hex chars over a stable
 JSON dump — for correlation and audit, not cryptographic integrity.
+
+Hash helpers themselves live in ``operad.utils.hashing``; this module
+keeps only the envelope type and the per-run state needed to thread
+`hash_graph` through nested invocations.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
 import platform
-import re
 from contextvars import ContextVar
 from importlib.metadata import PackageNotFoundError, version as _pkg_version
-from typing import Any, Generic, TypeVar
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
-from .config import Configuration
+from ..utils.hashing import hash_str
 
 
 Out = TypeVar("Out", bound=BaseModel)
@@ -56,48 +57,6 @@ class OperadOutput(BaseModel, Generic[Out]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
-# --- hash helpers -----------------------------------------------------------
-
-
-def hash_str(s: str) -> str:
-    """SHA-256 of `s`, truncated to 16 hex chars."""
-    return hashlib.sha256(s.encode("utf-8")).hexdigest()[:16]
-
-
-def hash_json(obj: Any) -> str:
-    """Stable hash of a JSON-serialisable object."""
-    return hash_str(json.dumps(obj, sort_keys=True, default=str))
-
-
-# Matches a `user:pass@` authority prefix, with or without a leading scheme.
-# Credentials embedded in `host` would otherwise be hashed verbatim, making
-# identical deployments hash differently based on operator.
-_HOST_AUTH_RE = re.compile(r"^(?P<scheme>[a-z][a-z0-9+.-]*://)?[^/@]+@")
-
-
-def hash_config(config: Configuration | None) -> str:
-    """Hash a `Configuration` with `api_key` excluded.
-
-    The `host` field is additionally scrubbed of any embedded
-    `user:pass@` authority so credentials never bleed into the
-    reproducibility hash.
-    """
-    if config is None:
-        return ""
-    dumped = config.model_dump(mode="json", exclude={"api_key"})
-    host = dumped.get("host")
-    if isinstance(host, str):
-        m = _HOST_AUTH_RE.match(host)
-        if m:
-            dumped["host"] = (m.group("scheme") or "") + host[m.end():]
-    return hash_json(dumped)
-
-
-def hash_schema(cls: type[BaseModel]) -> str:
-    """Hash the JSON schema of a Pydantic model."""
-    return hash_json(cls.model_json_schema())
-
-
 def _operad_version() -> str:
     try:
         return _pkg_version("operad")
@@ -115,12 +74,8 @@ _RUN_GRAPH_HASH: ContextVar[str] = ContextVar("_RUN_GRAPH_HASH", default="")
 
 
 __all__ = [
-    "OperadOutput",
     "OPERAD_VERSION_HASH",
+    "OperadOutput",
     "PYTHON_VERSION_HASH",
     "_RUN_GRAPH_HASH",
-    "hash_config",
-    "hash_json",
-    "hash_schema",
-    "hash_str",
 ]

@@ -6,7 +6,9 @@ from typing import Any
 
 import pytest
 
-from operad import Agent, Trace, TraceObserver, TypeRegistry
+from operad import Agent, Trace
+from operad.core.graph import TypeRegistry
+from operad.runtime.trace import TraceObserver
 from operad.runtime.observers import base as _obs
 
 from tests.conftest import A, B, C, FakeLeaf

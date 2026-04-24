@@ -7,11 +7,10 @@ from typing import Literal
 import pytest
 from pydantic import BaseModel, Field
 
-from operad import (
+from operad.agents import (
     Action,
     Actor,
     Answer,
-    Candidate,
     Classifier,
     Critic,
     Evaluator,
@@ -19,9 +18,9 @@ from operad import (
     Observation,
     Planner,
     Reasoner,
-    Score,
     Thought,
 )
+from operad.algorithms import Candidate, Score
 
 
 class _Question(BaseModel):

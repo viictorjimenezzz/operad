@@ -30,11 +30,14 @@ from ..runtime.streaming import ChunkEvent
 from ..utils.errors import BuildError
 from .config import Configuration
 from .diff import AgentDiff, diff_states
+from .example import Example
 from .output import (
     OPERAD_VERSION_HASH,
     PYTHON_VERSION_HASH,
     OperadOutput,
     _RUN_GRAPH_HASH,
+)
+from ..utils.hashing import (
     hash_config,
     hash_json,
     hash_schema,
@@ -49,15 +52,6 @@ if TYPE_CHECKING:
 
 In = TypeVar("In", bound=BaseModel)
 Out = TypeVar("Out", bound=BaseModel)
-
-
-class Example(BaseModel, Generic[In, Out]):
-    """Typed few-shot demonstration: one `(input, output)` pair."""
-
-    input: In
-    output: Out
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 def _system_to_str(rendered: str | list[dict[str, str]] | None) -> str:
@@ -523,27 +517,29 @@ class Agent(strands.Agent, Generic[In, Out]):
                 agent=type(self).__name__,
             ) from e
 
-    # --- framework entry point ----------------------------------------------
-    async def invoke(self, x: In) -> OperadOutput[Out]:
-        """Validate contract, then run `forward`, wrap in `OperadOutput`.
+    # --- run-context helpers ----------------------------------------------
 
-        When a symbolic tracer is active (during `build()`), this method
-        short-circuits into the tracer instead of running real logic.
-        """
-        tracer = _TRACER.get()
-        if tracer is not None:
-            response = await tracer.record(self, x)
-            return OperadOutput[Any].model_construct(response=response)
-
+    def _compute_path(self) -> str:
         from ..runtime.observers import base as _obs
 
         parent_entry = _obs._PATH_STACK.get()
         if parent_entry is None:
-            path = type(self).__name__
-        else:
-            parent_agent, parent_path = parent_entry
-            attr = _attr_name_hint(parent_agent, self) or type(self).__name__
-            path = f"{parent_path}.{attr}"
+            return type(self).__name__
+        parent_agent, parent_path = parent_entry
+        attr = _attr_name_hint(parent_agent, self) or type(self).__name__
+        return f"{parent_path}.{attr}"
+
+    def _enter_run(
+        self, path: str, *, track_retry: bool
+    ) -> tuple[bool, str, float, float, str, dict[str, Any], dict[str, Any], tuple[Any, Any, Any, Any | None]]:
+        """Set up per-run ContextVars and return the run frame.
+
+        Returns ``(is_root, run_id, started, started_wall, graph_hash,
+        start_meta, retry_meta, tokens)`` where ``tokens`` is the tuple
+        ``(tok_r, tok_p, tok_g, tok_m)`` to be handed to `_exit_run`.
+        ``tok_m`` is ``None`` when ``track_retry`` is False (streaming).
+        """
+        from ..runtime.observers import base as _obs
 
         is_root = _obs._RUN_ID.get() is None
         run_id = _obs._RUN_ID.get() or uuid.uuid4().hex
@@ -558,11 +554,82 @@ class Agent(strands.Agent, Generic[In, Out]):
         tok_r = _obs._RUN_ID.set(run_id)
         tok_p = _obs._PATH_STACK.set((self, path))
         retry_meta: dict[str, Any] = {}
-        tok_m = _obs._RETRY_META.set(retry_meta)
+        tok_m = _obs._RETRY_META.set(retry_meta) if track_retry else None
+
         start_meta: dict[str, Any] = {}
         if is_root:
             start_meta["graph"] = _graph_json_or_none(self)
             start_meta["is_root"] = True
+        return is_root, run_id, started, started_wall, graph_hash, start_meta, retry_meta, (tok_r, tok_p, tok_g, tok_m)
+
+    def _exit_run(
+        self, tokens: tuple[Any, Any, Any, Any | None]
+    ) -> None:
+        from ..runtime.observers import base as _obs
+
+        tok_r, tok_p, tok_g, tok_m = tokens
+        if tok_m is not None:
+            _obs._RETRY_META.reset(tok_m)
+        _obs._RUN_ID.reset(tok_r)
+        _obs._PATH_STACK.reset(tok_p)
+        if tok_g is not None:
+            _RUN_GRAPH_HASH.reset(tok_g)
+
+    def _check_built_and_input(self, x: In, *, entry: str) -> None:
+        if not self._built:
+            raise BuildError(
+                "not_built",
+                f"call .build() before .{entry}()",
+                agent=type(self).__name__,
+            )
+        if not isinstance(x, self.input):  # type: ignore[arg-type]
+            raise BuildError(
+                "input_mismatch",
+                f"expected {self.input.__name__}, got {type(x).__name__}",  # type: ignore[union-attr]
+                agent=type(self).__name__,
+            )
+
+    def _check_output(self, y: Any) -> None:
+        if not isinstance(y, self.output):  # type: ignore[arg-type]
+            raise BuildError(
+                "output_mismatch",
+                f"forward returned {type(y).__name__}, expected {self.output.__name__}",  # type: ignore[union-attr]
+                agent=type(self).__name__,
+            )
+
+    # --- framework entry point ----------------------------------------------
+    async def invoke(self, x: In) -> OperadOutput[Out]:
+        """Validate contract, then run `forward`, wrap in `OperadOutput`.
+
+        When a symbolic tracer is active (during `build()`), this method
+        short-circuits into the tracer instead of running real logic.
+        """
+        tracer = _TRACER.get()
+        if tracer is not None:
+            response = await tracer.record(self, x)
+            return OperadOutput[Any].model_construct(response=response)
+
+        return await self._invoke_envelope(x, executor=self.forward)
+
+    async def _invoke_envelope(
+        self,
+        x: In,
+        *,
+        executor: Callable[[In], Awaitable[Out]],
+    ) -> OperadOutput[Out]:
+        """Shared envelope-construction path for ``invoke`` (and the
+        non-streaming half of ``stream``). Handles path computation,
+        ContextVar setup, observer notify (start/end/error), the inline
+        built/input validation, output type check, envelope build, and
+        ContextVar teardown.
+        """
+        from ..runtime.observers import base as _obs
+
+        path = self._compute_path()
+        (
+            is_root, run_id, started, started_wall, graph_hash,
+            start_meta, retry_meta, tokens,
+        ) = self._enter_run(path, track_retry=True)
         try:
             await _obs.registry.notify(
                 _obs.AgentEvent(
@@ -570,28 +637,9 @@ class Agent(strands.Agent, Generic[In, Out]):
                 )
             )
 
-            if not self._built:
-                raise BuildError(
-                    "not_built",
-                    "call .build() before .invoke()",
-                    agent=type(self).__name__,
-                )
-
-            if not isinstance(x, self.input):  # type: ignore[arg-type]
-                raise BuildError(
-                    "input_mismatch",
-                    f"expected {self.input.__name__}, got {type(x).__name__}",  # type: ignore[union-attr]
-                    agent=type(self).__name__,
-                )
-
-            y = await self.forward(x)
-
-            if not isinstance(y, self.output):  # type: ignore[arg-type]
-                raise BuildError(
-                    "output_mismatch",
-                    f"forward returned {type(y).__name__}, expected {self.output.__name__}",  # type: ignore[union-attr]
-                    agent=type(self).__name__,
-                )
+            self._check_built_and_input(x, entry="invoke")
+            y = await executor(x)
+            self._check_output(y)
 
             finished = time.monotonic()
             finished_wall = time.time()
@@ -620,11 +668,7 @@ class Agent(strands.Agent, Generic[In, Out]):
             )
             raise
         finally:
-            _obs._RETRY_META.reset(tok_m)
-            _obs._RUN_ID.reset(tok_r)
-            _obs._PATH_STACK.reset(tok_p)
-            if tok_g is not None:
-                _RUN_GRAPH_HASH.reset(tok_g)
+            self._exit_run(tokens)
 
     async def __call__(self, x: In) -> OperadOutput[Out]:  # type: ignore[override]
         return await self.invoke(x)
@@ -681,30 +725,11 @@ class Agent(strands.Agent, Generic[In, Out]):
 
         from ..runtime.observers import base as _obs
 
-        parent_entry = _obs._PATH_STACK.get()
-        if parent_entry is None:
-            path = type(self).__name__
-        else:
-            parent_agent, parent_path = parent_entry
-            attr = _attr_name_hint(parent_agent, self) or type(self).__name__
-            path = f"{parent_path}.{attr}"
-
-        is_root = _obs._RUN_ID.get() is None
-        run_id = _obs._RUN_ID.get() or uuid.uuid4().hex
-        started_wall = time.time()
-        started = time.monotonic()
-
-        graph_hash = _RUN_GRAPH_HASH.get()
-        tok_g = None
-        if is_root:
-            graph_hash = _compute_graph_hash(self)
-            tok_g = _RUN_GRAPH_HASH.set(graph_hash)
-        tok_r = _obs._RUN_ID.set(run_id)
-        tok_p = _obs._PATH_STACK.set((self, path))
-        start_meta: dict[str, Any] = {}
-        if is_root:
-            start_meta["graph"] = _graph_json_or_none(self)
-            start_meta["is_root"] = True
+        path = self._compute_path()
+        (
+            is_root, run_id, started, started_wall, graph_hash,
+            start_meta, _retry_meta, tokens,
+        ) = self._enter_run(path, track_retry=False)
 
         queue: asyncio.Queue[Any] = asyncio.Queue()
         _SENTINEL_DONE = object()
@@ -716,19 +741,7 @@ class Agent(strands.Agent, Generic[In, Out]):
                 )
             )
 
-            if not self._built:
-                raise BuildError(
-                    "not_built",
-                    "call .build() before .stream()",
-                    agent=type(self).__name__,
-                )
-
-            if not isinstance(x, self.input):  # type: ignore[arg-type]
-                raise BuildError(
-                    "input_mismatch",
-                    f"expected {self.input.__name__}, got {type(x).__name__}",  # type: ignore[union-attr]
-                    agent=type(self).__name__,
-                )
+            self._check_built_and_input(x, entry="stream")
 
             async def on_chunk(i: int, piece: str) -> None:
                 await queue.put(ChunkEvent(piece, i, path, run_id))
@@ -743,12 +756,7 @@ class Agent(strands.Agent, Generic[In, Out]):
             async def driver() -> None:
                 try:
                     y = await self._stream_forward(x, on_chunk)
-                    if not isinstance(y, self.output):  # type: ignore[arg-type]
-                        raise BuildError(
-                            "output_mismatch",
-                            f"forward returned {type(y).__name__}, expected {self.output.__name__}",  # type: ignore[union-attr]
-                            agent=type(self).__name__,
-                        )
+                    self._check_output(y)
                     finished = time.monotonic()
                     finished_wall = time.time()
                     envelope = self._build_envelope(
@@ -803,10 +811,7 @@ class Agent(strands.Agent, Generic[In, Out]):
             )
             raise
         finally:
-            _obs._RUN_ID.reset(tok_r)
-            _obs._PATH_STACK.reset(tok_p)
-            if tok_g is not None:
-                _RUN_GRAPH_HASH.reset(tok_g)
+            self._exit_run(tokens)
 
     # --- build --------------------------------------------------------------
     def build(self) -> Self:

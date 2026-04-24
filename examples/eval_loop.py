@@ -15,15 +15,9 @@ import json
 
 from pydantic import BaseModel, Field
 
-from operad import (
-    Agent,
-    Configuration,
-    Contains,
-    EvalReport,
-    ExactMatch,
-    Rouge1,
-    evaluate,
-)
+from operad import Agent, Configuration, evaluate
+from operad.eval import EvalReport
+from operad.metrics import Contains, ExactMatch, Rouge1
 
 
 class Question(BaseModel):

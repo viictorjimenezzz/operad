@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from operad import CostTracker
+from operad.metrics import CostTracker
 from operad.metrics.cost import _CostEvent
 
 

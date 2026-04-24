@@ -16,7 +16,8 @@ import asyncio
 
 from pydantic import BaseModel, Field
 
-from operad import BestOfN, Critic, Reasoner
+from operad.agents import Critic, Reasoner
+from operad.algorithms import BestOfN
 
 from _config import local_config
 

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from operad import OperadOutput, Trace, TraceObserver, TraceStep
+from operad import OperadOutput, Trace
+from operad.runtime.trace import TraceObserver, TraceStep
 from operad.runtime.cost import Pricing, cost_estimate
 from operad.runtime.observers import base as _obs
 

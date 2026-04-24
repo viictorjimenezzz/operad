@@ -18,14 +18,9 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from operad import (
-    Agent,
-    Configuration,
-    JsonlObserver,
-    Pipeline,
-    TraceObserver,
-    observers,
-)
+from operad import Agent, Configuration, Pipeline
+from operad.runtime.observers import JsonlObserver, registry as observers
+from operad.runtime.trace import TraceObserver
 
 
 class Question(BaseModel):

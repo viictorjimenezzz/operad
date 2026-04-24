@@ -26,7 +26,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from operad import Classifier, Configuration, Parallel, Reasoner, set_limit
+from operad import Configuration, Parallel
+from operad.agents import Classifier, Reasoner
+from operad.runtime import set_limit
 
 from _config import local_config
 

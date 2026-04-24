@@ -15,7 +15,8 @@ import asyncio
 
 from pydantic import BaseModel, Field
 
-from operad import Evaluator, Extractor, Pipeline, Planner
+from operad import Pipeline
+from operad.agents import Evaluator, Extractor, Planner
 
 from _config import local_config
 

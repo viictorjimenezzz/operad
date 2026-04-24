@@ -8,7 +8,9 @@ generic and keep ``examples=()``.
 
 from __future__ import annotations
 
-from operad import Candidate, Critic, Example, Score
+from operad import Example
+from operad.agents import Critic
+from operad.algorithms import Candidate, Score
 
 
 def test_critic_examples_are_typed_pairs() -> None:
@@ -21,7 +23,14 @@ def test_critic_examples_are_typed_pairs() -> None:
 
 
 def test_generic_leaves_ship_empty_class_examples() -> None:
-    from operad import Actor, Classifier, Evaluator, Extractor, Planner, Reasoner
+    from operad.agents import (
+        Actor,
+        Classifier,
+        Evaluator,
+        Extractor,
+        Planner,
+        Reasoner,
+    )
 
     for leaf in (Reasoner, Actor, Extractor, Evaluator, Classifier, Planner):
         assert leaf.examples == ()

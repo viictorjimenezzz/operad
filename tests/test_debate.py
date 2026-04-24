@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from operad import (
-    Agent,
+from operad import Agent
+from operad.algorithms import (
     Critique,
     Debate,
     DebateRecord,

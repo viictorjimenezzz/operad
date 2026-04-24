@@ -25,7 +25,7 @@ from typing import Any, Literal
 import strands
 from pydantic import BaseModel
 
-from ..models import resolve_model
+from .models import resolve_model
 from ..utils.errors import BuildError
 from .agent import Agent, _TRACER
 

@@ -6,7 +6,9 @@ import asyncio
 
 import pytest
 
-from operad import BuildError, Dataset, EvalReport, ExactMatch, evaluate
+from operad import BuildError, Dataset, evaluate
+from operad.eval import EvalReport
+from operad.metrics import ExactMatch
 from operad.core.agent import _compute_graph_hash
 
 from .conftest import A, FakeLeaf
