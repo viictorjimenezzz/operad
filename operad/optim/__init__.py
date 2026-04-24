@@ -54,6 +54,7 @@ from operad.optim.loss import (
     Loss,
     LossFromMetric,
 )
+from operad.optim.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import (
     CategoricalParameter,
     ExampleListParameter,
@@ -82,6 +83,7 @@ from operad.optim.rewrite import (
     apply_rewrite,
     rewriter_for,
 )
+from operad.optim.sgd import TextualGradientDescent
 from operad.optim.tape import (
     Tape,
     TapeEntry,
@@ -110,6 +112,8 @@ __all__ = [
     "Loss",
     "LossFromMetric",
     "NumericConstraint",
+    "Optimizer",
+    "ParamGroup",
     "Parameter",
     "ParameterConstraint",
     "ParameterGradAgent",
@@ -132,6 +136,7 @@ __all__ = [
     "TextParameterGrad",
     "TextRewriter",
     "TextualGradient",
+    "TextualGradientDescent",
     "VocabConstraint",
     "apply_rewrite",
     "enabled",
