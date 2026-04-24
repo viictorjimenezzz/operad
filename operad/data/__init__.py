@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .active import UncertaintySampler
 from .loader import (
     Batch,
     DataLoader,
@@ -19,6 +20,7 @@ __all__ = [
     "RandomSampler",
     "Sampler",
     "SequentialSampler",
+    "UncertaintySampler",
     "WeightedRandomSampler",
     "random_split",
 ]

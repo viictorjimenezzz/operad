@@ -19,7 +19,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
 from contextvars import ContextVar
-from typing import Any, ClassVar, Generic, Self, TextIO, TYPE_CHECKING, TypeVar
+from typing import Any, ClassVar, Generic, Literal, Self, TextIO, TYPE_CHECKING, TypeVar
 
 import strands
 from pydantic import BaseModel, ConfigDict, Field, create_model
@@ -1264,26 +1264,76 @@ class Agent(strands.Agent, Generic[In, Out]):
         dataset: Any,
         metric: Any,
         *,
+        kind: Literal["evo", "textgrad", "momentum", "opro", "ape"] = "evo",
         mutations: list[Any] | None = None,
         population_size: int = 8,
         generations: int = 4,
+        epochs: int = 1,
+        lr: float = 1.0,
+        batch_size: int = 4,
         rng: Any = None,
+        loss: Any = None,
     ) -> "Agent[In, Out]":
-        """Evolve a copy of this agent to improve `metric` on `dataset`.
+        """Return a copy of this agent tuned to improve `metric` on `dataset`.
 
-        A thin wrapper around `operad.optim.EvoGradient`. Clones `self`
-        so the caller's agent is never mutated, picks a small default
-        mutation set when `mutations` is None, runs `generations` steps
-        of the population loop, and returns the evolved clone (whose
-        declared state is the best individual's).
+        The `kind` keyword dispatches to one of five optimizers. Default
+        is evolutionary search — the same behavior this method has
+        always had.
+
+        - ``"evo"``: population-based mutation/selection via
+          ``operad.optim.EvoGradient``. Respects ``mutations``,
+          ``population_size``, ``generations``.
+        - ``"textgrad"``: textual-gradient descent via
+          ``operad.optim.TextualGradientDescent`` inside a minimal
+          ``Trainer`` loop. Respects ``epochs``, ``lr``, ``batch_size``.
+        - ``"momentum"``: ``operad.optim.MomentumTextGrad`` instead.
+        - ``"opro"``: LLM-as-optimizer over per-parameter history
+          (``operad.optim.OPROOptimizer``). Respects ``epochs``.
+        - ``"ape"``: sample-and-rank candidate rewrites
+          (``operad.optim.APEOptimizer``). Respects ``population_size``
+          (mapped to the per-step candidate budget) and ``epochs``.
+
+        ``loss`` overrides the default ``LossFromMetric(metric)`` used
+        by the trainer-backed kinds; it is ignored by ``kind="evo"``.
 
         `dataset` may be a `Dataset`, an iterable of `Entry` objects, or
         an iterable of `(input, expected_output)` tuples.
-
-        For custom observers, recombination strategies, or fine-grained
-        control over the population, drive `operad.optim.EvoGradient`
-        directly.
         """
+        if kind == "evo":
+            return await self._auto_tune_evo(
+                dataset,
+                metric,
+                mutations=mutations,
+                population_size=population_size,
+                generations=generations,
+                rng=rng,
+            )
+        if kind in {"textgrad", "momentum", "opro", "ape"}:
+            return await self._auto_tune_via_trainer(
+                dataset,
+                metric,
+                kind=kind,
+                epochs=epochs,
+                lr=lr,
+                batch_size=batch_size,
+                population_size=population_size,
+                loss=loss,
+            )
+        raise ValueError(
+            f"Unknown auto_tune kind={kind!r}; allowed: "
+            "evo, textgrad, momentum, opro, ape"
+        )
+
+    async def _auto_tune_evo(
+        self,
+        dataset: Any,
+        metric: Any,
+        *,
+        mutations: list[Any] | None,
+        population_size: int,
+        generations: int,
+        rng: Any,
+    ) -> "Agent[In, Out]":
         from ..optim.evo import EvoGradient
         from ..utils.ops import default_mutations
 
@@ -1302,6 +1352,61 @@ class Agent(strands.Agent, Generic[In, Out]):
         )
         for _ in range(max(1, int(generations))):
             await optimizer.step()
+        return seed
+
+    async def _auto_tune_via_trainer(
+        self,
+        dataset: Any,
+        metric: Any,
+        *,
+        kind: str,
+        epochs: int,
+        lr: float,
+        batch_size: int,
+        population_size: int,
+        loss: Any,
+    ) -> "Agent[In, Out]":
+        from ..data.loader import DataLoader
+        from ..optim.ape import APEOptimizer
+        from ..optim.loss import LossFromMetric
+        from ..optim.momentum import MomentumTextGrad
+        from ..optim.opro import OPROOptimizer
+        from ..optim.sgd import TextualGradientDescent
+        from ..train import Trainer
+
+        seed = self.clone()
+        seed.mark_trainable(role=True, task=True, rules=True, recurse=True)
+        await seed.abuild()
+
+        ds = _coerce_eval_dataset(dataset)
+        loader = DataLoader(ds, batch_size=max(1, int(batch_size)))
+        loss_fn = loss if loss is not None else LossFromMetric(metric)
+        pairs = _coerce_eval_pairs(dataset)
+
+        params = list(seed.parameters())
+        if kind == "textgrad":
+            optimizer: Any = TextualGradientDescent(params, lr=lr)
+        elif kind == "momentum":
+            optimizer = MomentumTextGrad(params, lr=lr)
+        elif kind == "opro":
+            evaluator = _build_value_evaluator(seed, pairs, metric)
+            optimizer = OPROOptimizer(
+                params,
+                lr=lr,
+                objective_metric=metric,
+                evaluator=evaluator,
+            )
+        else:  # kind == "ape"
+            evaluator = _build_value_evaluator(seed, pairs, metric)
+            optimizer = APEOptimizer(
+                params,
+                lr=lr,
+                evaluator=evaluator,
+                k=max(1, int(population_size)),
+            )
+
+        trainer = Trainer(seed, optimizer, loss_fn)
+        await trainer.fit(loader, epochs=max(1, int(epochs)))
         return seed
 
     # --- freeze / thaw ------------------------------------------------------
@@ -1475,6 +1580,51 @@ def _coerce_eval_pairs(dataset: Any) -> list[tuple[Any, Any]]:
             inp, exp = item
             pairs.append((inp, exp))
     return pairs
+
+
+def _coerce_eval_dataset(dataset: Any) -> "Any":
+    """Like `_coerce_eval_pairs` but return a `Dataset` for `DataLoader`."""
+    from ..benchmark.dataset import Dataset
+    from ..benchmark.entry import Entry
+
+    if isinstance(dataset, Dataset):
+        return dataset
+    entries: list[Entry[Any, Any]] = []
+    for item in dataset:
+        if isinstance(item, Entry):
+            entries.append(item)
+        else:
+            inp, exp = item
+            entries.append(Entry(input=inp, expected_output=exp))
+    return Dataset(entries, name="auto_tune", version="v1")
+
+
+def _build_value_evaluator(
+    seed: "Agent[Any, Any]",
+    pairs: list[tuple[Any, Any]],
+    metric: Any,
+) -> Any:
+    """Return an ``Evaluator`` closure for OPRO / APE.
+
+    The closure temporarily swaps in a candidate `value` on the given
+    `Parameter`, rebuilds `seed`, evaluates against the eval pairs with
+    `metric`, and restores the original value before returning the
+    mean metric score.
+    """
+    from ..benchmark.evaluate import evaluate as _evaluate
+
+    async def _evaluator(param: Any, value: Any) -> float:
+        old = param.read()
+        param.write(value)
+        try:
+            await seed.abuild()
+            report = await _evaluate(seed, pairs, [metric])
+        finally:
+            param.write(old)
+            await seed.abuild()
+        return float(report.summary.get(metric.name, float("nan")))
+
+    return _evaluator
 
 
 def _attr_name_hint(parent: "Agent[Any, Any]", child: "Agent[Any, Any]") -> str | None:

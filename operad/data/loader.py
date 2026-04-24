@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import math
 import random
+import time
 from typing import (
     Any,
     AsyncIterator,
@@ -32,7 +33,12 @@ from pydantic import BaseModel, ConfigDict
 from ..benchmark.dataset import Dataset
 from ..benchmark.entry import Entry
 from ..metrics.base import Metric
+from ..runtime.events import get_current_epoch
+from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 from ..utils.hashing import hash_json
+
+
+_DATALOADER_PATH = "DataLoader"
 
 
 In = TypeVar("In", bound=BaseModel)
@@ -186,12 +192,17 @@ class _DataLoaderIter(Generic[In, Out]):
     ) -> None:
         self._loader = loader
         self._indices = indices
+        self._batch_index = 0
+        # (batch_index, batch_size, started_at) while a batch is in flight.
+        self._pending: tuple[int, int, float] | None = None
 
     def __aiter__(self) -> "_DataLoaderIter[In, Out]":
         return self
 
     async def __anext__(self) -> Any:
         loader = self._loader
+        await self._flush_pending()
+
         chunk: list[int] = []
         for _ in range(loader._batch_size):
             try:
@@ -204,6 +215,8 @@ class _DataLoaderIter(Generic[In, Out]):
             raise StopAsyncIteration
 
         entries = [loader._dataset[i] for i in chunk]
+        batch = _default_collate(loader._dataset, chunk, entries)
+
         collate = loader._collate_fn
         if collate is not None:
             # Why: num_workers>0 offloads user-supplied collate off the event
@@ -212,10 +225,52 @@ class _DataLoaderIter(Generic[In, Out]):
             # collate work; to_thread preserves the parameter surface without
             # those constraints.
             if loader._num_workers > 0:
-                return await asyncio.to_thread(collate, entries)
-            return collate(entries)
+                result: Any = await asyncio.to_thread(collate, entries)
+            else:
+                result = collate(entries)
+            hash_batch = ""
+        else:
+            result = batch
+            hash_batch = batch.hash_batch
 
-        return _default_collate(loader._dataset, chunk, entries)
+        await self._emit_batch_start(
+            batch_size=len(chunk), hash_batch=hash_batch
+        )
+        self._pending = (self._batch_index, len(chunk), time.monotonic())
+        self._batch_index += 1
+        return result
+
+    async def _emit_batch_start(
+        self, *, batch_size: int, hash_batch: str
+    ) -> None:
+        with _enter_algorithm_run():
+            await emit_algorithm_event(
+                "batch_start",
+                algorithm_path=_DATALOADER_PATH,
+                payload={
+                    "batch_index": self._batch_index,
+                    "batch_size": batch_size,
+                    "hash_batch": hash_batch,
+                    "epoch": get_current_epoch(),
+                },
+            )
+
+    async def _flush_pending(self) -> None:
+        if self._pending is None:
+            return
+        idx, size, started = self._pending
+        self._pending = None
+        with _enter_algorithm_run():
+            await emit_algorithm_event(
+                "batch_end",
+                algorithm_path=_DATALOADER_PATH,
+                payload={
+                    "batch_index": idx,
+                    "batch_size": size,
+                    "duration_ms": (time.monotonic() - started) * 1000.0,
+                    "epoch": get_current_epoch(),
+                },
+            )
 
 
 def _default_collate(
