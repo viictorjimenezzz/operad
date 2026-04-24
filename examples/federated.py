@@ -45,7 +45,8 @@ class Post(BaseModel):
 
 class Sentiment(BaseModel):
     label: Literal["positive", "neutral", "negative"] = Field(
-        description="Overall sentiment of the post."
+        default="neutral",
+        description="Overall sentiment of the post.",
     )
 
 
@@ -57,7 +58,10 @@ class Topics(BaseModel):
 
 
 class PostSummary(BaseModel):
-    headline: str = Field(description="A single-sentence headline for the post.")
+    headline: str = Field(
+        default="",
+        description="A single-sentence headline for the post.",
+    )
 
 
 class Report(BaseModel):
@@ -73,7 +77,7 @@ SAMPLE = (
 
 
 async def main(offline: bool = False) -> None:
-    local = local_config(sampling=Sampling(temperature=0.0))
+    local = local_config(sampling=Sampling(temperature=0.0, max_tokens=4096))
     print(f"[{_SCRIPT}] backend={local.backend} host={local.host} model={local.model}")
     if offline:
         print(f"[{_SCRIPT}] --offline not supported for this example (needs a real model); exiting 0 as no-op.")
@@ -91,7 +95,7 @@ async def main(offline: bool = False) -> None:
         sampling=Sampling(temperature=0.3),
     )
 
-    set_limit(backend="llamacpp", host=local.host, concurrency=8)
+    set_limit(backend=local.backend, host=local.host, concurrency=8)
     set_limit(backend="openai", concurrency=2)
 
     root = Parallel(

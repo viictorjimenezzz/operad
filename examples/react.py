@@ -26,7 +26,7 @@ _SCRIPT = "react.py"
 
 
 async def main(offline: bool = False) -> None:
-    cfg = local_config(sampling=Sampling(temperature=0.3, max_tokens=512))
+    cfg = local_config(sampling=Sampling(temperature=0.3, max_tokens=2048))
     print(f"[{_SCRIPT}] backend={cfg.backend} host={cfg.host} model={cfg.model}")
     if offline:
         print(f"[{_SCRIPT}] --offline not supported for this example (needs a real model); exiting 0 as no-op.")

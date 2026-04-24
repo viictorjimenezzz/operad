@@ -44,7 +44,7 @@ async def _fake_read(path: str) -> str:
 
 
 async def main(offline: bool = False) -> None:
-    cfg = local_config(sampling=Sampling(temperature=0.2, max_tokens=1024))
+    cfg = local_config(sampling=Sampling(temperature=0.2, max_tokens=2048))
     print(f"[{_SCRIPT}] backend={cfg.backend} host={cfg.host} model={cfg.model}")
     if offline:
         print(f"[{_SCRIPT}] --offline not supported for this example (needs a real model); exiting 0 as no-op.")
@@ -55,11 +55,11 @@ async def main(offline: bool = False) -> None:
             file=sys.stderr,
         )
         raise SystemExit(1)
-    set_limit(backend="llamacpp", host=cfg.host, concurrency=2)
+    set_limit(backend=cfg.backend, host=cfg.host, concurrency=2)
 
     reviewer = PRReviewer(config=cfg, read_file=_fake_read)
     await reviewer.abuild()
-    report = await reviewer(SYNTHETIC)
+    report = (await reviewer(SYNTHETIC)).response
 
     print(f"\nsummary: {report.summary}")
     for c in report.comments:

@@ -83,7 +83,7 @@ async def main(offline: bool = False) -> None:
         )
         agent: Agent[Joke, Pun] = _OfflinePunster(config=cfg)
     else:
-        cfg = local_config(sampling=Sampling(temperature=0.8, max_tokens=128))
+        cfg = local_config(sampling=Sampling(temperature=0.8, max_tokens=2048))
         print(f"[{script}] backend={cfg.backend} host={cfg.host} model={cfg.model}")
         if not server_reachable(cfg.host):
             print(

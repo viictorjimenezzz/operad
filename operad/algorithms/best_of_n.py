@@ -42,12 +42,17 @@ class BestOfN(Generic[In, Out]):
         self.n = n
 
     async def run(self, x: In) -> Out:
-        gen_outputs = await asyncio.gather(
-            *(self.generator(x) for _ in range(self.n))
-        )
+        # Concurrent calls to one Agent corrupt the strands-owned conversation
+        # history, so give each candidate its own instance.
+        gens = [self.generator] + [self.generator.clone() for _ in range(self.n - 1)]
+        judges = [self.judge] + [self.judge.clone() for _ in range(self.n - 1)]
+        if self.n > 1:
+            await asyncio.gather(*(a.abuild() for a in gens[1:] + judges[1:]))
+
+        gen_outputs = await asyncio.gather(*(gens[i](x) for i in range(self.n)))
         candidates: list[Out] = [g.response for g in gen_outputs]
         judge_outputs = await asyncio.gather(
-            *(self.judge(Candidate(input=x, output=c)) for c in candidates)
+            *(judges[i](Candidate(input=x, output=candidates[i])) for i in range(self.n))
         )
         scores: list[Score] = [j.response for j in judge_outputs]
         best = max(range(self.n), key=lambda i: scores[i].score)
