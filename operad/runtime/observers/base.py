@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import os
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Iterator, Literal, Protocol, runtime_checkable
 from uuid import uuid4
+
+_log = logging.getLogger("operad.observers")
 
 from pydantic import BaseModel
 
@@ -39,8 +44,11 @@ class Observer(Protocol):
 
 
 class ObserverRegistry:
-    def __init__(self) -> None:
+    def __init__(self, strict: bool = False) -> None:
         self._observers: list[Observer] = []
+        self._errors: dict[int, int] = {}
+        self._warned: set[int] = set()
+        self._strict: bool = strict or os.environ.get("OPERAD_OBSERVER_STRICT", "") not in ("", "0", "false")
 
     def register(self, observer: Observer) -> None:
         self._observers.append(observer)
@@ -57,13 +65,25 @@ class ObserverRegistry:
     def __len__(self) -> int:
         return len(self._observers)
 
+    def errors(self) -> dict[int, int]:
+        return dict(self._errors)
+
     async def notify(self, event: Event) -> None:
         for observer in list(self._observers):
             try:
                 await observer.on_event(event)
+            except asyncio.CancelledError:
+                raise
             except Exception:
-                # Observer failures must never break the pipeline.
-                pass
+                oid = id(observer)
+                self._errors[oid] = self._errors.get(oid, 0) + 1
+                if oid not in self._warned:
+                    self._warned.add(oid)
+                    _log.warning("Observer %r raised on first failure", observer, exc_info=True)
+                else:
+                    _log.debug("Observer %r raised again", observer, exc_info=True)
+                if self._strict:
+                    raise
 
 
 registry = ObserverRegistry()
