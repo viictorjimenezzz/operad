@@ -17,11 +17,13 @@ import asyncio
 import math
 import random
 import time
+import warnings
 from typing import (
     Any,
     AsyncIterator,
     Callable,
     Generic,
+    Hashable,
     Iterator,
     Protocol,
     TypeVar,
@@ -134,6 +136,92 @@ class WeightedRandomSampler:
 
     def __len__(self) -> int:
         return self._num_samples
+
+
+def _resolve_key(
+    key: Callable[..., Hashable] | str,
+) -> Callable[..., Hashable]:
+    if callable(key):
+        return key
+    parts = key.split(".")
+
+    def _get(entry: Any) -> Hashable:
+        obj = entry.expected_output
+        for p in parts:
+            obj = getattr(obj, p)
+        return obj  # type: ignore[return-value]
+
+    return _get
+
+
+def _stratified_interleave(
+    buckets: dict[Hashable, list[int]],
+    n: int,
+) -> Iterator[int]:
+    classes = list(buckets.keys())
+    counts = {k: len(v) for k, v in buckets.items()}
+    pointers = {k: 0 for k in classes}
+    deficit = {k: counts[k] / n for k in classes}
+    for _ in range(n):
+        cls = max(classes, key=lambda k: deficit[k])
+        lst = buckets[cls]
+        yield lst[pointers[cls] % len(lst)]
+        pointers[cls] += 1
+        for k in classes:
+            deficit[k] += counts[k] / n
+        deficit[cls] -= 1.0
+
+
+class StratifiedSampler:
+    """Yields indices preserving per-class frequency in each batch.
+
+    ``key`` is either a callable ``(Entry) -> Hashable`` or a dotted path
+    string evaluated against ``entry.expected_output`` (e.g. ``"label"``).
+    Single-key stratification only.
+    """
+
+    def __init__(
+        self,
+        dataset: "Dataset[Any, Any]",
+        key: Callable[..., Hashable] | str,
+        batch_size: int | None = None,
+        shuffle: bool = True,
+        seed: int | None = None,
+    ) -> None:
+        self._dataset = dataset
+        self._key_fn = _resolve_key(key)
+        self._batch_size = batch_size
+        self._shuffle = shuffle
+        self._seed = seed
+
+    def __iter__(self) -> Iterator[int]:
+        rng = random.Random(self._seed)
+
+        buckets: dict[Hashable, list[int]] = {}
+        for i, entry in enumerate(self._dataset):
+            k = self._key_fn(entry)
+            buckets.setdefault(k, []).append(i)
+
+        if self._shuffle:
+            for lst in buckets.values():
+                rng.shuffle(lst)
+
+        bs = self._batch_size
+        if bs is not None:
+            for cls, lst in buckets.items():
+                if len(lst) < bs:
+                    warnings.warn(
+                        f"StratifiedSampler: class {cls!r} has {len(lst)} samples "
+                        f"< batch_size={bs}; oversampling within batch.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    break
+
+        yield from _stratified_interleave(buckets, len(self._dataset))
+
+    def __len__(self) -> int:
+        return len(self._dataset)
 
 
 class DataLoader(Generic[In, Out]):
@@ -302,5 +390,6 @@ __all__ = [
     "RandomSampler",
     "Sampler",
     "SequentialSampler",
+    "StratifiedSampler",
     "WeightedRandomSampler",
 ]

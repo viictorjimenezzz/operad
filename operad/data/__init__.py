@@ -9,9 +9,10 @@ from .loader import (
     RandomSampler,
     Sampler,
     SequentialSampler,
+    StratifiedSampler,
     WeightedRandomSampler,
 )
-from .split import random_split
+from .split import random_split, stratified_split
 
 
 __all__ = [
@@ -20,7 +21,9 @@ __all__ = [
     "RandomSampler",
     "Sampler",
     "SequentialSampler",
+    "StratifiedSampler",
     "UncertaintySampler",
     "WeightedRandomSampler",
     "random_split",
+    "stratified_split",
 ]
