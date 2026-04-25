@@ -224,6 +224,30 @@ class StratifiedSampler:
         return len(self._dataset)
 
 
+class PermutableSampler:
+    """Sampler that yields a caller-supplied index permutation.
+
+    Call ``set_order(indices)`` before the next epoch to control exactly
+    which dataset indices are visited and in what order. Until the first
+    call, it yields ``0, 1, ..., n-1`` sequentially.
+    """
+
+    def __init__(self, n: int) -> None:
+        if n < 0:
+            raise ValueError("PermutableSampler length must be non-negative")
+        self._order: list[int] = list(range(n))
+
+    def set_order(self, indices: list[int]) -> None:
+        """Replace the iteration order for the next epoch."""
+        self._order = list(indices)
+
+    def __iter__(self) -> Iterator[int]:
+        return iter(self._order)
+
+    def __len__(self) -> int:
+        return len(self._order)
+
+
 class DataLoader(Generic[In, Out]):
     """Async, deterministic iterator over `Batch` objects."""
 
@@ -387,6 +411,7 @@ def _default_collate(
 __all__ = [
     "Batch",
     "DataLoader",
+    "PermutableSampler",
     "RandomSampler",
     "Sampler",
     "SequentialSampler",
