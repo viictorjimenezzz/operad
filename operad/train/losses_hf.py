@@ -12,6 +12,7 @@ feedback on outputs the human has actually rated.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ from .callbacks import _row_id
 
 
 _NEUTRAL_SCORE = 0.5
+_LOGGER = logging.getLogger("operad.train")
 
 
 class HumanFeedbackLoss(MetricBase):
@@ -35,15 +37,30 @@ class HumanFeedbackLoss(MetricBase):
         gradient_template: str = (
             "Human rated this output {rating}/5. Rationale: {rationale}"
         ),
+        reload_per_epoch: bool = False,
         name: str = "human_feedback",
     ) -> None:
         self.ratings_path = Path(ratings_path)
         self.gradient_template = gradient_template
+        self.reload_per_epoch = reload_per_epoch
         self.name = name
         self._by_id: dict[str, dict[str, Any]] | None = None
+        self._mtime: float | None = None
+
+    def reload(self) -> None:
+        """Force cache invalidation; next _load() re-reads the file."""
+        self._by_id = None
+        self._mtime = None
 
     def _load(self) -> dict[str, dict[str, Any]]:
-        if self._by_id is not None:
+        current_mtime: float | None = None
+        if self.ratings_path.exists():
+            current_mtime = self.ratings_path.stat().st_mtime
+        if (
+            self._by_id is not None
+            and not self.reload_per_epoch
+            and current_mtime == self._mtime
+        ):
             return self._by_id
         by_id: dict[str, dict[str, Any]] = {}
         if self.ratings_path.exists():
@@ -54,10 +71,12 @@ class HumanFeedbackLoss(MetricBase):
                 try:
                     row = json.loads(line)
                 except json.JSONDecodeError:
+                    _LOGGER.warning("hf ratings: skipping malformed line: %r", line[:120])
                     continue
                 row_id = row.get("id")
                 if isinstance(row_id, str):
                     by_id[row_id] = row  # later entries overwrite earlier ones
+        self._mtime = current_mtime
         self._by_id = by_id
         return by_id
 

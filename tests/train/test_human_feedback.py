@@ -121,3 +121,60 @@ async def test_loss_perfect_rating_emits_null_gradient(tmp_path: Path) -> None:
     score, grad = await loss.compute(predicted, None)
     assert score == pytest.approx(1.0)
     assert grad.severity == 0.0
+
+
+async def test_loss_reloads_when_file_changes(tmp_path: Path) -> None:
+    predicted1 = _Out(text="first")
+    predicted2 = _Out(text="second")
+    id1 = _row_id(predicted1.model_dump(mode="json"))
+    id2 = _row_id(predicted2.model_dump(mode="json"))
+    ratings_path = tmp_path / "r.jsonl"
+    ratings_path.write_text(
+        json.dumps({"id": id1, "rating": 3, "rationale": ""}) + "\n"
+    )
+    loss = HumanFeedbackLoss(ratings_path)
+    score1, _ = await loss.compute(predicted1, None)
+    assert score1 == pytest.approx(0.6)
+
+    # Append a new row — mtime advances on most filesystems.
+    with ratings_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"id": id2, "rating": 2, "rationale": ""}) + "\n")
+    # Touch mtime explicitly to guarantee the change is visible.
+    import os, time
+    os.utime(ratings_path, (time.time() + 1, time.time() + 1))
+
+    score2, _ = await loss.compute(predicted2, None)
+    assert score2 == pytest.approx(0.4)
+
+
+async def test_loss_does_not_reload_when_mtime_unchanged(tmp_path: Path) -> None:
+    predicted = _Out(text="stable")
+    row_id = _row_id(predicted.model_dump(mode="json"))
+    ratings_path = tmp_path / "r.jsonl"
+    ratings_path.write_text(
+        json.dumps({"id": row_id, "rating": 4, "rationale": ""}) + "\n"
+    )
+    loss = HumanFeedbackLoss(ratings_path)
+    await loss.compute(predicted, None)
+
+    # Simulate stale cache by mutating _by_id without touching the file.
+    assert loss._by_id is not None
+    loss._by_id[row_id] = {"id": row_id, "rating": 1, "rationale": ""}
+
+    score, _ = await loss.compute(predicted, None)
+    # Should return the mutated in-memory value (no re-read) → rating 1 → 0.2
+    assert score == pytest.approx(0.2)
+
+
+async def test_loss_partial_line_resilience(tmp_path: Path) -> None:
+    predicted = _Out(text="good")
+    row_id = _row_id(predicted.model_dump(mode="json"))
+    ratings_path = tmp_path / "r.jsonl"
+    ratings_path.write_text(
+        json.dumps({"id": row_id, "rating": 5, "rationale": ""}) + "\n"
+        + '{"id": "abc", "rating": 3, "rati\n'  # truncated line
+    )
+    loss = HumanFeedbackLoss(ratings_path)
+    score, grad = await loss.compute(predicted, None)
+    assert score == pytest.approx(1.0)
+    assert grad.severity == 0.0
