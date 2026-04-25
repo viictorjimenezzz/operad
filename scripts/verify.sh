@@ -4,15 +4,10 @@ set -euo pipefail
 uv run pytest tests/ -q --maxfail=1
 
 for f in \
-  examples/mermaid_export.py \
-  examples/custom_agent.py \
-  examples/eval_loop.py \
-  examples/evolutionary_demo.py \
-  examples/train_demo.py \
-  examples/observer_demo.py \
-  examples/sweep_demo.py \
-  examples/sandbox_pool_demo.py \
-  examples/sandbox_tooluser.py; do
+  examples/01_composition_research_analyst.py \
+  examples/02_talker_reasoner_intake.py \
+  examples/03_train_config_temperature.py \
+  examples/04_evolutionary_best_of_n.py; do
     echo "== $f =="
     uv run python "$f" --offline
 done

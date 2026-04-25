@@ -16,17 +16,39 @@ from .autoresearch import AutoResearcher, ResearchContext, ResearchInput, Resear
 from .beam import Beam
 from .debate import Debate
 from .sweep import Sweep, SweepCell, SweepReport
+from .talker_reasoner import (
+    AssistantMessage,
+    NavigationDecision,
+    NavigationInput,
+    NavigationKind,
+    ScenarioNode,
+    ScenarioTree,
+    TalkerInput,
+    TalkerReasoner,
+    Transcript,
+    Turn,
+)
 from .verifier_loop import VerifierLoop
 
 __all__ = [
+    "AssistantMessage",
     "AutoResearcher",
     "Beam",
     "Debate",
+    "NavigationDecision",
+    "NavigationInput",
+    "NavigationKind",
     "ResearchContext",
     "ResearchInput",
     "ResearchPlan",
+    "ScenarioNode",
+    "ScenarioTree",
     "Sweep",
     "SweepCell",
     "SweepReport",
+    "TalkerInput",
+    "TalkerReasoner",
+    "Transcript",
+    "Turn",
     "VerifierLoop",
 ]
