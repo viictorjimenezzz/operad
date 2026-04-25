@@ -45,6 +45,7 @@ def test_leaf_top_p_emitted_when_set() -> None:
     cfg = Configuration(
         backend="anthropic",
         model="claude-test",
+        api_key="sk-test",
         sampling=Sampling(temperature=0.0, top_p=0.9),
     )
     leaf = FakeLeaf(config=cfg, input=A, output=B)

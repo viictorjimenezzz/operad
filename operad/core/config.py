@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+_logger = logging.getLogger(__name__)
 
 Backend = Literal[
     "llamacpp",
@@ -26,6 +30,13 @@ _REMOTE_BACKENDS: frozenset[Backend] = frozenset(
 _BATCH_BACKENDS: frozenset[Backend] = frozenset(
     {"openai", "anthropic", "bedrock"}
 )
+# Backends that require an explicit api_key or a fallback env var.
+# bedrock is excluded: it authenticates via AWS SDK credentials, not an API key.
+_API_KEY_ENV_VARS: dict[str, str] = {
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "gemini": "GOOGLE_API_KEY",
+}
 
 
 class Sampling(BaseModel):
@@ -78,6 +89,17 @@ class Configuration(BaseModel):
     hosted backends (openai, bedrock, anthropic, gemini). Sampling,
     resilience, io, and backend-specific runtime knobs live in nested
     sub-models.
+
+    API key precedence and env-var fallbacks (checked at construction time):
+
+    - ``openai``: ``api_key`` field, then ``OPENAI_API_KEY`` env var.
+    - ``anthropic``: ``api_key`` field, then ``ANTHROPIC_API_KEY`` env var.
+    - ``gemini``: ``api_key`` field, then ``GOOGLE_API_KEY`` env var.
+    - ``bedrock``: no API key; uses AWS SDK credential chain (IAM, boto3, etc.).
+    - Local backends (llamacpp, lmstudio, ollama, huggingface): no API key required.
+
+    Construction raises ``ValidationError`` when a backend requires a key and
+    neither the field nor the env var is present.
     """
 
     backend: Backend
@@ -122,3 +144,22 @@ class Configuration(BaseModel):
                 f"got {self.backend!r}"
             )
         return self
+
+    @model_validator(mode="after")
+    def _check_api_key(self) -> "Configuration":
+        env_var = _API_KEY_ENV_VARS.get(self.backend)
+        if env_var is None:
+            return self
+        if self.api_key is not None:
+            return self
+        if os.environ.get(env_var):
+            _logger.debug(
+                "backend=%r: no api_key set, relying on env var %r",
+                self.backend,
+                env_var,
+            )
+            return self
+        raise ValueError(
+            f"backend={self.backend!r} requires an API key; "
+            f"set api_key= or export {env_var}"
+        )

@@ -54,7 +54,7 @@ def test_configuration_forbids_unknown_top_level_fields() -> None:
 
 
 def test_configuration_is_mutable() -> None:
-    cfg = Configuration(backend="openai", model="gpt-4o")
+    cfg = Configuration(backend="openai", model="gpt-4o", api_key="sk-test")
     cfg.sampling.temperature = 0.2
     assert cfg.sampling.temperature == 0.2
 
@@ -63,6 +63,7 @@ def test_configuration_new_fields_round_trip() -> None:
     cfg = Configuration(
         backend="openai",
         model="gpt-4o",
+        api_key="sk-test",
         resilience=Resilience(timeout=1.5, max_retries=3, backoff_base=1.0),
     )
     assert cfg.resilience.timeout == 1.5
@@ -71,7 +72,7 @@ def test_configuration_new_fields_round_trip() -> None:
 
 
 def test_configuration_new_fields_defaults() -> None:
-    cfg = Configuration(backend="openai", model="gpt-4o")
+    cfg = Configuration(backend="openai", model="gpt-4o", api_key="sk-test")
     assert cfg.resilience.timeout is None
     assert cfg.resilience.max_retries == 0
     assert cfg.resilience.backoff_base == 0.5
@@ -103,9 +104,47 @@ def test_configuration_still_forbids_unknown_after_new_fields() -> None:
         Configuration(
             backend="openai",
             model="gpt-4o",
+            api_key="sk-test",
             resilience=Resilience(timeout=1.0, max_retries=2),
             totally_unknown=True,  # type: ignore[call-arg]
         )
+
+# --- api_key / env-var validation ---
+
+def test_openai_requires_api_key_or_env(monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with pytest.raises(ValidationError, match="OPENAI_API_KEY"):
+        Configuration(backend="openai", model="gpt-4o")
+
+
+def test_openai_accepts_explicit_api_key() -> None:
+    cfg = Configuration(backend="openai", model="gpt-4o", api_key="sk-x")
+    assert cfg.api_key == "sk-x"
+
+
+def test_openai_accepts_env_var_fallback(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+    cfg = Configuration(backend="openai", model="gpt-4o")
+    assert cfg.api_key is None  # field stays None; strands reads the env var
+
+
+def test_anthropic_requires_api_key_or_env(monkeypatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(ValidationError, match="ANTHROPIC_API_KEY"):
+        Configuration(backend="anthropic", model="claude-haiku-4-5")
+
+
+def test_gemini_requires_api_key_or_env(monkeypatch) -> None:
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    with pytest.raises(ValidationError, match="GOOGLE_API_KEY"):
+        Configuration(backend="gemini", model="gemini-2.0-flash")
+
+
+def test_bedrock_no_api_key_required() -> None:
+    # bedrock authenticates via AWS SDK — no api_key needed
+    cfg = Configuration(backend="bedrock", model="anthropic.claude-3-5-sonnet-20241022-v2:0")
+    assert cfg.api_key is None
+
 
 # --- from test_configs.py ---
 VALID_YAML = {
