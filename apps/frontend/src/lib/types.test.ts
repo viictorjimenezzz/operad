@@ -9,6 +9,7 @@ import {
   RunSummary,
   SlotOccupancyEnvelope,
   StatsUpdateEnvelope,
+  SweepSnapshot,
 } from "@/lib/types";
 import { describe, expect, it } from "vitest";
 
@@ -128,6 +129,42 @@ describe("panel shapes", () => {
       attempts: [[3, 4]],
     });
     expect(m.ops).toEqual(["a"]);
+  });
+
+  it("parses sweep snapshot with 2-d grid", () => {
+    const snap = SweepSnapshot.parse({
+      cells: [
+        { cell_index: 0, parameters: { temperature: 0.5, max_tokens: 100 }, score: 0.7 },
+        { cell_index: 1, parameters: { temperature: 0.5, max_tokens: 200 }, score: 0.8 },
+        { cell_index: 2, parameters: { temperature: 1.0, max_tokens: 100 }, score: null },
+      ],
+      axes: [
+        { name: "temperature", values: [0.5, 1.0] },
+        { name: "max_tokens", values: [100, 200] },
+      ],
+      score_range: [0.7, 0.8],
+      best_cell_index: 1,
+      total_cells: 3,
+      finished: false,
+    });
+    expect(snap.cells).toHaveLength(3);
+    expect(snap.cells[2]?.score).toBeNull();
+    expect(snap.axes[0]?.name).toBe("temperature");
+    expect(snap.best_cell_index).toBe(1);
+    expect(snap.score_range).toEqual([0.7, 0.8]);
+  });
+
+  it("parses sweep snapshot with null score_range", () => {
+    const snap = SweepSnapshot.parse({
+      cells: [],
+      axes: [],
+      score_range: null,
+      best_cell_index: null,
+      total_cells: 0,
+      finished: false,
+    });
+    expect(snap.score_range).toBeNull();
+    expect(snap.best_cell_index).toBeNull();
   });
 
   it("parses progress snapshot", () => {

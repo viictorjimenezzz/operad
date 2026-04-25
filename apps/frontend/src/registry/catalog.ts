@@ -50,6 +50,9 @@ export const catalog = createCatalog({
     DriftTimeline: { props: z.object({ source: sourceProp }) },
     DebateRoundView: { props: z.object({ source: sourceProp }) },
     BeamCandidateChart: { props: z.object({ source: sourceProp, height: z.number().optional() }) },
+    SweepHeatmap: { props: z.object({ source: sourceProp }) },
+    SweepBestCellCard: { props: z.object({ source: sourceProp }) },
+    SweepCostTotalizer: { props: z.object({ source: sourceProp }) },
     AgentGraph: {
       props: z.object({
         source: sourceProp,

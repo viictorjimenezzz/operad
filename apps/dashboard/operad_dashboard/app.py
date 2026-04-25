@@ -25,6 +25,7 @@ from .routes import drift as drift_routes
 from .routes import fitness as fitness_routes
 from .routes import mutations as mutations_routes
 from .routes import progress as progress_routes
+from .routes import sweep as sweep_routes
 
 
 _PKG_DIR = Path(__file__).resolve().parent
@@ -199,6 +200,7 @@ def create_app(
     app.include_router(mutations_routes.router)
     app.include_router(drift_routes.router)
     app.include_router(progress_routes.router)
+    app.include_router(sweep_routes.router)
 
     @app.get("/", response_class=HTMLResponse)
     async def index() -> HTMLResponse:

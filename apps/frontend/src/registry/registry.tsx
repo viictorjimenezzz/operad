@@ -1,4 +1,7 @@
 import { AgentGraph } from "@/shared/charts/agent-graph";
+import { SweepBestCellCard } from "@/shared/charts/sweep-best-cell-card";
+import { SweepCostTotalizer } from "@/shared/charts/sweep-cost-totalizer";
+import { SweepHeatmap } from "@/shared/charts/sweep-heatmap";
 import { BeamCandidateChart } from "@/shared/charts/beam-candidate-chart";
 import { DebateRoundView } from "@/shared/charts/debate-round-view";
 import { DriftTimeline } from "@/shared/charts/drift-timeline";
@@ -133,6 +136,15 @@ export const registry: ComponentRegistry = {
     const p = element.props as { data?: unknown; height?: number };
     return <BeamCandidateChart data={p.data} height={p.height ?? 220} />;
   },
+  SweepHeatmap: ({ element }) => (
+    <SweepHeatmap data={(element.props as { data?: unknown }).data} />
+  ),
+  SweepBestCellCard: ({ element }) => (
+    <SweepBestCellCard data={(element.props as { data?: unknown }).data} />
+  ),
+  SweepCostTotalizer: ({ element }) => (
+    <SweepCostTotalizer data={(element.props as { data?: unknown }).data} />
+  ),
   AgentGraph: ({ element }) => {
     const p = element.props as { data?: unknown; dataMutations?: unknown };
     return <AgentGraph data={p.data} mutations={p.dataMutations} />;

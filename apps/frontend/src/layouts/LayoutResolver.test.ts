@@ -79,4 +79,10 @@ describe("resolveLayout integration (real layouts/)", () => {
     const { resolveLayout } = await import("./index");
     expect(resolveLayout(null).algorithm).toBe("*");
   });
+
+  it("resolves Sweep to the sweep layout", async () => {
+    const { resolveLayout } = await import("./index");
+    const layout = resolveLayout("Sweep");
+    expect(layout.algorithm).toBe("Sweep");
+  });
 });
