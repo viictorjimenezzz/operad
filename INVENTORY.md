@@ -202,9 +202,13 @@ Schemas: `Proposal`, `Critique`, `DebateContext`, `DebateRecord`,
 | `DebateAgent` | `Agent[DebateContext, Answer]` | Wraps `algorithms.Debate`; accepts `proposers`, `critic`, `synthesizer`, `rounds` kwargs. |
 | `VerifierAgent` | `Agent[Task, Answer]` | Wraps `algorithms.VerifierLoop`; accepts `generator`, `verifier`, `threshold`, `max_iter` kwargs. |
 
-### Planned
+### Shipped (iter-3)
 
-- `agents/conversational/TurnTaker`.
+- `agents/conversational/TurnTaker` — turn-gating leaf (`Utterance →
+  TurnChoice`). Ships with `Safeguard`, `Persona`, `RefusalLeaf`, and a
+  composite `Talker` that pipelines all four.
+
+### Planned
 
 ## 7. Algorithms — `operad.algorithms`
 
