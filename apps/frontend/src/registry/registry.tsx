@@ -12,6 +12,7 @@ import { EventTimeline } from "@/shared/panels/event-timeline";
 import { IODetail } from "@/shared/panels/io-detail";
 import { KpiTile } from "@/shared/panels/kpi-tile";
 import { LangfuseLink } from "@/shared/panels/langfuse-link";
+import { LangfuseSummaryCard } from "@/shared/panels/langfuse-summary-card";
 import { MetaListPanel } from "@/shared/panels/meta-list-panel";
 import { RawEnvelopePanel } from "@/shared/panels/raw-envelope-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -101,6 +102,10 @@ export const registry: ComponentRegistry = {
   LangfuseLink: ({ element }) => (
     <LangfuseLink runId={(element.props as { runId?: string }).runId ?? null} />
   ),
+  LangfuseSummaryCard: ({ element }) => {
+    const p = element.props as { runId?: string; data?: unknown };
+    return <LangfuseSummaryCard runId={p.runId ?? null} data={p.data} />;
+  },
 
   FitnessCurve: ({ element }) => {
     const p = element.props as { data?: unknown; height?: number };
