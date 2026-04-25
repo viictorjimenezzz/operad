@@ -24,7 +24,7 @@ interface RunRowProps {
 
 export function RunRow({ run, active, checked, onCheck }: RunRowProps) {
   const { pinned, toggle } = usePinnedRuns();
-  const isPinned = pinned.has(run.run_id);
+  const isPinned = pinned.includes(run.run_id);
 
   return (
     <li>
