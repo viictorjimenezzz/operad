@@ -1,0 +1,32 @@
+{
+  "run_id": "661313535f0e4baca21c935ae5fa0986",
+  "events": [
+    {
+      "type": "algo_event",
+      "run_id": "661313535f0e4baca21c935ae5fa0986",
+      "algorithm_path": "EvoGradient",
+      "kind": "generation",
+      "payload": {
+        "gen_index": 3,
+        "population_scores": [
+          0.33333333333333337, 0.33333333333333337, 0.33333333333333337, 0.33333333333333337,
+          0.6666666666666667, 0.33333333333333337
+        ],
+        "survivor_indices": [4, 0, 1],
+        "mutations": [
+          { "individual_id": 0, "op": "append_rule", "path": "", "improved": false },
+          { "individual_id": 1, "op": "tweak_role", "path": "", "improved": false },
+          { "individual_id": 2, "op": "tweak_role", "path": "", "improved": false },
+          { "individual_id": 3, "op": "set_temperature", "path": "", "improved": false },
+          { "individual_id": 4, "op": "append_rule", "path": "", "improved": true },
+          { "individual_id": 5, "op": "tweak_role", "path": "", "improved": false }
+        ],
+        "op_attempt_counts": { "append_rule": 2, "tweak_role": 3, "set_temperature": 1 },
+        "op_success_counts": { "append_rule": 1 }
+      },
+      "started_at": 1777142930.129741,
+      "finished_at": null,
+      "metadata": {}
+    }
+  ]
+}
