@@ -33,7 +33,7 @@ def test_api_manifest(app_and_obs) -> None:
         r = client.get("/api/manifest")
         assert r.status_code == 200
         body = r.json()
-        assert body["mode"] == "dashboard"
+        assert body["mode"] in {"production", "development"}
         assert "version" in body
 
 

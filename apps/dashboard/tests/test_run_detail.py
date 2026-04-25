@@ -1,4 +1,4 @@
-"""GET /runs/{run_id} — run detail page rendered from run_detail.html."""
+"""GET /runs/{run_id} — SPA shell served for all client-side routes."""
 
 from __future__ import annotations
 
@@ -29,50 +29,37 @@ def _seed(obs: WebDashboardObserver, run_id: str) -> None:
     )
 
 
-def test_run_detail_404_for_unknown(app_and_obs) -> None:
+def test_run_detail_spa_shell_for_known_run(app_and_obs) -> None:
+    app, obs = app_and_obs
+    _seed(obs, "abc123")
+    with TestClient(app) as client:
+        r = client.get("/runs/abc123")
+        assert r.status_code == 200
+        assert "operad" in r.text.lower()
+
+
+def test_run_detail_spa_shell_for_unknown_run(app_and_obs) -> None:
+    # SPA handles 404 client-side; server always returns the shell.
     app, _ = app_and_obs
     with TestClient(app) as client:
         r = client.get("/runs/nope-run-id")
-        assert r.status_code == 404
+        assert r.status_code == 200
+        assert "operad" in r.text.lower()
 
 
-def test_run_detail_renders_partials(app_and_obs) -> None:
+def test_run_summary_api_404_for_unknown(app_and_obs) -> None:
+    app, _ = app_and_obs
+    with TestClient(app) as client:
+        assert client.get("/runs/nope-run-id/summary").status_code == 404
+
+
+def test_run_summary_api_returns_data(app_and_obs) -> None:
     app, obs = app_and_obs
     _seed(obs, "abc123")
     with TestClient(app) as client:
-        r = client.get("/runs/abc123")
+        r = client.get("/runs/abc123/summary")
         assert r.status_code == 200
-        html = r.text
-        assert 'id="panel-progress"' in html
-        assert 'id="panel-fitness"' in html
-        assert 'id="panel-mutations"' in html
-        assert 'id="panel-drift"' in html
-        assert 'window.OPERAD_RUN_ID = "abc123"' in html
-
-
-def test_run_detail_no_langfuse_link_by_default(app_and_obs) -> None:
-    app, obs = app_and_obs
-    _seed(obs, "abc123")
-    with TestClient(app) as client:
-        r = client.get("/runs/abc123")
-        assert r.status_code == 200
-        assert "langfuse-link" not in r.text
-
-
-def test_run_detail_renders_langfuse_link_when_configured() -> None:
-    obs = WebDashboardObserver()
-    app = create_app(
-        observer=obs,
-        auto_register=False,
-        langfuse_url="http://localhost:3000",
-    )
-    _seed(obs, "abc123")
-    with TestClient(app) as client:
-        r = client.get("/runs/abc123")
-        assert r.status_code == 200
-        html = r.text
-        assert "langfuse-link" in html
-        assert 'href="http://localhost:3000/trace/abc123"' in html
+        assert r.json()["run_id"] == "abc123"
 
 
 def test_create_app_strips_trailing_slash_from_langfuse_url() -> None:
@@ -84,5 +71,6 @@ def test_create_app_strips_trailing_slash_from_langfuse_url() -> None:
     )
     _seed(obs, "abc")
     with TestClient(app) as client:
-        r = client.get("/runs/abc")
-        assert 'href="http://localhost:3000/trace/abc"' in r.text
+        # langfuse_url is exposed via /api/manifest, not injected into HTML
+        r = client.get("/api/manifest")
+        assert r.json()["langfuseUrl"] == "http://localhost:3000"
