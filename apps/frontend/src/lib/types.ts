@@ -172,6 +172,9 @@ export const RunSummary = z.object({
   error: stringOrNull,
   algorithm_terminal_score: numberOrNull,
   cost: CostTotals.optional(),
+  synthetic: z.boolean().default(false),
+  parent_run_id: stringOrNull.default(null),
+  algorithm_class: stringOrNull.default(null),
 });
 export type RunSummary = z.infer<typeof RunSummary>;
 

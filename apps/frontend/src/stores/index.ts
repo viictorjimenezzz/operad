@@ -1,5 +1,5 @@
 export { useUIStore } from "@/stores/ui";
-export type { RunListFilter, EventKindFilter } from "@/stores/ui";
+export type { EventKindFilter } from "@/stores/ui";
 export { useRunStore } from "@/stores/run";
 export { useEventBufferStore, eventBufferLimits } from "@/stores/eventBuffer";
 export { useStatsStore } from "@/stores/stats";

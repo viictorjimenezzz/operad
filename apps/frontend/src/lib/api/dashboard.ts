@@ -53,6 +53,11 @@ export class ParseError extends Error {
 
 export const dashboardApi = {
   runs: () => getJson("/runs", z.array(RunSummary)),
+  runsWithParams: (params: { includeSynthetic?: boolean }) => {
+    const qs = params.includeSynthetic ? "?include=synthetic" : "";
+    return getJson(`/runs${qs}`, z.array(RunSummary));
+  },
+  runChildren: (runId: string) => getJson(`/runs/${runId}/children`, z.array(RunSummary)),
   runSummary: (runId: string) => getJson(`/runs/${runId}/summary`, RunSummary),
   runEvents: (runId: string, limit = 500) =>
     getJson(`/runs/${runId}/events?limit=${limit}`, RunEventsResponse),

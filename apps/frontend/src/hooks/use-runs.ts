@@ -8,6 +8,14 @@ export function useRuns() {
   });
 }
 
+export function useRunsFiltered(includeSynthetic: boolean) {
+  return useQuery({
+    queryKey: ["runs", { includeSynthetic }] as const,
+    queryFn: () => dashboardApi.runsWithParams({ includeSynthetic }),
+    refetchInterval: 5_000,
+  });
+}
+
 export function useRunSummary(runId: string | null | undefined) {
   return useQuery({
     queryKey: ["run", "summary", runId] as const,
