@@ -32,32 +32,64 @@ def _seed_job(data_dir: Path, name: str, rows: list[dict]) -> Path:
     return path
 
 
-def test_index_shows_seeded_jobs(tmp_path: Path) -> None:
+def test_jobs_api_lists_seeded_jobs(tmp_path: Path) -> None:
     _seed_job(tmp_path, "talker", [_row("a"), _row("b", rating=5)])
     app = create_app(data_dir=tmp_path)
     with TestClient(app) as client:
-        r = client.get("/")
+        r = client.get("/jobs")
         assert r.status_code == 200
-        assert "talker" in r.text
-        assert "1 / 2" in r.text  # rated / total
+        items = r.json()
+        assert len(items) == 1
+        assert items[0]["name"] == "talker"
+        assert items[0]["total_rows"] == 2
+        assert items[0]["rated_rows"] == 1
 
 
-def test_index_empty_dir(tmp_path: Path) -> None:
+def test_jobs_api_empty_dir(tmp_path: Path) -> None:
+    app = create_app(data_dir=tmp_path)
+    with TestClient(app) as client:
+        r = client.get("/jobs")
+        assert r.status_code == 200
+        assert r.json() == []
+
+
+def test_job_rows_api_returns_rows(tmp_path: Path) -> None:
+    _seed_job(tmp_path, "talker", [_row("a"), _row("b", rating=3)])
+    app = create_app(data_dir=tmp_path)
+    with TestClient(app) as client:
+        r = client.get("/jobs/talker/rows")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["total"] == 2
+        assert body["rated"] == 1
+        assert any(row["predicted"]["text"] == "hello" for row in body["rows"])
+
+
+def test_spa_index_returns_html(tmp_path: Path) -> None:
     app = create_app(data_dir=tmp_path)
     with TestClient(app) as client:
         r = client.get("/")
         assert r.status_code == 200
-        assert "No jobs" in r.text
+        assert "operad" in r.text.lower()
 
 
-def test_job_view_lists_rows(tmp_path: Path) -> None:
-    _seed_job(tmp_path, "talker", [_row("a"), _row("b", rating=3)])
+def test_spa_catch_all_serves_studio_routes(tmp_path: Path) -> None:
+    _seed_job(tmp_path, "talker", [_row("a")])
     app = create_app(data_dir=tmp_path)
     with TestClient(app) as client:
         r = client.get("/jobs/talker")
         assert r.status_code == 200
-        assert "hello" in r.text
-        assert "1 / 2 rated" in r.text
+        assert "operad" in r.text.lower()
+
+
+def test_api_manifest(tmp_path: Path) -> None:
+    app = create_app(data_dir=tmp_path, dashboard_port=7860)
+    with TestClient(app) as client:
+        r = client.get("/api/manifest")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["mode"] == "studio"
+        assert body["dashboardPort"] == 7860
 
 
 def test_rate_row_persists(tmp_path: Path) -> None:

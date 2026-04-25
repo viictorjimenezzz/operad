@@ -1,6 +1,21 @@
 # Build context is the operad repo root (not apps/dashboard/).
 # The dashboard depends on operad as an editable install via uv source,
 # so we copy the whole operad/ tree alongside the app's own source.
+#
+# We build the React SPA (apps/frontend/) in a Node stage and copy the
+# dashboard bundle into operad_dashboard/web/ before installing the
+# Python wheel — the [tool.hatch.build.targets.wheel.force-include]
+# directive in apps/dashboard/pyproject.toml then ships web/ inside
+# the package.
+
+FROM node:22-alpine AS frontend
+WORKDIR /workspace
+COPY apps/frontend/package.json apps/frontend/pnpm-lock.yaml apps/frontend/.npmrc* ./apps/frontend/
+RUN corepack enable && cd apps/frontend && corepack prepare pnpm@10.30.2 --activate \
+    && pnpm install --frozen-lockfile
+COPY apps/frontend ./apps/frontend
+RUN cd apps/frontend && pnpm build:dashboard
+
 
 FROM python:3.12-slim AS base
 
@@ -21,9 +36,14 @@ COPY operad ./operad
 # 2. Copy the dashboard package.
 COPY apps/dashboard /workspace/apps/dashboard
 
+# 3. Drop the freshly built SPA into the dashboard package so it ships
+#    inside the wheel (force-include in pyproject.toml).
+COPY --from=frontend /workspace/apps/frontend/dist-dashboard \
+    /workspace/apps/dashboard/operad_dashboard/web
+
 WORKDIR /workspace/apps/dashboard
 
-# 3. Sync deps. Includes operad (editable) + the [otel] extra so the
+# 4. Sync deps. Includes operad (editable) + the [otel] extra so the
 #    dashboard process emits OTel spans to Langfuse.
 RUN uv pip install --system -e . \
  && uv pip install --system "operad[otel] @ /workspace"

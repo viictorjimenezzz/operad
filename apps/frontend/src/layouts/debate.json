@@ -1,0 +1,41 @@
+{
+  "algorithm": "Debate",
+  "version": 1,
+  "dataSources": {
+    "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "graph": { "endpoint": "/graph/$context.runId" }
+  },
+  "spec": {
+    "root": "page",
+    "elements": {
+      "page": {
+        "type": "Tabs",
+        "props": {
+          "tabs": [
+            { "id": "rounds", "label": "rounds" },
+            { "id": "graph", "label": "graph" },
+            { "id": "events", "label": "events" }
+          ]
+        },
+        "children": ["t-rounds", "t-graph", "t-events"]
+      },
+      "t-rounds": {
+        "type": "Col",
+        "props": { "gap": 12 },
+        "children": ["meta-card", "rounds-card"]
+      },
+      "meta-card": {
+        "type": "Card",
+        "props": { "title": "meta" },
+        "children": ["meta", "langfuse"]
+      },
+      "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
+      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
+      "rounds-card": { "type": "Card", "props": { "title": "rounds" }, "children": ["rounds"] },
+      "rounds": { "type": "DebateRoundView", "props": { "source": "$queries.summary.rounds" } },
+      "t-graph": { "type": "Card", "props": { "title": "agent graph" }, "children": ["graph"] },
+      "graph": { "type": "AgentGraph", "props": { "source": "$queries.graph" } },
+      "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } }
+    }
+  }
+}

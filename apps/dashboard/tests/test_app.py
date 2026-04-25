@@ -25,7 +25,25 @@ def test_index_renders(app_and_obs) -> None:
         r = client.get("/")
         assert r.status_code == 200
         assert "operad" in r.text.lower()
-        assert "/static/app.js" in r.text
+
+
+def test_api_manifest(app_and_obs) -> None:
+    app, _ = app_and_obs
+    with TestClient(app) as client:
+        r = client.get("/api/manifest")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["mode"] == "dashboard"
+        assert "version" in body
+
+
+def test_spa_catch_all_serves_run_detail(app_and_obs) -> None:
+    app, _ = app_and_obs
+    with TestClient(app) as client:
+        # Any /runs/{run_id} (no further suffix) is an SPA route now.
+        r = client.get("/runs/abc")
+        assert r.status_code == 200
+        assert "operad" in r.text.lower()
 
 
 def test_runs_empty(app_and_obs) -> None:

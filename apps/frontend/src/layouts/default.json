@@ -1,0 +1,68 @@
+{
+  "algorithm": "*",
+  "version": 1,
+  "dataSources": {
+    "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "graph": { "endpoint": "/graph/$context.runId" }
+  },
+  "spec": {
+    "root": "page",
+    "elements": {
+      "page": {
+        "type": "Tabs",
+        "props": {
+          "tabs": [
+            { "id": "overview", "label": "overview" },
+            { "id": "events", "label": "events" },
+            { "id": "graph", "label": "graph" },
+            { "id": "io", "label": "i/o" },
+            { "id": "raw", "label": "raw" }
+          ]
+        },
+        "children": ["t-overview", "t-events", "t-graph", "t-io", "t-raw"]
+      },
+      "t-overview": { "type": "Col", "props": { "gap": 12 }, "children": ["kpis", "meta-card"] },
+      "kpis": {
+        "type": "Row",
+        "props": { "gap": 12 },
+        "children": ["k-events", "k-tokens", "k-cost", "k-duration"]
+      },
+      "k-events": {
+        "type": "KPI",
+        "props": { "label": "events", "source": "$queries.summary.event_total", "format": "int" }
+      },
+      "k-tokens": {
+        "type": "KPI",
+        "props": {
+          "label": "tokens",
+          "source": "$queries.summary.prompt_tokens",
+          "format": "tokens"
+        }
+      },
+      "k-cost": {
+        "type": "KPI",
+        "props": { "label": "cost", "source": "$queries.summary.cost.cost_usd", "format": "cost" }
+      },
+      "k-duration": {
+        "type": "KPI",
+        "props": {
+          "label": "duration",
+          "source": "$queries.summary.duration_ms",
+          "format": "duration"
+        }
+      },
+      "meta-card": {
+        "type": "Card",
+        "props": { "title": "meta" },
+        "children": ["meta", "langfuse"]
+      },
+      "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
+      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
+      "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } },
+      "t-graph": { "type": "Card", "props": { "title": "agent graph" }, "children": ["graph"] },
+      "graph": { "type": "AgentGraph", "props": { "source": "$queries.graph" } },
+      "t-io": { "type": "IODetail", "props": { "source": "$run.events" } },
+      "t-raw": { "type": "RawEnvelope", "props": {} }
+    }
+  }
+}

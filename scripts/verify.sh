@@ -24,4 +24,24 @@ uv run python -m examples.benchmark.run \
     --methods no_train,hand_edit,sweep,evo \
     --out /dev/null
 
+echo "== apps/dashboard tests =="
+( cd apps/dashboard && uv run pytest tests/ -q )
+
+echo "== apps/studio tests =="
+( cd apps/studio && uv run pytest tests/ -q )
+
+if command -v pnpm >/dev/null 2>&1; then
+    echo "== apps/frontend (typecheck, lint, vitest) =="
+    (
+        cd apps/frontend
+        pnpm install --frozen-lockfile
+        pnpm typecheck
+        pnpm lint
+        pnpm test
+        if [ -n "${OPERAD_E2E:-}" ]; then pnpm test:e2e; fi
+    )
+else
+    echo "[skip] pnpm not installed; skipping apps/frontend gates."
+fi
+
 echo "✅ verify complete."

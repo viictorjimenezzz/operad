@@ -24,7 +24,9 @@ STUDIO_PORT         ?= 7870
         dashboard studio demo \
         test test-otel test-dashboard \
         verify \
-        cassettes-refresh cassettes-check
+        cassettes-refresh cassettes-check \
+        frontend-install frontend-typecheck frontend-test frontend-build \
+        build-frontend dev-frontend dev-studio-frontend
 
 # ------------------------------------------------------------------
 # Help (default target)
@@ -48,6 +50,12 @@ help:
 	@printf '    make studio       operad-studio on :$(STUDIO_PORT) (data-dir=./.studio-data)\n\n'
 	@printf '  Demos:\n'
 	@printf '    make demo         agent_evolution offline + dashboard attach + Langfuse OTel\n\n'
+	@printf '  Frontend (apps/frontend/):\n'
+	@printf '    make build-frontend     Build dashboard + studio bundles, copy into both apps\n'
+	@printf '    make dev-frontend       Vite dev server for dashboard (:5173, proxies to :$(DASHBOARD_PORT))\n'
+	@printf '    make dev-studio-frontend Vite dev server for studio (:5174, proxies to :$(STUDIO_PORT))\n'
+	@printf '    make frontend-test      pnpm vitest in apps/frontend/\n'
+	@printf '    make frontend-typecheck pnpm tsc --noEmit in apps/frontend/\n\n'
 	@printf '  Tests:\n'
 	@printf '    make test               Full offline suite\n'
 	@printf '    make test-otel          Just the OtelObserver tests\n'
@@ -156,3 +164,30 @@ cassettes-refresh:
 
 cassettes-check:
 	uv run python scripts/cassettes_check.py
+
+# ------------------------------------------------------------------
+# Frontend (apps/frontend/) — pnpm-driven React 19 SPA
+# ------------------------------------------------------------------
+
+frontend-install:
+	cd apps/frontend && pnpm install --frozen-lockfile
+
+frontend-typecheck: frontend-install
+	cd apps/frontend && pnpm typecheck
+
+frontend-test: frontend-install
+	cd apps/frontend && pnpm test
+
+# Build both bundles (dashboard, studio) and copy into the FastAPI
+# packages so `operad-dashboard` / `operad-studio` serve them from /web.
+build-frontend: frontend-install
+	cd apps/frontend && pnpm build
+	rsync -a --delete apps/frontend/dist-dashboard/ apps/dashboard/operad_dashboard/web/
+	rsync -a --delete apps/frontend/dist-studio/    apps/studio/operad_studio/web/
+	@echo "build-frontend: dashboard + studio bundles deployed."
+
+dev-frontend:
+	cd apps/frontend && pnpm dev:dashboard
+
+dev-studio-frontend:
+	cd apps/frontend && pnpm dev:studio

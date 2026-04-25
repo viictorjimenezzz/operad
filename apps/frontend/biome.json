@@ -16,7 +16,10 @@
     "enabled": true,
     "rules": {
       "recommended": true,
-      "suspicious": { "noExplicitAny": "error" },
+      "suspicious": {
+        "noExplicitAny": "error",
+        "noArrayIndexKey": "off"
+      },
       "style": {
         "useImportType": "error",
         "useNodejsImportProtocol": "error",

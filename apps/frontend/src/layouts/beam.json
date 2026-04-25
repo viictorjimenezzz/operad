@@ -1,0 +1,48 @@
+{
+  "algorithm": "Beam",
+  "version": 1,
+  "dataSources": {
+    "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "graph": { "endpoint": "/graph/$context.runId" }
+  },
+  "spec": {
+    "root": "page",
+    "elements": {
+      "page": {
+        "type": "Tabs",
+        "props": {
+          "tabs": [
+            { "id": "candidates", "label": "candidates" },
+            { "id": "graph", "label": "graph" },
+            { "id": "events", "label": "events" }
+          ]
+        },
+        "children": ["t-candidates", "t-graph", "t-events"]
+      },
+      "t-candidates": {
+        "type": "Col",
+        "props": { "gap": 12 },
+        "children": ["meta-card", "candidates-card"]
+      },
+      "meta-card": {
+        "type": "Card",
+        "props": { "title": "meta" },
+        "children": ["meta", "langfuse"]
+      },
+      "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
+      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
+      "candidates-card": {
+        "type": "Card",
+        "props": { "title": "candidates" },
+        "children": ["candidates"]
+      },
+      "candidates": {
+        "type": "BeamCandidateChart",
+        "props": { "source": "$queries.summary.candidates", "height": 240 }
+      },
+      "t-graph": { "type": "Card", "props": { "title": "agent graph" }, "children": ["graph"] },
+      "graph": { "type": "AgentGraph", "props": { "source": "$queries.graph" } },
+      "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } }
+    }
+  }
+}

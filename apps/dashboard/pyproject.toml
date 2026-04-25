@@ -8,7 +8,6 @@ dependencies = [
     "operad",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
-    "jinja2>=3.1",
     "sse-starlette>=2.1",
 ]
 
@@ -28,6 +27,11 @@ testpaths = ["tests"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["operad_dashboard"]
+
+# Ship the React SPA bundle inside the wheel. `web/` is gitignored;
+# CI / make build-frontend / Dockerfile populate it before packaging.
+[tool.hatch.build.targets.wheel.force-include]
+"operad_dashboard/web" = "operad_dashboard/web"
 
 [tool.uv.sources]
 operad = { path = "../..", editable = true }

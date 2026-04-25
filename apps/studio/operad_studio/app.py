@@ -1,16 +1,16 @@
-"""FastAPI app for Studio — labeling UI + training launcher."""
+"""FastAPI app for Studio - labeling UI + training launcher (SPA-served)."""
 
 from __future__ import annotations
 
 import asyncio
 import json
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
 
 from .jobs import list_jobs, read_rows, save_rating
@@ -18,10 +18,18 @@ from .training import TrainingLauncher
 
 
 _PKG_DIR = Path(__file__).resolve().parent
-_TEMPLATES_DIR = _PKG_DIR / "templates"
-_STATIC_DIR = _PKG_DIR / "static"
+_WEB_DIR = _PKG_DIR / "web"
+_WEB_INDEX = _WEB_DIR / "index.html"
+_WEB_ASSETS = _WEB_DIR / "assets"
 
 _SSE_HEARTBEAT_SECONDS = 15.0
+
+
+def _studio_version() -> str:
+    try:
+        return version("operad-studio")
+    except PackageNotFoundError:
+        return "0.0.0"
 
 
 def create_app(
@@ -48,29 +56,65 @@ def create_app(
     app.state.launcher = launcher or TrainingLauncher()
     app.state.runner = runner
 
-    templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
-    app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
-
-    @app.get("/", response_class=HTMLResponse)
-    async def index(request: Request) -> HTMLResponse:
-        jobs = list_jobs(data_dir)
-        return templates.TemplateResponse(
-            request, "index.html", {"jobs": jobs, "data_dir": str(data_dir)}
+    if _WEB_ASSETS.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_WEB_ASSETS)), name="assets")
+    if _WEB_DIR.is_dir():
+        app.mount(
+            "/web",
+            StaticFiles(directory=str(_WEB_DIR), html=False),
+            name="web",
         )
 
-    @app.get("/jobs/{job_name}", response_class=HTMLResponse)
-    async def job_view(request: Request, job_name: str) -> HTMLResponse:
+    @app.get("/api/manifest")
+    async def manifest() -> JSONResponse:
+        return JSONResponse(
+            {
+                "mode": "studio",
+                "version": _studio_version(),
+                "dataDir": str(data_dir),
+                "dashboardPort": app.state.dashboard_port,
+            }
+        )
+
+    @app.get("/jobs")
+    async def jobs() -> JSONResponse:
+        items = list_jobs(data_dir)
+        return JSONResponse(
+            [
+                {
+                    "name": j.name,
+                    "total_rows": j.total_rows,
+                    "rated_rows": j.rated_rows,
+                    "unrated": j.unrated,
+                }
+                for j in items
+            ]
+        )
+
+    @app.get("/jobs/{job_name}/rows")
+    async def job_rows(job_name: str) -> JSONResponse:
         path = _job_path(data_dir, job_name)
         rows = read_rows(path)
-        return templates.TemplateResponse(
-            request,
-            "job.html",
+        return JSONResponse(
             {
-                "job_name": job_name,
-                "rows": rows,
+                "rows": [
+                    {
+                        "id": r.id,
+                        "index": r.index,
+                        "run_id": r.run_id,
+                        "agent_path": r.agent_path,
+                        "input": r.input,
+                        "expected": r.expected,
+                        "predicted": r.predicted,
+                        "rating": r.rating,
+                        "rationale": r.rationale,
+                        "written_at": r.written_at,
+                    }
+                    for r in rows
+                ],
                 "total": len(rows),
                 "rated": sum(1 for r in rows if r.rating is not None),
-            },
+            }
         )
 
     @app.post("/jobs/{job_name}/rows/{row_id}")
@@ -137,11 +181,32 @@ def create_app(
             raise HTTPException(status_code=404, detail="job not found")
         return FileResponse(path, filename=f"{job_name}.jsonl")
 
+    @app.get("/", response_class=HTMLResponse)
+    async def index() -> HTMLResponse:
+        return HTMLResponse(_render_shell())
+
+    @app.get("/{full_path:path}", response_class=HTMLResponse)
+    async def spa_catch_all(full_path: str) -> Response:
+        del full_path
+        return HTMLResponse(_render_shell())
+
     return app
 
 
+def _render_shell() -> str:
+    if _WEB_INDEX.is_file():
+        return _WEB_INDEX.read_text(encoding="utf-8")
+    return (
+        "<!doctype html><html><head><meta charset=\"utf-8\">"
+        "<title>operad - studio</title></head><body>"
+        "<h1>operad</h1>"
+        "<p>frontend bundle not built. Run "
+        "<code>make build-frontend</code> or <code>cd apps/frontend &amp;&amp; pnpm dev:studio</code>.</p>"
+        "</body></html>"
+    )
+
+
 def _job_path(data_dir: Path, job_name: str) -> Path:
-    # Prevent path traversal.
     if "/" in job_name or ".." in job_name:
         raise HTTPException(status_code=400, detail="invalid job name")
     return data_dir / f"{job_name}.jsonl"
