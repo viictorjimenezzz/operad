@@ -324,6 +324,7 @@ def _bare_cfg(**sampling_overrides: Any) -> Configuration:
 
 def test_default_sampling_fills_unset_fields() -> None:
     leaf = Classifier(config=_bare_cfg(), input=A, output=B)
+    leaf._apply_default_sampling()
     assert leaf.config is not None
     assert leaf.config.sampling.temperature == 0.0
     assert leaf.config.sampling.max_tokens == 128
@@ -333,6 +334,7 @@ def test_user_value_wins_over_default() -> None:
     leaf = Classifier(
         config=_bare_cfg(temperature=0.9), input=A, output=B
     )
+    leaf._apply_default_sampling()
     assert leaf.config is not None
     assert leaf.config.sampling.temperature == 0.9
     assert leaf.config.sampling.max_tokens == 128
@@ -342,6 +344,7 @@ def test_user_max_tokens_wins_over_default() -> None:
     leaf = Classifier(
         config=_bare_cfg(max_tokens=999), input=A, output=B
     )
+    leaf._apply_default_sampling()
     assert leaf.config is not None
     assert leaf.config.sampling.temperature == 0.0
     assert leaf.config.sampling.max_tokens == 999
@@ -375,17 +378,19 @@ def test_callers_config_is_not_mutated_in_place() -> None:
     leaf = Classifier(config=cfg, input=A, output=B)
     assert cfg.sampling.temperature == original_temp
     assert cfg.sampling.max_tokens == original_max
-    assert leaf.config is not cfg
+    assert leaf.config is cfg
 
 
 def test_reasoner_default_temperature() -> None:
     leaf = Reasoner(config=_bare_cfg(), input=A, output=B)
+    leaf._apply_default_sampling()
     assert leaf.config is not None
     assert leaf.config.sampling.temperature == 0.7
 
 
 def test_critic_defaults() -> None:
     leaf = Critic(config=_bare_cfg())
+    leaf._apply_default_sampling()
     assert leaf.config is not None
     assert leaf.config.sampling.temperature == 0.0
     assert leaf.config.sampling.max_tokens == 512
@@ -393,6 +398,7 @@ def test_critic_defaults() -> None:
 
 def test_router_defaults() -> None:
     leaf = Router(config=_bare_cfg())
+    leaf._apply_default_sampling()
     assert leaf.config is not None
     assert leaf.config.sampling.temperature == 0.0
     assert leaf.config.sampling.max_tokens == 64
