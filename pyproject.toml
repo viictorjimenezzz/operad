@@ -1,6 +1,6 @@
 [project]
 name = "operad"
-version = "0.1.0"
+version = "0.2.0"
 description = "Typed, composable agent architectures for local-first LLM servers."
 readme = "README.md"
 license = { file = "LICENSE.txt" }

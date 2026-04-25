@@ -67,23 +67,22 @@ class _StatefulLeaf(Agent[_In, _Out]):
 async def test_stateless_invoke_uses_transient_strands(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Every call goes through a transient — operad's own ``self.messages``
-    and ``self.system_prompt`` are never mutated by ``forward``."""
+    """Every call goes through a transient runner — the persistent
+    runner's system prompt is never mutated by ``forward``."""
     agent = await _StatelessLeaf(config=_cfg()).abuild()
     spy = install_spy(monkeypatch, StrandsSpy(canned_structured=_Out(reply="ok")))
 
-    # Snapshot what build() wired into self; it must stay unchanged.
-    pre_msgs = list(agent.messages)
-    pre_sp = agent.system_prompt
+    # Snapshot what build() wired into the persistent runner.
+    pre_sp = agent._runner.system_prompt
 
     await agent(_In(msg="hi"))
     await agent(_In(msg="bye"))
 
-    assert agent.messages == pre_msgs
-    assert agent.system_prompt == pre_sp
-    # The spy ran on the transient — and the transient was constructed
-    # with the freshly composed system prompt, which (since this leaf has
-    # no system-flagged input fields) equals the static base.
+    # Stateless: the persistent runner's system_prompt is untouched.
+    assert agent._runner.system_prompt == pre_sp
+    # Each spy call ran on a transient constructed with the freshly
+    # composed system prompt; since this leaf has no system-flagged
+    # input fields, the composed prompt equals the static base.
     assert all(sp == pre_sp for sp in spy.system_prompts)
     assert len(spy.system_prompts) == 2
 
@@ -128,18 +127,18 @@ async def test_stateless_concurrent_fanout_is_reentrant(
 async def test_stateful_subclass_preserves_history_and_mutates_self(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``stateless=False`` opts back into chat-style behaviour: the operad
-    Agent itself becomes the strands target, ``self.system_prompt`` is
-    refreshed per call, and ``self.messages`` is left alone so
-    conversation history accumulates across turns."""
+    """``stateless=False`` opts back into chat-style behaviour: the
+    persistent runner is reused across calls, its system_prompt is
+    refreshed per call, and the underlying strands.Agent's `messages`
+    log is left alone so conversation history accumulates across turns."""
     agent = await _StatefulLeaf(config=_cfg()).abuild()
     install_spy(monkeypatch, StrandsSpy(canned_structured=_Out(reply="ok")))
 
     pre = [{"role": "user", "content": [{"text": "carry over"}]}]
-    agent.messages = list(pre)
+    agent._runner._agent.messages = list(pre)
     await agent(_In(msg="hi"))
     # forward() does not reset history when the subclass opts out.
-    assert agent.messages == pre
+    assert agent._runner._agent.messages == pre
 
 
 # --------------------------------------------------------------------------- #

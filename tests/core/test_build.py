@@ -333,7 +333,7 @@ async def test_payload_branch_exec_defined_degrades_gracefully(cfg) -> None:
     assert "__bool__" in str(exc.value)
 
 
-async def test_init_strands_skipped_on_trace_failure(cfg, monkeypatch) -> None:
+async def test_init_runner_skipped_on_trace_failure(cfg, monkeypatch) -> None:
     from operad.core import build as build_mod
 
     calls: list[str] = []
@@ -341,7 +341,7 @@ async def test_init_strands_skipped_on_trace_failure(cfg, monkeypatch) -> None:
     def tracker(a: Agent) -> None:
         calls.append(type(a).__name__)
 
-    monkeypatch.setattr(build_mod, "_init_strands", tracker)
+    monkeypatch.setattr(build_mod, "_init_runner", tracker)
 
     class Brancher(Agent):
         input = A
@@ -360,7 +360,7 @@ async def test_init_strands_skipped_on_trace_failure(cfg, monkeypatch) -> None:
     assert calls == []
 
 
-async def test_init_strands_runs_after_successful_trace(cfg, monkeypatch) -> None:
+async def test_init_runner_runs_after_successful_trace(cfg, monkeypatch) -> None:
     from operad.core import build as build_mod
 
     calls: list[str] = []
@@ -368,7 +368,7 @@ async def test_init_strands_runs_after_successful_trace(cfg, monkeypatch) -> Non
     def tracker(a: Agent) -> None:
         calls.append(type(a).__name__)
 
-    monkeypatch.setattr(build_mod, "_init_strands", tracker)
+    monkeypatch.setattr(build_mod, "_init_runner", tracker)
 
     class Pipeline(Agent):
         input = A

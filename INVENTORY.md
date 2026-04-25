@@ -58,6 +58,18 @@ leaf = MyLeaf(config=Configuration(backend="llamacpp",
 | `clone()`                    | Deep copy of state, unbuilt.                                                  |
 | `diff(other)`                | Structured `AgentDiff` between two agents.                                    |
 
+### Breaking change (0.1 → 0.2)
+
+`Agent` no longer inherits from `strands.Agent`. Subclasses that
+previously called `super().__init__(...)` with Strands kwargs
+(`model=`, `tools=`, `messages=`, etc.) must drop them — the call is
+now a plain `Agent.__init__` and accepts only the kwargs documented
+above. The Strands runtime is wrapped internally by
+`operad.core._strands_runner.StrandsRunner`; nothing else in operad
+imports `strands.Agent`. Existing freeze artefacts will reject on
+load (the version hash bumps with the package), so re-freeze any
+persisted agents.
+
 ## 2. Structural composition
 
 `Pipeline` chains agents left-to-right; `Parallel` fans out to a dict
@@ -115,6 +127,10 @@ BuildError(input_mismatch): at Pipeline.stage_1 → stage_2
 flowchart LR
     stage_1[Reasoner: Utterance → Answer] -->|FAIL| stage_2[Critic: Question → Score]
 ```
+
+For default-forward leaves, `build()` also constructs the leaf's
+`StrandsRunner` (the only seam to the runtime substrate). Composites
+never construct one.
 
 ## 5. Freeze / thaw — skip the trace
 
@@ -314,6 +330,11 @@ adapters treat them as invariants.
 provider's batch endpoint and returns a `BatchHandle`; poll with
 `operad.core.models.poll_batch(handle)`. Available for `openai`,
 `anthropic`, `bedrock`.
+
+`Configuration` is translated to a `strands.models.Model` by
+`operad/core/models.py`, then handed to the leaf's `StrandsRunner` at
+build time. The runner is the only place operad imports
+`strands.Agent`.
 
 ## 11. Rendering — three wire formats
 
