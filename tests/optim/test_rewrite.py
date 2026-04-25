@@ -245,3 +245,46 @@ def test_registry_covers_every_parameter_kind():
 def test_rewriter_for_unknown_kind_raises():
     with pytest.raises(KeyError, match="no rewriter registered"):
         rewriter_for("not-a-kind")  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# Schema-aware retry: ValidationError details injected into second prompt
+# ---------------------------------------------------------------------------
+
+
+class ValidationErrorRewriter(ExampleListRewriter):
+    """Returns bad JSON on first real call, valid JSON on second; records requests."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.calls: list[RewriteRequest] = []
+
+    async def forward(self, x: RewriteRequest) -> RewriteResponse:
+        # Tracer hands a sentinel with no old_value; skip it.
+        if not getattr(x, "old_value", ""):
+            return RewriteResponse(new_value="[]")
+        self.calls.append(x)
+        if len(self.calls) == 1:
+            # value is a string, not an int — will raise ValidationError
+            bad = [{"input": {"text": "q"}, "output": {"value": "not-an-int"}}]
+            return RewriteResponse(new_value=json.dumps(bad))
+        good = [{"input": {"text": "q"}, "output": {"value": 42}}]
+        return RewriteResponse(new_value=json.dumps(good))
+
+
+async def test_retry_prompt_contains_validation_error_details(cfg):
+    leaf = FakeLeaf(config=cfg, input=A, output=B)
+    leaf.examples = [Example(input=A(text="hi"), output=B(value=1))]
+    p = ExampleListParameter.from_agent(leaf, "examples", "examples")
+    grad = TextualGradient(message="improve examples", severity=0.8)
+
+    rewriter = await ValidationErrorRewriter(config=cfg).abuild()
+    await apply_rewrite(p, grad, rewriter, lr=0.7)
+
+    # Two real calls were made: first (bad) and second (good).
+    assert len(rewriter.calls) == 2
+
+    second_hint = rewriter.calls[1].constraint_hint
+    assert "Schema validation" in second_hint
+    # The field path from the ValidationError should appear in the hint.
+    assert "value" in second_hint

@@ -76,8 +76,7 @@ async def test_early_stopping_mode_min_patience() -> None:
         await es.on_validation_end(t, _eval_report({"loss": v}))  # type: ignore[arg-type]
     assert t._should_stop is False
 
-    # stagnant for 3 calls (patience=2 means > 2 stale → stop after 3rd)
-    await es.on_validation_end(t, _eval_report({"loss": 0.7}))  # type: ignore[arg-type]
+    # stagnant: patience=2 means >= 2 stale → stop after 2nd non-improving call
     await es.on_validation_end(t, _eval_report({"loss": 0.7}))  # type: ignore[arg-type]
     assert t._should_stop is False
     await es.on_validation_end(t, _eval_report({"loss": 0.7}))  # type: ignore[arg-type]
@@ -91,8 +90,7 @@ async def test_early_stopping_mode_max_tracks_higher_is_better() -> None:
     await es.on_validation_end(t, _eval_report({"acc": 0.5}))  # type: ignore[arg-type]
     await es.on_validation_end(t, _eval_report({"acc": 0.6}))  # type: ignore[arg-type]
     assert t._should_stop is False
-    # stagnant twice
-    await es.on_validation_end(t, _eval_report({"acc": 0.6}))  # type: ignore[arg-type]
+    # patience=1: first stale call triggers stop
     await es.on_validation_end(t, _eval_report({"acc": 0.6}))  # type: ignore[arg-type]
     assert t._should_stop is True
 
@@ -113,6 +111,19 @@ async def test_early_stopping_ignores_nan_values() -> None:
 
     await es.on_validation_end(t, _eval_report({"other": 0.5}))  # type: ignore[arg-type]
     assert t._should_stop is False
+
+
+async def test_early_stopping_stops_at_exact_patience() -> None:
+    """Regression: _stale >= patience, not > patience (off-by-one)."""
+    es = EarlyStopping(monitor="loss", mode="min", patience=3, min_delta=0.0)
+    t = _FakeTrainer()
+
+    await es.on_validation_end(t, _eval_report({"loss": 1.0}))  # sets best
+    for _ in range(2):
+        await es.on_validation_end(t, _eval_report({"loss": 1.0}))  # stale 1, 2
+    assert t._should_stop is False
+    await es.on_validation_end(t, _eval_report({"loss": 1.0}))  # stale 3 → stop
+    assert t._should_stop is True
 
 
 def test_early_stopping_rejects_invalid_config() -> None:
@@ -235,3 +246,103 @@ async def test_memory_rotation_warns_when_tape_large(
 def test_memory_rotation_rejects_bad_threshold() -> None:
     with pytest.raises(ValueError):
         MemoryRotation(max_tape_entries=0)
+
+
+# ---------------------------------------------------------------------------
+# Curriculum
+# ---------------------------------------------------------------------------
+
+
+from operad.data.loader import PermutableSampler
+from operad.train import Curriculum
+
+
+class _FakeLoader:
+    def __init__(self, sampler: Any) -> None:
+        self._sampler = sampler
+
+
+class _CurriculumTrainer(_FakeTrainer):
+    def __init__(self, severity_map: dict[int, float], sampler: Any) -> None:
+        super().__init__()
+        self.last_epoch_per_sample_severity = severity_map
+        self.loader = _FakeLoader(sampler)
+
+
+def _epoch_report() -> EpochReport:
+    return EpochReport(epoch=0, train_loss=0.0)
+
+
+async def test_curriculum_hard_first_orders_descending() -> None:
+    sampler = PermutableSampler(3)
+    t = _CurriculumTrainer({0: 0.1, 1: 0.9, 2: 0.5}, sampler)
+    cb = Curriculum(mode="hard_first")
+    await cb.on_epoch_end(t, _epoch_report())  # type: ignore[arg-type]
+    assert sampler._order == [1, 2, 0]
+
+
+async def test_curriculum_easy_first_orders_ascending() -> None:
+    sampler = PermutableSampler(3)
+    t = _CurriculumTrainer({0: 0.1, 1: 0.9, 2: 0.5}, sampler)
+    cb = Curriculum(mode="easy_first")
+    await cb.on_epoch_end(t, _epoch_report())  # type: ignore[arg-type]
+    assert sampler._order == [0, 2, 1]
+
+
+async def test_curriculum_anneal_hard_first_during_warmup() -> None:
+    sampler = PermutableSampler(3)
+    severity = {0: 0.1, 1: 0.9, 2: 0.5}
+    t = _CurriculumTrainer(severity, sampler)
+    cb = Curriculum(mode="anneal", warmup_epochs=2)
+    # epoch 1 of 2 warmup: hard_first
+    await cb.on_epoch_end(t, _epoch_report())  # type: ignore[arg-type]
+    assert sampler._order == [1, 2, 0]
+    # epoch 2 of 2 warmup: still hard_first
+    await cb.on_epoch_end(t, _epoch_report())  # type: ignore[arg-type]
+    assert sampler._order == [1, 2, 0]
+
+
+async def test_curriculum_anneal_random_after_warmup() -> None:
+    sampler = PermutableSampler(3)
+    severity = {0: 0.1, 1: 0.9, 2: 0.5}
+    t = _CurriculumTrainer(severity, sampler)
+    cb = Curriculum(mode="anneal", warmup_epochs=1)
+    # epoch 1: warmup (hard_first)
+    await cb.on_epoch_end(t, _epoch_report())  # type: ignore[arg-type]
+    assert sampler._order == [1, 2, 0]
+    # epoch 2: post-warmup, result is a valid permutation
+    await cb.on_epoch_end(t, _epoch_report())  # type: ignore[arg-type]
+    assert sorted(sampler._order) == [0, 1, 2]
+
+
+async def test_curriculum_uniform_severity_no_error() -> None:
+    sampler = PermutableSampler(3)
+    t = _CurriculumTrainer({0: 0.5, 1: 0.5, 2: 0.5}, sampler)
+    cb = Curriculum(mode="hard_first")
+    await cb.on_epoch_end(t, _epoch_report())  # type: ignore[arg-type]
+    assert sorted(sampler._order) == [0, 1, 2]  # valid permutation, no error
+
+
+async def test_curriculum_warns_when_sampler_lacks_set_order() -> None:
+    class _NoOrderSampler:
+        def __iter__(self):
+            return iter([])
+        def __len__(self):
+            return 0
+
+    t = _CurriculumTrainer({0: 0.5}, _NoOrderSampler())
+    cb = Curriculum(mode="hard_first")
+    with warnings.catch_warnings(record=True) as ws:
+        warnings.simplefilter("always")
+        await cb.on_epoch_end(t, _epoch_report())  # type: ignore[arg-type]
+    assert any("set_order" in str(w.message) for w in ws)
+
+
+def test_curriculum_rejects_invalid_mode() -> None:
+    with pytest.raises(ValueError):
+        Curriculum(mode="random")  # type: ignore[arg-type]
+
+
+def test_curriculum_rejects_negative_warmup() -> None:
+    with pytest.raises(ValueError):
+        Curriculum(warmup_epochs=-1)

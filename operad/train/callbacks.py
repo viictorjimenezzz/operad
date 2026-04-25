@@ -139,7 +139,7 @@ class EarlyStopping(Callback):
             self._stale = 0
             return
         self._stale += 1
-        if self._stale > self.patience:
+        if self._stale >= self.patience:
             trainer._should_stop = True
 
 
@@ -435,9 +435,101 @@ class HumanFeedbackCallback(Callback):
                 self._rows_written += 1
 
 
+class Curriculum(Callback):
+    """Re-order each epoch's data by per-sample gradient severity.
+
+    After each epoch, reads ``trainer.last_epoch_per_sample_severity``
+    (populated by ``Trainer._run_batch``) and calls ``set_order()`` on the
+    loader's sampler so the next epoch sees examples in severity order.
+
+    Modes:
+
+    - ``"hard_first"`` — descending severity every epoch.
+    - ``"easy_first"`` — ascending severity every epoch.
+    - ``"anneal"`` — hard-first for the first ``warmup_epochs`` epochs,
+      then random (matches the curriculum-learning literature and avoids
+      overfitting to the difficulty order once the model has improved).
+
+    Requires the loader's sampler to expose a ``set_order(indices)`` method.
+    Use ``PermutableSampler`` from ``operad.data`` when constructing the
+    ``DataLoader``; a ``UserWarning`` is emitted if the sampler lacks the
+    hook. When combined with ``WeightedRandomSampler`` or
+    ``StratifiedSampler``, Curriculum overrides their natural ordering —
+    this is intentional but may surprise users, hence the ``on_fit_start``
+    warning.
+    """
+
+    _OVERRIDE_SAMPLER_TYPES = ("WeightedRandomSampler", "StratifiedSampler")
+
+    def __init__(
+        self,
+        monitor: str = "severity_per_sample",
+        mode: Literal["hard_first", "easy_first", "anneal"] = "hard_first",
+        warmup_epochs: int = 1,
+    ) -> None:
+        if mode not in ("hard_first", "easy_first", "anneal"):
+            raise ValueError(
+                f"mode must be 'hard_first', 'easy_first', or 'anneal', got {mode!r}"
+            )
+        if warmup_epochs < 0:
+            raise ValueError("warmup_epochs must be non-negative")
+        self.monitor = monitor
+        self.mode = mode
+        self.warmup_epochs = warmup_epochs
+        self._epoch_count: int = 0
+
+    async def on_fit_start(self, trainer: "Trainer[Any, Any]") -> None:
+        self._epoch_count = 0
+        sampler = getattr(getattr(trainer, "loader", None), "_sampler", None)
+        if sampler is not None and type(sampler).__name__ in self._OVERRIDE_SAMPLER_TYPES:
+            warnings.warn(
+                f"Curriculum: loader uses {type(sampler).__name__}, whose natural "
+                "ordering will be overridden by Curriculum.set_order().",
+                UserWarning,
+                stacklevel=2,
+            )
+
+    async def on_epoch_end(
+        self, trainer: "Trainer[Any, Any]", report: EpochReport
+    ) -> None:
+        self._epoch_count += 1
+
+        loader = getattr(trainer, "loader", None)
+        sampler = getattr(loader, "_sampler", None)
+        if sampler is None or not hasattr(sampler, "set_order"):
+            warnings.warn(
+                "Curriculum: loader.sampler does not support set_order(); "
+                "wrap it in PermutableSampler (operad.data.PermutableSampler).",
+                UserWarning,
+                stacklevel=2,
+            )
+            return
+
+        severity_map: dict[int, float] = trainer.last_epoch_per_sample_severity
+        if not severity_map:
+            return
+
+        indices = list(severity_map.keys())
+
+        if self.mode == "hard_first":
+            ordered = sorted(indices, key=lambda i: severity_map[i], reverse=True)
+        elif self.mode == "easy_first":
+            ordered = sorted(indices, key=lambda i: severity_map[i])
+        else:  # anneal
+            if self._epoch_count <= self.warmup_epochs:
+                ordered = sorted(indices, key=lambda i: severity_map[i], reverse=True)
+            else:
+                import random as _random
+                ordered = indices[:]
+                _random.shuffle(ordered)
+
+        sampler.set_order(ordered)
+
+
 __all__ = [
     "BestCheckpoint",
     "Callback",
+    "Curriculum",
     "EarlyStopping",
     "EarlyStoppingSpec",
     "GradClip",

@@ -163,14 +163,24 @@ Schemas: `BeliefItem`, `BeliefOp`, `BeliefOperation`, `SessionItem`,
 `SessionNamespace`, `SessionStatus`.
 
 ### `safeguard/`
-Chat-scope guardrail leaves. `Context` evaluates whether a prompt is
-in-scope (returns a `SafeguardCategory`); `Talker` produces a refusal
-or pass-through response when called as a guard. Disambiguated as
+Chat-scope guardrail leaves plus a pre-wired pipeline composite.
+`Context` evaluates whether a prompt is in-scope (returns a
+`SafeguardCategory`); `Talker` produces a refusal response when called
+as a guard. `SafetyGuard` is a composite that wires `Context →
+{in_scope: inner, *: Talker}` automatically. Disambiguated as
 `SafeguardTalker` at the top-level `operad.agents` re-export.
 
 ```python
-from operad.agents.safeguard import Context, Talker as SafeguardTalker
-guard_pipeline = Pipeline(Context(config=cfg), SafeguardTalker(config=cfg))
+from operad.agents.safeguard import Context, SafetyGuard, Talker
+
+guard = SafetyGuard(
+    context=Context(config=cfg),
+    talker=Talker(config=cfg),
+    inner=my_agent,                          # optional; defaults to passthrough
+    refusal_factory=lambda x, cat: MyOut(),  # required when output != TextResponse
+)
+guard.build()
+result = await guard(ContextInput(message="hello"))
 ```
 
 ### `retrieval/`
@@ -204,6 +214,7 @@ metric feedback. Plain classes with `run(...)` — not `Agent` subclasses.
 | `VerifierLoop`   | Generator loops until `Verifier` approves or `max_iter` hits. |
 | `Sweep`          | Cartesian grid over dotted-path parameters of a seed agent. Returns a `SweepReport` with one `SweepCell` per grid point. |
 | `AutoResearcher` | Planner → Retriever → Reasoner → Critic → Reflector loop, wrapped in best-of-N. Plus `ResearchPlan`, `ResearchInput`, `ResearchContext` types. |
+| `SelfRefine`     | Generator → Reflector → Refiner loop; on-policy (shared generator/refiner) or cross-policy; `stop_when` callback. |
 
 ```python
 from operad.algorithms import Beam, AutoResearcher
@@ -219,7 +230,6 @@ absorbed there.
 
 ### Planned
 
-- `SelfRefine` — Generator → Reflector → Refiner.
 - `TalkerReasoner` — interleaved chat + reasoning.
 
 ## 8. Metrics — `operad.metrics`
@@ -274,18 +284,21 @@ cfg = Configuration(
 )
 ```
 
-### Supported backends
+### Per-backend constraint table
 
-| Backend       | Local? | Extra needed      |
-| ------------- | ------ | ----------------- |
-| `llamacpp`    | yes    | (built-in)        |
-| `lmstudio`    | yes    | (built-in)        |
-| `ollama`      | yes    | (built-in)        |
-| `huggingface` | yes    | `[huggingface]`   |
-| `openai`      | hosted | (built-in)        |
-| `anthropic`   | hosted | (built-in)        |
-| `bedrock`     | hosted | (built-in)        |
-| `gemini`      | hosted | `[gemini]`        |
+All constraints are enforced at `Configuration` construction time; runtime
+adapters treat them as invariants.
+
+| Backend       | `host`   | `api_key` / env-var fallback          | `batch` | Extra pkg        |
+| ------------- | -------- | ------------------------------------- | ------- | ---------------- |
+| `llamacpp`    | required | —                                     | no      | (built-in)       |
+| `lmstudio`    | required | optional (placeholder `"lm-studio"`)  | no      | (built-in)       |
+| `ollama`      | required | —                                     | no      | (built-in)       |
+| `huggingface` | —        | —                                     | no      | `[huggingface]`  |
+| `openai`      | —        | required (`OPENAI_API_KEY`)           | yes     | (built-in)       |
+| `anthropic`   | —        | required (`ANTHROPIC_API_KEY`)        | yes     | (built-in)       |
+| `bedrock`     | —        | — (AWS SDK credential chain)          | yes     | (built-in)       |
+| `gemini`      | —        | required (`GOOGLE_API_KEY`)           | no      | `[gemini]`       |
 
 ### Batch mode
 
@@ -659,9 +672,17 @@ train, val = random_split(dataset, [0.8, 0.2], seed=0)
 loader = DataLoader(train, batch_size=8, shuffle=True)
 ```
 
-Samplers: `RandomSampler`, `SequentialSampler`,
-`WeightedRandomSampler`. Batches arrive as
-`Batch[In, Out](inputs, expected)`.
+Samplers: `RandomSampler`, `SequentialSampler`, `WeightedRandomSampler`,
+`StratifiedSampler`. Batches arrive as `Batch[In, Out](inputs, expected)`.
+
+`StratifiedSampler(dataset, key, batch_size, shuffle, seed)` interleaves
+indices so each contiguous window of `batch_size` mirrors the dataset's
+class distribution. `key` is a callable or dotted path on
+`entry.expected_output` (e.g. `"label"`). Single-key stratification only.
+
+`stratified_split(dataset, fractions, key, seed)` mirrors `random_split`
+but splits each class bucket proportionally before merging, so every shard
+preserves the original class ratios.
 
 ### `state_dict` / `load_state_dict`
 

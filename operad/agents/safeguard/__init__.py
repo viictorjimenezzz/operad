@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .components import Context, Talker
+from .pipeline import SafetyGuard
 from .schemas import (
     ContextInput,
     ContextOutput,
@@ -16,6 +17,7 @@ __all__ = [
     "ContextInput",
     "ContextOutput",
     "SafeguardCategory",
+    "SafetyGuard",
     "Talker",
     "TalkerInput",
     "TextResponse",

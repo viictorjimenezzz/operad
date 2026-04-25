@@ -106,3 +106,19 @@ async def test_thaw_classmethod_checks_type(
     with pytest.raises(BuildError) as exc:
         Pipeline.thaw(str(path))
     assert exc.value.reason == "not_built"
+
+
+async def test_freeze_thaw_two_backend_variants(tmp_path) -> None:
+    """freeze/thaw round-trips for two backend variants (llamacpp + openai)."""
+    llamacpp_cfg = Configuration(backend="llamacpp", host="127.0.0.1:0", model="gemma")
+    openai_cfg = Configuration(backend="openai", model="gpt-4o", api_key="sk-test")
+
+    for cfg, label in [(llamacpp_cfg, "llamacpp"), (openai_cfg, "openai")]:
+        leaf = await FakeLeaf(config=cfg, input=A, output=B, canned={"value": 1}).abuild()
+        path = tmp_path / f"{label}.json"
+        leaf.freeze(str(path))
+        restored = FakeLeaf.thaw(str(path))
+        assert restored._built
+        assert restored.config.backend == label
+        out = await restored(A(text="hi"))
+        assert out.response.value == 1

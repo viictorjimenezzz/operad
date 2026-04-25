@@ -125,6 +125,8 @@ class Trainer(Generic[In, Out]):
         self._should_stop: bool = False
         self._last_batch_tape_entries: int = 0
         self._last_report: TrainingReport | None = None
+        self.last_epoch_per_sample_severity: dict[int, float] = {}
+        self.loader: DataLoader[In, Out] | None = None
 
         # Optional wave-4 optimizer hook: OPRO/APE need an evaluator closure.
         if getattr(optimizer, "needs_evaluator", False):
@@ -140,6 +142,18 @@ class Trainer(Generic[In, Out]):
         epochs: int,
         early_stopping: EarlyStopping | None = None,
     ) -> TrainingReport:
+        """Run the training loop for ``epochs`` epochs.
+
+        **Gradient accumulation contract** (``accumulation_steps > 1``):
+        Per-sample gradients are collected in an internal accumulator across
+        ``accumulation_steps`` consecutive batches. Immediately before
+        ``optimizer.step()`` fires, the accumulated per-sample gradients are
+        merged once into a single ``TextualGradient`` per parameter — each
+        original sample's gradient message appears exactly once in the merged
+        result, regardless of batch boundaries. ``severity`` is the maximum
+        across all samples; ``target_paths`` are de-duplicated in arrival
+        order.
+        """
         if not self.agent._built:
             raise BuildError(
                 "not_built",
@@ -202,6 +216,7 @@ class Trainer(Generic[In, Out]):
         epoch_reports: list[EpochReport],
         batch_counter: int,
     ) -> TrainingReport:
+        self.loader = loader
         for cb in cbs:
             await cb.on_fit_start(self)
 
@@ -215,6 +230,7 @@ class Trainer(Generic[In, Out]):
                 await cb.on_epoch_start(self, epoch)
 
             set_current_epoch(epoch)
+            self.last_epoch_per_sample_severity = {}
             try:
                 sampler = getattr(loader, "_sampler", None)
                 if sampler is not None and hasattr(sampler, "refresh"):
@@ -404,22 +420,31 @@ class Trainer(Generic[In, Out]):
         """Process every sample in ``batch``; return (mean loss, count).
 
         Each sample gets its own tape + backward; per-sample grads are
-        folded onto each parameter's ``.grad`` slot so `optimizer.step`
-        sees a single merged gradient per parameter.
+        merged with any gradient already accumulated on ``p.grad`` from
+        prior batches, so ``optimizer.step`` sees a single merged gradient
+        per parameter that covers every sample across the accumulation window.
         """
         params = _flatten_params(self.optimizer)
+        # Capture any gradient accumulated from previous batches before
+        # backward() overwrites p.grad with the first sample's gradient.
+        pre_batch: dict[int, TextualGradient | None] = {}
+        for p in params:
+            pre_batch[id(p)] = p.grad
+            p.grad = None
+
         per_sample: dict[int, list[TextualGradient]] = {id(p): [] for p in params}
         loss_sum = 0.0
         sample_count = 0
         tape_entries_total = 0
 
-        for x, y in zip(batch.inputs, batch.expected):
+        for idx, x, y in zip(batch.indices, batch.inputs, batch.expected):
             async with tape() as t:
                 output = await self.agent(x)
             tape_entries_total += len(t.entries)
             score, grad = await self.loss_fn.compute(output.response, y)
             loss_sum += score
             sample_count += 1
+            self.last_epoch_per_sample_severity[idx] = grad.severity
             if grad.severity <= 0:
                 continue
             await backward(t, grad, parameters=params)
@@ -434,7 +459,8 @@ class Trainer(Generic[In, Out]):
             grads = per_sample[id(p)]
             if not grads:
                 continue
-            pending = [p.grad] if p.grad is not None else []
+            prev = pre_batch[id(p)]
+            pending = [prev] if prev is not None and prev.severity > 0 else []
             p.grad = _merge_grads(grads + pending)
 
         mean_loss = loss_sum / sample_count if sample_count > 0 else 0.0

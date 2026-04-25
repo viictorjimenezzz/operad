@@ -176,15 +176,64 @@ def _extra_attrs(a: Agent) -> dict[str, Any]:
 # --- freeze -----------------------------------------------------------------
 
 
+def _state_from_frozen(state_dict: dict) -> AgentState:
+    """Reconstruct an AgentState from a frozen JSON dict.
+
+    Uses model_construct for Configuration so the api_key presence validator
+    does not fire on redacted (api_key=None) frozen configs.
+    """
+    from .config import Configuration
+
+    from .config import IOConfig, Resilience, Runtime, Sampling
+
+    cfg_dict = state_dict.get("config")
+    if cfg_dict:
+        cfg = Configuration.model_construct(
+            **{
+                **cfg_dict,
+                "sampling": Sampling.model_construct(**cfg_dict.get("sampling", {})),
+                "resilience": Resilience.model_construct(**cfg_dict.get("resilience", {})),
+                "io": IOConfig.model_construct(**cfg_dict.get("io", {})),
+                "runtime": Runtime.model_construct(**cfg_dict.get("runtime", {})),
+            }
+        )
+    else:
+        cfg = None
+    children = {
+        k: _state_from_frozen(v)
+        for k, v in state_dict.get("children", {}).items()
+    }
+    return AgentState.model_construct(
+        class_name=state_dict["class_name"],
+        role=state_dict.get("role", ""),
+        task=state_dict.get("task", ""),
+        style=state_dict.get("style", ""),
+        context=state_dict.get("context", ""),
+        rules=state_dict.get("rules", []),
+        examples=state_dict.get("examples", []),
+        config=cfg,
+        input_type_name=state_dict.get("input_type_name", ""),
+        output_type_name=state_dict.get("output_type_name", ""),
+        children=children,
+    )
+
+
 def _redact_state(state: AgentState) -> AgentState:
     """Return a copy of `state` with every `config.api_key` zeroed."""
+    from .config import Configuration
+
     cfg = state.config
     if cfg is not None and getattr(cfg, "api_key", None) is not None:
-        cfg = cfg.model_copy(update={"api_key": None})
-    return AgentState(
+        # Use model_construct to bypass validators — the redacted copy is
+        # intentionally missing the api_key (security scrub before serialisation)
+        # and must not re-trigger the api_key presence check.
+        cfg = Configuration.model_construct(**{**cfg.__dict__, "api_key": None})
+    # Use model_construct so the redacted cfg (api_key=None) is not re-validated.
+    return AgentState.model_construct(
         class_name=state.class_name,
         role=state.role,
         task=state.task,
+        style=state.style,
         context=state.context,
         rules=list(state.rules),
         examples=[dict(e) for e in state.examples],
@@ -476,7 +525,7 @@ def _thaw_from_data(data: dict[str, Any]) -> Agent:
     graph_json: dict[str, Any] | None = data.get("graph")
     io_map = _io_from_graph(graph_json)
 
-    root_state = AgentState.model_validate(data["state"])
+    root_state = _state_from_frozen(data["state"])
     root_path = _resolve_class(data["agent_class"]).__name__
     root = _reconstruct(root_state, root_path, class_map, io_map)
 
