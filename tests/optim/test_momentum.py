@@ -136,9 +136,10 @@ async def test_decay_shrinks_past_severity(cfg: Any) -> None:
 
     history = p.momentum_state["momentum"]["history"]
     assert [h.message for h in history] == ["first", "second"]
-    # `first` was decayed once during step 2 (from 1.0 → 0.5).
-    assert history[0].severity == pytest.approx(0.5)
-    assert history[1].severity == pytest.approx(1.0)
+    # `first` was scaled on append (1.0 → 0.5) then decayed again on step 2
+    # (0.5 → 0.25).  `second` was scaled on append (1.0 → 0.5).
+    assert history[0].severity == pytest.approx(0.25)
+    assert history[1].severity == pytest.approx(0.5)
 
 
 async def test_summarizer_zero_severity_skips_rewriter(cfg: Any) -> None:
@@ -164,6 +165,30 @@ async def test_summarizer_zero_severity_skips_rewriter(cfg: Any) -> None:
 
     assert p.value == "unchanged"
     assert rewriter.gradient_messages == []
+
+
+async def test_current_step_decays_before_append(cfg: Any) -> None:
+    """Regression: the step's own gradient must be scaled before appending."""
+    leaf, p = _make_role_param(cfg, "role-0")
+    summarizer = await _built_summarizer(cfg)
+    rewriter = await _built_rewriter(cfg)
+
+    opt = MomentumTextGrad(
+        [p],
+        lr=1.0,
+        rewriter_factory=lambda kind: rewriter,
+        summarizer_factory=lambda: summarizer,
+        momentum=0.5,
+    )
+
+    p.grad = TextualGradient(message="only", severity=1.0)
+    await opt.step()
+
+    history = p.momentum_state["momentum"]["history"]
+    # The entry appended on step 1 should already be scaled (1.0 × 0.5 = 0.5),
+    # not stored at full severity 1.0.
+    assert len(history) == 1
+    assert history[0].severity == pytest.approx(0.5)
 
 
 async def test_summarizer_built_once_across_steps(cfg: Any) -> None:

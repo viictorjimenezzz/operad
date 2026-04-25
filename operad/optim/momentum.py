@@ -7,9 +7,11 @@ gradient at each step. The synthesised gradient replaces the raw
 `TextualGradientDescent` (kind-based rewriter resolution, per-group
 `lr`, concurrency cap, optional `persist_grads`).
 
-The per-group `momentum` float is the decay applied to each entry's
-severity between steps — 1.0 means no decay, 0.9 (default) means past
-entries lose 10 % of their severity per step.
+The per-group `momentum` float is the per-step decay factor applied to
+every entry's severity, including the entry being appended at the
+current step. With `momentum=m`, after N steps entry k carries
+`m^(N-k+1)` of its original severity (Polyak/EMA schedule). 1.0 means
+no decay; 0.9 (default) means each entry loses 10 % per step.
 """
 
 from __future__ import annotations
@@ -159,6 +161,16 @@ class MomentumTextGrad(TextualGradientDescent):
                 )
                 for h in history
             ]
+            # Scale the current step before appending so every entry in the
+            # history has been subject to the same exponential decay schedule.
+            # After N steps with factor m, entry k carries m^(N-k) of its
+            # original severity (Polyak/EMA-style averaging).
+            grad = TextualGradient(
+                message=grad.message,
+                by_field=dict(grad.by_field),
+                severity=float(grad.severity) * decay,
+                target_paths=list(grad.target_paths),
+            )
         history.append(grad)
         if self._history_k > 0:
             history = history[-self._history_k :]

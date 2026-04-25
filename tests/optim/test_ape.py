@@ -16,6 +16,7 @@ from operad.optim import (
     TextParameter,
     TextualGradient,
 )
+from operad.optim.parameter import TextConstraint
 from tests._helpers.fake_leaf import A, B, FakeLeaf
 
 
@@ -122,6 +123,33 @@ async def test_grad_ignored_warns_once(cfg: Any) -> None:
             and "APEOptimizer ignores" in str(w.message)
             for w in caught
         )
+
+
+async def test_all_coerced_accepts_best_with_warning(cfg: Any) -> None:
+    """Regression: when all k candidates coerce, accept the best and warn."""
+    leaf, p = _make_role_param(cfg, "start")
+    # Constraint: max 3 chars — all candidates longer than that are coerced.
+    p.constraint = TextConstraint(max_length=3)
+    # Candidates: "long-a" → coerced to "lon", "long-b" → "lon", "long-c" → "lon"
+    # Use distinct strings so we can differentiate scores by the raw coerced value.
+    gen = await _built_gen(cfg, ["aaaa", "bbbbb", "cccccc"])
+    # Coerced values: "aaa", "bbb", "ccc"
+    scores = {"start": 0.1, "aaa": 0.2, "bbb": 0.9, "ccc": 0.5}
+
+    async def evaluator(param: TextParameter, candidate: str) -> float:
+        return scores.get(candidate, 0.0)
+
+    opt = APEOptimizer(
+        [p],
+        evaluator=evaluator,
+        generator_factory=lambda: gen,
+        k=3,
+    )
+
+    with pytest.warns(UserWarning, match="coerced"):
+        await opt.step()
+
+    assert p.value == "bbb"
 
 
 async def test_k_zero_rejected(cfg: Any) -> None:

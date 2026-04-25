@@ -6,6 +6,8 @@ from typing import Any
 
 import pytest
 
+import warnings
+
 from operad.core.agent import _TRACER
 from operad.metrics.base import MetricBase
 from operad.optim import (
@@ -15,6 +17,7 @@ from operad.optim import (
     OPROOutput,
     TextParameter,
 )
+from operad.optim.parameter import TextConstraint
 from tests._helpers.fake_leaf import A, B, FakeLeaf
 
 
@@ -133,6 +136,36 @@ async def test_accepts_first_candidate_that_beats_best(cfg: Any) -> None:
     assert len(opro.calls) == 2
     assert [h.value for h in opro.calls[0].history] == ["past"]
     assert [h.value for h in opro.calls[1].history] == ["past", "low"]
+
+
+async def test_coerced_candidate_accepted_with_warning(cfg: Any) -> None:
+    """Regression: exhausted retries on coerced candidates must warn and update."""
+    leaf, p = _make_role_param(cfg, "start")
+    # Constraint: max 3 chars — any candidate longer than that is coerced.
+    p.constraint = TextConstraint(max_length=3)
+    # All candidates will be longer than 3 chars and thus coerced.
+    opro = await _built_opro(cfg, ["long-a", "long-b", "long-c"])
+    # Coerced values: "lon", "lon", "lon" (first 3 chars).
+    scores = {"lon": 0.7}
+
+    async def evaluator(param: TextParameter, candidate: str) -> float:
+        return scores.get(candidate, 0.0)
+
+    opt = OPROOptimizer(
+        [p],
+        objective_metric=_DummyMetric(),
+        evaluator=evaluator,
+        opro_factory=lambda: opro,
+        max_retries=3,
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        await opt.step()
+
+    user_warnings = [w for w in caught if issubclass(w.category, UserWarning)]
+    assert any("coerced" in str(w.message).lower() for w in user_warnings)
+    assert p.value == "lon"
 
 
 async def test_history_truncates_to_k(cfg: Any) -> None:

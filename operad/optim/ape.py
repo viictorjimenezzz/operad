@@ -98,7 +98,14 @@ GeneratorFactory = Callable[
 
 
 class APEOptimizer(Optimizer):
-    """Best-of-K candidate sampler over a parameter's value space."""
+    """Best-of-K candidate sampler over a parameter's value space.
+
+    Coercion handling: candidates mutated by the parameter's constraint are
+    kept in a separate pool. If every candidate in the K samples is coerced,
+    the best-scored coerced value is accepted and a ``UserWarning`` is
+    emitted. If no candidates survive parsing at all, the parameter is left
+    unchanged.
+    """
 
     def __init__(
         self,
@@ -179,12 +186,14 @@ class APEOptimizer(Optimizer):
         )
 
         parsed_candidates: list[tuple[str, Any]] = []
+        coerced_candidates: list[tuple[str, Any]] = []
         for raw in raw_candidates:
             try:
                 parsed = _parse(raw, param)
                 if param.constraint is not None:
                     coerced = param.constraint.validate(parsed)
                     if coerced != parsed:
+                        coerced_candidates.append((raw, coerced))
                         continue
                     parsed = coerced
                 parsed_candidates.append((raw, parsed))
@@ -192,7 +201,16 @@ class APEOptimizer(Optimizer):
                 continue
 
         if not parsed_candidates:
-            return
+            if coerced_candidates:
+                warnings.warn(
+                    "APEOptimizer: all candidates were coerced by the constraint; "
+                    "accepting best-scored coerced candidate.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                parsed_candidates = coerced_candidates
+            else:
+                return
 
         current_score = float(await self._evaluator(param, param.value))
         scored = await asyncio.gather(

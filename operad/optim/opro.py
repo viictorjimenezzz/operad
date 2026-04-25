@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import inspect
 import math
+import warnings
 from collections.abc import Awaitable
 from inspect import cleandoc
 from typing import Any, Callable, Iterable
@@ -130,7 +131,14 @@ OPROFactory = Callable[[], OPROAgent | Awaitable[OPROAgent]]
 
 
 class OPROOptimizer(Optimizer):
-    """LLM-as-optimizer over a parameter's value history."""
+    """LLM-as-optimizer over a parameter's value history.
+
+    Coercion handling: if a candidate passes parsing but is mutated by the
+    parameter's constraint, it is not accepted unconditionally. Instead the
+    coerced value is scored and kept as a fallback. If all retries produce
+    only coerced candidates, the best-scored coerced value is accepted and a
+    ``UserWarning`` is emitted.
+    """
 
     def __init__(
         self,
@@ -190,6 +198,8 @@ class OPROOptimizer(Optimizer):
         opro_agent = await self._resolve_opro()
         hint = _describe_constraint(param.constraint)
 
+        best_coerced: tuple[Any, float] | None = None
+
         for _ in range(self._max_retries):
             payload = OPROInput(
                 parameter_kind=param.kind,
@@ -206,13 +216,17 @@ class OPROOptimizer(Optimizer):
 
             try:
                 parsed = _parse(raw_new, param)
-                if param.constraint is not None:
-                    coerced = param.constraint.validate(parsed)
-                    if coerced != parsed:
-                        raise ValueError("candidate coerced by constraint")
-                    parsed = coerced
             except Exception:
                 continue
+
+            if param.constraint is not None:
+                coerced = param.constraint.validate(parsed)
+                if coerced != parsed:
+                    coerced_score = float(await self._evaluator(param, coerced))
+                    if best_coerced is None or coerced_score > best_coerced[1]:
+                        best_coerced = (coerced, coerced_score)
+                    continue
+                parsed = coerced
 
             score = float(await self._evaluator(param, parsed))
             history.append((raw_new, score))
@@ -221,6 +235,15 @@ class OPROOptimizer(Optimizer):
                 param.write(parsed)
                 return
             best_score = max(best_score, score)
+
+        if best_coerced is not None:
+            warnings.warn(
+                "OPROOptimizer: all candidates were coerced by the constraint; "
+                "accepting best-scored coerced candidate.",
+                UserWarning,
+                stacklevel=2,
+            )
+            param.write(best_coerced[0])
 
     def _truncate_history(self, history: list[tuple[str, float]]) -> None:
         overflow = len(history) - self._history_k
