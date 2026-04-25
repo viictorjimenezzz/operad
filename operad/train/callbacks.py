@@ -139,7 +139,7 @@ class EarlyStopping(Callback):
             self._stale = 0
             return
         self._stale += 1
-        if self._stale > self.patience:
+        if self._stale >= self.patience:
             trainer._should_stop = True
 
 

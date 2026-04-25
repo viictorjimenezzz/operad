@@ -76,8 +76,7 @@ async def test_early_stopping_mode_min_patience() -> None:
         await es.on_validation_end(t, _eval_report({"loss": v}))  # type: ignore[arg-type]
     assert t._should_stop is False
 
-    # stagnant for 3 calls (patience=2 means > 2 stale → stop after 3rd)
-    await es.on_validation_end(t, _eval_report({"loss": 0.7}))  # type: ignore[arg-type]
+    # stagnant: patience=2 means >= 2 stale → stop after 2nd non-improving call
     await es.on_validation_end(t, _eval_report({"loss": 0.7}))  # type: ignore[arg-type]
     assert t._should_stop is False
     await es.on_validation_end(t, _eval_report({"loss": 0.7}))  # type: ignore[arg-type]
@@ -91,8 +90,7 @@ async def test_early_stopping_mode_max_tracks_higher_is_better() -> None:
     await es.on_validation_end(t, _eval_report({"acc": 0.5}))  # type: ignore[arg-type]
     await es.on_validation_end(t, _eval_report({"acc": 0.6}))  # type: ignore[arg-type]
     assert t._should_stop is False
-    # stagnant twice
-    await es.on_validation_end(t, _eval_report({"acc": 0.6}))  # type: ignore[arg-type]
+    # patience=1: first stale call triggers stop
     await es.on_validation_end(t, _eval_report({"acc": 0.6}))  # type: ignore[arg-type]
     assert t._should_stop is True
 
@@ -113,6 +111,19 @@ async def test_early_stopping_ignores_nan_values() -> None:
 
     await es.on_validation_end(t, _eval_report({"other": 0.5}))  # type: ignore[arg-type]
     assert t._should_stop is False
+
+
+async def test_early_stopping_stops_at_exact_patience() -> None:
+    """Regression: _stale >= patience, not > patience (off-by-one)."""
+    es = EarlyStopping(monitor="loss", mode="min", patience=3, min_delta=0.0)
+    t = _FakeTrainer()
+
+    await es.on_validation_end(t, _eval_report({"loss": 1.0}))  # sets best
+    for _ in range(2):
+        await es.on_validation_end(t, _eval_report({"loss": 1.0}))  # stale 1, 2
+    assert t._should_stop is False
+    await es.on_validation_end(t, _eval_report({"loss": 1.0}))  # stale 3 → stop
+    assert t._should_stop is True
 
 
 def test_early_stopping_rejects_invalid_config() -> None:
