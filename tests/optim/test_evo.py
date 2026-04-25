@@ -9,11 +9,11 @@ from pydantic import BaseModel
 
 from operad import Agent
 from operad.metrics.base import MetricBase
-from operad.optim import EvoGradient
+from operad.optim import ConfigurationConstraint, EvoGradient
 from operad.runtime.events import AlgorithmEvent
 from operad.runtime.observers import registry as obs_registry
 from operad.utils.errors import BuildError
-from operad.utils.ops import AppendRule, TweakRole
+from operad.utils.ops import AppendRule, TweakRole, random_configuration_op
 
 
 pytestmark = pytest.mark.asyncio
@@ -279,3 +279,81 @@ async def test_evo_gradient_rollback_preserves_population_size(cfg) -> None:
     assert "POISON" not in seed.rules
     assert isinstance(seed, _PoisonableLeaf)
     assert len(optimizer._population) == 4
+
+
+# ---------------------------------------------------------------------------
+# ConfigurationParameter evolution
+# ---------------------------------------------------------------------------
+
+
+_FAVOURED_BACKEND = "ollama"
+_FAVOURED_MODEL = "o1"
+
+
+class _BackendReporterLeaf(Agent[Q, R]):
+    """Leaf whose output value is 1 iff (backend, model) matches the target.
+
+    Lets a metric reward configurations that evolved toward the favoured
+    pair without depending on actually invoking the model.
+    """
+
+    input = Q
+    output = R
+
+    async def forward(self, x: Q) -> R:  # type: ignore[override]
+        match = (
+            self.config.backend == _FAVOURED_BACKEND
+            and self.config.model == _FAVOURED_MODEL
+        )
+        return R.model_construct(value=1 if match else 0)
+
+
+class _MatchTargetMetric(MetricBase):
+    name = "matches_target"
+
+    async def score(self, predicted: BaseModel, expected: BaseModel) -> float:
+        return float(getattr(predicted, "value", 0))
+
+
+async def test_evo_gradient_evolves_configuration_parameter(cfg) -> None:
+    seed = _BackendReporterLeaf(config=cfg)
+    constraint = ConfigurationConstraint(
+        allowed_backends=["llamacpp", "ollama"],
+        allowed_models={
+            "llamacpp": ["test", "m2"],
+            _FAVOURED_BACKEND: [_FAVOURED_MODEL],
+        },
+        temperature_range=(0.0, 1.0),
+    )
+    seed.set_configuration_constraint(constraint)
+    seed.mark_trainable(config=True)
+    await seed.abuild()
+
+    rng = random.Random(0)
+    mutations = [
+        random_configuration_op(constraint, base=cfg, rng=rng)
+        for _ in range(8)
+    ]
+
+    dataset = [(Q(text="x"), R(value=1)) for _ in range(2)]
+    optimizer = EvoGradient(
+        list(seed.parameters()),
+        mutations=mutations,
+        metric=_MatchTargetMetric(),
+        dataset=dataset,
+        population_size=4,
+        rng=random.Random(1),
+    )
+
+    visited_configs: set[tuple[str, str]] = set()
+    for _ in range(3):
+        await optimizer.step()
+        for ind in optimizer._population or []:
+            visited_configs.add((ind.config.backend, ind.config.model))
+
+    # Visible diversity across generations.
+    assert len(visited_configs) >= 2
+
+    # Survivor (root after write-back) lands on the favoured pair.
+    assert seed.config.backend == _FAVOURED_BACKEND
+    assert seed.config.model == _FAVOURED_MODEL

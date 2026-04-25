@@ -80,6 +80,8 @@ from operad.optim.opro import (
 from operad.optim.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import (
     CategoricalParameter,
+    ConfigurationConstraint,
+    ConfigurationParameter,
     ExampleListParameter,
     FloatParameter,
     ListConstraint,
@@ -96,6 +98,7 @@ from operad.optim.parameter import (
 from operad.optim.rewrite import (
     REWRITE_AGENTS,
     CategoricalRewriter,
+    ConfigurationRewriter,
     ExampleListRewriter,
     FloatRewriter,
     RewriteAgent,
@@ -129,6 +132,9 @@ __all__ = [
     "CategoricalRewriter",
     "ChainedScheduler",
     "CompositeLoss",
+    "ConfigurationConstraint",
+    "ConfigurationParameter",
+    "ConfigurationRewriter",
     "ConstantLR",
     "CosineExplorationLR",
     "CriticLoss",

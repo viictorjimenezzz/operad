@@ -16,6 +16,8 @@ import pytest
 from operad.core.example import Example
 from operad.optim import (
     CategoricalParameter,
+    ConfigurationConstraint,
+    ConfigurationParameter,
     ExampleListParameter,
     FloatParameter,
     ListConstraint,
@@ -289,7 +291,87 @@ def test_constraint_variants_discriminate():
         NumericConstraint(min=0.0, max=1.0),
         VocabConstraint(allowed=["a", "b"]),
         ListConstraint(max_count=3),
+        ConfigurationConstraint(
+            allowed_backends=["llamacpp"],
+            allowed_models={"llamacpp": ["m1"]},
+        ),
     ]
     for c in variants:
         dumped = c.model_dump()
         assert dumped["kind"] == c.kind
+
+
+# ---------------------------------------------------------------------------
+# ConfigurationParameter + ConfigurationConstraint
+# ---------------------------------------------------------------------------
+
+
+def _config_constraint(**overrides):
+    base = dict(
+        allowed_backends=["llamacpp", "ollama"],
+        allowed_models={
+            "llamacpp": ["test", "m2"],
+            "ollama": ["o1"],
+        },
+    )
+    base.update(overrides)
+    return ConfigurationConstraint(**base)
+
+
+def test_configuration_parameter_round_trip(cfg):
+    leaf = FakeLeaf(config=cfg, input=A, output=B)
+
+    p = ConfigurationParameter.from_agent(leaf, "config", "configuration")
+    assert p.value.backend == "llamacpp"
+    assert p.value.model == "test"
+
+    new_cfg = cfg.model_copy(update={"model": "renamed"})
+    p.write(new_cfg)
+    assert leaf.config.model == "renamed"
+    assert p.read().model == "renamed"
+
+
+def test_configuration_constraint_rejects_out_of_shape_model(cfg):
+    constraint = _config_constraint()
+    bad = cfg.model_copy(update={"model": "not-allowed"})
+    with pytest.raises(ValueError, match="not in allowed_models"):
+        constraint.validate(bad)
+
+
+def test_configuration_constraint_rejects_out_of_shape_backend(cfg):
+    constraint = _config_constraint(allowed_backends=["openai"], allowed_models={"openai": ["gpt-4o"]})
+    with pytest.raises(ValueError, match="not in allowed_backends"):
+        constraint.validate(cfg)
+
+
+def test_configuration_constraint_clamps_temperature(cfg):
+    hot_cfg = cfg.model_copy(
+        update={"sampling": cfg.sampling.model_copy(update={"temperature": 5.0})}
+    )
+    constraint = _config_constraint(temperature_range=(0.0, 1.0))
+    clamped = constraint.validate(hot_cfg)
+    assert clamped.sampling.temperature == 1.0
+    # Original instance untouched.
+    assert hot_cfg.sampling.temperature == 5.0
+
+
+def test_configuration_constraint_passthrough_for_legal_config(cfg):
+    constraint = _config_constraint()
+    out = constraint.validate(cfg)
+    assert out is cfg
+
+
+def test_configuration_parameter_freeze_thaw_preserves_backend(cfg):
+    leaf1 = FakeLeaf(config=cfg, input=A, output=B)
+    p = ConfigurationParameter.from_agent(leaf1, "config", "configuration")
+    swapped = cfg.model_copy(update={"backend": "ollama", "model": "o1"})
+    p.write(swapped)
+
+    state = leaf1.state()
+
+    leaf2 = FakeLeaf(config=cfg, input=A, output=B)
+    leaf2.load_state(state)
+
+    p2 = ConfigurationParameter.from_agent(leaf2, "config", "configuration")
+    assert p2.value.backend == "ollama"
+    assert p2.value.model == "o1"

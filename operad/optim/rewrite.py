@@ -16,13 +16,16 @@ from __future__ import annotations
 
 import json
 from inspect import cleandoc
-from typing import Any
+from typing import Any, Callable
 
 from pydantic import BaseModel, Field, ValidationError
 
 from operad.core.agent import Agent
+from operad.core.config import Configuration
 from operad.core.example import Example
 from operad.optim.parameter import (
+    ConfigurationConstraint,
+    ConfigurationParameter,
     ListConstraint,
     NumericConstraint,
     Parameter,
@@ -355,6 +358,34 @@ class CategoricalRewriter(RewriteAgent):
     default_sampling = {"temperature": 0.0, "max_tokens": 64}
 
 
+class ConfigurationRewriter(RewriteAgent):
+    """Rewriter for the whole `Configuration` block.
+
+    `old_value` and `new_value` are JSON-encoded `Configuration` dumps
+    (with `api_key` excluded). The caller (`apply_rewrite`) re-attaches
+    `api_key`, `host`, and `runtime.extra` from the agent's existing
+    config after parsing, so the rewriter cannot inadvertently break
+    those — but it should still honour the rule that asks it not to.
+    """
+
+    role = "You are a disciplined config-rewriter for a typed agent."
+    task = cleandoc("""
+        Produce a JSON object in `new_value` that is a complete, valid
+        `Configuration` addressing the `gradient` and respecting every
+        bullet in `constraint_hint`.
+    """)
+    rules = _BASE_RULES + (
+        "`new_value` must be a JSON object matching the Configuration "
+        "schema in `constraint_hint` — no extra keys, no missing fields.",
+        "Do not modify `api_key`, `host`, or `runtime.extra`; preserve "
+        "the values from `old_value`.",
+        "lr semantics: high (>=0.9) authorises a wholesale backend/model "
+        "swap; low (<=0.2) tweaks sampling within the same backend.",
+    )
+    examples = ()
+    default_sampling = {"temperature": 0.3}
+
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
@@ -375,6 +406,7 @@ REWRITE_AGENTS: dict[ParameterKind, type[RewriteAgent]] = {
     "model": CategoricalRewriter,
     "backend": CategoricalRewriter,
     "renderer": CategoricalRewriter,
+    "configuration": ConfigurationRewriter,
 }
 
 
@@ -421,6 +453,38 @@ def _describe_constraint(c: ParameterConstraint | None) -> str:
         if c.item is not None:
             parts.append(f"Each item: {_describe_constraint(c.item)}")
         return " ".join(parts)
+    if isinstance(c, ConfigurationConstraint):
+        parts = ["Configuration object."]
+        parts.append(
+            f"Allowed backends: {sorted(c.allowed_backends)!r}."
+        )
+        parts.append(
+            "Allowed models per backend: "
+            + json.dumps({k: sorted(v) for k, v in c.allowed_models.items()})
+            + "."
+        )
+        parts.append(f"Renderer choices: {list(c.renderer_choices)!r}.")
+        parts.append(
+            f"Temperature must lie in [{c.temperature_range[0]}, "
+            f"{c.temperature_range[1]}]."
+        )
+        parts.append(
+            f"top_p must lie in [{c.top_p_range[0]}, {c.top_p_range[1]}]."
+        )
+        if c.max_tokens_range is not None:
+            parts.append(
+                f"max_tokens must lie in [{c.max_tokens_range[0]}, "
+                f"{c.max_tokens_range[1]}]."
+            )
+        if c.max_tokens_per_run is not None:
+            parts.append(
+                f"Soft cap of {c.max_tokens_per_run} tokens per run."
+            )
+        if c.max_cost_per_run_usd is not None:
+            parts.append(
+                f"Soft cap of ${c.max_cost_per_run_usd:.4f} per run."
+            )
+        return " ".join(parts)
     return "No explicit constraint — any valid value of the expected type."
 
 
@@ -440,6 +504,8 @@ def _serialize(param: Parameter[Any]) -> str:
         return json.dumps([value.model_dump(mode="json")])
     if kind in ("temperature", "top_p", "top_k"):
         return repr(float(value))
+    if kind == "configuration":
+        return value.model_dump_json(exclude={"api_key"})
     return str(value)
 
 
@@ -472,6 +538,16 @@ def _parse(raw: str, param: Parameter[Any]) -> Any:
         )
     if kind in ("temperature", "top_p", "top_k"):
         return float(raw.strip())
+    if kind == "configuration":
+        original = param._agent().config
+        parsed = Configuration.model_validate_json(raw)
+        return parsed.model_copy(
+            update={
+                "api_key": original.api_key,
+                "host": original.host,
+                "runtime": original.runtime,
+            }
+        )
     return raw.strip() if kind in ("model", "backend", "renderer") else raw
 
 
@@ -484,6 +560,11 @@ def _enrich_hint_for_examples(hint: str, param: Parameter[Any]) -> str:
         f"Input schema: {in_schema}\n"
         f"Output schema: {out_schema}"
     )
+
+
+def _enrich_hint_for_configuration(hint: str) -> str:
+    schema = json.dumps(Configuration.model_json_schema())
+    return f"{hint}\nConfiguration schema: {schema}"
 
 
 # ---------------------------------------------------------------------------
@@ -512,6 +593,7 @@ async def apply_rewrite(
     rewriter: RewriteAgent,
     *,
     lr: float,
+    cost_estimator: Callable[[Configuration], float] | None = None,
 ) -> None:
     """Invoke `rewriter` on `(param, grad, lr)` and write the result back.
 
@@ -521,10 +603,18 @@ async def apply_rewrite(
     (either by raising inside `validate` or by being coerced to a
     different value). A second violation raises a descriptive error
     identifying the parameter path.
+
+    For `ConfigurationParameter` whose constraint sets
+    `max_cost_per_run_usd`, an optional `cost_estimator` is consulted
+    on the candidate config; an over-budget candidate is treated as a
+    constraint violation and triggers the same one-retry-then-raise
+    flow.
     """
     hint = _describe_constraint(param.constraint)
     if param.kind in ("examples", "example_i"):
         hint = _enrich_hint_for_examples(hint, param)
+    elif param.kind == "configuration":
+        hint = _enrich_hint_for_configuration(hint)
 
     def _build_request(extra: str = "") -> RewriteRequest:
         return RewriteRequest(
@@ -552,10 +642,28 @@ async def apply_rewrite(
             )
         return coerced
 
+    def _check_budget(candidate: Any) -> None:
+        if (
+            cost_estimator is None
+            or not isinstance(param, ConfigurationParameter)
+            or not isinstance(param.constraint, ConfigurationConstraint)
+        ):
+            return
+        budget = param.constraint.max_cost_per_run_usd
+        if budget is None:
+            return
+        cost = float(cost_estimator(candidate))
+        if cost > budget:
+            raise ValueError(
+                f"candidate config cost ${cost:.4f} exceeds budget "
+                f"${budget:.4f}"
+            )
+
     try:
         resp = await _invoke(_build_request())
         new_value = _parse(resp.new_value, param)
         validated = _check(new_value)
+        _check_budget(validated)
     except Exception as first_err:
         schema_hint = (
             _format_validation_hint(first_err)
@@ -572,6 +680,7 @@ async def apply_rewrite(
             resp = await _invoke(_build_request(tightened))
             new_value = _parse(resp.new_value, param)
             validated = _check(new_value)
+            _check_budget(validated)
         except Exception as second_err:
             raise RuntimeError(
                 f"rewrite for parameter {param.path!r} "
@@ -584,6 +693,7 @@ async def apply_rewrite(
 
 __all__ = [
     "CategoricalRewriter",
+    "ConfigurationRewriter",
     "ExampleListRewriter",
     "FloatRewriter",
     "REWRITE_AGENTS",

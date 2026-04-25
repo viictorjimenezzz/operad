@@ -83,6 +83,7 @@ _LOCAL_FIELD_TO_PATH: dict[str, str] = {
     "examples": "examples",
     "temperature": "config.sampling.temperature",
     "top_p": "config.sampling.top_p",
+    "config": "config",
 }
 
 
@@ -254,6 +255,7 @@ class Agent(Generic[In, Out]):
         object.__setattr__(self, "_graph", None)
         object.__setattr__(self, "_runner", None)
         object.__setattr__(self, "_requires_grad_overrides", {})
+        object.__setattr__(self, "_configuration_constraint", None)
         object.__setattr__(self, "_forward_pre_hooks", [])
         object.__setattr__(self, "_forward_hooks", [])
         object.__setattr__(self, "_backward_hooks", [])
@@ -396,6 +398,7 @@ class Agent(Generic[In, Out]):
         object.__setattr__(new, "_built", False)
         object.__setattr__(new, "_graph", None)
         object.__setattr__(new, "_requires_grad_overrides", {})
+        object.__setattr__(new, "_configuration_constraint", self._configuration_constraint)
         object.__setattr__(new, "_forward_pre_hooks", [])
         object.__setattr__(new, "_forward_hooks", [])
         object.__setattr__(new, "_backward_hooks", [])
@@ -477,6 +480,7 @@ class Agent(Generic[In, Out]):
         """
         from ..optim.parameter import (
             CategoricalParameter,
+            ConfigurationParameter,
             ExampleListParameter,
             FloatParameter,
             Parameter,
@@ -486,8 +490,13 @@ class Agent(Generic[In, Out]):
 
         overrides: dict[str, bool] = self._requires_grad_overrides
 
-        def _mk(path: str, ctor: Any, kind: str) -> tuple[str, "Parameter[Any]"]:
-            p = ctor.from_agent(self, path, kind)
+        def _mk(
+            path: str,
+            ctor: Any,
+            kind: str,
+            constraint: Any = None,
+        ) -> tuple[str, "Parameter[Any]"]:
+            p = ctor.from_agent(self, path, kind, constraint=constraint)
             if path in overrides:
                 p.requires_grad = overrides[path]
             return path, p
@@ -509,12 +518,26 @@ class Agent(Generic[In, Out]):
             yield _mk("examples", ExampleListParameter, "examples")
 
         if self.config is not None:
-            yield _mk("config.sampling.temperature", FloatParameter, "temperature")
-            if self.config.sampling.top_p is not None:
-                yield _mk("config.sampling.top_p", FloatParameter, "top_p")
-            yield _mk("config.model", CategoricalParameter, "model")
-            yield _mk("config.backend", CategoricalParameter, "backend")
-            yield _mk("config.io.renderer", CategoricalParameter, "renderer")
+            if overrides.get("config", False):
+                yield _mk(
+                    "config",
+                    ConfigurationParameter,
+                    "configuration",
+                    constraint=self._configuration_constraint,
+                )
+            else:
+                yield _mk(
+                    "config.sampling.temperature", FloatParameter, "temperature"
+                )
+                if self.config.sampling.top_p is not None:
+                    yield _mk(
+                        "config.sampling.top_p", FloatParameter, "top_p"
+                    )
+                yield _mk("config.model", CategoricalParameter, "model")
+                yield _mk("config.backend", CategoricalParameter, "backend")
+                yield _mk(
+                    "config.io.renderer", CategoricalParameter, "renderer"
+                )
 
     def parameters(
         self, *, recurse: bool = True, element_wise: bool = False
@@ -558,12 +581,13 @@ class Agent(Generic[In, Out]):
     ) -> None:
         """Write ``_requires_grad_overrides[path] = value`` for a local field.
 
-        Sampling fields (``temperature``, ``top_p``) require ``config`` to
-        be set. ``strict=True`` raises ``KeyError`` when it isn't; ``False``
-        silently skips (used for broadcast recursion over composites).
+        Sampling fields (``temperature``, ``top_p``) and the whole-config
+        flag (``config``) require ``config`` to be set. ``strict=True``
+        raises ``KeyError`` when it isn't; ``False`` silently skips (used
+        for broadcast recursion over composites).
         """
         path = _LOCAL_FIELD_TO_PATH[field]
-        if field in ("temperature", "top_p") and self.config is None:
+        if field in ("temperature", "top_p", "config") and self.config is None:
             if strict:
                 raise KeyError(
                     f"{field!r}: {type(self).__name__} has no config"
@@ -582,6 +606,7 @@ class Agent(Generic[In, Out]):
         examples: bool = False,
         temperature: bool = False,
         top_p: bool = False,
+        config: bool = False,
         recurse: bool = True,
         _strict: bool = True,
         **per_path: bool,
@@ -604,6 +629,7 @@ class Agent(Generic[In, Out]):
             "role": role, "task": task, "style": style,
             "rules": rules, "examples": examples,
             "temperature": temperature, "top_p": top_p,
+            "config": config,
         }
         for field, on in flags.items():
             if on:
@@ -616,6 +642,7 @@ class Agent(Generic[In, Out]):
                     role=role, task=task, style=style,
                     rules=rules, examples=examples,
                     temperature=temperature, top_p=top_p,
+                    config=config,
                     recurse=True, _strict=False,
                 )
 
@@ -650,6 +677,7 @@ class Agent(Generic[In, Out]):
         examples: bool = False,
         temperature: bool = False,
         top_p: bool = False,
+        config: bool = False,
         recurse: bool = True,
         **per_path: bool,
     ) -> None:
@@ -662,12 +690,19 @@ class Agent(Generic[In, Out]):
         selected field names to every descendant (silently skipping fields
         that don't apply, e.g. ``temperature`` on a composite with no
         ``config``).
+
+        ``config=True`` opts the whole `Configuration` block into a single
+        `ConfigurationParameter`; in that mode the leaf-level config
+        flags (``temperature``, ``top_p``, ``model``, ``backend``,
+        ``renderer``) are silently overridden so the optimizer only sees
+        one decomposition.
         """
         self._set_requires_grad(
             True,
             role=role, task=task, style=style,
             rules=rules, examples=examples,
-            temperature=temperature, top_p=top_p, recurse=recurse,
+            temperature=temperature, top_p=top_p,
+            config=config, recurse=recurse,
             **per_path,
         )
 
@@ -681,6 +716,7 @@ class Agent(Generic[In, Out]):
         examples: bool = False,
         temperature: bool = False,
         top_p: bool = False,
+        config: bool = False,
         recurse: bool = True,
         **per_path: bool,
     ) -> None:
@@ -690,7 +726,8 @@ class Agent(Generic[In, Out]):
             False,
             role=role, task=task, style=style,
             rules=rules, examples=examples,
-            temperature=temperature, top_p=top_p, recurse=recurse,
+            temperature=temperature, top_p=top_p,
+            config=config, recurse=recurse,
             **per_path,
         )
 
@@ -704,6 +741,7 @@ class Agent(Generic[In, Out]):
         examples: bool = False,
         temperature: bool = False,
         top_p: bool = False,
+        config: bool = False,
         recurse: bool = True,
         **per_path: bool,
     ) -> None:
@@ -711,9 +749,21 @@ class Agent(Generic[In, Out]):
         self.mark_trainable(
             role=role, task=task, style=style,
             rules=rules, examples=examples,
-            temperature=temperature, top_p=top_p, recurse=recurse,
+            temperature=temperature, top_p=top_p,
+            config=config, recurse=recurse,
             **per_path,
         )
+
+    def set_configuration_constraint(
+        self, constraint: "Any | None"
+    ) -> None:
+        """Attach a ``ConfigurationConstraint`` consulted by `ConfigurationParameter`.
+
+        The constraint flows into the parameter via
+        ``ConfigurationParameter.from_agent`` whenever
+        ``mark_trainable(config=True)`` is set. Pass ``None`` to clear.
+        """
+        object.__setattr__(self, "_configuration_constraint", constraint)
 
     # --- forward / backward hooks (registered) ------------------------------
     def register_forward_pre_hook(

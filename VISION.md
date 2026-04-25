@@ -124,6 +124,19 @@ with history), `APEOptimizer` (sample-and-rank). All five subclass
 the same `Optimizer` base; all five take `list[Parameter] |
 list[ParamGroup]`; all five expose `zero_grad()` + `await step()`.
 
+**Config as a unit.** `mark_trainable(config=True)` lifts the entire
+`Configuration` block (backend, model, sampling, renderer, …) into a
+single `ConfigurationParameter`. A `ConfigurationConstraint` encodes
+per-backend legality (`allowed_models[backend]`), sampling ranges, and
+advisory budget knobs (`max_tokens_per_run`, `max_cost_per_run_usd`)
+that flow into `apply_rewrite` via an optional `cost_estimator`
+callable. Optimisers can now reason about the config holistically —
+e.g. "the gradient says we're too slow; downshift backend and lower
+`max_tokens` together" — instead of correlating five independent leaf
+parameters. `EvoGradient` consumes this surface via the
+`SetConfiguration` op + `random_configuration_op` factory, sampling
+legal configurations from the constraint pool.
+
 **Trainer.** `operad.train.Trainer.fit/evaluate/predict` glues the
 spine together with callbacks (`EarlyStopping`, `BestCheckpoint`,
 `GradClip`, `PromptDrift`, `LearningRateLogger`, `MemoryRotation`,
