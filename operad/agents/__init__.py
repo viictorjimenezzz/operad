@@ -65,6 +65,7 @@ from .reasoning import (
     Action,
     Actor,
     Answer,
+    DebateAgent,
     ChatReasoner,
     ChatReasonerInput,
     ChatReasonerOutput,
@@ -94,6 +95,7 @@ from .reasoning import (
     ToolCall,
     ToolResult,
     ToolUser,
+    VerifierAgent,
 )
 from .retrieval import (
     CitationGist,
@@ -185,6 +187,8 @@ __all__ = [
     "Query",
     "ReAct",
     "Reasoner",
+    "DebateAgent",
+    "VerifierAgent",
     "Reflection",
     "ReflectionInput",
     "Reflector",

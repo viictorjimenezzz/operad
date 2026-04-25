@@ -26,6 +26,7 @@ from .components import (
     Tool,
     ToolUser,
 )
+from .debate import DebateAgent
 from .react import ReAct
 from .schemas import (
     Action,
@@ -47,10 +48,12 @@ from .schemas import (
     ToolResult,
 )
 from .switch import Switch
+from .verifier import VerifierAgent
 
 __all__ = [
     "Action",
     "Actor",
+    "DebateAgent",
     "Answer",
     "BM25Retriever",
     "ChatReasoner",
@@ -83,4 +86,5 @@ __all__ = [
     "ToolCall",
     "ToolResult",
     "ToolUser",
+    "VerifierAgent",
 ]

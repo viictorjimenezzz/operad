@@ -195,11 +195,15 @@ the multi-agent debate algorithm. Used by `operad.algorithms.debate`.
 Schemas: `Proposal`, `Critique`, `DebateContext`, `DebateRecord`,
 `DebateTurn`.
 
+### `reasoning/` — pre-wired composites
+
+| Class | Shape | Description |
+| -------------- | ------------------------------ | -------------------------------------------------- |
+| `DebateAgent` | `Agent[DebateContext, Answer]` | Wraps `algorithms.Debate`; accepts `proposers`, `critic`, `synthesizer`, `rounds` kwargs. |
+| `VerifierAgent` | `Agent[Task, Answer]` | Wraps `algorithms.VerifierLoop`; accepts `generator`, `verifier`, `threshold`, `max_iter` kwargs. |
+
 ### Planned
 
-- `agents/reasoning/debate.py` and `agents/reasoning/verifier.py` —
-  pre-wired multi-agent compositions parallel to `react.py`.
-  Algorithms exist; the agent-level pre-wirings do not.
 - `agents/conversational/TurnTaker`.
 
 ## 7. Algorithms — `operad.algorithms`
