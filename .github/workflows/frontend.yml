@@ -1,0 +1,40 @@
+name: Frontend
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: apps/frontend/pnpm-lock.yaml
+
+      - name: Install
+        run: make frontend-install
+
+      - name: Typecheck
+        run: make frontend-typecheck
+
+      - name: Test
+        run: make frontend-test
+
+      - name: Build
+        run: make build-frontend
+
+      - name: Verify bundles
+        run: |
+          test -f apps/dashboard/operad_dashboard/web/index.html \
+            || { echo "dashboard web/ not populated"; exit 1; }
+          test -f apps/studio/operad_studio/web/index.html \
+            || { echo "studio web/ not populated"; exit 1; }

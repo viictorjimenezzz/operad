@@ -43,7 +43,11 @@ COPY --from=frontend /workspace/apps/frontend/dist-dashboard \
 
 WORKDIR /workspace/apps/dashboard
 
-# 4. Sync deps. Includes operad (editable) + the [otel] extra so the
+# 4. Guard: fail fast if the SPA bundle was not produced by the Node stage.
+RUN test -f operad_dashboard/web/index.html \
+    || { echo "ERROR: SPA bundle missing — run 'make build-frontend'"; exit 1; }
+
+# 5. Sync deps. Includes operad (editable) + the [otel] extra so the
 #    dashboard process emits OTel spans to Langfuse.
 RUN uv pip install --system -e . \
  && uv pip install --system "operad[otel] @ /workspace"
