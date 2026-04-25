@@ -27,6 +27,12 @@ can be taken by a separate agent.
     rewrite — children are untouched). `_init_strands` now relocates
     strands' state to `_strands_state`. `demo.py` stage 5 no longer
     needs its fresh-unbuilt-copy workaround.
+- **2026-04-25 (Iter 5, Stream 1)** — strands decoupling landed:
+  **F-2 — resolved-by-removal.** `Agent` no longer inherits from
+  `strands.Agent`; the runtime is composed via
+  `operad.core._strands_runner.StrandsRunner`, so the
+  `_strands_state` workaround is gone (not just bypassed). Package
+  bumped to 0.2.0; existing freeze artefacts auto-reject on load.
   - **H-4 (High) — RESOLVED.** `evaluate()` had no per-row error
     capture; one bad row crashed the whole gather. Now uses
     `return_exceptions=True` and surfaces failures via

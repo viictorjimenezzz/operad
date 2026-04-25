@@ -1,12 +1,14 @@
 """The `Agent` base class.
 
-A `operad.Agent` is a `strands.Agent` subclass with typed I/O,
-PyTorch-style child tracking, and a `build()` step. Everything a user
-would have put on a separate `Prompt` object — role, task, rules,
-examples, typed input/output, config — lives directly on the Agent.
-Class-level attribute defaults play the role of module hyperparameters;
-instance attributes carry the live values, freely mutable before
-`build()`.
+A `operad.Agent` is a typed, composable component with PyTorch-style
+child tracking and a `build()` step. The Strands runtime is wrapped
+internally by `operad.core._strands_runner.StrandsRunner` for default-
+forward leaves; nothing else in operad imports `strands.Agent`.
+Everything a user would have put on a separate `Prompt` object — role,
+task, rules, examples, typed input/output, config — lives directly on
+the Agent. Class-level attribute defaults play the role of module
+hyperparameters; instance attributes carry the live values, freely
+mutable before `build()`.
 """
 
 from __future__ import annotations
@@ -21,8 +23,9 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequen
 from contextvars import ContextVar
 from typing import Any, ClassVar, Generic, Literal, Self, TextIO, TYPE_CHECKING, TypeVar
 
-import strands
 from pydantic import BaseModel, ConfigDict, Field, create_model
+
+from ._strands_runner import StrandsRunner
 
 from ..runtime import acquire as _acquire_slot
 from ..runtime.retry import with_retry as _with_retry
@@ -178,13 +181,14 @@ def _extract_tokens(result: Any) -> int:
     return p + c
 
 
-class Agent(strands.Agent, Generic[In, Out]):
+class Agent(Generic[In, Out]):
     """Typed, composable agent.
 
     Subclass this to define either a leaf (use the default ``forward``,
-    which delegates to ``strands.Agent.invoke_async`` with structured
-    output) or a composite (override ``forward`` to route between
-    sub-agents, which are auto-registered when assigned as attributes).
+    which delegates to a wrapped ``strands.Agent`` via
+    :class:`StrandsRunner` with structured output) or a composite
+    (override ``forward`` to route between sub-agents, which are
+    auto-registered when assigned as attributes).
 
     Component subclasses declare their contract at the class level::
 
@@ -198,9 +202,9 @@ class Agent(strands.Agent, Generic[In, Out]):
     Instantiate as ``Reasoner(config=cfg)``; any constructor kwarg
     overrides the matching class attribute.
 
-    The call to ``strands.Agent.__init__`` is deferred to ``build()`` so
-    that constructing an Agent never touches a provider and so that
-    every attribute stays mutable beforehand.
+    The Strands runner is constructed at ``build()`` time so that
+    constructing an Agent never touches a provider and every attribute
+    stays mutable beforehand.
     """
 
     # --- class-level defaults (override in subclasses) ----------------------
@@ -248,6 +252,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         object.__setattr__(self, "_children", {})
         object.__setattr__(self, "_built", False)
         object.__setattr__(self, "_graph", None)
+        object.__setattr__(self, "_runner", None)
         object.__setattr__(self, "_requires_grad_overrides", {})
         object.__setattr__(self, "_forward_pre_hooks", [])
         object.__setattr__(self, "_forward_hooks", [])
@@ -418,13 +423,13 @@ class Agent(strands.Agent, Generic[In, Out]):
         # Composite subclasses may hold non-Agent routing state
         # (Pipeline._stages, Parallel._keys, Parallel._combine, etc.) that
         # references children. Deep-copy it with the clone memo so those
-        # references point at the new clones. Default-forward leaves skip
-        # this to avoid copying strands internals from `_init_strands`.
+        # references point at the new clones. The Strands runner is
+        # rebuilt by the next `abuild()`, never deep-copied.
         if type(self).forward is not Agent.forward:
             _known = {
                 "role", "task", "style", "context", "rules", "examples", "config",
                 "input", "output",
-                "_children", "_built", "_graph",
+                "_children", "_built", "_graph", "_runner",
                 "_requires_grad_overrides",
                 "_forward_pre_hooks", "_forward_hooks", "_backward_hooks",
             }
@@ -926,32 +931,28 @@ class Agent(strands.Agent, Generic[In, Out]):
             return self.output  # type: ignore[return-value]
         return _wrap_with_reasoning(self.output, self.reasoning_field)
 
-    def _build_transient_strands(
+    def _build_transient_runner(
         self, system_prompt: str | None
-    ) -> "strands.Agent | None":
-        """Build a fresh strands.Agent for one invoke, sharing this leaf's model.
+    ) -> "StrandsRunner | None":
+        """Build a fresh `StrandsRunner` for one invoke, sharing the model.
 
         When ``stateless`` is True (default) every ``forward`` call routes
         through one of these transients so concurrent fan-out on a single
-        operad Agent doesn't race on shared ``self.system_prompt`` /
-        ``self.messages``. The transient lives only for the duration of
-        the call and carries the per-call composed system prompt.
+        operad Agent doesn't race on a shared system prompt. The
+        transient lives only for the duration of the call and carries
+        the per-call composed system prompt.
 
-        Returns ``None`` when ``self.model`` hasn't been set — a leaf
-        whose ``_init_strands`` was skipped (e.g. tests that bypass
-        ``abuild``). The caller falls back to mutating ``self`` for
-        that single call; reentrancy still holds in the normal built-
-        leaf case.
+        Returns ``None`` when ``self._runner`` hasn't been set — a leaf
+        whose ``_init_runner`` was skipped (e.g. tests that bypass
+        ``abuild``). The caller falls back to mutating ``self._runner``
+        for that single call; reentrancy still holds in the normal
+        built-leaf case.
         """
-        model = getattr(self, "model", None)
-        if model is None:
+        if self._runner is None:
             return None
-        from strands.types.agent import ConcurrentInvocationMode
-
-        return strands.Agent(
-            model=model,
+        return StrandsRunner(
+            model=self._runner.model,
             system_prompt=system_prompt,
-            concurrent_invocation_mode=ConcurrentInvocationMode.UNSAFE_REENTRANT,
         )
 
     # --- default leaf forward ------------------------------------------------
@@ -959,7 +960,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         """Default leaf behavior: single Strands call with structured output.
 
         The system prompt was wired at ``build()`` time
-        (see ``operad.core.build._init_strands``); here we only render
+        (see ``operad.core.build._init_runner``); here we only render
         the per-call user turn. Composite agents override this.
 
         When ``self.config.io.stream`` is True, dispatches to the streaming
@@ -994,7 +995,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         async with _acquire_slot(self.config) as slot:  # type: ignore[arg-type]
             async def _call() -> Any:
                 transient = (
-                    self._build_transient_strands(composed_system)
+                    self._build_transient_runner(composed_system)
                     if stateless
                     else None
                 )
@@ -1005,17 +1006,23 @@ class Agent(strands.Agent, Generic[In, Out]):
                             structured_output_model=effective_out,
                         )
                     return await transient.invoke_async(user_msg)
-                # Stateful path (or fallback when no resolved model is
-                # cached): mutate self so strands carries conversation
-                # history across calls. Concurrent fan-out on a
-                # stateless=False agent is undefined by contract.
-                self.system_prompt = composed_system
+                # Stateful path (or fallback when no runner is set):
+                # mutate the persistent runner so strands carries
+                # conversation history across calls. Concurrent fan-out
+                # on a stateless=False agent is undefined by contract.
+                if self._runner is None:
+                    raise BuildError(
+                        "not_built",
+                        f"{type(self).__name__} has no runner; call abuild() first",
+                        agent=type(self).__name__,
+                    )
+                self._runner.system_prompt = composed_system
                 if structuredio:
-                    return await super(Agent, self).invoke_async(  # type: ignore[misc]
+                    return await self._runner.invoke_async(
                         user_msg,
                         structured_output_model=effective_out,
                     )
-                return await super(Agent, self).invoke_async(user_msg)  # type: ignore[misc]
+                return await self._runner.invoke_async(user_msg)
 
             result: Any = None
             try:
@@ -1085,18 +1092,24 @@ class Agent(strands.Agent, Generic[In, Out]):
         effective_out = self._effective_output_schema()
         user_msg = self.format_user_message(x)
         transient = (
-            self._build_transient_strands(composed_system)
+            self._build_transient_runner(composed_system)
             if self.stateless
             else None
         )
         if transient is not None:
             stream_source: Any = transient
         else:
-            self.system_prompt = composed_system
-            stream_source = self
+            if self._runner is None:
+                raise BuildError(
+                    "not_built",
+                    f"{type(self).__name__} has no runner; call abuild() first",
+                    agent=type(self).__name__,
+                )
+            self._runner.system_prompt = composed_system
+            stream_source = self._runner
         async with _acquire_slot(self.config) as slot:  # type: ignore[arg-type]
             try:
-                async for event in stream_source.stream_async(  # type: ignore[misc]
+                async for event in stream_source.stream_async(
                     user_msg,
                     structured_output_model=effective_out,
                 ):
@@ -1732,15 +1745,15 @@ class Agent(strands.Agent, Generic[In, Out]):
             scratchpad: ...
             output: ...
 
-        Original output classes (and the cached strands `system_prompt`)
+        Original output classes (and the runner's cached `system_prompt`)
         are restored in a `finally` block.
         """
         from ..runtime.observers.base import registry as _registry
         from ..runtime.trace import TraceObserver
 
-        # Swap Output + re-render strands system_prompt on default-forward
-        # leaves so that `structured_output_model=self.output` and the
-        # cached system message both reflect the scratchpad field.
+        # Swap Output + re-render the runner's system_prompt on default-
+        # forward leaves so that `structured_output_model=self.output`
+        # and the cached system message both reflect the scratchpad field.
         swaps: list[tuple[Agent[Any, Any], type[BaseModel], Any]] = []
         try:
             for _path, leaf in _labelled_tree(self):
@@ -1752,11 +1765,13 @@ class Agent(strands.Agent, Generic[In, Out]):
                     continue
                 if "scratchpad" in leaf.output.model_fields:
                     continue
+                if leaf._runner is None:
+                    continue
                 original_output = leaf.output
-                original_sp = leaf.__dict__.get("system_prompt", None)
+                original_sp = leaf._runner.system_prompt
                 leaf.output = _augmented_output(original_output)
                 rendered = leaf.format_system_message()
-                leaf.system_prompt = _system_to_str(rendered) or None
+                leaf._runner.system_prompt = _system_to_str(rendered) or None
                 swaps.append((leaf, original_output, original_sp))
 
             observer = TraceObserver()
@@ -1781,10 +1796,8 @@ class Agent(strands.Agent, Generic[In, Out]):
         finally:
             for leaf, original_output, original_sp in swaps:
                 leaf.output = original_output
-                if original_sp is None:
-                    leaf.__dict__.pop("system_prompt", None)
-                else:
-                    leaf.system_prompt = original_sp
+                if leaf._runner is not None:
+                    leaf._runner.system_prompt = original_sp
 
 
 def _coerce_eval_pairs(dataset: Any) -> list[tuple[Any, Any]]:

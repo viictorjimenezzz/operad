@@ -3,7 +3,7 @@
 `build_agent(root)` prepares an `Agent` for `invoke`-ability:
 
 1. Validates that every agent in the tree has a usable typed contract.
-2. Wires `strands.Agent.__init__` for leaf agents that rely on the default
+2. Constructs a `StrandsRunner` for leaf agents that rely on the default
    `forward` (ones whose `forward` is `Agent.forward` unchanged), threading
    the full `Configuration` through `operad.models.resolve_model`. The
    system prompt is rendered via `agent.format_system_message()`.
@@ -24,10 +24,10 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any, Literal, NoReturn
 
-import strands
 from pydantic import BaseModel
 
 from .models import resolve_model
+from ._strands_runner import StrandsRunner
 from ..utils.errors import BuildError
 from .agent import Agent, _TRACER
 
@@ -215,7 +215,7 @@ def _node_kind(a: Agent[Any, Any]) -> NodeKind:
 
 
 def _is_default_forward(a: Agent[Any, Any]) -> bool:
-    """True iff the agent will delegate to `strands.Agent.invoke_async`."""
+    """True iff the agent will delegate to its `StrandsRunner`."""
     return type(a).forward is Agent.forward
 
 
@@ -397,13 +397,13 @@ def _validate(a: Agent[Any, Any]) -> None:
         )
 
 
-def _init_strands(
+def _init_runner(
     a: Agent[Any, Any], *, cached_prompt: str | None = None
 ) -> None:
-    """Initialize the strands.Agent half for default-forward leaves only.
+    """Construct the `StrandsRunner` for default-forward leaves only.
 
-    Composites (agents that override ``forward``) don't need strands
-    wiring; they route calls to their children and never invoke the model
+    Composites (agents that override ``forward``) don't need a runner;
+    they route calls to their children and never invoke the model
     themselves.
 
     When `cached_prompt` is provided, `format_system_message()` is skipped
@@ -413,8 +413,6 @@ def _init_strands(
     if not _is_default_forward(a):
         return
     try:
-        from strands.types.agent import ConcurrentInvocationMode
-
         model = resolve_model(a.config)  # type: ignore[arg-type]
         if cached_prompt is None:
             rendered = a.format_system_message()
@@ -427,29 +425,19 @@ def _init_strands(
             system_prompt = rendered or None
         else:
             system_prompt = cached_prompt or None
-        strands.Agent.__init__(
+        object.__setattr__(
             a,
-            model=model,
-            system_prompt=system_prompt,
-            concurrent_invocation_mode=ConcurrentInvocationMode.UNSAFE_REENTRANT,
+            "_runner",
+            StrandsRunner(model=model, system_prompt=system_prompt),
         )
     except BuildError:
         raise
     except Exception as e:
         raise BuildError(
             "trace_failed",
-            f"strands.Agent init failed: {e}",
+            f"runner init failed: {e}",
             agent=type(a).__name__,
         ) from e
-
-    # strands.Agent.__init__ sets `self.state = AgentState(...)` as an
-    # instance attribute, which shadows operad's `Agent.state()` method
-    # and breaks `.state()`, `.hash_content`, `.diff()` on any built leaf.
-    # Move strands' state to a safe slot so the method stays accessible.
-    # Operad never calls strands' take_snapshot / load_snapshot, so the
-    # relocation is invisible outside the stashed attribute.
-    if "state" in a.__dict__:
-        object.__setattr__(a, "_strands_state", a.__dict__.pop("state"))
 
 
 def _warn_shared_children(root: Agent[Any, Any]) -> None:
@@ -504,17 +492,17 @@ async def abuild_agent(root: Agent[Any, Any]) -> Agent[Any, Any]:
     """Compile an agent architecture (async entry point).
 
     Passes run in order: validate → warn-on-shared-children → trace
-    (composite roots only) → init-strands. Running `_init_strands` last
-    means a failed trace leaves no leaf with stale strands state.
+    (composite roots only) → init-runner. Running `_init_runner` last
+    means a failed trace leaves no leaf with a half-built runner.
     """
     for a in _tree(root):
         _validate(a)
     _warn_shared_children(root)
 
     tracer = Tracer(root)
-    # Trace unless the root is a default-forward leaf — those need strands
-    # to be initialised before their forward can run, and since they have
-    # no children there is no graph to record anyway.
+    # Trace unless the root is a default-forward leaf — those need their
+    # runner to be initialised before their forward can run, and since
+    # they have no children there is no graph to record anyway.
     if root._children or not _is_default_forward(root):
         try:
             out = await _trace(root, tracer)
@@ -573,7 +561,7 @@ async def abuild_agent(root: Agent[Any, Any]) -> Agent[Any, Any]:
             ) from e
 
     for a in _tree(root):
-        _init_strands(a)
+        _init_runner(a)
 
     object.__setattr__(root, "_graph", tracer.graph)
     object.__setattr__(root, "_built", True)

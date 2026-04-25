@@ -139,7 +139,7 @@ optimizers — except the gradient language is English.
 
 We deliberately do not reimplement what strands already does well:
 
-| Inherited from strands           | Provided by operad                     |
+| Provided by strands              | Provided by operad                     |
 | -------------------------------- | -------------------------------------- |
 | Tool calls, MCP                  | Typed `Agent[In, Out]` over strands    |
 | Structured output                | `Pipeline` / `Parallel` / `Switch`     |

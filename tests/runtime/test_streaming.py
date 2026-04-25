@@ -33,9 +33,9 @@ def _make_fake_stream_async(events: list[dict[str, Any]]):
     return _fake_stream_async
 
 
-def _build_leaf(cfg: Configuration) -> StreamLeaf:
+async def _build_leaf(cfg: Configuration) -> StreamLeaf:
     leaf = StreamLeaf(config=cfg)
-    object.__setattr__(leaf, "_built", True)
+    await leaf.abuild()
     return leaf
 
 
@@ -69,7 +69,7 @@ async def test_stream_on_three_chunks(
         strands.Agent, "stream_async", _make_fake_stream_async(events)
     )
 
-    leaf = _build_leaf(cfg_stream)
+    leaf = await _build_leaf(cfg_stream)
     collected = [item async for item in leaf.stream(A(text="hi"))]
 
     chunks = [c for c in collected if isinstance(c, ChunkEvent)]
@@ -107,7 +107,7 @@ async def test_stream_observers_receive_chunk_events(
     obs = MemObs()
     _obs.registry.register(obs)
     try:
-        leaf = _build_leaf(cfg_stream)
+        leaf = await _build_leaf(cfg_stream)
         _ = [item async for item in leaf.stream(A(text="hi"))]
     finally:
         _obs.registry.unregister(obs)
@@ -132,7 +132,7 @@ async def test_stream_structured_parsing_from_text(
         strands.Agent, "stream_async", _make_fake_stream_async(events)
     )
 
-    leaf = _build_leaf(cfg_stream)
+    leaf = await _build_leaf(cfg_stream)
     collected = [item async for item in leaf.stream(A(text="hi"))]
     envelopes = [c for c in collected if isinstance(c, OperadOutput)]
     assert envelopes[0].response.value == 99
@@ -153,7 +153,7 @@ async def test_stream_invoke_still_returns_envelope(
         strands.Agent, "stream_async", _make_fake_stream_async(events)
     )
 
-    leaf = _build_leaf(cfg_stream)
+    leaf = await _build_leaf(cfg_stream)
     out = await leaf(A(text="hi"))
     assert isinstance(out, OperadOutput)
     assert out.response.value == 3
@@ -171,7 +171,7 @@ async def test_stream_parse_failure_raises_output_mismatch(
         strands.Agent, "stream_async", _make_fake_stream_async(events)
     )
 
-    leaf = _build_leaf(cfg_stream)
+    leaf = await _build_leaf(cfg_stream)
     with pytest.raises(BuildError) as ei:
         _ = [item async for item in leaf.stream(A(text="hi"))]
     assert ei.value.reason == "output_mismatch"

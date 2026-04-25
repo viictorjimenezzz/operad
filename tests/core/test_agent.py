@@ -535,10 +535,10 @@ async def test_load_state_resets_built_flag(cfg) -> None:
 
 
 async def test_state_survives_build_on_default_forward_leaf(cfg) -> None:
-    # strands.Agent.__init__ sets `self.state = AgentState(...)` which
-    # otherwise shadows operad's `state()` method. Verify the rescue in
-    # `_init_strands` keeps the method accessible and hash_content, diff,
-    # and clone-after-build continue to work.
+    # Composition (no inheritance from strands.Agent) means
+    # `state()` is the operad method, never shadowed by a strands
+    # instance attribute. Verify hash_content / diff / clone-after-
+    # build all continue to work post-build.
     leaf = _DefaultLeaf(config=cfg, role="persona", task="do the thing")
     await leaf.abuild()
 
@@ -549,8 +549,8 @@ async def test_state_survives_build_on_default_forward_leaf(cfg) -> None:
     assert isinstance(leaf.hash_content, str)
     d = leaf.diff(leaf.clone())
     assert isinstance(d, AgentDiff)
-    # Strands' own state bag is preserved under a safe slot.
-    assert hasattr(leaf, "_strands_state")
+    # No strands-state shadow attribute exists post-refactor.
+    assert "_strands_state" not in leaf.__dict__
 
 
 async def test_clone_build_clone_cycle_on_default_forward_leaves(cfg) -> None:

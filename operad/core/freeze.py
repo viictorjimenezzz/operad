@@ -159,9 +159,8 @@ def _resolve_refs(value: Any, children: dict[str, Agent]) -> Any:
 def _extra_attrs(a: Agent) -> dict[str, Any]:
     """Attributes that live on a custom-forward agent outside AgentState.
 
-    For default-forward leaves we return ``{}``; their non-standard
-    ``__dict__`` entries are strands-owned and get rebuilt by
-    ``_init_strands`` on thaw.
+    For default-forward leaves we return ``{}``; their ``_runner`` is
+    rebuilt by ``_init_runner`` on thaw.
     """
     if _is_default_forward(a):
         return {}
@@ -534,13 +533,13 @@ def _thaw_from_data(data: dict[str, Any]) -> Agent:
     if graph_json is not None:
         object.__setattr__(root, "_graph", from_json(graph_json))
 
-    # Re-wire strands for every default-forward leaf, using the cached
-    # system message so we skip `format_system_message()`.
-    from .build import _init_strands
+    # Construct the runner for every default-forward leaf, using the
+    # cached system message so we skip `format_system_message()`.
+    from .build import _init_runner
 
     for qual_path, node in _labelled_tree(root):
         if _is_default_forward(node) and not node._children:
-            _init_strands(node, cached_prompt=prompts.get(qual_path))
+            _init_runner(node, cached_prompt=prompts.get(qual_path))
 
     object.__setattr__(root, "_built", True)
     for _, node in _labelled_tree(root):
