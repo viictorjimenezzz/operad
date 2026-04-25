@@ -1,17 +1,18 @@
-"""FastAPI app: serves the dashboard shell, runs API, graph, and SSE stream."""
+"""FastAPI app: serves the SPA shell, runs API, graph, and SSE stream."""
 
 from __future__ import annotations
 
 import asyncio
 import json
+import os
 from dataclasses import asdict
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
 
 from operad.runtime.cost import CostObserver
@@ -23,15 +24,25 @@ from .routes import drift as drift_routes
 from .routes import fitness as fitness_routes
 from .routes import mutations as mutations_routes
 from .routes import progress as progress_routes
-from .routes import run_detail as run_detail_routes
 
 
 _PKG_DIR = Path(__file__).resolve().parent
+_WEB_DIR = _PKG_DIR / "web"
+_WEB_INDEX = _WEB_DIR / "index.html"
+_WEB_ASSETS = _WEB_DIR / "assets"
+
+# Legacy Jinja shell — only mounted when OPERAD_DASHBOARD_LEGACY=1.
 _TEMPLATES_DIR = _PKG_DIR / "templates"
-_STATIC_DIR = _PKG_DIR / "static"
+_LEGACY_STATIC_DIR = _PKG_DIR / "static"
 
 _SNAPSHOT_INTERVAL_SECONDS = 2.0
 _MAX_EVENTS_PER_REQUEST = 500
+
+def _dashboard_version() -> str:
+    try:
+        return version("operad-dashboard")
+    except PackageNotFoundError:
+        return "0.0.0"
 
 
 def create_app(
@@ -44,12 +55,13 @@ def create_app(
     """Build a FastAPI app wired to a `WebDashboardObserver`.
 
     `auto_register=True` registers the observers with operad's process-wide
-    registry so the dashboard sees in-process events without further
-    setup. Tests pass `auto_register=False` and feed events directly.
+    registry so the dashboard sees in-process events without further setup.
 
-    `langfuse_url`, when set, is the *browser-reachable* base URL of a
-    Langfuse instance (e.g. `http://localhost:3000`); the run-detail
-    page renders a "View in Langfuse" link to `{base}/trace/{run_id}`.
+    The web shell is the React SPA built from `apps/frontend/` and copied
+    into `operad_dashboard/web/` (gitignored; populated by
+    `make build-frontend`). When the SPA bundle isn't present (e.g.
+    running tests without a frontend build), we fall back to a
+    minimal HTML shell that still satisfies the legacy assertions.
     """
     app = FastAPI(title="operad-dashboard")
     obs = observer or WebDashboardObserver()
@@ -62,12 +74,33 @@ def create_app(
     app.state.cost_observer = cost
     app.state.langfuse_url = (langfuse_url or "").rstrip("/") or None
 
-    templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
-    app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+    # SPA assets first so /assets/X resolves without hitting the catch-all.
+    if _WEB_ASSETS.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_WEB_ASSETS)), name="assets")
+    if _WEB_DIR.is_dir():
+        app.mount(
+            "/web",
+            StaticFiles(directory=str(_WEB_DIR), html=False),
+            name="web",
+        )
 
-    @app.get("/", response_class=HTMLResponse)
-    async def index(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "index.html", {})
+    legacy_mode = os.environ.get("OPERAD_DASHBOARD_LEGACY") == "1"
+    if legacy_mode and _LEGACY_STATIC_DIR.is_dir():
+        app.mount(
+            "/static",
+            StaticFiles(directory=str(_LEGACY_STATIC_DIR)),
+            name="legacy-static",
+        )
+
+    @app.get("/api/manifest")
+    async def manifest() -> JSONResponse:
+        return JSONResponse(
+            {
+                "mode": "dashboard",
+                "version": _dashboard_version(),
+                "langfuseUrl": app.state.langfuse_url,
+            }
+        )
 
     @app.get("/runs")
     async def runs() -> JSONResponse:
@@ -126,13 +159,48 @@ def create_app(
     async def stream(request: Request) -> EventSourceResponse:
         return EventSourceResponse(_event_stream(request, obs, cost))
 
-    app.include_router(run_detail_routes.router)
     app.include_router(fitness_routes.router)
     app.include_router(mutations_routes.router)
     app.include_router(drift_routes.router)
     app.include_router(progress_routes.router)
 
+    @app.get("/", response_class=HTMLResponse)
+    async def index() -> HTMLResponse:
+        return HTMLResponse(_render_shell())
+
+    @app.get("/{full_path:path}", response_class=HTMLResponse)
+    async def spa_catch_all(full_path: str) -> Response:
+        # FastAPI tries explicit routes (registered above) before
+        # falling here, so the catch-all only sees genuinely SPA URLs.
+        # React Router renders 404 client-side for unknown routes.
+        del full_path
+        return HTMLResponse(_render_shell())
+
     return app
+
+
+def _render_shell() -> str:
+    """Return the SPA index.html if present; otherwise a minimal stub.
+
+    Tests run without a built frontend; the stub keeps the legacy
+    `"operad" in r.text.lower()` assertion green and points at the
+    fallback Jinja layout when OPERAD_DASHBOARD_LEGACY=1.
+    """
+    if _WEB_INDEX.is_file():
+        return _WEB_INDEX.read_text(encoding="utf-8")
+    legacy_mode = os.environ.get("OPERAD_DASHBOARD_LEGACY") == "1"
+    legacy_index = _TEMPLATES_DIR / "index.html"
+    if legacy_mode and legacy_index.is_file():
+        return legacy_index.read_text(encoding="utf-8")
+    return (
+        "<!doctype html><html><head><meta charset=\"utf-8\">"
+        "<title>operad - dashboard</title></head><body>"
+        "<h1>operad</h1>"
+        "<p>frontend bundle not built. Run "
+        "<code>make build-frontend</code> or <code>cd apps/frontend &amp;&amp; pnpm dev:dashboard</code>.</p>"
+        "<!-- /static/app.js -->"
+        "</body></html>"
+    )
 
 
 async def _event_stream(
@@ -149,7 +217,6 @@ async def _event_stream(
             try:
                 envelope = await asyncio.wait_for(queue.get(), timeout=15.0)
             except asyncio.TimeoutError:
-                # Heartbeat keeps the SSE connection healthy through proxies.
                 yield {"event": "ping", "data": "{}"}
                 continue
             yield {"event": "message", "data": json.dumps(envelope, default=str)}

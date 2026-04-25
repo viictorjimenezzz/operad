@@ -1,0 +1,114 @@
+{
+  "algorithm": "EvoGradient",
+  "version": 1,
+  "dataSources": {
+    "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "fitness": {
+      "endpoint": "/runs/$context.runId/fitness.json",
+      "stream": "/runs/$context.runId/fitness.sse"
+    },
+    "mutations": {
+      "endpoint": "/runs/$context.runId/mutations.json",
+      "stream": "/runs/$context.runId/mutations.sse"
+    },
+    "graph": { "endpoint": "/graph/$context.runId" }
+  },
+  "spec": {
+    "root": "page",
+    "elements": {
+      "page": {
+        "type": "Tabs",
+        "props": {
+          "tabs": [
+            { "id": "overview", "label": "overview" },
+            { "id": "evolution", "label": "evolution" },
+            { "id": "graph", "label": "graph" },
+            { "id": "events", "label": "events" }
+          ]
+        },
+        "children": ["t-overview", "t-evolution", "t-graph", "t-events"]
+      },
+      "t-overview": {
+        "type": "Col",
+        "props": { "gap": 12 },
+        "children": ["kpis", "meta-card", "fitness-card"]
+      },
+      "kpis": {
+        "type": "Row",
+        "props": { "gap": 12 },
+        "children": ["k-events", "k-tokens", "k-cost", "k-score"]
+      },
+      "k-events": {
+        "type": "KPI",
+        "props": { "label": "events", "source": "$queries.summary.event_total", "format": "int" }
+      },
+      "k-tokens": {
+        "type": "KPI",
+        "props": {
+          "label": "tokens",
+          "source": "$queries.summary.prompt_tokens",
+          "format": "tokens"
+        }
+      },
+      "k-cost": {
+        "type": "KPI",
+        "props": { "label": "cost", "source": "$queries.summary.cost.cost_usd", "format": "cost" }
+      },
+      "k-score": {
+        "type": "KPI",
+        "props": {
+          "label": "best",
+          "source": "$queries.summary.algorithm_terminal_score",
+          "format": "number"
+        }
+      },
+      "meta-card": {
+        "type": "Card",
+        "props": { "title": "meta" },
+        "children": ["meta", "langfuse"]
+      },
+      "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
+      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
+      "fitness-card": { "type": "Card", "props": { "title": "fitness" }, "children": ["fitness"] },
+      "fitness": {
+        "type": "FitnessCurve",
+        "props": { "source": "$queries.fitness", "height": 240 }
+      },
+
+      "t-evolution": {
+        "type": "Col",
+        "props": { "gap": 12 },
+        "children": ["scatter-card", "ops-card", "heat-card"]
+      },
+      "scatter-card": {
+        "type": "Card",
+        "props": { "title": "population" },
+        "children": ["scatter"]
+      },
+      "scatter": {
+        "type": "PopulationScatter",
+        "props": { "source": "$queries.fitness", "height": 220 }
+      },
+      "ops-card": {
+        "type": "Card",
+        "props": { "title": "mutation operators" },
+        "children": ["ops-table"]
+      },
+      "ops-table": { "type": "OpSuccessTable", "props": { "source": "$queries.mutations" } },
+      "heat-card": {
+        "type": "Card",
+        "props": { "title": "per-op success rate per generation" },
+        "children": ["heat"]
+      },
+      "heat": { "type": "MutationHeatmap", "props": { "source": "$queries.mutations" } },
+
+      "t-graph": { "type": "Card", "props": { "title": "agent graph" }, "children": ["graph"] },
+      "graph": {
+        "type": "AgentGraph",
+        "props": { "source": "$queries.graph", "sourceMutations": "$queries.mutations" }
+      },
+
+      "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } }
+    }
+  }
+}

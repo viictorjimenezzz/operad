@@ -1,0 +1,70 @@
+{
+  "algorithm": "Trainer",
+  "version": 1,
+  "dataSources": {
+    "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "progress": {
+      "endpoint": "/runs/$context.runId/progress.json",
+      "stream": "/runs/$context.runId/progress.sse"
+    },
+    "fitness": {
+      "endpoint": "/runs/$context.runId/fitness.json",
+      "stream": "/runs/$context.runId/fitness.sse"
+    },
+    "drift": {
+      "endpoint": "/runs/$context.runId/drift.json",
+      "stream": "/runs/$context.runId/drift.sse"
+    },
+    "graph": { "endpoint": "/graph/$context.runId" }
+  },
+  "spec": {
+    "root": "page",
+    "elements": {
+      "page": {
+        "type": "Tabs",
+        "props": {
+          "tabs": [
+            { "id": "progress", "label": "progress" },
+            { "id": "loss", "label": "loss" },
+            { "id": "drift", "label": "drift" },
+            { "id": "graph", "label": "graph" },
+            { "id": "events", "label": "events" }
+          ]
+        },
+        "children": ["t-progress", "t-loss", "t-drift", "t-graph", "t-events"]
+      },
+      "t-progress": {
+        "type": "Col",
+        "props": { "gap": 12 },
+        "children": ["meta-card", "progress-card"]
+      },
+      "meta-card": {
+        "type": "Card",
+        "props": { "title": "meta" },
+        "children": ["meta", "langfuse"]
+      },
+      "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
+      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
+      "progress-card": {
+        "type": "Card",
+        "props": { "title": "training progress" },
+        "children": ["progress"]
+      },
+      "progress": { "type": "TrainingProgress", "props": { "source": "$queries.progress" } },
+
+      "t-loss": { "type": "Card", "props": { "title": "loss curve" }, "children": ["loss"] },
+      "loss": {
+        "type": "TrainingLossCurve",
+        "props": { "source": "$queries.fitness", "height": 240 }
+      },
+
+      "t-drift": { "type": "Card", "props": { "title": "prompt drift" }, "children": ["drift"] },
+      "drift": { "type": "DriftTimeline", "props": { "source": "$queries.drift" } },
+
+      "t-graph": { "type": "Card", "props": { "title": "agent graph" }, "children": ["graph"] },
+      "graph": { "type": "AgentGraph", "props": { "source": "$queries.graph" } },
+
+      "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } }
+    }
+  }
+}
