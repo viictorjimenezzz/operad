@@ -34,6 +34,9 @@ COPY --from=frontend /workspace/apps/frontend/dist-studio \
 
 WORKDIR /workspace/apps/studio
 
+RUN test -f operad_studio/web/index.html \
+    || { echo "ERROR: SPA bundle missing — run 'make build-frontend'"; exit 1; }
+
 RUN uv pip install --system -e . \
  && uv pip install --system "operad[otel] @ /workspace"
 

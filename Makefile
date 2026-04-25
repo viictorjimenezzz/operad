@@ -182,6 +182,10 @@ frontend-test: frontend-install
 # packages so `operad-dashboard` / `operad-studio` serve them from /web.
 build-frontend: frontend-install
 	cd apps/frontend && pnpm build
+	@test -f apps/frontend/dist-dashboard/index.html \
+	    || { echo "ERROR: dist-dashboard/index.html missing after pnpm build"; exit 1; }
+	@test -f apps/frontend/dist-studio/index.html \
+	    || { echo "ERROR: dist-studio/index.html missing after pnpm build"; exit 1; }
 	rsync -a --delete apps/frontend/dist-dashboard/ apps/dashboard/operad_dashboard/web/
 	rsync -a --delete apps/frontend/dist-studio/    apps/studio/operad_studio/web/
 	@echo "build-frontend: dashboard + studio bundles deployed."
