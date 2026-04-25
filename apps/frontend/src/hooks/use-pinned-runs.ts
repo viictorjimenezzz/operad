@@ -26,8 +26,9 @@ export function usePinnedRunSummaries():
 
   let staleCount = 0;
   results.forEach((r, i) => {
-    if (r.isError) {
-      unpin(pinned[i]);
+    const id = pinned[i];
+    if (r.isError && id !== undefined) {
+      unpin(id);
       staleCount++;
     }
   });
