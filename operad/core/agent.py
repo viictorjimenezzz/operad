@@ -1319,6 +1319,9 @@ class Agent(Generic[In, Out]):
             is_root, run_id, started, started_wall, graph_hash,
             start_meta, retry_meta, tokens,
         ) = self._enter_run(path, track_retry=True)
+        algo_parent = _obs._ALGO_RUN_ID.get()
+        if algo_parent is not None and not is_root:
+            start_meta["parent_run_id"] = algo_parent
         try:
             await _obs.registry.notify(
                 _obs.AgentEvent(
@@ -1352,6 +1355,8 @@ class Agent(Generic[In, Out]):
                 end_meta["is_root"] = True
                 end_meta["output_type"] = _qualified(self.output)  # type: ignore[arg-type]
             end_meta.update(retry_meta)
+            if algo_parent is not None and not is_root:
+                end_meta["parent_run_id"] = algo_parent
             await _obs.registry.notify(
                 _obs.AgentEvent(
                     run_id, path, "end", x, envelope, None, started, finished, end_meta
@@ -1361,6 +1366,8 @@ class Agent(Generic[In, Out]):
         except BaseException as e:
             err_meta: dict[str, Any] = {"is_root": True} if is_root else {}
             err_meta.update(retry_meta)
+            if algo_parent is not None and not is_root:
+                err_meta["parent_run_id"] = algo_parent
             await _obs.registry.notify(
                 _obs.AgentEvent(
                     run_id, path, "error", x, None, e, started, time.monotonic(), err_meta
@@ -1432,6 +1439,9 @@ class Agent(Generic[In, Out]):
             is_root, run_id, started, started_wall, graph_hash,
             start_meta, _retry_meta, tokens,
         ) = self._enter_run(path, track_retry=False)
+        algo_parent_s = _obs._ALGO_RUN_ID.get()
+        if algo_parent_s is not None and not is_root:
+            start_meta["parent_run_id"] = algo_parent_s
 
         # Bounded so a slow consumer applies backpressure to the producer
         # instead of letting the queue grow without bound on a long stream.
@@ -1509,6 +1519,8 @@ class Agent(Generic[In, Out]):
             if is_root:
                 end_meta["is_root"] = True
                 end_meta["output_type"] = _qualified(self.output)  # type: ignore[arg-type]
+            if algo_parent_s is not None and not is_root:
+                end_meta["parent_run_id"] = algo_parent_s
             finished = time.monotonic()
             await _obs.registry.notify(
                 _obs.AgentEvent(
@@ -1518,6 +1530,8 @@ class Agent(Generic[In, Out]):
             )
         except BaseException as e:
             err_meta: dict[str, Any] = {"is_root": True} if is_root else {}
+            if algo_parent_s is not None and not is_root:
+                err_meta["parent_run_id"] = algo_parent_s
             await _obs.registry.notify(
                 _obs.AgentEvent(
                     run_id, path, "error", x, None, e, started, time.monotonic(), err_meta

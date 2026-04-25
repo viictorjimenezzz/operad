@@ -105,21 +105,31 @@ _RETRY_META: ContextVar[dict[str, Any] | None] = ContextVar(
     "_RETRY_META", default=None
 )
 
+# Algorithm-scoped run id. Set by _enter_algorithm_run() so nested
+# AgentEvents can carry parent_run_id in metadata.
+_ALGO_RUN_ID: ContextVar[str | None] = ContextVar("_ALGO_RUN_ID", default=None)
+
 
 @contextmanager
 def _enter_algorithm_run() -> Iterator[str]:
     """Reuse the enclosing run_id if one is set; otherwise mint a new one
-    for the duration of the scope so nested `AgentEvent`s share it."""
+    for the duration of the scope so nested `AgentEvent`s share it.
+
+    When a new run_id is minted, `_ALGO_RUN_ID` is also set to that id
+    so that nested `AgentEvent` metadata can carry `parent_run_id`.
+    """
     existing = _RUN_ID.get()
     if existing is not None:
         yield existing
         return
     rid = uuid4().hex
-    tok = _RUN_ID.set(rid)
+    tok_r = _RUN_ID.set(rid)
+    tok_a = _ALGO_RUN_ID.set(rid)
     try:
         yield rid
     finally:
-        _RUN_ID.reset(tok)
+        _RUN_ID.reset(tok_r)
+        _ALGO_RUN_ID.reset(tok_a)
 
 
 async def emit_algorithm_event(
