@@ -264,17 +264,6 @@ class Agent(strands.Agent, Generic[In, Out]):
                 agent=cls.__name__,
             )
 
-        if config is not None and cls.default_sampling:
-            from .config import Sampling
-            user_set = config.sampling.model_fields_set
-            fill = {
-                k: v
-                for k, v in cls.default_sampling.items()
-                if k not in user_set and k in Sampling.model_fields
-            }
-            if fill:
-                new_sampling = config.sampling.model_copy(update=fill)
-                config = config.model_copy(update={"sampling": new_sampling})
         self.config = config
         self.role = role if role is not None else cls.role
         self.task = task if task is not None else cls.task
@@ -907,6 +896,25 @@ class Agent(strands.Agent, Generic[In, Out]):
             return graph._repr_html_()  # type: ignore[no-any-return]
         return f"<pre>{_html.escape(repr(self))}</pre>"
 
+    def _apply_default_sampling(self) -> None:
+        if self.config is None or not type(self).default_sampling:
+            return
+        from .config import Sampling
+        user_set = self.config.sampling.model_fields_set
+        fill = {
+            k: v
+            for k, v in type(self).default_sampling.items()
+            if k not in user_set and k in Sampling.model_fields
+        }
+        if fill:
+            new_sampling = self.config.sampling.model_copy(update=fill)
+            self.config = self.config.model_copy(update={"sampling": new_sampling})
+
+    def _apply_default_sampling_tree(self) -> None:
+        self._apply_default_sampling()
+        for child in self._children.values():
+            child._apply_default_sampling_tree()
+
     def _effective_output_schema(self) -> type[BaseModel]:
         """Return the Pydantic class actually sent to strands as the wire schema.
 
@@ -1465,12 +1473,14 @@ class Agent(strands.Agent, Generic[In, Out]):
         """
         from .build import build_agent
 
+        self._apply_default_sampling_tree()
         return build_agent(self)
 
     async def abuild(self) -> Self:
         """Async variant of `build()` for use inside a running event loop."""
         from .build import abuild_agent
 
+        self._apply_default_sampling_tree()
         return await abuild_agent(self)
 
     # --- auto-tune ----------------------------------------------------------
