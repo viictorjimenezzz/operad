@@ -1,8 +1,11 @@
 import { AgentGraph } from "@/shared/charts/agent-graph";
 import { BeamCandidateChart } from "@/shared/charts/beam-candidate-chart";
+import { CheckpointTimeline } from "@/shared/charts/checkpoint-timeline";
 import { DebateRoundView } from "@/shared/charts/debate-round-view";
 import { DriftTimeline } from "@/shared/charts/drift-timeline";
 import { FitnessCurve } from "@/shared/charts/fitness-curve";
+import { GradientLog } from "@/shared/charts/gradient-log";
+import { LrScheduleCurve } from "@/shared/charts/lr-schedule-curve";
 import { MutationHeatmap } from "@/shared/charts/mutation-heatmap";
 import { OpSuccessTable } from "@/shared/charts/op-success-table";
 import { PopulationScatter } from "@/shared/charts/population-scatter";
@@ -120,8 +123,8 @@ export const registry: ComponentRegistry = {
     <TrainingProgress data={(element.props as { data?: unknown }).data} />
   ),
   TrainingLossCurve: ({ element }) => {
-    const p = element.props as { data?: unknown; height?: number };
-    return <TrainingLossCurve data={p.data} height={p.height ?? 220} />;
+    const p = element.props as { data?: unknown; dataCheckpoint?: unknown; height?: number };
+    return <TrainingLossCurve data={p.data} checkpointData={p.dataCheckpoint} height={p.height ?? 220} />;
   },
   DriftTimeline: ({ element }) => (
     <DriftTimeline data={(element.props as { data?: unknown }).data} />
@@ -133,6 +136,16 @@ export const registry: ComponentRegistry = {
     const p = element.props as { data?: unknown; height?: number };
     return <BeamCandidateChart data={p.data} height={p.height ?? 220} />;
   },
+  GradientLog: ({ element }) => (
+    <GradientLog data={(element.props as { data?: unknown }).data} />
+  ),
+  LrScheduleCurve: ({ element }) => {
+    const p = element.props as { data?: unknown; height?: number };
+    return <LrScheduleCurve data={p.data} height={p.height ?? 220} />;
+  },
+  CheckpointTimeline: ({ element }) => (
+    <CheckpointTimeline data={(element.props as { data?: unknown }).data} />
+  ),
   AgentGraph: ({ element }) => {
     const p = element.props as { data?: unknown; dataMutations?: unknown };
     return <AgentGraph data={p.data} mutations={p.dataMutations} />;

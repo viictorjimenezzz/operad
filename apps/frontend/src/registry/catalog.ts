@@ -46,8 +46,17 @@ export const catalog = createCatalog({
     MutationHeatmap: { props: z.object({ source: sourceProp }) },
     OpSuccessTable: { props: z.object({ source: sourceProp }) },
     TrainingProgress: { props: z.object({ source: sourceProp }) },
-    TrainingLossCurve: { props: z.object({ source: sourceProp, height: z.number().optional() }) },
+    TrainingLossCurve: {
+      props: z.object({
+        source: sourceProp,
+        checkpointSource: sourceProp,
+        height: z.number().optional(),
+      }),
+    },
     DriftTimeline: { props: z.object({ source: sourceProp }) },
+    GradientLog: { props: z.object({ source: sourceProp }) },
+    LrScheduleCurve: { props: z.object({ source: sourceProp, height: z.number().optional() }) },
+    CheckpointTimeline: { props: z.object({ source: sourceProp }) },
     DebateRoundView: { props: z.object({ source: sourceProp }) },
     BeamCandidateChart: { props: z.object({ source: sourceProp, height: z.number().optional() }) },
     AgentGraph: {

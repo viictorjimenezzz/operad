@@ -21,8 +21,10 @@ from operad.runtime.observers.base import registry as operad_registry
 from operad.runtime.slots import registry as slot_registry
 
 from .observer import WebDashboardObserver, serialize_event
+from .routes import checkpoints as checkpoints_routes
 from .routes import drift as drift_routes
 from .routes import fitness as fitness_routes
+from .routes import gradients as gradients_routes
 from .routes import mutations as mutations_routes
 from .routes import progress as progress_routes
 
@@ -199,6 +201,8 @@ def create_app(
     app.include_router(mutations_routes.router)
     app.include_router(drift_routes.router)
     app.include_router(progress_routes.router)
+    app.include_router(checkpoints_routes.router)
+    app.include_router(gradients_routes.router)
 
     @app.get("/", response_class=HTMLResponse)
     async def index() -> HTMLResponse:
