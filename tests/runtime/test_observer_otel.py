@@ -251,6 +251,75 @@ async def test_gen_ai_attributes_on_leaf(cfg, exporter) -> None:
     assert a.get("gen_ai.request.model")
 
 
+async def test_tool_span_attributes(exporter) -> None:
+    """ToolUser spans carry gen_ai.tool.* attributes."""
+    from pydantic import BaseModel as PBM
+
+    from operad.agents.reasoning.components.tool_user import ToolUser
+    from operad.agents.reasoning.schemas import ToolCall, ToolResult
+
+    class AddArgs(PBM):
+        a: int
+        b: int
+
+    class AddResult(PBM):
+        sum: int
+
+    class AddTool:
+        name = "add"
+        args_schema = AddArgs
+        result_schema = AddResult
+
+        async def call(self, args: AddArgs) -> AddResult:
+            return AddResult(sum=args.a + args.b)
+
+    user = await ToolUser(tools={"add": AddTool()}).abuild()
+    obs_registry.register(OtelObserver())
+    await user(ToolCall(tool_name="add", args=AddArgs(a=3, b=4)))
+
+    spans = exporter.get_finished_spans()
+    assert len(spans) == 1
+    a = _attrs(spans[0])
+
+    assert a["gen_ai.tool.name"] == "add"
+    assert a["gen_ai.tool.call.id"]
+    assert '"a":3' in a["gen_ai.tool.arguments"]
+    assert '"b":4' in a["gen_ai.tool.arguments"]
+    assert '"sum":7' in a["gen_ai.tool.result"]
+    assert '"ok":true' in a["gen_ai.tool.result"]
+
+
+async def test_tool_span_argument_truncation(exporter) -> None:
+    """gen_ai.tool.arguments is truncated to max_attr_length."""
+    from pydantic import BaseModel as PBM
+
+    from operad.agents.reasoning.components.tool_user import ToolUser
+    from operad.agents.reasoning.schemas import ToolCall
+
+    class BigArgs(PBM):
+        data: str
+
+    class BigResult(PBM):
+        ok: bool = True
+
+    class EchoTool:
+        name = "echo"
+        args_schema = BigArgs
+        result_schema = BigResult
+
+        async def call(self, args: BigArgs) -> BigResult:
+            return BigResult()
+
+    max_len = 32
+    user = await ToolUser(tools={"echo": EchoTool()}).abuild()
+    obs_registry.register(OtelObserver(max_attr_length=max_len))
+    await user(ToolCall(tool_name="echo", args=BigArgs(data="x" * 200)))
+
+    spans = exporter.get_finished_spans()
+    a = _attrs(spans[0])
+    assert len(a["gen_ai.tool.arguments"]) == max_len
+
+
 async def test_missing_opentelemetry_raises(monkeypatch) -> None:
     import builtins
     import sys

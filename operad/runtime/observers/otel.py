@@ -12,6 +12,12 @@ chars = 128 bits, so the conversion is lossless. Downstream OTel
 backends therefore see a trace whose ID matches operad's ``run_id``
 verbatim, enabling deterministic deep-links of the form
 ``{backend_url}/trace/{run_id}`` from operad UIs.
+
+Tool-use attributes follow OpenTelemetry GenAI semantic conventions
+(opentelemetry-specification v1.32.0 / semconv v1.29.0):
+``gen_ai.tool.name``, ``gen_ai.tool.call.id`` (stable),
+``gen_ai.tool.arguments``, ``gen_ai.tool.result`` (not yet in spec —
+set verbatim per stream brief 2-5).
 """
 
 from __future__ import annotations
@@ -19,8 +25,11 @@ from __future__ import annotations
 import secrets
 from typing import Any
 
+from pydantic import BaseModel
+
+from ...agents.reasoning.schemas import ToolCall, ToolResult
 from ...core.output import OperadOutput
-from ...utils.hashing import hash_json
+from ...utils.hashing import _stable_json, hash_json
 from ..events import AlgorithmEvent
 from .base import AgentEvent, Event
 
@@ -42,9 +51,13 @@ class OtelObserver:
     pair, keyed by `(run_id, algorithm_path)`. Per-boundary events
     (`generation`, `round`, ...) attach as span events on the
     enclosing algorithm span.
+
+    Tool-use spans (``ToolUser`` leaves) additionally receive
+    ``gen_ai.tool.*`` attributes. Arguments and results are serialized
+    as canonical JSON and truncated to ``max_attr_length`` bytes.
     """
 
-    def __init__(self, *, tracer_name: str = "operad") -> None:
+    def __init__(self, *, tracer_name: str = "operad", max_attr_length: int = 4096) -> None:
         try:
             from opentelemetry import context as _ot_context
             from opentelemetry import trace as _ot_trace
@@ -54,9 +67,11 @@ class OtelObserver:
         self._trace = _ot_trace
         self._context = _ot_context
         self._tracer = _ot_trace.get_tracer(tracer_name)
+        self._max_attr_length = max_attr_length
         self._spans: dict[tuple[str, str], Any] = {}
         self._chunks: dict[tuple[str, str], int] = {}
         self._tokens: dict[tuple[str, str], Any] = {}
+        self._tool_inputs: dict[tuple[str, str], ToolCall] = {}
         self._algo_spans: dict[tuple[str, str], Any] = {}
         self._algo_tokens: dict[tuple[str, str], Any] = {}
 
@@ -97,6 +112,10 @@ class OtelObserver:
                 "operad.hash_input",
                 hash_json(event.input.model_dump(mode="json")),
             )
+        if isinstance(event.input, ToolCall):
+            self._tool_inputs[key] = event.input
+            span.set_attribute("gen_ai.tool.name", event.input.tool_name)
+            span.set_attribute("gen_ai.tool.call.id", event.run_id)
 
     def _start_root_span(self, run_id: str, agent_path: str) -> Any:
         """Start a root span whose OTel trace_id derives from ``run_id``.
@@ -134,12 +153,26 @@ class OtelObserver:
         span = self._spans.pop(key, None)
         token = self._tokens.pop(key, None)
         chunks = self._chunks.pop(key, 0)
+        tool_input = self._tool_inputs.pop(key, None)
         if span is None:
             return
         try:
             if isinstance(event.output, OperadOutput):
                 self._set_envelope_attributes(span, event.output)
             span.set_attribute("operad.chunks", chunks)
+            if tool_input is not None:
+                args = tool_input.args
+                if args is not None:
+                    raw = args.model_dump(mode="json") if isinstance(args, BaseModel) else args
+                    span.set_attribute(
+                        "gen_ai.tool.arguments",
+                        _truncate(_stable_json(raw), self._max_attr_length),
+                    )
+                if isinstance(event.output, OperadOutput) and isinstance(event.output.response, ToolResult):
+                    span.set_attribute(
+                        "gen_ai.tool.result",
+                        _truncate(_stable_json(event.output.response.model_dump(mode="json")), self._max_attr_length),
+                    )
             from opentelemetry.trace import Status, StatusCode
 
             span.set_status(Status(StatusCode.OK))
@@ -152,6 +185,7 @@ class OtelObserver:
         span = self._spans.pop(key, None)
         token = self._tokens.pop(key, None)
         chunks = self._chunks.pop(key, 0)
+        self._tool_inputs.pop(key, None)
         inline = False
         if span is None:
             span = self._tracer.start_span(event.agent_path)
@@ -249,6 +283,10 @@ class OtelObserver:
                 "gen_ai.usage.total_tokens",
                 out.prompt_tokens + out.completion_tokens,
             )
+
+
+def _truncate(s: str, max_length: int) -> str:
+    return s if len(s) <= max_length else s[:max_length]
 
 
 def _otel_attrs(payload: dict[str, Any]) -> dict[str, Any]:
