@@ -75,6 +75,7 @@ from .reasoning import (
     Action,
     Actor,
     Answer,
+    DebateAgent,
     ChatReasoner,
     ChatReasonerInput,
     ChatReasonerOutput,
@@ -104,6 +105,7 @@ from .reasoning import (
     ToolCall,
     ToolResult,
     ToolUser,
+    VerifierAgent,
 )
 from .retrieval import (
     CitationGist,
@@ -124,6 +126,7 @@ from .safeguard import (
     ContextInput,
     ContextOutput,
     SafeguardCategory,
+    SafetyGuard,
 )
 from .safeguard import Talker as SafeguardTalker
 from .safeguard import TalkerInput as SafeguardTalkerInput
@@ -204,6 +207,8 @@ __all__ = [
     "Query",
     "ReAct",
     "Reasoner",
+    "DebateAgent",
+    "VerifierAgent",
     "Reflection",
     "ReflectionInput",
     "Reflector",
@@ -214,6 +219,7 @@ __all__ = [
     "Router",
     "SafeguardCategory",
     "SafeguardTalker",
+    "SafetyGuard",
     "SafeguardTalkerInput",
     "SessionItem",
     "SessionOp",

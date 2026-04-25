@@ -11,6 +11,7 @@ from __future__ import annotations
 from .callbacks import (
     BestCheckpoint,
     Callback,
+    Curriculum,
     EarlyStopping,
     EarlyStoppingSpec,
     GradClip,
@@ -28,6 +29,7 @@ from .trainer import Trainer
 __all__ = [
     "BestCheckpoint",
     "Callback",
+    "Curriculum",
     "EarlyStopping",
     "EarlyStoppingSpec",
     "EpochReport",

@@ -4,7 +4,7 @@ All examples that talk to a real model server import `local_config()`.
 Override via env vars if you have a different setup:
 
     OPERAD_LLAMACPP_HOST=127.0.0.1:9000
-    OPERAD_LLAMACPP_MODEL=google/gemma-4-e4b
+    OPERAD_LLAMACPP_MODEL=google/gemma-4-e2b
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import socket
 from operad import Configuration
 
 DEFAULT_HOST = "127.0.0.1:9000"
-DEFAULT_MODEL = "google/gemma-4-e4b"
+DEFAULT_MODEL = "google/gemma-4-e2b"
 
 
 def local_config(**overrides) -> Configuration:

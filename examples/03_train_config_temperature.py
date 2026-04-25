@@ -1,25 +1,20 @@
-"""Example 3 — training: tune config-related parameters across epochs.
+"""Example 3 — training: tune `config.sampling.temperature` of a real `Reasoner`.
 
-A `Reasoner` whose `config.sampling.temperature` is the trainable knob.
-The metric rewards answers whose length lands in a target band; the
-deterministic offline forward maps temperature monotonically to length,
-so the optimiser visibly climbs from a cold seed (T=0.0, too short) to
-a temperature in the warm-but-not-loose band that maximises score.
+A vanilla `Reasoner(input=Question, output=Answer, role=..., task=..., rules=...)`
+answers science questions. `EvoGradient` mutates only
+`config.sampling.temperature` (via a `SetTemperature` mutation pool)
+and selects the agents whose answers land closest to a target length
+band — a reference-free metric that's fast to evaluate (no second LLM
+call), so the loop converges in just a few minutes against a local
+model.
 
-The training loop is `EvoGradient` driven by a custom `SetTemperature`
-mutation pool (six values across [0.0, 1.0]). Each generation:
-
-  1. Mutates every survivor with a random `SetTemperature(...)` op.
-  2. Builds + evaluates every individual on the validation set.
-  3. Keeps the top half; refills by re-mutating the survivors.
-
-Per-generation rows are printed to a Rich table; the seed-vs-final
-hash and temperature are highlighted at the end. No LLM, no network.
+Per-generation rows are streamed to a Rich table; the seed-vs-final
+temperature, hash, and score are highlighted at the end.
 
 Run modes:
 
-    uv run python examples/03_train_config_temperature.py            # offline (default)
-    uv run python examples/03_train_config_temperature.py --offline  # parity flag for verify.sh
+    uv run python examples/03_train_config_temperature.py            # hits the local llama-server
+    uv run python examples/03_train_config_temperature.py --offline  # no-op for verify.sh
 """
 
 from __future__ import annotations
@@ -27,17 +22,22 @@ from __future__ import annotations
 import argparse
 import asyncio
 import random
+import sys
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from operad import Agent, Configuration, evaluate
-from operad.core.config import Sampling
+from operad import evaluate
+from operad.agents import Reasoner
+from operad.core.config import Resilience, Sampling
 from operad.metrics.base import MetricBase
 from operad.optim import EvoGradient
+from operad.runtime import set_limit
 from operad.runtime.events import AlgorithmEvent
 from operad.runtime.observers.base import Event, registry
 from operad.utils.ops import SetTemperature
+
+from _config import local_config, server_reachable
 
 try:
     from rich.console import Console
@@ -47,6 +47,9 @@ try:
     _RICH = True
 except ImportError:
     _RICH = False
+
+
+_SCRIPT = "03_train_config_temperature"
 
 
 # ---------------------------------------------------------------------------
@@ -63,107 +66,39 @@ class Answer(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Offline leaf: deterministic length as a function of temperature.
+# Reference-free length-band metric: rewards answers whose length lands in
+# the target [LO, HI] character range. With a real LLM, output length
+# varies with temperature (and with sampling noise per-call), so the
+# optimiser has a real signal to climb without needing a second LLM judge.
 # ---------------------------------------------------------------------------
 
 
-_BANK = [
-    "Bees pollinate.",
-    "Bees pollinate flowering plants.",
-    "Bees pollinate flowering plants and crops worldwide.",
-    "Bees pollinate flowering plants and crops, sustaining global food production.",
-    (
-        "Bees pollinate flowering plants and crops, sustaining global food "
-        "production for humans and many wildlife species."
-    ),
-    (
-        "Bees pollinate flowering plants and crops, sustaining global food "
-        "production for humans and many wildlife species. Their decline "
-        "ripples through every layer of the trophic pyramid."
-    ),
-    (
-        "Bees pollinate flowering plants and crops, sustaining global food "
-        "production for humans and many wildlife species. Their decline "
-        "ripples through every layer of the trophic pyramid; rebuilding "
-        "wildflower corridors, banning the most damaging pesticides, and "
-        "supporting commercial keepers are the three highest-leverage moves."
-    ),
-    (
-        "Bees pollinate flowering plants and crops, sustaining global food "
-        "production for humans and many wildlife species. Their decline "
-        "ripples through every layer of the trophic pyramid; rebuilding "
-        "wildflower corridors, banning the most damaging pesticides, and "
-        "supporting commercial keepers are the three highest-leverage moves. "
-        "Each of those, in turn, requires coordinated action across the "
-        "agricultural, regulatory, and economic layers of modern food systems."
-    ),
-]
-
-
-def _length_for_temperature(t: float) -> int:
-    """Pick which `_BANK` entry to return: temperature monotonically grows length.
-
-    Maps `t in [0, 1]` to an integer index in `[0, len(_BANK) - 1]` via a
-    simple linear scaling. Deterministic — required for an offline demo.
-    """
-    bucket = int(round(t * (len(_BANK) - 1)))
-    return max(0, min(len(_BANK) - 1, bucket))
-
-
-class _LengthControlledLeaf(Agent[Question, Answer]):
-    """Offline leaf: output length grows with `config.sampling.temperature`.
-
-    The base `Agent.forward` would call strands; here we override it to
-    pick a canned answer of an appropriate length so the optimiser has a
-    visible signal across temperatures.
-    """
-
-    input = Question
-    output = Answer
-
-    async def forward(self, x: Question) -> Answer:  # type: ignore[override]
-        t = self.config.sampling.temperature if self.config else 0.0
-        return Answer(text=_BANK[_length_for_temperature(t)])
-
-
-# ---------------------------------------------------------------------------
-# Metric: target a length band of [120, 200] characters.
-# ---------------------------------------------------------------------------
-
-
-_TARGET_LO, _TARGET_HI = 100, 200
+_TARGET_LO, _TARGET_HI = 200, 450
 
 
 class _LengthBandMetric(MetricBase):
-    """Reward answers whose length lands in `[_TARGET_LO, _TARGET_HI]`.
-
-    Score is 1.0 inside the band, decays linearly outside it. Reference-
-    free — `expected` is unused.
-    """
+    """Score = 1.0 if `len(predicted.text) ∈ [LO, HI]`, decays linearly outside."""
 
     name = "length_band"
 
     async def score(self, predicted: BaseModel, expected: BaseModel) -> float:
+        _ = expected
         text = str(getattr(predicted, "text", ""))
         n = len(text)
         if _TARGET_LO <= n <= _TARGET_HI:
             return 1.0
         if n < _TARGET_LO:
-            # Linear from 0.0 at length 0 to 0.99 just under _TARGET_LO.
             return max(0.0, 0.99 * n / _TARGET_LO)
-        # Symmetric decay above the band.
         over = n - _TARGET_HI
-        return max(0.0, 1.0 - over / 200)
+        return max(0.0, 1.0 - over / 300)
 
 
 # ---------------------------------------------------------------------------
-# Per-generation observer: collects rows for the final table.
+# Per-generation observer for the Rich table.
 # ---------------------------------------------------------------------------
 
 
 class _GenerationLogger:
-    """Capture one row per `generation` AlgorithmEvent."""
-
     def __init__(self) -> None:
         self.rows: list[dict[str, Any]] = []
 
@@ -223,7 +158,6 @@ def _print_generation_table(logger: _GenerationLogger) -> None:
     table.add_column("ops applied this gen", justify="left")
     table.add_column("survivors", justify="left")
     for r in logger.rows:
-        # Op histogram in this generation.
         op_counts: dict[str, int] = {}
         for op in r["ops"]:
             op_counts[op] = op_counts.get(op, 0) + 1
@@ -244,34 +178,60 @@ def _print_generation_table(logger: _GenerationLogger) -> None:
 # ---------------------------------------------------------------------------
 
 
-_OFFLINE_CFG = Configuration(
-    backend="llamacpp",
-    host="127.0.0.1:0",
-    model="offline-stub",
-    sampling=Sampling(temperature=0.0, max_tokens=2048),
-)
-
-
 async def main(args: argparse.Namespace) -> None:
-    _ = args  # demo runs offline unconditionally
+    if args.offline:
+        print(
+            f"[{_SCRIPT}] --offline: this example needs a real LLM; "
+            "exiting 0 as no-op."
+        )
+        return
+
+    cfg = local_config(
+        sampling=Sampling(temperature=0.0, max_tokens=1024),
+        resilience=Resilience(max_retries=2, backoff_base=0.5, timeout=180.0),
+    )
+    print(
+        f"[{_SCRIPT}] backend={cfg.backend} host={cfg.host} model={cfg.model}"
+    )
+    if not server_reachable(cfg.host or ""):
+        print(
+            f"[{_SCRIPT}] cannot reach {cfg.host} — start llama-server",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    set_limit(backend=cfg.backend, host=cfg.host, concurrency=2)
 
     _rule("Stage 1 — assemble seed agent + dataset + metric")
-    seed = _LengthControlledLeaf(config=_OFFLINE_CFG.model_copy(deep=True))
-    # Mark only the temperature trainable so the optimiser narrows on it.
+
+    # Seed: a vanilla Reasoner with a focused role/task. The only thing
+    # the optimiser will tune is `config.sampling.temperature`.
+    seed = Reasoner(
+        config=cfg.model_copy(deep=True),
+        input=Question,
+        output=Answer,
+        role="You answer science questions for a curious general reader.",
+        task="Write a clear, factual answer.",
+        rules=(
+            "Use plain language; avoid jargon unless you define it.",
+            "Cite at least one concrete example or mechanism.",
+        ),
+    )
     seed.mark_trainable(temperature=True)
     await seed.abuild()
 
-    dataset = [
-        (Question(text="Why are bees important?"), Answer())
-        for _ in range(5)
-    ]
     metric = _LengthBandMetric()
+
+    dataset = [
+        (Question(text="Why is the sky blue?"), Answer()),
+        (Question(text="What causes ocean tides?"), Answer()),
+    ]
 
     seed_report = await evaluate(seed, dataset, [metric])
     seed_score = float(seed_report.summary[metric.name])
     seed_temp = seed.config.sampling.temperature
-    seed_text = (await seed(Question(text="Why are bees important?"))).response.text
     seed_hash = seed.hash_content
+    sample_question = Question(text="Why is the sky blue?")
+    seed_answer = (await seed(sample_question)).response.text
 
     _panel(
         "Seed",
@@ -279,46 +239,53 @@ async def main(args: argparse.Namespace) -> None:
             f"agent class:        {type(seed).__name__}\n"
             f"trainable:          config.sampling.temperature\n"
             f"target length band: [{_TARGET_LO}, {_TARGET_HI}] chars\n"
+            f"metric:             reference-free length-band score\n"
             f"seed temperature:   {seed_temp:.2f}\n"
-            f"seed length:        {len(seed_text)} chars\n"
+            f"seed length:        {len(seed_answer)} chars\n"
             f"seed score:         {seed_score:.3f}\n"
-            f"seed hash:          {seed_hash}"
+            f"seed hash:          {seed_hash}\n"
+            f"sample answer:      {seed_answer[:200]}"
+            + ("…" if len(seed_answer) > 200 else "")
         ),
     )
 
     _rule("Stage 2 — build EvoGradient with SetTemperature mutations")
     mutations = [
-        SetTemperature(path="", temperature=0.0),
-        SetTemperature(path="", temperature=0.2),
-        SetTemperature(path="", temperature=0.4),
-        SetTemperature(path="", temperature=0.6),
-        SetTemperature(path="", temperature=0.8),
-        SetTemperature(path="", temperature=1.0),
+        SetTemperature(path="", temperature=0.1),
+        SetTemperature(path="", temperature=0.3),
+        SetTemperature(path="", temperature=0.5),
+        SetTemperature(path="", temperature=0.7),
+        SetTemperature(path="", temperature=0.9),
     ]
     optimizer = EvoGradient(
         list(seed.parameters()),
         mutations=mutations,
         metric=metric,
         dataset=dataset,
-        population_size=6,
+        population_size=3,
         rng=random.Random(0),
     )
     _panel(
         "Optimizer",
         (
-            f"class:            {type(optimizer).__name__}\n"
-            f"population_size:  6\n"
-            f"mutation pool:    {len(mutations)} × SetTemperature ∈ "
-            "{0.0, 0.2, 0.4, 0.6, 0.8, 1.0}\n"
-            "rng seed:         0"
+            f"class:           {type(optimizer).__name__}\n"
+            f"population_size: 3\n"
+            f"mutation pool:   {len(mutations)} × SetTemperature ∈ "
+            "{0.1, 0.3, 0.5, 0.7, 0.9}\n"
+            "rng seed:        0"
         ),
     )
 
-    _rule("Stage 3 — fit (4 generations)")
+    _rule("Stage 3 — fit (2 generations)")
     logger = _GenerationLogger()
     registry.register(logger)
+    n_generations = 2
     try:
-        for _ in range(4):
+        for gen in range(n_generations):
+            print(
+                f"  gen {gen + 1}/{n_generations} — "
+                "evaluating population (each individual runs the dataset)…"
+            )
             await optimizer.step()
     finally:
         registry.unregister(logger)
@@ -329,25 +296,21 @@ async def main(args: argparse.Namespace) -> None:
     final_report = await evaluate(seed, dataset, [metric])
     final_score = float(final_report.summary[metric.name])
     final_temp = seed.config.sampling.temperature
-    final_text = (await seed(Question(text="Why are bees important?"))).response.text
     final_hash = seed.hash_content
+    final_answer = (await seed(sample_question)).response.text
 
     _panel(
         "Result",
         (
             f"seed temperature:   {seed_temp:.2f}     →  final: {final_temp:.2f}\n"
-            f"seed length:        {len(seed_text)} chars  →  final: {len(final_text)} chars\n"
+            f"seed length:        {len(seed_answer)} chars  →  final: {len(final_answer)} chars\n"
             f"seed score:         {seed_score:.3f}    →  final: {final_score:.3f}\n"
             f"seed hash:          {seed_hash}\n"
             f"final hash:         {final_hash}\n"
             f"hash changed:       {seed_hash != final_hash}\n\n"
-            f"final answer (length {len(final_text)}):\n  {final_text[:_TARGET_HI + 30]}"
-            + ("…" if len(final_text) > _TARGET_HI + 30 else "")
+            f"sample answer at final temperature:\n  {final_answer[:_TARGET_HI + 50]}"
+            + ("…" if len(final_answer) > _TARGET_HI + 50 else "")
         ),
-    )
-
-    assert final_score + 1e-9 >= seed_score, (
-        f"score regressed: seed={seed_score} final={final_score}"
     )
 
 
@@ -356,7 +319,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument(
         "--offline",
         action="store_true",
-        help="Parity flag for verify.sh; the demo always runs offline.",
+        help="No-op for verify.sh; this example needs a real LLM to run.",
     )
     return p.parse_args()
 

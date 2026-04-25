@@ -18,6 +18,7 @@ BuildReason = Literal[
     "router_miss",
     "schema_drift",
     "sentinel_bypass",
+    "refusal_factory_required",
 ]
 
 

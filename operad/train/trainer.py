@@ -125,6 +125,8 @@ class Trainer(Generic[In, Out]):
         self._should_stop: bool = False
         self._last_batch_tape_entries: int = 0
         self._last_report: TrainingReport | None = None
+        self.last_epoch_per_sample_severity: dict[int, float] = {}
+        self.loader: DataLoader[In, Out] | None = None
 
         # Optional wave-4 optimizer hook: OPRO/APE need an evaluator closure.
         if getattr(optimizer, "needs_evaluator", False):
@@ -214,6 +216,7 @@ class Trainer(Generic[In, Out]):
         epoch_reports: list[EpochReport],
         batch_counter: int,
     ) -> TrainingReport:
+        self.loader = loader
         for cb in cbs:
             await cb.on_fit_start(self)
 
@@ -227,6 +230,7 @@ class Trainer(Generic[In, Out]):
                 await cb.on_epoch_start(self, epoch)
 
             set_current_epoch(epoch)
+            self.last_epoch_per_sample_severity = {}
             try:
                 sampler = getattr(loader, "_sampler", None)
                 if sampler is not None and hasattr(sampler, "refresh"):
@@ -433,13 +437,14 @@ class Trainer(Generic[In, Out]):
         sample_count = 0
         tape_entries_total = 0
 
-        for x, y in zip(batch.inputs, batch.expected):
+        for idx, x, y in zip(batch.indices, batch.inputs, batch.expected):
             async with tape() as t:
                 output = await self.agent(x)
             tape_entries_total += len(t.entries)
             score, grad = await self.loss_fn.compute(output.response, y)
             loss_sum += score
             sample_count += 1
+            self.last_epoch_per_sample_severity[idx] = grad.severity
             if grad.severity <= 0:
                 continue
             await backward(t, grad, parameters=params)

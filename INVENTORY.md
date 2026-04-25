@@ -163,14 +163,24 @@ Schemas: `BeliefItem`, `BeliefOp`, `BeliefOperation`, `SessionItem`,
 `SessionNamespace`, `SessionStatus`.
 
 ### `safeguard/`
-Chat-scope guardrail leaves. `Context` evaluates whether a prompt is
-in-scope (returns a `SafeguardCategory`); `Talker` produces a refusal
-or pass-through response when called as a guard. Disambiguated as
+Chat-scope guardrail leaves plus a pre-wired pipeline composite.
+`Context` evaluates whether a prompt is in-scope (returns a
+`SafeguardCategory`); `Talker` produces a refusal response when called
+as a guard. `SafetyGuard` is a composite that wires `Context →
+{in_scope: inner, *: Talker}` automatically. Disambiguated as
 `SafeguardTalker` at the top-level `operad.agents` re-export.
 
 ```python
-from operad.agents.safeguard import Context, Talker as SafeguardTalker
-guard_pipeline = Pipeline(Context(config=cfg), SafeguardTalker(config=cfg))
+from operad.agents.safeguard import Context, SafetyGuard, Talker
+
+guard = SafetyGuard(
+    context=Context(config=cfg),
+    talker=Talker(config=cfg),
+    inner=my_agent,                          # optional; defaults to passthrough
+    refusal_factory=lambda x, cat: MyOut(),  # required when output != TextResponse
+)
+guard.build()
+result = await guard(ContextInput(message="hello"))
 ```
 
 ### `retrieval/`
@@ -185,6 +195,13 @@ the multi-agent debate algorithm. Used by `operad.algorithms.debate`.
 Schemas: `Proposal`, `Critique`, `DebateContext`, `DebateRecord`,
 `DebateTurn`.
 
+### `reasoning/` — pre-wired composites
+
+| Class | Shape | Description |
+| -------------- | ------------------------------ | -------------------------------------------------- |
+| `DebateAgent` | `Agent[DebateContext, Answer]` | Wraps `algorithms.Debate`; accepts `proposers`, `critic`, `synthesizer`, `rounds` kwargs. |
+| `VerifierAgent` | `Agent[Task, Answer]` | Wraps `algorithms.VerifierLoop`; accepts `generator`, `verifier`, `threshold`, `max_iter` kwargs. |
+
 ### Shipped (iter-3)
 
 - `agents/conversational/TurnTaker` — turn-gating leaf (`Utterance →
@@ -192,10 +209,6 @@ Schemas: `Proposal`, `Critique`, `DebateContext`, `DebateRecord`,
   composite `Talker` that pipelines all four.
 
 ### Planned
-
-- `agents/reasoning/debate.py` and `agents/reasoning/verifier.py` —
-  pre-wired multi-agent compositions parallel to `react.py`.
-  Algorithms exist; the agent-level pre-wirings do not.
 
 ## 7. Algorithms — `operad.algorithms`
 
@@ -209,6 +222,7 @@ metric feedback. Plain classes with `run(...)` — not `Agent` subclasses.
 | `VerifierLoop`   | Generator loops until `Verifier` approves or `max_iter` hits. |
 | `Sweep`          | Cartesian grid over dotted-path parameters of a seed agent. Returns a `SweepReport` with one `SweepCell` per grid point. |
 | `AutoResearcher` | Planner → Retriever → Reasoner → Critic → Reflector loop, wrapped in best-of-N. Plus `ResearchPlan`, `ResearchInput`, `ResearchContext` types. |
+| `SelfRefine`     | Generator → Reflector → Refiner loop; on-policy (shared generator/refiner) or cross-policy; `stop_when` callback. |
 
 ```python
 from operad.algorithms import Beam, AutoResearcher
@@ -224,7 +238,6 @@ absorbed there.
 
 ### Planned
 
-- `SelfRefine` — Generator → Reflector → Refiner.
 - `TalkerReasoner` — interleaved chat + reasoning.
 
 ## 8. Metrics — `operad.metrics`
