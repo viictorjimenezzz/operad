@@ -4,10 +4,19 @@ Optional: the `opentelemetry` packages are only required at
 construction time. If they aren't installed, the constructor raises
 `RuntimeError` with a clear install hint. Core operad stays importable
 without the extra.
+
+Trace-id alignment with operad ``run_id``: at the root span, the
+observer injects a ``SpanContext`` whose ``trace_id`` equals the
+``run_id`` parsed as a 128-bit integer. UUID4 hex is exactly 32 hex
+chars = 128 bits, so the conversion is lossless. Downstream OTel
+backends therefore see a trace whose ID matches operad's ``run_id``
+verbatim, enabling deterministic deep-links of the form
+``{backend_url}/trace/{run_id}`` from operad UIs.
 """
 
 from __future__ import annotations
 
+import secrets
 from typing import Any
 
 from ...core.output import OperadOutput
@@ -66,7 +75,14 @@ class OtelObserver:
             self._on_error(key, event)
 
     def _on_start(self, key: tuple[str, str], event: AgentEvent) -> None:
-        span = self._tracer.start_span(event.agent_path)
+        meta = event.metadata or {}
+        is_root = bool(meta.get("is_root"))
+
+        if is_root:
+            span = self._start_root_span(event.run_id, event.agent_path)
+        else:
+            span = self._tracer.start_span(event.agent_path)
+
         token = self._context.attach(self._trace.set_span_in_context(span))
         self._spans[key] = span
         self._tokens[key] = token
@@ -74,14 +90,45 @@ class OtelObserver:
 
         span.set_attribute("operad.run_id", event.run_id)
         span.set_attribute("operad.agent_path", event.agent_path)
-        meta = event.metadata or {}
-        span.set_attribute("operad.is_root", bool(meta.get("is_root")))
+        span.set_attribute("operad.is_root", is_root)
         span.set_attribute("operad.hash_graph", str(meta.get("hash_graph", "")))
         if event.input is not None:
             span.set_attribute(
                 "operad.hash_input",
                 hash_json(event.input.model_dump(mode="json")),
             )
+
+    def _start_root_span(self, run_id: str, agent_path: str) -> Any:
+        """Start a root span whose OTel trace_id derives from ``run_id``.
+
+        Builds a non-recording parent ``SpanContext`` carrying the
+        derived trace_id; OTel propagates that trace_id into the child
+        span we actually start. If ``run_id`` does not parse as hex,
+        falls back to OTel's default trace_id generation.
+        """
+        from opentelemetry.trace import (
+            NonRecordingSpan,
+            SpanContext,
+            TraceFlags,
+        )
+
+        try:
+            trace_id = int(run_id, 16)
+        except ValueError:
+            trace_id = 0
+        if trace_id == 0:
+            return self._tracer.start_span(agent_path)
+
+        parent_span_id = secrets.randbits(64) or 1
+        parent_ctx = SpanContext(
+            trace_id=trace_id,
+            span_id=parent_span_id,
+            is_remote=False,
+            trace_flags=TraceFlags(TraceFlags.SAMPLED),
+        )
+        parent = NonRecordingSpan(parent_ctx)
+        ctx = self._trace.set_span_in_context(parent)
+        return self._tracer.start_span(agent_path, context=ctx)
 
     def _on_end(self, key: tuple[str, str], event: AgentEvent) -> None:
         span = self._spans.pop(key, None)
@@ -185,6 +232,23 @@ class OtelObserver:
             span.set_attribute("operad.prompt_tokens", out.prompt_tokens)
         if out.completion_tokens is not None:
             span.set_attribute("operad.completion_tokens", out.completion_tokens)
+
+        # OTel `gen_ai.*` semantic conventions — picked up by Langfuse and
+        # other LLM observability backends to render the span as a typed
+        # "generation" with model + token usage in the UI.
+        if out.backend:
+            span.set_attribute("gen_ai.system", out.backend)
+        if out.model:
+            span.set_attribute("gen_ai.request.model", out.model)
+        if out.prompt_tokens is not None:
+            span.set_attribute("gen_ai.usage.prompt_tokens", out.prompt_tokens)
+        if out.completion_tokens is not None:
+            span.set_attribute("gen_ai.usage.completion_tokens", out.completion_tokens)
+        if out.prompt_tokens is not None and out.completion_tokens is not None:
+            span.set_attribute(
+                "gen_ai.usage.total_tokens",
+                out.prompt_tokens + out.completion_tokens,
+            )
 
 
 def _otel_attrs(payload: dict[str, Any]) -> dict[str, Any]:
