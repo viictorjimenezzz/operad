@@ -389,6 +389,9 @@ run-detail page. Bootstrap via `LANGFUSE_INIT_*` env vars (admin user,
 organization, project, API keys) and seed `OTEL_EXPORTER_OTLP_HEADERS`
 with `scripts/langfuse_otel_header.sh`. See
 [`apps/README.md`](apps/README.md).
+The trace-id derivation (`int(run_id, 16)`) and deep-link URL format are verified in
+`tests/runtime/test_observer_otel.py` (OTel side) and
+`apps/dashboard/tests/test_run_detail.py` (dashboard side).
 
 ### `Trace` + `trace_diff` + schema-drift replay
 
