@@ -295,6 +295,7 @@ class Tracer:
         )
 
         if child._children:
+            edges_before = len(self.graph.edges)
             self._stack.append((child, callee))
             try:
                 sentinel = _make_sentinel(child.input)
@@ -322,6 +323,20 @@ class Tracer:
                                 f"returned {type(out).__name__}, "
                                 f"expected {child.output.__name__}"
                             ),
+                        ),
+                    )
+                if len(self.graph.edges) == edges_before:
+                    from .graph import to_mermaid_node
+
+                    raise BuildError(
+                        "sentinel_bypass",
+                        f"composite {type(child).__name__}.forward returned without "
+                        "invoking any child; the sentinel was not routed through the graph",
+                        agent=callee,
+                        mermaid=to_mermaid_node(
+                            callee,
+                            (child.input, child.output),
+                            note="no child was invoked",
                         ),
                     )
             finally:
@@ -366,11 +381,19 @@ def _validate(a: Agent[Any, Any]) -> None:
         raise BuildError(
             "prompt_incomplete", "missing input/output type", agent=type(a).__name__
         )
-    if _is_default_forward(a) and a.config is None:
+    _needs_config = _is_default_forward(a) or getattr(a, "requires_config_at_build", False)
+    if not a._children and a.config is None and _needs_config:
+        from .graph import to_mermaid_node
+
         raise BuildError(
             "prompt_incomplete",
             "leaf agent requires `config`; pass one to the constructor",
             agent=type(a).__name__,
+            mermaid=to_mermaid_node(
+                type(a).__name__,
+                (a.input, a.output),
+                note="config is None",
+            ),
         )
 
 
@@ -517,6 +540,20 @@ async def abuild_agent(root: Agent[Any, Any]) -> Agent[Any, Any]:
                         f"returned {type(out).__name__}, expected "
                         f"{root.output.__name__}"  # type: ignore[union-attr]
                     ),
+                ),
+            )
+        if root._children and len(tracer.graph.edges) == 0:
+            from .graph import to_mermaid_node
+
+            raise BuildError(
+                "sentinel_bypass",
+                f"root composite {type(root).__name__}.forward returned without "
+                "invoking any child; the sentinel was not routed through the graph",
+                agent=type(root).__name__,
+                mermaid=to_mermaid_node(
+                    type(root).__name__,
+                    (root.input, root.output),  # type: ignore[arg-type]
+                    note="no child was invoked",
                 ),
             )
     else:
