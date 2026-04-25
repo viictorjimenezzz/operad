@@ -163,14 +163,24 @@ Schemas: `BeliefItem`, `BeliefOp`, `BeliefOperation`, `SessionItem`,
 `SessionNamespace`, `SessionStatus`.
 
 ### `safeguard/`
-Chat-scope guardrail leaves. `Context` evaluates whether a prompt is
-in-scope (returns a `SafeguardCategory`); `Talker` produces a refusal
-or pass-through response when called as a guard. Disambiguated as
+Chat-scope guardrail leaves plus a pre-wired pipeline composite.
+`Context` evaluates whether a prompt is in-scope (returns a
+`SafeguardCategory`); `Talker` produces a refusal response when called
+as a guard. `SafetyGuard` is a composite that wires `Context →
+{in_scope: inner, *: Talker}` automatically. Disambiguated as
 `SafeguardTalker` at the top-level `operad.agents` re-export.
 
 ```python
-from operad.agents.safeguard import Context, Talker as SafeguardTalker
-guard_pipeline = Pipeline(Context(config=cfg), SafeguardTalker(config=cfg))
+from operad.agents.safeguard import Context, SafetyGuard, Talker
+
+guard = SafetyGuard(
+    context=Context(config=cfg),
+    talker=Talker(config=cfg),
+    inner=my_agent,                          # optional; defaults to passthrough
+    refusal_factory=lambda x, cat: MyOut(),  # required when output != TextResponse
+)
+guard.build()
+result = await guard(ContextInput(message="hello"))
 ```
 
 ### `retrieval/`
