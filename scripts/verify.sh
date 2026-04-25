@@ -18,4 +18,10 @@ uv run --extra observers python demo.py --offline
 echo "== apps/demos/agent_evolution/run.py =="
 uv run python apps/demos/agent_evolution/run.py --offline --generations 2 --population 4 --seed 0
 
+echo "== examples/benchmark (offline, 5 examples) =="
+uv run python -m examples.benchmark.run \
+    --offline --max-examples 5 --seeds 0 \
+    --methods no_train,hand_edit,sweep,evo \
+    --out /dev/null
+
 echo "✅ verify complete."
