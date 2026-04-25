@@ -274,18 +274,21 @@ cfg = Configuration(
 )
 ```
 
-### Supported backends
+### Per-backend constraint table
 
-| Backend       | Local? | Extra needed      |
-| ------------- | ------ | ----------------- |
-| `llamacpp`    | yes    | (built-in)        |
-| `lmstudio`    | yes    | (built-in)        |
-| `ollama`      | yes    | (built-in)        |
-| `huggingface` | yes    | `[huggingface]`   |
-| `openai`      | hosted | (built-in)        |
-| `anthropic`   | hosted | (built-in)        |
-| `bedrock`     | hosted | (built-in)        |
-| `gemini`      | hosted | `[gemini]`        |
+All constraints are enforced at `Configuration` construction time; runtime
+adapters treat them as invariants.
+
+| Backend       | `host`   | `api_key` / env-var fallback          | `batch` | Extra pkg        |
+| ------------- | -------- | ------------------------------------- | ------- | ---------------- |
+| `llamacpp`    | required | —                                     | no      | (built-in)       |
+| `lmstudio`    | required | optional (placeholder `"lm-studio"`)  | no      | (built-in)       |
+| `ollama`      | required | —                                     | no      | (built-in)       |
+| `huggingface` | —        | —                                     | no      | `[huggingface]`  |
+| `openai`      | —        | required (`OPENAI_API_KEY`)           | yes     | (built-in)       |
+| `anthropic`   | —        | required (`ANTHROPIC_API_KEY`)        | yes     | (built-in)       |
+| `bedrock`     | —        | — (AWS SDK credential chain)          | yes     | (built-in)       |
+| `gemini`      | —        | required (`GOOGLE_API_KEY`)           | no      | `[gemini]`       |
 
 ### Batch mode
 

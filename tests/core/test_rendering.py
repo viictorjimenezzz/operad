@@ -317,9 +317,10 @@ def _bare_cfg(**sampling_overrides: Any) -> Configuration:
         return Configuration(
             backend="openai",
             model="gpt-4o-mini",
+            api_key="sk-test",
             sampling=Sampling(**sampling_overrides),
         )
-    return Configuration(backend="openai", model="gpt-4o-mini")
+    return Configuration(backend="openai", model="gpt-4o-mini", api_key="sk-test")
 
 
 def test_default_sampling_fills_unset_fields() -> None:

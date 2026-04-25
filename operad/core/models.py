@@ -187,7 +187,8 @@ def _build_bedrock(cfg: Configuration) -> "BedrockModel":
 def _build_llamacpp(cfg: Configuration) -> "LlamaCppModel":
     from strands.models.llamacpp import LlamaCppModel
 
-    assert cfg.host is not None
+    if cfg.host is None:
+        raise BuildError("prompt_incomplete", f"backend={cfg.backend!r} requires host")
     return LlamaCppModel(
         base_url=http_base_url(cfg.host),
         model_id=cfg.model,
@@ -198,7 +199,8 @@ def _build_llamacpp(cfg: Configuration) -> "LlamaCppModel":
 def _build_lmstudio(cfg: Configuration) -> "OpenAIModel":
     from strands.models.openai import OpenAIModel
 
-    assert cfg.host is not None
+    if cfg.host is None:
+        raise BuildError("prompt_incomplete", f"backend={cfg.backend!r} requires host")
     base_url = http_base_url(cfg.host)
     # LM Studio's OpenAI-compatible endpoint lives under /v1. Users may pass
     # either the server root or a URL that already includes /v1.
@@ -206,6 +208,11 @@ def _build_lmstudio(cfg: Configuration) -> "OpenAIModel":
         base_url = f"{base_url}/v1"
     client_args = openai_client_args(cfg)
     client_args["base_url"] = base_url
+    if cfg.api_key is None:
+        import logging as _logging
+        _logging.getLogger(__name__).debug(
+            "backend='lmstudio': no api_key set, using placeholder 'lm-studio'"
+        )
     client_args["api_key"] = cfg.api_key or "lm-studio"
     return OpenAIModel(
         client_args=client_args,
@@ -217,7 +224,8 @@ def _build_lmstudio(cfg: Configuration) -> "OpenAIModel":
 def _build_ollama(cfg: Configuration) -> "OllamaModel":
     from strands.models.ollama import OllamaModel
 
-    assert cfg.host is not None
+    if cfg.host is None:
+        raise BuildError("prompt_incomplete", f"backend={cfg.backend!r} requires host")
     kwargs: dict[str, Any] = {
         "model_id": cfg.model,
         "temperature": cfg.sampling.temperature,
