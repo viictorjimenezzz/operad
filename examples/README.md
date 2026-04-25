@@ -1,13 +1,12 @@
 # examples/
 
-Four end-to-end examples — one per pillar of the operad vision. Each is
-self-contained, runs offline by default (`--offline` is a parity flag for
-`scripts/verify.sh`), and prints a Rich-formatted terminal walkthrough
-you can follow line-by-line. Pass `--live` (where supported) to hit a
-real `llama-server` configured via `_config.py`.
+Start here: **`00_hello.py`** — one leaf, one call, ~35 lines. Then work through the numbered examples below, one per pillar of the operad vision.
+
+Each example is self-contained, runs offline by default (`--offline` is a parity flag for `scripts/verify.sh`), and prints a terminal walkthrough you can follow line-by-line. Pass `--live` (where supported) to hit a real `llama-server` configured via `_config.py`.
 
 | # | Script                                  | What it shows |
 | - | --------------------------------------- | ------------- |
+| 0 | `00_hello.py` ← **start here**         | A single leaf agent, a single `await agent(x)`, and `print(out.response.response)`. The minimal shape of every operad program. |
 | 1 | `01_composition_research_analyst.py`    | A single `await agent(x)` over four nested composition layers (Pipeline ⊃ Parallel × 3 ⊃ Pipeline ⊃ ReAct). 28 typed nodes, 27 edges, all checked at `build()` time. |
 | 2 | `02_talker_reasoner_intake.py`          | The new `TalkerReasoner` algorithm walking a user through a four-stage scenario tree. Exercises the `stay`/`advance`/`branch`/`finish` decision branches end-to-end. |
 | 3 | `03_train_config_temperature.py`        | A small training loop that tunes `config.sampling.temperature` via `EvoGradient` with `SetTemperature` mutations. Score climbs from 0.15 → 1.00 across four generations. |
@@ -16,6 +15,7 @@ real `llama-server` configured via `_config.py`.
 Run them all from the repo root:
 
 ```bash
+uv run python examples/00_hello.py
 uv run python examples/01_composition_research_analyst.py
 uv run python examples/02_talker_reasoner_intake.py
 uv run python examples/03_train_config_temperature.py
