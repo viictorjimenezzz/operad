@@ -86,10 +86,13 @@ class EvoGradient(Optimizer):
         self._population: list[Agent[Any, Any]] | None = None
         self._generation = 0
         self._root = self._discover_root()
-        # Tracks (individual→op_name) via id() of each agent in the
-        # current population so attribution survives across generations
-        # (survivors keep their creation op).
-        self._origin_ops: dict[int, str] = {}
+        # Tracks (individual→(op_name, path)) via id() of each agent in
+        # the current population so attribution survives across
+        # generations (survivors keep their creation op). Path is the
+        # dotted path the op targeted in the tree, used by observers
+        # (e.g. the dashboard graph panel) to attribute changes to a
+        # specific sub-agent.
+        self._origin_ops: dict[int, tuple[str, str]] = {}
         # Scores evaluated during the most recent step(), used to compute
         # the "improved vs previous generation median" flag on the next
         # emission. Seeded from a one-off root eval on the first step.
@@ -103,7 +106,7 @@ class EvoGradient(Optimizer):
 
     async def _attempt_mutate_and_build(
         self, parent: Agent[Any, Any]
-    ) -> tuple[Agent[Any, Any], str] | None:
+    ) -> tuple[Agent[Any, Any], str, str] | None:
         candidate = parent.clone()
         op = copy.deepcopy(self._rng.choice(self._mutations))
         op.apply(candidate)
@@ -112,7 +115,7 @@ class EvoGradient(Optimizer):
         except BuildError:
             op.undo(candidate)
             return None
-        return candidate, op.name
+        return candidate, op.name, getattr(op, "path", "")
 
     async def _fresh_individual(
         self, parent: Agent[Any, Any]
@@ -120,8 +123,8 @@ class EvoGradient(Optimizer):
         for _ in range(self._max_mutation_retries):
             outcome = await self._attempt_mutate_and_build(parent)
             if outcome is not None:
-                candidate, op_name = outcome
-                self._origin_ops[id(candidate)] = op_name
+                candidate, op_name, op_path = outcome
+                self._origin_ops[id(candidate)] = (op_name, op_path)
                 return candidate
         warnings.warn(
             "EvoGradient: all mutation attempts failed to build after "
@@ -131,11 +134,12 @@ class EvoGradient(Optimizer):
         )
         fallback = parent.clone()
         await fallback.abuild()
-        self._origin_ops[id(fallback)] = _IDENTITY_OP
+        self._origin_ops[id(fallback)] = (_IDENTITY_OP, "")
         return fallback
 
     async def step(self) -> None:
         if self._population is None:
+            await self._emit_algo_start()
             # Seed-score baseline drives the first-generation `improved`
             # comparisons: every initial individual is judged against
             # how the unmutated root scored on the same dataset.
@@ -200,6 +204,38 @@ class EvoGradient(Optimizer):
         self._last_scores = scores
         self._generation += 1
 
+    async def _emit_algo_start(self) -> None:
+        """Announce the run with the root agent's identity and Mermaid graph.
+
+        The dashboard uses `root_path` to anchor mutation paths to graph
+        node IDs (mutation paths are root-relative, but Mermaid IDs are
+        rooted at the agent class name) and uses `graph_mermaid` to
+        render the topology on the algorithm run's graph panel — agent
+        evaluations during a run carry separate run_ids, so without
+        this the algorithm run has no graph to render.
+        """
+        from operad.core.graph import to_mermaid
+
+        graph_mermaid: str | None = None
+        graph = getattr(self._root, "_graph", None)
+        if graph is not None:
+            try:
+                graph_mermaid = to_mermaid(graph)
+            except Exception:
+                graph_mermaid = None
+        payload: dict[str, Any] = {
+            "root_path": type(self._root).__name__,
+            "population_size": self._population_size,
+        }
+        if graph_mermaid is not None:
+            payload["graph_mermaid"] = graph_mermaid
+        with _enter_algorithm_run():
+            await emit_algorithm_event(
+                "algo_start",
+                algorithm_path=type(self).__name__,
+                payload=payload,
+            )
+
     async def _emit_generation_event(
         self,
         *,
@@ -209,14 +245,17 @@ class EvoGradient(Optimizer):
     ) -> None:
         baseline = self._last_scores or []
         median = statistics.median(baseline) if baseline else float("-inf")
-        ops = [
-            self._origin_ops.get(id(a), _IDENTITY_OP) for a in population
+        origins = [
+            self._origin_ops.get(id(a), (_IDENTITY_OP, "")) for a in population
         ]
+        ops = [o[0] for o in origins]
+        paths = [o[1] for o in origins]
         improved = [s > median for s in scores]
         mutations: list[dict[str, Any]] = [
             {
                 "individual_id": i,
                 "op": ops[i],
+                "path": paths[i],
                 "improved": bool(improved[i]),
             }
             for i in range(len(population))

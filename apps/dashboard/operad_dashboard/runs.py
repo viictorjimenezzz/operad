@@ -238,7 +238,14 @@ class RunRegistry:
         info.algorithm_kinds.add(kind)
         payload = envelope.get("payload") or {}
         ts = envelope.get("started_at")
-        if kind == "generation":
+        if kind == "algo_start":
+            mermaid = payload.get("graph_mermaid")
+            if isinstance(mermaid, str) and info.mermaid is None:
+                info.mermaid = mermaid
+            root_path = payload.get("root_path")
+            if isinstance(root_path, str) and info.root_agent_path is None:
+                info.root_agent_path = root_path
+        elif kind == "generation":
             scores = payload.get("population_scores") or []
             best = max(scores) if scores else None
             mean = sum(scores) / len(scores) if scores else None

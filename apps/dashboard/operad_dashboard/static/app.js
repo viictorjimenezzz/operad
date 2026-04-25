@@ -124,6 +124,7 @@ function ingestEvent(env) {
     }
     if (state.currentTab === "evolution") renderEvolution();
     if (state.currentTab === "overview" && !state.currentRunId) renderOverview();
+    if (state.currentTab === "graph" && runId === state.currentRunId) renderGraph();
   }
 
   if (isNew || state.autoFollow) {
@@ -527,6 +528,53 @@ function renderScatter(slot, gens) {
 
 /* ---------- graph tab ---------- */
 
+/**
+ * Aggregate per-path mutation activity from generation events for `runId`.
+ * Returns a Map<dotted_path, {attempts, successes}>.
+ *
+ * Mutation entries come from EvoGradient's `generation` AlgorithmEvent payload
+ * (`mutations: [{individual_id, op, path, improved}]`). Identity / unattributed
+ * entries with empty path are ignored — they represent the unmutated root or
+ * fallback clones, not a graph-node-level signal.
+ */
+function aggregatePathMutations(runId) {
+  const acc = new Map();
+  for (const gen of state.liveGenerations) {
+    if (gen.run_id !== runId) continue;
+    for (const m of gen.mutations || []) {
+      const path = m.path || "";
+      if (!path) continue;
+      const cur = acc.get(path) || { attempts: 0, successes: 0 };
+      cur.attempts += 1;
+      if (m.improved) cur.successes += 1;
+      acc.set(path, cur);
+    }
+  }
+  return acc;
+}
+
+/**
+ * Append Mermaid `style` directives that tint nodes which were the target
+ * of mutations during this run. Node IDs in the Mermaid source replace `.`
+ * with `_` (see operad/core/graph.py::_mermaid_id), and mutation paths are
+ * relative to the root agent — so the full graph-node path is
+ * `${rootName}.${mutation.path}` (or `${rootName}` when path is empty).
+ */
+function tintGraphFromMutations(mermaidSrc, rootName, pathMutations) {
+  if (!rootName || pathMutations.size === 0) return mermaidSrc;
+  const lines = [mermaidSrc];
+  for (const [path, counts] of pathMutations) {
+    const fullPath = `${rootName}.${path}`;
+    const nodeId = fullPath.replaceAll(".", "_");
+    if (counts.successes > 0) {
+      lines.push(`style ${nodeId} fill:#1b3a2a,stroke:#46e09a,stroke-width:2px`);
+    } else if (counts.attempts > 0) {
+      lines.push(`style ${nodeId} fill:#3a2f1b,stroke:#e0a946,stroke-width:2px`);
+    }
+  }
+  return lines.join("\n");
+}
+
 async function renderGraph() {
   const rid = state.currentRunId;
   const graphEl = $("graph");
@@ -545,7 +593,12 @@ async function renderGraph() {
       graphEl.innerHTML = `flowchart LR\n  none["no graph captured for this run"]`;
     } else {
       const j = await r.json();
-      graphEl.innerHTML = j.mermaid;
+      let src = j.mermaid;
+      const summary = state.runSummaries.get(rid) || state.runs.get(rid);
+      const rootName = summary && summary.root_agent_path;
+      const pathMutations = aggregatePathMutations(rid);
+      src = tintGraphFromMutations(src, rootName, pathMutations);
+      graphEl.innerHTML = src;
     }
     graphEl.removeAttribute("data-processed");
     await mermaid.run({ nodes: [graphEl] });
