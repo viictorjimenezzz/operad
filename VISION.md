@@ -1,415 +1,268 @@
-# operad — vision and direction
+# operad — vision
 
-This document is the north star for the `operad` library: the bet we
-are making, the mental model we borrow from, and the kind of system we
-expect to have in twelve months. It is required reading for anyone
-contributing code, whether human or agent.
+> *Audience: coding agents and contributors. This document is terse,
+> structured, and link-dense by design. For the user-facing intro, see
+> [README.md](README.md). For the capability inventory, see
+> [INVENTORY.md](INVENTORY.md). For training internals, see
+> [TRAINING.md](TRAINING.md) and
+> [`operad/optim/README.md`](operad/optim/README.md).*
 
-## 1. Vision in one sentence
+---
 
-**operad is the `torch.nn` of local-first agent systems: typed,
-composable agent modules; algorithms that compose those modules into
-coordinated behavior; and metrics that can feed results back into the
-loop.**
+## 1. Purpose
 
-The library is built on top of [Strands Agents](https://strandsagents.com/)
-and is designed around locally-served OpenAI-compatible model servers
-(LMStudio, `llama-server`, Ollama), but nothing in the foundations
-prevents it from pointing at hosted providers.
+`operad` is an agentic framework built on top of
+[strands-agents](https://strandsagents.com/). It inherits everything
+strands gives you for free — tool calls, MCP, structured output,
+OpenAI-compatible adapters across every common backend — and adds
+three capabilities strands does not provide:
 
-## 2. The name
+- **Typed compositional definition** of agentic systems.
+- **Prompt parametrization** — every prompt field is a tunable knob.
+- **Algorithms** — outer loops where agents improve other agents.
 
-An **operad** is the mathematical structure of abstract operations that
-compose by trees. An element of an operad is an `n`-ary operation with
-a fixed output; composition plugs the output of one operation into one
-of the inputs of another, producing a new, deeper operation. The
-collection of all such compositions obeys associativity and the obvious
-equivariance under relabeling.
+Together, these enable the end vision: **dynamic agentic systems
+trained at the prompt level, not the weights level** — improvement
+driven by text feedback, textual backpropagation, and prompt
+engineering as optimization. Anyone building an agentic workflow can
+build it on `operad` and then launch coordinated-agent algorithms on
+their workflow to improve it.
 
-Every `Agent[In, Out]` in this library is a typed operation. `Pipeline`
-composes them sequentially; `Parallel` fans them out and joins the
-results through an `n`-ary combine step; a future `Debate` would
-introduce mutual critique before a synthesis node. `build()` captures
-the tree of operations symbolically, checks every edge for type
-compatibility, and freezes it into an `AgentGraph` — a first-class
-value you can export, mutate, or run.
+This framing dictates the rest of the architecture. Every primitive
+exists because it serves prompt-level training. Every dependency
+points toward making improvement loops first-class citizens.
 
-The name is literal, not decorative: this library *is* a library of
-typed operations that compose by trees, with a build step that makes
-the composition explicit.
+## 2. The three pillars
 
-## 3. The big bet
+### 2.1 Typed compositional definition
 
-Most agent frameworks today land in one of two camps:
+`Agent[In, Out]` is a typed unit of work. `Pipeline`, `Parallel`,
+`Switch`, and `Router` compose units into trees. `build()` walks the
+tree symbolically, type-checks every parent-to-child handoff, and
+freezes the result into an `AgentGraph` — a first-class value you can
+export, mutate, hash, replay.
 
-- **Graph DSLs** (LangGraph, state machines): nodes and edges are a
-  separate language from the code that runs inside them. Type safety
-  stops at the node boundary; you edit YAML to change composition.
-- **Role-play systems** (AutoGen, CrewAI): agents are named personas
-  that converse; composition is a conversation, which is neither typed
-  nor reproducible.
+*Why this matters for the vision*: an agentic system you cannot
+introspect is one you cannot improve. The graph is the substrate every
+optimizer, observer, and replay tool reads. Topology errors are caught
+before any token is generated; the same graph drives Mermaid export,
+cassette replay, cost accounting, and `backward()`. **The build step
+is the compile step**: it turns a Python script into a data structure.
 
-`operad` bets on a third path: **agents are Python modules in the
-`torch.nn` sense**. They have typed inputs and outputs, they can be
-nested, they can be serialized, they can be mutated in place, and
-their composition is *itself* a module. If that bet pays off, three
-things become possible:
+### 2.2 Prompt parametrization
 
-1. The same surface expresses one-shot leaves, fan-outs, pipelines,
-   best-of-N, debates, evolutionary loops, and self-improvement — with
-   no new primitives.
-2. Dashboards, observability, cost estimation, and optimization all
-   hang off a single computation graph captured before any token is
-   generated.
-3. Prompts, temperatures, and topologies are parameters that can be
-   swept over, A/B-tested, and mutated by other agents — because
-   they're just Pydantic objects, not YAML.
+Every mutable field on an `Agent` is a `Parameter`:
 
-Everything else in this document is in service of that bet.
+- `role`, `task` → `TextParameter`
+- `rules` → `RuleListParameter`
+- `examples` → `ExampleListParameter`
+- `temperature`, `top_p` → `FloatParameter`
+- `model`, `backend`, `renderer` → `CategoricalParameter`
 
-## 4. The PyTorch analogy
+`agent.parameters()` and `agent.named_parameters()` yield handles you
+can read, mutate, sweep, A/B test, or train. `mark_trainable(...)`
+flips `requires_grad` flags at any granularity (whole tree, per field,
+per dotted path).
 
-The mental model deliberately mirrors `torch.nn` at every level.
+*Why this matters for the vision*: prompts cease to be opaque strings
+and become a tunable surface. This is the precondition for treating
+"prompt engineering" as a numerical (well, *textual*) optimization
+problem instead of a hand-craft discipline. Constraints
+(`TextConstraint`, `VocabConstraint`, `NumericConstraint`,
+`ListConstraint`) are the textual-gradient analog of gradient
+clipping, applied before every update.
 
-| PyTorch                          | operad                                                       |
-| -------------------------------- | ------------------------------------------------------------ |
-| `nn.Module`                      | `Agent` (single class; leaves and composites)                |
-| module weights / params          | agent state (config, role, task, rules, examples, I/O types) |
-| `forward(x)`                     | `forward(x: In) -> Out` (async)                              |
-| `Module.__call__`                | `Agent.__call__` / `invoke` (validates contract)             |
-| child module tracking            | `__setattr__` hook registers sub-`Agent`s                    |
-| `torch.compile` / `fx`           | `build()` with symbolic tracing                              |
-| `torch.fx.Graph`                 | `AgentGraph` of `Edge` + `Node` objects                      |
-| `torch.nn` library               | `agents/` (typed, composable Agent subclasses)               |
-| `torchmetrics`                   | `metrics/` (deterministic scorers)                           |
-| `nn.Parameter`                   | `operad.optim.Parameter`                                     |
-| `loss.backward()`                | `await tape.backward(loss)` (walks the runtime tape)         |
-| `torch.optim.*`                  | `operad.optim.*` (SGD / Momentum / Evo / OPRO / APE)         |
-| `torch.optim.lr_scheduler.*`     | `operad.optim.lr_scheduler.*`                                |
-| `torch.utils.data.DataLoader`    | `operad.data.DataLoader`                                     |
-| `lightning.Trainer`              | `operad.train.Trainer`                                       |
-| `torch.no_grad()`                | `async with operad.no_grad():`                               |
-| `Module.register_forward_hook`   | `Agent.register_forward_hook`                                |
-| numerical-loop algorithms        | `algorithms/` (non-Agent loops: BestOfN, Evolutionary, …)    |
+### 2.3 Algorithms — agents improving agents
 
-Two consequences follow from taking this analogy seriously:
+`operad/algorithms/` are plain classes whose `run(...)` methods
+orchestrate `Agent`s through outer loops with metric feedback
+(`Beam`, `Debate`, `Sweep`, `VerifierLoop`, `AutoResearcher`). They
+are deliberately **not** `Agent` subclasses — their natural API is
+not `__call__(x: In) -> Out`.
 
-1. **A component is an `Agent` subclass** — leaves, pipelines,
-   parallel fan-outs, and the leaf starter pack (`Reasoner`,
-   `Extractor`, `Classifier`, `Planner`, `Critic`, ...) all satisfy
-   the typed `Agent[In, Out]` surface and nest freely.
-2. **Algorithms are *not* Agents.** An `Evolutionary[Template, Agent]`
-   that mutates prompts, evaluates populations, selects survivors,
-   and iterates has a shape that doesn't fit `x: In -> y: Out`.
-   Forcing every outer loop into the Agent mold loses information and
-   produces awkward constructors. Algorithms are plain classes with
-   whatever `run(...)` signature they need; they take Agents as
-   parameters and operate on their outputs with metric feedback.
+`operad/optim/` and `operad/train/` formalize the same pattern: the
+gradient agents (`BackpropAgent`) and rewrite agents (`RewriteAgent`)
+that constitute `backward()` and `Optimizer.step()` are themselves
+`Agent` subclasses. So the whole observer / cassette / hashing stack
+composes straight through a fit loop.
 
-## 5. The three core abstractions
+*Why this matters for the vision*: improvement is itself an agentic
+workflow. There is no separate optimization framework underneath;
+the same primitives that build the workflow also improve it. This is
+what makes "people who build agentic workflows can launch algorithms
+on their workflows" coherent — the algorithms are made of the same
+stuff as the workflow they improve.
 
-### 5.1 `Agent[In, Out]`
+## 3. The training paradigm
 
-- Inherits from `strands.Agent`.
-- Generic over its input and output Pydantic classes, so composition is
-  type-checkable in your IDE.
-- Holds all its "hyperparameters" directly on the instance — no wrapper
-  object. The full surface is: `config`, `role`, `task`, `rules`,
-  `examples`, `input`, `output`. Class-level attribute defaults carry
-  the opinionated values for each component; the constructor merges
-  them with any per-instance overrides.
-- Leaves: use the default `forward`, which delegates to
-  `strands.Agent.invoke_async(..., structured_output_model=...)` to get
-  validated structured output.
-- Composites: override `forward` to route between child `Agent`s.
-  Children assigned as attributes are auto-registered (PyTorch
-  `__setattr__` trick).
-- `strands.Agent.__init__` is intentionally deferred to `build()` so
-  that constructing an `Agent` has zero network/provider side effects.
+Prompt-level training is operad's load-bearing differentiator.
 
-### 5.2 Agent "hyperparameters" (role / task / rules / examples)
-
-The four structural prompt sections live on the Agent itself. The
-field set comes from cross-referencing DSPy Signatures, the TELeR
-taxonomy, PICCO, and the Prompt Report (Schulhoff et al. 2024) —
-what's common to all of them is here; the rest is either redundant
-with our typed I/O schemas or better pushed into `In`:
-
-- `config: Configuration | None` — backend + sampling knobs; `None`
-  for pure-router composites.
-- `role: str` — the persona the agent adopts.
-- `task: str` — the single most important instruction.
-- `rules: list[str]` — hard constraints.
-- `examples: list[Example[In, Out]]` — *typed* few-shot pairs
-  (DSPy-style: each demonstration is a full `(In, Out)` instance, not
-  a string).
-- `input: type[In]` / `output: type[Out]` — the typed contract.
-
-The default renderer surfaces section descriptions (persona, task,
-etc.) as XML `desc="..."` attributes so the model is told what each
-section *means*, not just what it says. The same trick surfaces
-`Field(description=...)` on the user's own `In` and `Out` schemas,
-which is the DSPy insight that per-field semantics belong in the
-prompt contract.
-
-Because every knob is a plain mutable attribute, evolutionary search,
-hyperparameter sweeps, A/B prompt comparison, and runtime prompt
-swapping are all *just mutations* — no special framework support
-needed.
-
-Components declare opinionated defaults at the class level:
+**The signal is text.** A `TextualGradient` is a Pydantic critique:
 
 ```python
-class Reasoner(Agent[In, Out]):
-    role = "You are a careful, methodical reasoner."
-    task = "Work through the problem step-by-step, then commit to an answer."
-    rules = ("Show your reasoning before the final answer.", ...)
+class TextualGradient(BaseModel):
+    message: str                    # natural-language critique
+    by_field: dict[str, str] = {}   # per-field breakdown
+    severity: float = 1.0           # magnitude; 0 = no-op
+    target_paths: list[str] = []    # blame-routing hints
 ```
 
-Instantiation is `Reasoner(config=cfg, input=Q, output=A)` (or a
-subclass that pins `input`/`output` at the class level). Any field
-can be overridden at construction time or mutated on the instance
-(`leaf.task = "..."`) afterwards.
+LLM critics (rubric judges, structured evaluators) emit gradients;
+optimizers consume them; `RewriteAgent`s apply them to `Parameter`s.
 
-### 5.3 `build()` — the "compile" step
+**The plumbing mirrors PyTorch's:** `Parameter` → `tape()` →
+`backward()` → `Optimizer.step()` → `Trainer.fit()`. The mirroring is
+ergonomic — anyone who has trained a model can read the code — but
+it is not the *reason* the architecture exists. The reason is that
+the same observer / cassette / hashing infrastructure that makes
+inference observable also makes training observable, and the same
+`Agent` surface that runs the workflow also implements the optimizer.
 
-`agent.build()` (sync) or `await agent.abuild()` (inside a running
-loop) prepares a composed architecture for repeated `invoke()` calls.
-It:
+**Optimizer fleet.** `TextualGradientDescent`, `MomentumTextGrad`,
+`EvoGradient` (population-search), `OPROOptimizer` (LLM-as-optimizer
+with history), `APEOptimizer` (sample-and-rank). All five subclass
+the same `Optimizer` base; all five take `list[Parameter] |
+list[ParamGroup]`; all five expose `zero_grad()` + `await step()`.
 
-1. **Validates** every agent in the tree (input/output types set;
-   leaves have a config).
-2. **Resolves models**: `Configuration` → `strands.models.Model` via
-   `operad.models.resolve_model`, wiring leaves that use the default
-   `forward`.
-3. **Symbolically traces**: `forward()` is called once with a sentinel
-   input. Child `invoke` calls are intercepted by a `Tracer` installed
-   via an `asyncio.ContextVar`.
-   - Each edge is type-checked (caller input vs child's `input`).
-   - Each edge is recorded as
-     `Edge(caller, callee, input_type, output_type)`.
-   - Composites recurse; leaves return a typed `model_construct()`
-     output.
-   - No LLM is contacted.
-4. **Checks root output** against the root's `output`.
-5. **Freezes**: stores `AgentGraph` on `root._graph`, flips `_built`
-   on every node in the tree.
+**Trainer.** `operad.train.Trainer.fit/evaluate/predict` glues the
+spine together with callbacks (`EarlyStopping`, `BestCheckpoint`,
+`GradClip`, `PromptDrift`, `LearningRateLogger`, `MemoryRotation`,
+`HumanFeedbackCallback`) and LR schedulers. Full walkthrough in
+[TRAINING.md](TRAINING.md).
 
-The payoff: architecture errors (mismatched types, missing contracts,
-wrong return types) are caught *before any token is generated*, and
-you get a free computation graph for observability
-(`operad.to_mermaid`, `to_json`).
+**Meta-optimization** is the long-term research surface: an optimizer
+*is* an agent, so a `Trainer` optimizing the optimizer that optimizes
+a workflow is the same three-level stack you get with learned
+optimizers — except the gradient language is English.
 
-**Important constraint** (shared with `torch.fx`): `forward()` is
-called with sentinel inputs during tracing, so composite `forward`
-methods must *route* rather than *branch on payload values*. Pydantic
-field defaults land in the sentinel; if your logic needs a real value,
-do it inside a leaf. The build-time proxy planned for iteration 4
-will turn this silent footgun into a hard error.
+## 4. Strands as the substrate
 
-## 6. Where we are today
+We deliberately do not reimplement what strands already does well:
 
-The full `torch.nn` + `torch.fx` + `torch.optim` + `torch.utils.data`
-+ `pytorch-lightning` surface area, in operad terms.
+| Inherited from strands           | Provided by operad                     |
+| -------------------------------- | -------------------------------------- |
+| Tool calls, MCP                  | Typed `Agent[In, Out]` over strands    |
+| Structured output                | `Pipeline` / `Parallel` / `Switch`     |
+| OpenAI-compatible adapters       | `build()` symbolic trace + type check  |
+| Backend selection                | `Parameter` + textual gradients        |
+| Conversation state               | `Trainer` + callbacks + LR schedulers  |
+| Streaming                        | Algorithms (`Beam`, `Debate`, …)       |
+| Provider auth                    | Observer registry + cassette replay    |
 
-```
-operad/
-  core/
-    agent.py        Agent[In, Out] with class-attribute defaults; Example;
-                    parameters() / named_parameters() / mark_trainable();
-                    register_forward_hook / pre-hook / backward hook
-    config.py       Configuration, Backend
-    build.py        Tracer, AgentGraph, Edge, Node, build_agent, abuild_agent
-    graph.py        to_mermaid, to_json exporters
-    render.py       XML-tagged description-aware prompt renderer
-  utils/errors.py   BuildError + BuildReason
-  models/           resolve_model dispatcher, one file per backend
-  runtime/slots.py  SlotRegistry, acquire, set_limit
-  agents/           organized by domain: each <domain>/ has its own
-                    components/ subfolder + composed patterns at root
-    pipeline.py     structural operators (domain-agnostic)
-    parallel.py
-    reasoning/
-      components/   Reasoner, Actor, Extractor, Evaluator,
-                    Classifier, Planner, Critic (leaf Agent subclasses)
-      react.py      Reason-Act-Observe-Evaluate composition
-  algorithms/       BestOfN, Debate, SelfRefine, VerifierLoop,
-                    Evolutionary, Sweep, AutoResearcher
-  metrics/          Metric protocol, ExactMatch / JsonValid / Latency / …
-  optim/            Parameter, TextualGradient, tape / backward,
-                    Loss + CriticLoss + LossFromMetric + CompositeLoss,
-                    Optimizer base + TextualGradientDescent +
-                    MomentumTextGrad + EvoGradient + OPROOptimizer +
-                    APEOptimizer; LR scheduler family;
-                    BackpropAgent, RewriteAgent
-  train/            Trainer (fit / evaluate / predict) + callbacks
-                    (EarlyStopping, BestCheckpoint, GradClip,
-                    PromptDrift, LearningRateLogger, MemoryRotation);
-                    EpochReport, TrainingReport
-  data/             DataLoader, Batch, Sampler family, random_split
-tests/              offline by default; `tests/integration/` opt-in via
-                    OPERAD_INTEGRATION env var
-examples/           parallel.py — fan-out reasoners over a shared prompt
-```
+Supported backends today: `llamacpp`, `lmstudio`, `ollama`,
+`huggingface`, `openai`, `anthropic`, `bedrock`, `gemini`. Batch mode
+on the three providers that expose it (`openai`, `anthropic`,
+`bedrock`).
 
-Iteration 4 delivers the optim/train layer on top of the existing
-foundations: typed `Parameter` handles, textual-gradient propagation
-via a runtime tape, the full optimizer fleet, LR schedulers, and a
-PyTorch-Lightning-style `Trainer`. The wave-by-wave plan lives in
-[`.conductor/optim/`](.conductor/optim/).
+## 5. Architecture map
 
-New domains slot in as sibling folders of `reasoning/`:
+Current state. See [`operad/README.md`](operad/README.md) for the
+rationale of every submodule and links to per-submodule READMEs.
 
-* `coding/` — code-review components, PR synthesizers
-* `conversational/` — turn-taking, safeguards, persona management
-* `memory/` — belief / user-fact extractors, retrieval helpers
-* `<your-domain>/` — same shape
+| Submodule         | Role                                                                              |
+| ----------------- | --------------------------------------------------------------------------------- |
+| `core/`           | `Agent`, `build`, `AgentGraph`, `Configuration`, model dispatch, freeze/diff      |
+| `utils/`          | hashing, errors, mutation primitives (`Op`/`CompoundOp`), cassette record/replay  |
+| `runtime/`        | concurrency slots, traces, observer registry (Rich/JSONL/OTel/Web), cost, retry, sandbox launcher |
+| `agents/`         | the component library: `reasoning/`, `coding/`, `conversational/`, `memory/`, `retrieval/`, `safeguard/`, `debate/` + `Pipeline` / `Parallel` |
+| `algorithms/`     | `Beam`, `Debate`, `Sweep`, `VerifierLoop`, `AutoResearcher`                       |
+| `metrics/`        | deterministic scorers + `RubricCritic` + `CostTracker`                            |
+| `benchmark/`      | `Dataset`, `Entry`, `evaluate`, `Experiment`, `SensitivityReport`, `RegressionReport` |
+| `data/`           | `DataLoader`, samplers (incl. `UncertaintySampler`), `random_split`               |
+| `optim/`          | `Parameter` + `tape`/`backward` + `Optimizer` fleet + LR schedulers + `BackpropAgent` / `RewriteAgent` |
+| `train/`          | `Trainer` + callbacks + `HumanFeedbackCallback` / `HumanFeedbackLoss` + `TrainerProgressObserver` |
+| `configs/`        | YAML loader + schema (drives the CLI)                                             |
+| `cli.py`          | `operad run` / `trace` / `graph` / `tail`                                         |
+| `tracing.py`      | `watch()` context + `OPERAD_TRACE` env entry                                      |
+| `dashboard.py`    | event POST helper for a running `apps/dashboard/`                                 |
 
-Every composed pattern is free to import components from sibling
-domains (`ReAct`'s `Reasoner` already does).
+Surrounding extras live outside `operad/`:
+[`apps/dashboard`](apps/dashboard/README.md),
+[`apps/studio`](apps/studio/README.md),
+[`apps/demos`](apps/demos/README.md),
+[`examples/`](examples/README.md),
+[`scripts/verify.sh`](scripts/verify.sh).
 
-Iterations 1–3 deliver: real end-to-end execution against llama.cpp /
-LM Studio / Ollama / OpenAI / Bedrock; honest `Configuration`
-threading; per-endpoint concurrency slots; DSPy-grounded structured
-prompts living directly on the Agent (no wrapper object) with typed
-few-shot examples and description-aware rendering; the first seven
-leaf components; a pre-wired ReAct composition; the
-components-vs-algorithms taxonomy; a minimal metrics package; and
-graph export.
+## 6. Roadmap
 
-## 7. Where we're going
+Items not yet in code, ordered by priority:
 
-Layers planned for upcoming iterations. Each slots onto the
-foundations without revisiting them.
-
-```
-operad/
-  core/
-    render.py           additional renderers (Markdown, chat-template-aware)
-    build.py            sentinel proxy: detect payload-branching in composites
-                        at trace time, turning today's silent footgun into a
-                        BuildError with a pointer at the offending if/for
-  runtime/
-    observers/          hook protocol on `Agent.invoke`, Rich TUI dashboard,
-                        JSONL log writer, OpenTelemetry bridge
-    launchers/          asyncio (default) / process / macOS Terminal
-  agents/
-    reasoning/
-      components/       ToolUser, Retriever, Reflector, Router-by-enum
-      debate.py         more pre-wired patterns alongside react.py
-      verifier.py
-    coding/
-      components/       context_optimizer, reviewer
-      pr_reviewer.py
-    conversational/
-      components/       safeguard, turn-taker
-      talker.py
-    memory/
-      components/       beliefs, user_model, episodic
-  algorithms/           Debate, VerifierLoop, SelfRefine, TalkerReasoner,
-                        Evolutionary, AutoResearch
-  metrics/              rubric-driven judges, cost/token accounting
-  configs/              YAML/JSON entrypoints that instantiate algorithms
-  cli.py                `operad run config.yaml`
-```
-
-Iteration 4 focuses on correctness + observability: the sentinel
-proxy closes the "composite branches on payload" footgun, and the
-observer protocol gives us a single hook point for a Rich dashboard,
-JSONL logging, cost accounting, and the eventual HTML report.
-
-One north-star milestone remains explicitly on the roadmap:
-
-1. **`AutoResearcher` on 8 concurrent llama-server slots**: plan →
-   retrieve → read → write → verify → reflect, all local, all
+1. **Cassette-replay determinism validation** — the full validation
+   matrix for offline-deterministic training under
+   `OPERAD_CASSETTE=record/replay`.
+2. **Pre-wired composition wrappers** at `operad/agents/reasoning/`:
+   `debate.py` and `verifier.py`. The corresponding algorithms exist
+   under `operad/algorithms/`; the agent-level pre-wirings (parallel
+   to `react.py`) do not.
+3. **Additional launchers** in `operad/runtime/launchers/`: asyncio
+   default + macOS Terminal. Today only the sandbox process pool ships.
+4. **More algorithms**: `SelfRefine`, `TalkerReasoner`.
+5. **`TurnTaker`** under `operad/agents/conversational/`.
+6. **Meta-optimization** — north-star research surface. An optimizer
+   is itself an `Agent`; a `Trainer` optimizing the optimizer that
+   optimizes a workflow is the long-term unlock.
+7. **`AutoResearcher` on 8 concurrent llama-server slots**, fully
    observable in a live dashboard, with per-agent metrics feeding an
-   outer best-of-N loop.
+   outer best-of-N loop. End-to-end milestone for the local-first
+   story.
 
-The original north star — **`Evolutionary` as a non-Agent algorithm
-whose output is an improved Agent** — is now **SHIPPED**. The
-optim/train layer (`Parameter`, `backward()`, `Optimizer`, `Trainer`)
-landed in commits `368bd8a..126434b`; `EvoGradient` is a first-class
-`Optimizer` subclass that rewrites agents from textual gradients, and
-`Agent.auto_tune` wraps `Evolutionary` as the one-liner entry point.
-See [`.conductor/optim/`](.conductor/optim/) for the task plan and
-[`apps/demos/agent_evolution/run.py`](apps/demos/agent_evolution/run.py)
-for a live, fully-offline demo.
+## 7. Non-goals
 
-A second milestone — **training observability and human-in-the-loop
-labeling** — is also now **SHIPPED**. Four per-run dashboard panels
-(fitness curve, mutation heatmap, `PromptDrift` timeline, training
-progress) render live at `GET /runs/{run_id}` on
-`apps/dashboard/`, driven entirely by the existing observer
-registry. A sibling **Studio** app (`apps/studio/`) closes the loop:
-`HumanFeedbackCallback` writes `(input, predicted)` rows during
-`Trainer.fit`, a human assigns 1-5 ratings in the UI, and the same
-ratings file is replayed as a `HumanFeedbackLoss` on the next fit.
-See [`.conductor/training-v2/`](.conductor/training-v2/) for the
-task plan.
-
-## 8. Non-goals and deliberate omissions
-
-- **No static-type-checker runtime integration** (`ty`, `mypy`, etc.).
-  The library is fully typed (PEP 561 via `py.typed`) so your IDE/CI
-  gets full IntelliSense. `build()` handles dynamic validation. We do
-  not shell out to external type checkers.
-- **No prompt templating engine** in the foundations. Prompt sections
-  (`role`, `task`, `rules`) are plain strings, rendered by the
-  built-in XML renderer. If Jinja/format-style templating is needed
-  later, it will slot in by overriding `Agent.format_system_message`
-  — the foundation doesn't change.
-- **No agent DSL, YAML/JSON schema, or blueprint system** in the
-  foundations. Configurations arrive later in `configs/`.
+- **No model-weight training.** operad trains *prompts and sampling*,
+  not weights. We are not an LLM training framework.
+- **No static-type-checker runtime integration** (`ty`, `mypy`).
+  PEP-561 typing for IDE/CI; `build()` does dynamic validation. No
+  shelling out to type checkers.
+- **No prompt templating engine in the foundations.** `role`, `task`,
+  `rules` are plain strings; the built-in renderer emits XML / Markdown
+  / chat-template. If Jinja-style templating is needed later it slots
+  in by overriding `Agent.format_system_message` — the foundations do
+  not change.
+- **No agent DSL or YAML/JSON blueprint system in the foundations.**
+  The CLI's YAML loader (`operad/configs/`) is a thin deserializer
+  over the Python API, not a separate language.
 - **No hidden model-provider fallbacks.** `Configuration.backend` is
   the single source of truth. Provider resolution happens explicitly
-  in `operad.models`.
+  in `operad/core/models.py`.
 
-## 9. Contributor checklist
+## 8. Contributor checklist
 
 When adding to the library:
 
-1. **Preserve the components-vs-algorithms split.** If a new
-   abstraction has a typed `In -> Out` contract, it's a component and
-   subclasses `Agent[In, Out]`. If it orchestrates agents with a loop
-   + metric feedback and its natural API isn't `__call__(x)`, it's an
-   algorithm and lives as a plain class with a `run(...)` method.
+1. **Preserve the components-vs-algorithms split.** A typed `In → Out`
+   contract ⇒ the new abstraction is an `Agent` subclass and lives in
+   `operad/agents/<domain>/components/`. An orchestrator with a
+   feedback loop whose natural API is not `__call__(x)` ⇒ a plain
+   class with a `run(...)` method living in `operad/algorithms/`.
+
 2. **Declare component contracts as class attributes.** `input`,
-   `output`, `role`, `task`, `rules`, `examples` all live on the
-   class body. Construction kwargs override them.
-3. **Write composite `forward` as a router, not a calculator.**
-   Inspect payload values only inside leaves or post-invoke;
-   composites just orchestrate child calls. (Iteration 4's sentinel
-   proxy will catch violations at build time.)
-4. **Keep `__init__` free of side effects.** No network, no provider
+   `output`, `role`, `task`, `rules`, `examples` all live on the class
+   body. Construction kwargs override; instance mutation works.
+
+3. **Composite `forward` is a router, not a calculator.** Inspect
+   payload values only inside leaves or post-invoke. The sentinel
+   proxy in `operad/core/build.py` catches payload-branching at trace
+   time and raises `BuildError`.
+
+4. **`__init__` is side-effect-free.** No network, no provider
    handshakes, no model loading. All of that belongs in `build()`.
-5. **Add offline tests.** Use `FakeLeaf`-style helpers — anything
-   that overrides `forward` skips strands wiring and runs in the test
-   process without network.
-6. **Extend, don't fork, the public API.** New abstractions slot into
-   `agents/`, `algorithms/`, `metrics/`, or `runtime/`; the
-   foundations under `core/` and `utils/errors.py` should rarely
+
+5. **Add offline tests.** Use `FakeLeaf`-style helpers — anything that
+   overrides `forward` skips strands wiring and runs in the test
+   process without network. Integration tests are opt-in via
+   `OPERAD_INTEGRATION=<backend>`.
+
+6. **Extend, don't fork.** New abstractions slot into:
+   - `operad/agents/<domain>/components/` for components,
+   - `operad/algorithms/` for orchestrators,
+   - `operad/metrics/` for scorers,
+   - `operad/optim/` for optimizers / losses / schedulers,
+   - `operad/runtime/observers/` for observability,
+   - `operad/data/` for samplers,
+   - `operad/core/models.py` for backend adapters.
+
+   Foundations under `operad/core/` and `operad/utils/` should rarely
    change.
 
-## 10. Training as the next frontier
-
-The library now contains both inference and training. `operad.optim`
-is our TextGrad / OPRO / APE analogue: textual gradients are
-LLM-generated natural-language critique instead of floats, but the
-spine — `Parameter → backward → Optimizer → Trainer` — is the same
-one that `torch.optim` exposes. The gradient agents (`BackpropAgent`)
-and the rewrite agents (`RewriteAgent`) are themselves `Agent`
-subclasses, so the whole observer / cassette / hashing stack composes
-straight through a fit loop.
-
-The open research surface here is **meta-optimization**: an optimizer
-is an agent, which means its own `role`, `task`, `rules`, and
-sampling are `Parameter`s. A `Trainer` optimizing the
-`OPROOptimizer` that optimizes a `Pipeline` is the same three-level
-stack that PyTorch gets with learned optimizers — except the gradient
-language is English, not a tensor.
-
-Further reading: [TRAINING.md](TRAINING.md),
-[`operad/optim/README.md`](operad/optim/README.md),
-[`.conductor/optim/0-0-orchestration.md`](.conductor/optim/0-0-orchestration.md),
-and [`apps/demos/agent_evolution/run.py`](apps/demos/agent_evolution/run.py)
-(the flagship offline agents-optimizing-agents demo).
+7. **Update the inventory.** Anything new that ends up in the public
+   API surface gets an entry in [INVENTORY.md](INVENTORY.md).
