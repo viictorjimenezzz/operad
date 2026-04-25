@@ -185,12 +185,17 @@ the multi-agent debate algorithm. Used by `operad.algorithms.debate`.
 Schemas: `Proposal`, `Critique`, `DebateContext`, `DebateRecord`,
 `DebateTurn`.
 
+### Shipped (iter-3)
+
+- `agents/conversational/TurnTaker` — turn-gating leaf (`Utterance →
+  TurnChoice`). Ships with `Safeguard`, `Persona`, `RefusalLeaf`, and a
+  composite `Talker` that pipelines all four.
+
 ### Planned
 
 - `agents/reasoning/debate.py` and `agents/reasoning/verifier.py` —
   pre-wired multi-agent compositions parallel to `react.py`.
   Algorithms exist; the agent-level pre-wirings do not.
-- `agents/conversational/TurnTaker`.
 
 ## 7. Algorithms — `operad.algorithms`
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -97,11 +99,50 @@ class TextResponse(BaseModel):
     text: str = Field(default="", description="The response body as raw text.")
 
 
+class Utterance(BaseModel):
+    """A single user message entering the conversational pipeline."""
+
+    user_message: str = Field(default="", description="The user's raw message.")
+
+
+class SafeguardVerdict(BaseModel):
+    """Classification result from the content safeguard leaf."""
+
+    label: Literal["allow", "block"] = Field(
+        default="allow",
+        description="Whether the message is safe to process.",
+    )
+    reason: str = Field(default="", description="One-sentence justification.")
+
+
+class TurnChoice(BaseModel):
+    """Decision on whether the bot should take this turn."""
+
+    action: Literal["respond", "skip"] = Field(
+        default="respond",
+        description="'respond' to generate a reply; 'skip' to stay silent.",
+    )
+    prompt: str = Field(
+        default="",
+        description="Optional instruction injected into the persona prompt.",
+    )
+
+
+class StyledUtterance(BaseModel):
+    """Persona-styled response text."""
+
+    response: str = Field(default="", description="The final response body.")
+
+
 __all__ = [
     "ConversationTitlerInput",
     "ConversationTitlerOutput",
     "InteractionTitlerInput",
     "InteractionTitlerOutput",
+    "SafeguardVerdict",
+    "StyledUtterance",
     "TalkerInput",
     "TextResponse",
+    "TurnChoice",
+    "Utterance",
 ]
