@@ -114,6 +114,7 @@ from .safeguard import (
     ContextInput,
     ContextOutput,
     SafeguardCategory,
+    SafetyGuard,
 )
 from .safeguard import Talker as SafeguardTalker
 from .safeguard import TalkerInput as SafeguardTalkerInput
@@ -194,6 +195,7 @@ __all__ = [
     "Router",
     "SafeguardCategory",
     "SafeguardTalker",
+    "SafetyGuard",
     "SafeguardTalkerInput",
     "SessionItem",
     "SessionOp",
