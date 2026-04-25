@@ -12,6 +12,7 @@ from operad import Agent
 from operad.metrics import Rouge1
 from operad.optim.loss import LossFromMetric
 
+from ._config import default_config
 from ._shared import (
     OFFLINE_CFG,
     DocIn,
@@ -57,13 +58,13 @@ class _SummarizerHandEdit(Agent[DocIn, SummaryOut]):
 def make_seed_agent(offline: bool = False) -> Agent[DocIn, SummaryOut]:
     if offline:
         return OfflineSummaryLeaf(config=OFFLINE_CFG.model_copy(deep=True))
-    return _Summarizer(config=None)
+    return _Summarizer(config=default_config())
 
 
 def make_hand_edit_agent(offline: bool = False) -> Agent[DocIn, SummaryOut]:
     if offline:
         return OfflineSummaryLeaf(config=OFFLINE_CFG.model_copy(deep=True))
-    return _SummarizerHandEdit(config=None)
+    return _SummarizerHandEdit(config=default_config())
 
 
 def make_sweep_grid() -> dict[str, list[Any]]:

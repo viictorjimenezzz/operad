@@ -13,6 +13,7 @@ from operad import Agent
 from operad.metrics import Contains, ExactMatch
 from operad.optim.loss import LossFromMetric
 
+from ._config import default_config
 from ._shared import (
     OFFLINE_CFG,
     OfflineToolLeaf,
@@ -66,13 +67,13 @@ class _ToolSelectorHandEdit(Agent[ToolIn, ToolOut]):
 def make_seed_agent(offline: bool = False) -> Agent[ToolIn, ToolOut]:
     if offline:
         return OfflineToolLeaf(config=OFFLINE_CFG.model_copy(deep=True))
-    return _ToolSelector(config=None)
+    return _ToolSelector(config=default_config())
 
 
 def make_hand_edit_agent(offline: bool = False) -> Agent[ToolIn, ToolOut]:
     if offline:
         return OfflineToolLeaf(config=OFFLINE_CFG.model_copy(deep=True))
-    return _ToolSelectorHandEdit(config=None)
+    return _ToolSelectorHandEdit(config=default_config())
 
 
 def make_sweep_grid() -> dict[str, list[Any]]:
