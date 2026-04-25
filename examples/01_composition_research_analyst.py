@@ -101,14 +101,9 @@ class ResearchReport(BaseModel):
 
     headline: str = Field(description="One-sentence headline answer.")
     reasoning: str = Field(description="Why the headline is the right call.")
-    perspectives: list[BranchView] = Field(
-        default_factory=list,
-        description="Per-perspective views the editor weighed.",
-    )
 
 
 _PerspectiveBundle.model_rebuild()
-ResearchReport.model_rebuild()
 
 
 # ---------------------------------------------------------------------------
@@ -213,13 +208,12 @@ def assemble(*, cfg: Configuration) -> Pipeline:
         ),
         task=(
             "Read all three BranchViews. Commit to a single headline and "
-            "write a short reasoning paragraph. Carry every BranchView "
-            "through into the report's `perspectives` list unchanged."
+            "write a short reasoning paragraph that synthesises the three "
+            "perspectives into one decisive position."
         ),
         rules=(
             "The headline is one sentence and commits to a position.",
             "The reasoning paragraph references each perspective at least implicitly.",
-            "Do NOT drop or reorder the perspectives — they are evidence.",
         ),
     )
     return Pipeline(
@@ -256,18 +250,9 @@ def _print_report(report: ResearchReport) -> None:
     if not _RICH:
         print(f"headline:  {report.headline}")
         print(f"reasoning: {report.reasoning}")
-        for v in report.perspectives:
-            print(f"  ├── [{v.perspective}] {v.answer}")
-            print(f"  │   reasoning: {v.reasoning}")
         return
     tree = Tree(f"[bold green]headline[/]  {report.headline}")
     tree.add(f"[dim]reasoning[/]  {report.reasoning}")
-    branch = tree.add("[bold]perspectives[/]")
-    for v in report.perspectives:
-        node = branch.add(f"[cyan]{v.perspective}[/]")
-        node.add(f"[bold]sub-question[/] {v.sub_question}")
-        node.add(f"[bold]reasoning[/]    {v.reasoning}")
-        node.add(f"[bold]answer[/]       {v.answer}")
     Console(width=120).print(tree)
 
 

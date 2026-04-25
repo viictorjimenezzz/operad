@@ -1265,7 +1265,6 @@ version = "0.1.0"
 source = { editable = "apps/dashboard" }
 dependencies = [
     { name = "fastapi" },
-    { name = "jinja2" },
     { name = "operad" },
     { name = "sse-starlette" },
     { name = "uvicorn", extra = ["standard"] },
@@ -1274,7 +1273,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
-    { name = "jinja2", specifier = ">=3.1" },
     { name = "operad", editable = "." },
     { name = "sse-starlette", specifier = ">=2.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
