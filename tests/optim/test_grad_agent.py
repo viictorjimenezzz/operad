@@ -419,7 +419,10 @@ def test_parameter_grad_for_raises_for_extra_kind():
 def test_every_parameter_kind_accounted_for():
     all_kinds = set(get_args(ParameterKind))
     unmapped = all_kinds - _EXPECTED_KINDS
-    assert unmapped == {"extra"}
+    # `configuration` reaches the optimizer through `EvoGradient`'s
+    # `SetConfiguration` op pool rather than via a textual-gradient
+    # `ParameterGradAgent`; `extra` is the generic catch-all kind.
+    assert unmapped == {"extra", "configuration"}
 
 
 # ---------------------------------------------------------------------------

@@ -573,10 +573,16 @@ for path, p in agent.named_parameters():
 | `ExampleListParameter`   | `examples` — `list[Example[In, Out]]`.   |
 | `FloatParameter`         | `temperature`, `top_p` — bounded floats. |
 | `CategoricalParameter`   | `model`, `backend`, `renderer` — vocab.  |
+| `ConfigurationParameter` | the whole `Configuration` — opt in via `mark_trainable(config=True)`; silently overrides leaf-level config flags. |
 
 Each carries an optional `ParameterConstraint` (bounds / vocab /
-length) which the optimizer consults before accepting an update — the
-textual-gradient analogue of gradient clipping.
+length / per-backend whitelist + budget) which the optimizer consults
+before accepting an update — the textual-gradient analogue of gradient
+clipping. `ConfigurationConstraint` adds per-backend `allowed_models`,
+sampling ranges, and advisory `max_tokens_per_run` /
+`max_cost_per_run_usd` knobs; the budget knobs are consulted by
+`apply_rewrite` when a `cost_estimator` callable is supplied, and by
+downstream optimisers as post-step rejection criteria.
 
 `Agent.parameters()` / `named_parameters()` yield handles in
 attribute-insertion order. `Agent.trainable_parameters()` is the

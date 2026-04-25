@@ -17,6 +17,9 @@ from operad.core.example import Example
 from operad.optim import (
     CategoricalParameter,
     CategoricalRewriter,
+    ConfigurationConstraint,
+    ConfigurationParameter,
+    ConfigurationRewriter,
     ExampleListParameter,
     ExampleListRewriter,
     FloatParameter,
@@ -288,3 +291,165 @@ async def test_retry_prompt_contains_validation_error_details(cfg):
     assert "Schema validation" in second_hint
     # The field path from the ValidationError should appear in the hint.
     assert "value" in second_hint
+
+
+# ---------------------------------------------------------------------------
+# ConfigurationRewriter
+# ---------------------------------------------------------------------------
+
+
+def _config_constraint(**overrides):
+    base = dict(
+        allowed_backends=["llamacpp", "ollama"],
+        allowed_models={
+            "llamacpp": ["test", "m2"],
+            "ollama": ["o1"],
+        },
+    )
+    base.update(overrides)
+    return ConfigurationConstraint(**base)
+
+
+class StubConfigurationRewriter(ConfigurationRewriter):
+    """Returns a config that swaps to ollama+o1 with a lower temperature."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.calls: list[RewriteRequest] = []
+
+    async def forward(self, x: RewriteRequest) -> RewriteResponse:
+        if not getattr(x, "old_value", ""):
+            return RewriteResponse(new_value="{}")
+        self.calls.append(x)
+        new_cfg = {
+            "backend": "ollama",
+            "model": "o1",
+            "host": "127.0.0.1:0",
+            "batch": False,
+            "sampling": {
+                "temperature": 0.2,
+                "max_tokens": 16,
+                "top_p": None,
+                "top_k": None,
+                "seed": None,
+                "stop": None,
+                "reasoning_tokens": None,
+            },
+            "resilience": {
+                "timeout": None,
+                "max_retries": 0,
+                "backoff_base": 0.5,
+            },
+            "io": {"stream": False, "structuredio": True, "renderer": "xml"},
+            "runtime": {"extra": {}},
+        }
+        return RewriteResponse(new_value=json.dumps(new_cfg))
+
+
+class IllegalThenLegalConfigRewriter(ConfigurationRewriter):
+    """First call returns a config with disallowed model; second call is legal."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.calls: list[RewriteRequest] = []
+
+    async def forward(self, x: RewriteRequest) -> RewriteResponse:
+        if not getattr(x, "old_value", ""):
+            return RewriteResponse(new_value="{}")
+        self.calls.append(x)
+        bad_or_good_model = "not-allowed" if len(self.calls) == 1 else "o1"
+        new_cfg = {
+            "backend": "ollama",
+            "model": bad_or_good_model,
+            "host": "127.0.0.1:0",
+            "batch": False,
+            "sampling": {
+                "temperature": 0.3,
+                "max_tokens": 16,
+                "top_p": None,
+                "top_k": None,
+                "seed": None,
+                "stop": None,
+                "reasoning_tokens": None,
+            },
+            "resilience": {
+                "timeout": None,
+                "max_retries": 0,
+                "backoff_base": 0.5,
+            },
+            "io": {"stream": False, "structuredio": True, "renderer": "xml"},
+            "runtime": {"extra": {}},
+        }
+        return RewriteResponse(new_value=json.dumps(new_cfg))
+
+
+async def test_apply_rewrite_configuration_proposes_legal_config(cfg):
+    leaf = FakeLeaf(config=cfg, input=A, output=B)
+    p = ConfigurationParameter.from_agent(
+        leaf, "config", "configuration", constraint=_config_constraint()
+    )
+    grad = TextualGradient(message="swap backend", severity=0.8)
+
+    rewriter = await StubConfigurationRewriter(config=cfg).abuild()
+    await apply_rewrite(p, grad, rewriter, lr=0.9)
+
+    assert leaf.config.backend == "ollama"
+    assert leaf.config.model == "o1"
+    assert leaf.config.sampling.temperature == 0.2
+
+
+async def test_apply_rewrite_configuration_constraint_violation_retries_once(cfg):
+    leaf = FakeLeaf(config=cfg, input=A, output=B)
+    p = ConfigurationParameter.from_agent(
+        leaf, "config", "configuration", constraint=_config_constraint()
+    )
+    grad = TextualGradient(message="swap backend", severity=0.8)
+
+    rewriter = await IllegalThenLegalConfigRewriter(config=cfg).abuild()
+    await apply_rewrite(p, grad, rewriter, lr=0.9)
+
+    assert len(rewriter.calls) == 2
+    assert leaf.config.model == "o1"
+    second_hint = rewriter.calls[1].constraint_hint
+    assert "STRICT" in second_hint
+
+
+async def test_apply_rewrite_configuration_budget_rejection_retries(cfg):
+    leaf = FakeLeaf(config=cfg, input=A, output=B)
+    constraint = _config_constraint(max_cost_per_run_usd=0.50)
+    p = ConfigurationParameter.from_agent(
+        leaf, "config", "configuration", constraint=constraint
+    )
+    grad = TextualGradient(message="swap backend", severity=0.8)
+
+    rewriter = await StubConfigurationRewriter(config=cfg).abuild()
+
+    costs = iter([1.0, 0.10])
+
+    def cost_estimator(c) -> float:
+        return next(costs)
+
+    await apply_rewrite(
+        p, grad, rewriter, lr=0.9, cost_estimator=cost_estimator
+    )
+
+    assert len(rewriter.calls) == 2
+    assert leaf.config.model == "o1"
+
+
+async def test_apply_rewrite_configuration_preserves_api_key_and_host(cfg):
+    leaf = FakeLeaf(config=cfg, input=A, output=B)
+    leaf.config = leaf.config.model_copy(
+        update={"runtime": leaf.config.runtime.model_copy(update={"extra": {"foo": 1}})}
+    )
+    p = ConfigurationParameter.from_agent(
+        leaf, "config", "configuration", constraint=_config_constraint()
+    )
+    grad = TextualGradient(message="swap", severity=0.5)
+
+    rewriter = await StubConfigurationRewriter(config=cfg).abuild()
+    await apply_rewrite(p, grad, rewriter, lr=0.7)
+
+    # api_key (None for llamacpp), host, and runtime.extra all preserved.
+    assert leaf.config.host == "127.0.0.1:0"
+    assert leaf.config.runtime.extra == {"foo": 1}

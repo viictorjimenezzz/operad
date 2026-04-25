@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Generic, Literal, TypeVar, Uni
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
+from operad.core.config import Backend, Configuration
 from operad.core.example import Example
 from operad.utils.paths import resolve_parent
 
@@ -42,6 +43,7 @@ ParameterKind = Literal[
     "rule_i",
     "example_i",
     "extra",
+    "configuration",
 ]
 
 
@@ -112,8 +114,80 @@ class ListConstraint(BaseModel):
         return v
 
 
+class ConfigurationConstraint(BaseModel):
+    """Per-backend legality + advisory budget envelope for `Configuration`.
+
+    Vocab-style fields (`allowed_backends`, `allowed_models`,
+    `renderer_choices`) are hard-error: a `Configuration` whose
+    `backend` / `model` / `io.renderer` falls outside is rejected. Range
+    fields (`temperature_range`, `top_p_range`, `max_tokens_range`)
+    clamp silently. Budget knobs (`max_tokens_per_run`,
+    `max_cost_per_run_usd`) are advisory metadata — `validate()` does
+    not enforce them; `apply_rewrite` consults them via an optional
+    cost estimator and downstream optimisers may reject post-step.
+    """
+
+    kind: Literal["configuration"] = "configuration"
+    allowed_backends: list[Backend]
+    allowed_models: dict[Backend, list[str]]
+    renderer_choices: list[Literal["xml", "markdown", "chat"]] = Field(
+        default_factory=lambda: ["xml", "markdown", "chat"]
+    )
+    temperature_range: tuple[float, float] = (0.0, 2.0)
+    top_p_range: tuple[float, float] = (0.0, 1.0)
+    max_tokens_range: tuple[int, int] | None = None
+    max_tokens_per_run: int | None = None
+    max_cost_per_run_usd: float | None = None
+
+    def validate(self, v: Configuration) -> Configuration:
+        if v.backend not in self.allowed_backends:
+            raise ValueError(
+                f"backend={v.backend!r} not in allowed_backends "
+                f"{self.allowed_backends!r}"
+            )
+        models_for_backend = self.allowed_models.get(v.backend, [])
+        if v.model not in models_for_backend:
+            raise ValueError(
+                f"model={v.model!r} not in allowed_models[{v.backend!r}] "
+                f"{models_for_backend!r}"
+            )
+        if v.io.renderer not in self.renderer_choices:
+            raise ValueError(
+                f"io.renderer={v.io.renderer!r} not in renderer_choices "
+                f"{self.renderer_choices!r}"
+            )
+
+        sampling_update: dict[str, Any] = {}
+        lo, hi = self.temperature_range
+        clamped_temp = min(hi, max(lo, v.sampling.temperature))
+        if clamped_temp != v.sampling.temperature:
+            sampling_update["temperature"] = clamped_temp
+        if v.sampling.top_p is not None:
+            lo_p, hi_p = self.top_p_range
+            clamped_p = min(hi_p, max(lo_p, v.sampling.top_p))
+            if clamped_p != v.sampling.top_p:
+                sampling_update["top_p"] = clamped_p
+        if self.max_tokens_range is not None:
+            lo_t, hi_t = self.max_tokens_range
+            clamped_t = min(hi_t, max(lo_t, v.sampling.max_tokens))
+            if clamped_t != v.sampling.max_tokens:
+                sampling_update["max_tokens"] = clamped_t
+
+        if not sampling_update:
+            return v
+        return v.model_copy(
+            update={"sampling": v.sampling.model_copy(update=sampling_update)}
+        )
+
+
 ParameterConstraint = Annotated[
-    Union[TextConstraint, NumericConstraint, VocabConstraint, ListConstraint],
+    Union[
+        TextConstraint,
+        NumericConstraint,
+        VocabConstraint,
+        ListConstraint,
+        ConfigurationConstraint,
+    ],
     Field(discriminator="kind"),
 ]
 
@@ -234,8 +308,26 @@ class CategoricalParameter(Parameter[str]):
     """Parameter over a vocab-bounded string (`model`, `backend`, `renderer`)."""
 
 
+class ConfigurationParameter(Parameter[Configuration]):
+    """Parameter over the whole `Configuration` block.
+
+    Yielded only when `mark_trainable(config=True)` is set; in that mode
+    the leaf-level `temperature` / `top_p` / `model` / `backend` /
+    `renderer` parameters are *not* yielded — the agent picks one
+    decomposition per training run, and `config=True` wins over any
+    leaf-level flags supplied alongside it.
+
+    Mid-training backend swaps interact with concurrency slots
+    (`operad.runtime.slots.SlotRegistry`); the registry keys per
+    `(backend, host)`, so a swap allocates a fresh gate lazily on the
+    next call. No explicit reset is needed.
+    """
+
+
 __all__ = [
     "CategoricalParameter",
+    "ConfigurationConstraint",
+    "ConfigurationParameter",
     "ExampleListParameter",
     "FloatParameter",
     "ListConstraint",

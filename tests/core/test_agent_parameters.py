@@ -11,6 +11,8 @@ from operad.agents.pipeline import Pipeline
 from operad.core.config import Sampling
 from operad.optim import (
     CategoricalParameter,
+    ConfigurationConstraint,
+    ConfigurationParameter,
     ExampleListParameter,
     FloatParameter,
     Parameter,
@@ -313,3 +315,76 @@ def test_unfreeze_is_alias(cfg: Configuration) -> None:
     leaf.freeze_parameters(role=True)
     leaf.unfreeze_parameters(role=True)
     assert dict(leaf.named_parameters(recurse=False))["role"].requires_grad is True
+
+
+# ---------------------------------------------------------------------------
+# config=True yields ConfigurationParameter and silently overrides leaf flags
+# ---------------------------------------------------------------------------
+
+
+def _config_constraint() -> ConfigurationConstraint:
+    return ConfigurationConstraint(
+        allowed_backends=["llamacpp", "ollama"],
+        allowed_models={"llamacpp": ["test", "m2"], "ollama": ["o1"]},
+    )
+
+
+def test_mark_trainable_config_yields_configuration_parameter(cfg: Configuration) -> None:
+    leaf = _leaf(cfg)
+    leaf.set_configuration_constraint(_config_constraint())
+    leaf.mark_trainable(config=True)
+
+    by_path = dict(leaf.named_parameters(recurse=False))
+    assert "config" in by_path
+    assert isinstance(by_path["config"], ConfigurationParameter)
+    assert by_path["config"].kind == "configuration"
+    assert isinstance(by_path["config"].constraint, ConfigurationConstraint)
+
+
+def test_mark_trainable_config_silently_overrides_leaf_flags(cfg: Configuration) -> None:
+    leaf = _leaf(cfg)
+    leaf.mark_trainable(config=True, temperature=True)
+
+    by_path = dict(leaf.named_parameters(recurse=False))
+    # ConfigurationParameter is yielded.
+    assert "config" in by_path
+    assert isinstance(by_path["config"], ConfigurationParameter)
+    # Leaf-level config params are NOT yielded.
+    assert "config.sampling.temperature" not in by_path
+    assert "config.model" not in by_path
+    assert "config.backend" not in by_path
+    assert "config.io.renderer" not in by_path
+
+
+def test_freeze_config_drops_configuration_parameter(cfg: Configuration) -> None:
+    leaf = _leaf(cfg)
+    leaf.mark_trainable(config=True)
+    assert "config" in dict(leaf.named_parameters(recurse=False))
+
+    leaf.freeze_parameters(config=True)
+    by_path = dict(leaf.named_parameters(recurse=False))
+    # config flag is now False → leaf-level params return.
+    assert "config" not in by_path
+    assert "config.sampling.temperature" in by_path
+    assert "config.model" in by_path
+
+
+def test_mark_trainable_config_without_config_raises_at_root(cfg: Configuration) -> None:
+    a, b = _leaf(cfg), _leaf(cfg)
+    pipe = Pipeline(a, b, input=A, output=B)
+    with pytest.raises(KeyError):
+        pipe.mark_trainable(config=True, recurse=False)
+
+
+def test_mark_trainable_config_broadcast_skips_composite_silently(cfg: Configuration) -> None:
+    a, b = _leaf(cfg), _leaf(cfg)
+    pipe = Pipeline(a, b, input=A, output=B)
+    # Mirrors `test_sampling_broadcast_skips_composite_silently`: the
+    # composite root has no config, so the strict path at the root would
+    # raise. The lenient broadcast (`_strict=False`) reaches children
+    # without choking on the configless root.
+    pipe._set_requires_grad(True, config=True, recurse=True, _strict=False)
+    pipe_paths = {p for p, _ in pipe.named_parameters(recurse=False)}
+    assert "config" not in pipe_paths
+    assert "config" in dict(a.named_parameters(recurse=False))
+    assert "config" in dict(b.named_parameters(recurse=False))

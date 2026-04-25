@@ -14,6 +14,7 @@ deterministic.
 
 from __future__ import annotations
 
+import random
 from typing import Any, Protocol, TYPE_CHECKING, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, PrivateAttr
@@ -23,6 +24,7 @@ from .paths import _resolve
 
 if TYPE_CHECKING:
     from ..core.agent import Agent, Example
+    from ..optim.parameter import ConfigurationConstraint
 
 
 _UNDO_BEFORE_APPLY = "undo() called before apply()"
@@ -315,6 +317,87 @@ class SetBackend(_OpBase):
         self._applied = False
 
 
+class SetConfiguration(_OpBase):
+    """Replace the agent's whole `Configuration` with a new value.
+
+    Snapshot/restore via `model_copy(deep=True)` so `undo()` puts the
+    original instance back. Companion to `random_configuration_op`,
+    which produces a SetConfiguration with random fields drawn from a
+    `ConfigurationConstraint`.
+    """
+
+    path: str
+    config: Configuration
+    name: str = "set_configuration"
+
+    _prev_config: Configuration | None = PrivateAttr(default=None)
+    _applied: bool = PrivateAttr(default=False)
+
+    def apply(self, agent: "Agent[Any, Any]") -> None:
+        target = _resolve(agent, self.path)
+        if target.config is None:
+            raise ValueError(
+                f"cannot set configuration on composite at {self.path!r} "
+                f"(no config)"
+            )
+        self._prev_config = target.config.model_copy(deep=True)
+        self._applied = True
+        target.config = self.config
+
+    def undo(self, agent: "Agent[Any, Any]") -> None:
+        if not self._applied:
+            raise RuntimeError(_UNDO_BEFORE_APPLY)
+        target = _resolve(agent, self.path)
+        target.config = self._prev_config
+        self._prev_config = None
+        self._applied = False
+
+
+def random_configuration_op(
+    constraint: "ConfigurationConstraint",
+    base: Configuration,
+    rng: random.Random,
+    *,
+    path: str = "",
+) -> "SetConfiguration":
+    """Sample a legal Configuration from `constraint` and wrap in a SetConfiguration.
+
+    Uses `base` for fields the constraint does not govern (`host`,
+    `api_key`, `runtime.extra`, `resilience`, `sampling.max_tokens` when
+    `max_tokens_range` is unset, etc.) so the returned config still
+    satisfies Configuration's host/api_key validators in typical use.
+    Callers that mix local and remote backends in `allowed_backends`
+    must pass a `base` whose `host`/`api_key` are valid for every
+    backend they enumerate.
+    """
+    backend = rng.choice(list(constraint.allowed_backends))
+    models = constraint.allowed_models.get(backend, [])
+    if not models:
+        raise ValueError(
+            f"random_configuration_op: allowed_models has no entry for "
+            f"backend={backend!r}"
+        )
+    model = rng.choice(list(models))
+    renderer = rng.choice(list(constraint.renderer_choices))
+    lo_t, hi_t = constraint.temperature_range
+    temperature = rng.uniform(lo_t, hi_t)
+
+    sampling_update: dict[str, Any] = {"temperature": temperature}
+    if constraint.max_tokens_range is not None:
+        lo_n, hi_n = constraint.max_tokens_range
+        sampling_update["max_tokens"] = rng.randint(lo_n, hi_n)
+
+    new_config = base.model_copy(
+        update={
+            "backend": backend,
+            "model": model,
+            "io": base.io.model_copy(update={"renderer": renderer}),
+            "sampling": base.sampling.model_copy(update=sampling_update),
+        }
+    )
+    return SetConfiguration(path=path, config=new_config)
+
+
 class CompoundOp(_OpBase):
     """Apply a sequence of ops atomically (in order).
 
@@ -395,8 +478,10 @@ __all__ = [
     "Op",
     "ReplaceRule",
     "SetBackend",
+    "SetConfiguration",
     "SetModel",
     "SetTemperature",
     "TweakRole",
     "default_mutations",
+    "random_configuration_op",
 ]
