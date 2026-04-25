@@ -217,16 +217,18 @@ operad's `run_id`, so the dashboard's run-detail page renders a
 without any external mapping.
 
 ```bash
-cp .env.example .env
-# Set LANGFUSE_INIT_PROJECT_*_KEY pair + user password in .env, then:
-bash scripts/langfuse_otel_header.sh --update    # populates OTEL_EXPORTER_OTLP_HEADERS
-docker compose up -d
+make env          # cp .env.example .env (first time only)
+# Edit .env: set LANGFUSE_INIT_PROJECT_*_KEY pair + user password.
+make header       # populate OTEL_EXPORTER_OTLP_HEADERS from those keys
+make up           # bring up the 8-service stack (~2-3 min on first boot)
+make demo         # run agent_evolution with dashboard + Langfuse OTel wired
 ```
 
 Exposed: Langfuse on **3000**, dashboard on **7860**, studio on
 **7870**. The stack also includes Postgres, Clickhouse, Redis, and
-MinIO (S3-compatible blob); expect ~3 GB RAM. See
-[`apps/README.md`](apps/README.md) for details.
+MinIO (S3-compatible blob); expect ~3 GB RAM. Run `make help` for
+the full target list. See [`apps/README.md`](apps/README.md) for the
+underlying compose details.
 
 ## Tests
 

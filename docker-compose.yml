@@ -165,7 +165,8 @@ services:
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS}
       # Browser-facing URL for the deep-link button.
       LANGFUSE_PUBLIC_URL: ${LANGFUSE_PUBLIC_URL:-http://localhost:3000}
-    command: ["operad-dashboard", "--host", "0.0.0.0", "--port", "7860"]
+    # ENTRYPOINT in the Dockerfile is `operad-dashboard`; only flags here.
+    command: ["--host", "0.0.0.0", "--port", "7860"]
 
   operad-studio:
     build:
@@ -184,8 +185,8 @@ services:
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS}
     volumes:
       - studio_data:/data
+    # ENTRYPOINT in the Dockerfile is `operad-studio`; only flags here.
     command:
-      - "operad-studio"
       - "--host"
       - "0.0.0.0"
       - "--port"
