@@ -12,6 +12,7 @@ from operad import Agent
 from operad.metrics import ExactMatch
 from operad.optim.loss import LossFromMetric
 
+from ._config import default_config
 from ._shared import (
     OFFLINE_CFG,
     IntentIn,
@@ -63,13 +64,13 @@ class _IntentClassifierHandEdit(Agent[IntentIn, IntentOut]):
 def make_seed_agent(offline: bool = False) -> Agent[IntentIn, IntentOut]:
     if offline:
         return OfflineIntentLeaf(config=OFFLINE_CFG.model_copy(deep=True))
-    return _IntentClassifier(config=None)
+    return _IntentClassifier(config=default_config())
 
 
 def make_hand_edit_agent(offline: bool = False) -> Agent[IntentIn, IntentOut]:
     if offline:
         return OfflineIntentLeaf(config=OFFLINE_CFG.model_copy(deep=True))
-    return _IntentClassifierHandEdit(config=None)
+    return _IntentClassifierHandEdit(config=default_config())
 
 
 def make_sweep_grid() -> dict[str, list[Any]]:
