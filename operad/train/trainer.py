@@ -39,6 +39,14 @@ from ..optim.parameter import Parameter, TextualGradient
 from ..optim.tape import tape
 from ..runtime.events import set_current_epoch
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
+from ..utils.cassette import (
+    TrainCassetteMiss,
+    _compose_train_key,
+    _hash_train_inputs,
+    _hash_train_params,
+    get_train_ctx,
+    record_train_step,
+)
 from ..utils.errors import BuildError
 from .callbacks import Callback, EarlyStopping, GradClip
 from .report import EpochReport, TrainingReport
@@ -240,28 +248,121 @@ class Trainer(Generic[In, Out]):
                 t0 = time.monotonic()
                 epoch_loss_sum = 0.0
                 epoch_sample_count = 0
+                step_idx = 0
+                window_inputs: list[Any] = []
+                tc = get_train_ctx()
+                all_params = _flatten_params(self.optimizer)
 
                 async for batch in loader:
                     step = batch_counter
                     for cb in cbs:
                         await cb.on_batch_start(self, batch, step)
 
-                    batch_loss, n = await self._run_batch(batch)
-                    epoch_loss_sum += batch_loss * n
-                    epoch_sample_count += n
-
-                    for cb in cbs:
-                        await cb.on_batch_end(self, batch, step, batch_loss)
-
+                    window_inputs.extend(batch.inputs)
                     batch_counter += 1
-                    if batch_counter % self.accumulation_steps == 0:
-                        await self.optimizer.step()
-                        self.optimizer.zero_grad()
+                    should_step = batch_counter % self.accumulation_steps == 0
+
+                    if tc is not None and tc.mode == "replay" and should_step:
+                        h_agent = self.agent.hash_content
+                        h_inputs = _hash_train_inputs(window_inputs)
+                        h_params = _hash_train_params(all_params)
+                        key = _compose_train_key(epoch, step_idx, h_agent, h_inputs, h_params)
+                        entry = tc.entries.get(key)
+                        if entry is None:
+                            raise TrainCassetteMiss(
+                                key,
+                                epoch=epoch,
+                                step_idx=step_idx,
+                                hash_agent=h_agent,
+                                hash_inputs=h_inputs,
+                                hash_params=h_params,
+                                path=tc.path,
+                            )
+                        mean_loss = entry["mean_loss"]
+                        n = entry["n_samples"]
+                        epoch_loss_sum += mean_loss * n
+                        epoch_sample_count += n
+                        for path, val in entry["post_step_params"].items():
+                            for p in all_params:
+                                if p.path == path:
+                                    p.write(val)
+                                    break
+                        lr_state_json = entry.get("lr_state_json")
+                        if lr_state_json is not None and self.scheduler is not None:
+                            self.scheduler.load_state_dict(json.loads(lr_state_json))
+                        window_inputs.clear()
+                        step_idx += 1
+                        for cb in cbs:
+                            await cb.on_batch_end(self, batch, step, mean_loss)
+                    else:
+                        batch_loss, n = await self._run_batch(batch)
+                        epoch_loss_sum += batch_loss * n
+                        epoch_sample_count += n
+
+                        for cb in cbs:
+                            await cb.on_batch_end(self, batch, step, batch_loss)
+
+                        if should_step:
+                            if tc is not None and tc.mode == "record":
+                                h_agent = self.agent.hash_content
+                                h_inputs = _hash_train_inputs(window_inputs)
+                                h_params = _hash_train_params(all_params)
+                                key = _compose_train_key(epoch, step_idx, h_agent, h_inputs, h_params)
+                            await self.optimizer.step()
+                            self.optimizer.zero_grad()
+                            if tc is not None and tc.mode == "record":
+                                post_params = {p.path: p.value for p in all_params}
+                                lr_state = (
+                                    self.scheduler.state_dict()
+                                    if self.scheduler is not None
+                                    else None
+                                )
+                                record_train_step(
+                                    tc,
+                                    key=key,
+                                    hash_agent=h_agent,
+                                    hash_inputs=h_inputs,
+                                    hash_params=h_params,
+                                    epoch=epoch,
+                                    step_idx=step_idx,
+                                    mean_loss=batch_loss,
+                                    n_samples=n,
+                                    post_step_params=post_params,
+                                    lr_state=lr_state,
+                                )
+                            window_inputs.clear()
+                            step_idx += 1
 
                 # Residual flush: some accumulated grads may still be on params.
-                if self._has_pending_grad():
-                    await self.optimizer.step()
-                    self.optimizer.zero_grad()
+                if tc is None or tc.mode != "replay":
+                    if self._has_pending_grad():
+                        if tc is not None and tc.mode == "record":
+                            h_agent = self.agent.hash_content
+                            h_inputs = _hash_train_inputs(window_inputs)
+                            h_params = _hash_train_params(all_params)
+                            key = _compose_train_key(epoch, step_idx, h_agent, h_inputs, h_params)
+                        await self.optimizer.step()
+                        self.optimizer.zero_grad()
+                        if tc is not None and tc.mode == "record":
+                            post_params = {p.path: p.value for p in all_params}
+                            lr_state = (
+                                self.scheduler.state_dict()
+                                if self.scheduler is not None
+                                else None
+                            )
+                            record_train_step(
+                                tc,
+                                key=key,
+                                hash_agent=h_agent,
+                                hash_inputs=h_inputs,
+                                hash_params=h_params,
+                                epoch=epoch,
+                                step_idx=step_idx,
+                                mean_loss=0.0,
+                                n_samples=len(window_inputs),
+                                post_step_params=post_params,
+                                lr_state=lr_state,
+                            )
 
                 val_report: EvalReport | None = None
                 if val_ds is not None:

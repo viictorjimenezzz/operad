@@ -1,21 +1,18 @@
-"""VCR-style record/replay for default-leaf LLM calls.
+"""VCR-style record/replay for default-leaf LLM calls and training runs.
 
-Tests that opt in (via the ``cassette`` pytest fixture) run inside a
-context that monkeypatches :meth:`operad.core.agent.Agent.forward`. The
-wrapper computes a deterministic key from the rendered prompt,
-configuration, and input; on replay it returns a deserialised response
-from a JSONL cassette file, on record it calls the real forward and
-appends the result.
+Inference cassette (``cassette_context``): monkeypatches
+:meth:`operad.core.agent.Agent.forward` so that LLM calls are replayed
+from a JSONL file keyed by prompt + config + input hashes.
 
-Only default-forward leaves are affected. Composites override
-``forward`` and therefore bypass the wrapper entirely. FakeLeaf
-subclasses are likewise unaffected.
+Training cassette (``training_cassette_context``): records/replays the
+net effect of each optimizer step — per-step mean loss, post-step
+parameter values, and LR scheduler state — stored in a sibling
+``<name>.train.jsonl`` file. In replay mode the trainer skips every LLM
+call inside ``_run_batch`` and ``optimizer.step()`` and restores the
+recorded state directly, yielding a byte-equal ``TrainingReport``.
 
-Storage is JSONL (one entry per line) keyed by the full triple of
-hashes; the ``key`` column is the sha256 of those three concatenated,
-truncated to 16 hex characters. The rendered system/user prompt and
-input payload are deliberately **not** stored — only their hashes — so
-cassette files are safe to commit regardless of prompt content.
+Both cassette files store only hashes (never prompt text or credentials)
+and are safe to commit.
 """
 
 from __future__ import annotations
@@ -24,6 +21,8 @@ import hashlib
 import json
 import time
 from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, Literal
 
@@ -199,4 +198,178 @@ def cassette_context(path: Path, mode: Mode = "replay") -> Iterator[None]:
         Agent.forward = original  # type: ignore[method-assign]
 
 
-__all__ = ["CassetteMiss", "cassette_context", "Mode"]
+
+# ---------------------------------------------------------------------------
+# Training cassette
+# ---------------------------------------------------------------------------
+
+
+class TrainCassetteMiss(KeyError):
+    """Raised in replay mode when a training-step key is absent.
+
+    Carries the hash segments so callers know which part of the agent or
+    data caused the miss.
+    """
+
+    def __init__(
+        self,
+        key: str,
+        *,
+        epoch: int,
+        step_idx: int,
+        hash_agent: str,
+        hash_inputs: str,
+        hash_params: str,
+        path: Path,
+    ) -> None:
+        self.key = key
+        self.epoch = epoch
+        self.step_idx = step_idx
+        self.hash_agent = hash_agent
+        self.hash_inputs = hash_inputs
+        self.hash_params = hash_params
+        self.path = path
+        super().__init__(str(self))
+
+    def _cause(self, entries: dict[str, dict[str, Any]]) -> str:
+        by_agent = sum(1 for e in entries.values() if e.get("hash_agent") == self.hash_agent)
+        by_inputs = sum(1 for e in entries.values() if e.get("hash_inputs") == self.hash_inputs)
+        by_params = sum(1 for e in entries.values() if e.get("hash_params") == self.hash_params)
+        if not entries:
+            return "cassette is empty; record first"
+        missing = [name for name, cnt in (
+            ("hash_agent", by_agent),
+            ("hash_inputs", by_inputs),
+            ("hash_params", by_params),
+        ) if cnt == 0]
+        if len(missing) >= 2:
+            return f"multiple segments drifted: {', '.join(missing)}"
+        if missing == ["hash_agent"]:
+            return "hash_agent drift (agent prompt changed)"
+        if missing == ["hash_inputs"]:
+            return "hash_inputs drift (input data changed)"
+        if missing == ["hash_params"]:
+            return "hash_params drift (parameter values changed)"
+        return "unknown"
+
+    def __str__(self) -> str:
+        lines = [
+            f"TrainCassetteMiss: no training cassette entry for key {self.key}",
+            f"  epoch={self.epoch}  step_idx={self.step_idx}",
+            f"  hash_agent  = {self.hash_agent}",
+            f"  hash_inputs = {self.hash_inputs}",
+            f"  hash_params = {self.hash_params}",
+            f"(at {self.path})",
+        ]
+        return "\n".join(lines)
+
+
+@dataclass
+class _TrainCtx:
+    path: Path
+    mode: Mode
+    entries: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+
+_TRAIN_CTX: ContextVar[_TrainCtx | None] = ContextVar("_TRAIN_CTX", default=None)
+
+
+def get_train_ctx() -> _TrainCtx | None:
+    """Return the active training cassette context, or ``None``."""
+    return _TRAIN_CTX.get()
+
+
+def _compose_train_key(
+    epoch: int,
+    step_idx: int,
+    hash_agent: str,
+    hash_inputs: str,
+    hash_params: str,
+) -> str:
+    raw = f"train|{epoch}|{step_idx}|{hash_agent}|{hash_inputs}|{hash_params}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def _hash_train_inputs(inputs: list[BaseModel]) -> str:
+    combined = "|".join(m.model_dump_json() for m in inputs)
+    return hashlib.sha256(combined.encode()).hexdigest()[:16]
+
+
+def _hash_train_params(params: list[Any]) -> str:
+    # params is list[Parameter]; avoid importing here to prevent circular deps
+    snap = {p.path: json.dumps(p.value, default=str, sort_keys=True) for p in params}
+    combined = json.dumps(snap, sort_keys=True)
+    return hashlib.sha256(combined.encode()).hexdigest()[:16]
+
+
+def _append_train(path: Path, entry: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, sort_keys=True) + "\n")
+
+
+def record_train_step(
+    ctx: _TrainCtx,
+    *,
+    key: str,
+    hash_agent: str,
+    hash_inputs: str,
+    hash_params: str,
+    epoch: int,
+    step_idx: int,
+    mean_loss: float,
+    n_samples: int,
+    post_step_params: dict[str, Any],
+    lr_state: dict[str, Any] | None,
+) -> None:
+    """Append a training-step entry to the cassette and update in-memory index."""
+    entry: dict[str, Any] = {
+        "epoch": epoch,
+        "hash_agent": hash_agent,
+        "hash_inputs": hash_inputs,
+        "hash_params": hash_params,
+        "key": key,
+        "lr_state_json": json.dumps(lr_state, sort_keys=True) if lr_state is not None else None,
+        "mean_loss": mean_loss,
+        "n_samples": n_samples,
+        "post_step_params": post_step_params,
+        "recorded_at": time.time(),
+        "step_idx": step_idx,
+    }
+    ctx.entries[key] = entry
+    _append_train(ctx.path, entry)
+
+
+@contextmanager
+def training_cassette_context(path: Path | str, mode: Mode = "replay") -> Iterator[None]:
+    """Activate a training cassette for the duration of the context.
+
+    ``path`` is coerced to ``<stem>.train.jsonl``. In ``replay`` mode the
+    existing file is loaded into memory; unknown keys raise
+    :class:`TrainCassetteMiss`. In ``record`` mode entries are appended to
+    the file as the training loop runs.
+    """
+    if mode not in ("record", "replay"):
+        raise ValueError(f"invalid cassette mode {mode!r}")
+    p = Path(path).with_suffix(".train.jsonl")
+    entries = _load(p) if mode == "replay" and p.exists() else {}
+    ctx = _TrainCtx(path=p, mode=mode, entries=entries)
+    token = _TRAIN_CTX.set(ctx)
+    try:
+        yield
+    finally:
+        _TRAIN_CTX.reset(token)
+
+
+__all__ = [
+    "CassetteMiss",
+    "Mode",
+    "TrainCassetteMiss",
+    "cassette_context",
+    "get_train_ctx",
+    "record_train_step",
+    "training_cassette_context",
+    "_hash_train_inputs",
+    "_hash_train_params",
+    "_compose_train_key",
+]
