@@ -15,8 +15,9 @@ export function DriftTimeline({ data }: { data: unknown }) {
   }
 
   const entries = [...parsed.data].sort((a, b) => a.epoch - b.epoch);
-  const epoch = selectedEpoch ?? entries[entries.length - 1].epoch;
-  const entry = entries.find((e) => e.epoch === epoch) ?? entries[entries.length - 1];
+  const lastEntry = entries[entries.length - 1]!;
+  const epoch = selectedEpoch ?? lastEntry.epoch;
+  const entry = entries.find((e) => e.epoch === epoch) ?? lastEntry;
 
   return (
     <div className="flex flex-col gap-3">

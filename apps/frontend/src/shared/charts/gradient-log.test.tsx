@@ -40,8 +40,8 @@ describe("GradientLog", () => {
     render(<GradientLog data={mockEntries} />);
     const items = screen.getAllByRole("listitem");
     // epoch 1 should appear before epoch 0 (newest first)
-    expect(items[0].textContent).toContain("epoch 1");
-    expect(items[1].textContent).toContain("epoch 0");
+    expect(items[0]!.textContent).toContain("epoch 1");
+    expect(items[1]!.textContent).toContain("epoch 0");
   });
 
   it("shows severity badge", () => {

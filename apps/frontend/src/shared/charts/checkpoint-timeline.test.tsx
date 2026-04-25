@@ -38,7 +38,7 @@ describe("CheckpointTimeline", () => {
     render(<CheckpointTimeline data={mockEntries} />);
     const bestBadges = screen.getAllByText("best");
     expect(bestBadges).toHaveLength(1);
-    expect(bestBadges[0].closest("li")?.textContent).toContain("epoch 1");
+    expect(bestBadges[0]!.closest("li")?.textContent).toContain("epoch 1");
   });
 
   it("shows val_loss when present", () => {
