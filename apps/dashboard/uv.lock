@@ -661,6 +661,7 @@ requires-dist = [
     { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=0.3" },
     { name = "openai", specifier = ">=2.30.0" },
     { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.24" },
+    { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'otel'", specifier = ">=1.24" },
     { name = "opentelemetry-sdk", marker = "extra == 'otel'", specifier = ">=1.24" },
     { name = "operad-dashboard", marker = "extra == 'dashboard'", editable = "." },
     { name = "pydantic", specifier = ">=2.8" },

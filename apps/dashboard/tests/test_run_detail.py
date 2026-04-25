@@ -48,3 +48,41 @@ def test_run_detail_renders_partials(app_and_obs) -> None:
         assert 'id="panel-mutations"' in html
         assert 'id="panel-drift"' in html
         assert 'window.OPERAD_RUN_ID = "abc123"' in html
+
+
+def test_run_detail_no_langfuse_link_by_default(app_and_obs) -> None:
+    app, obs = app_and_obs
+    _seed(obs, "abc123")
+    with TestClient(app) as client:
+        r = client.get("/runs/abc123")
+        assert r.status_code == 200
+        assert "langfuse-link" not in r.text
+
+
+def test_run_detail_renders_langfuse_link_when_configured() -> None:
+    obs = WebDashboardObserver()
+    app = create_app(
+        observer=obs,
+        auto_register=False,
+        langfuse_url="http://localhost:3000",
+    )
+    _seed(obs, "abc123")
+    with TestClient(app) as client:
+        r = client.get("/runs/abc123")
+        assert r.status_code == 200
+        html = r.text
+        assert "langfuse-link" in html
+        assert 'href="http://localhost:3000/trace/abc123"' in html
+
+
+def test_create_app_strips_trailing_slash_from_langfuse_url() -> None:
+    obs = WebDashboardObserver()
+    app = create_app(
+        observer=obs,
+        auto_register=False,
+        langfuse_url="http://localhost:3000/",
+    )
+    _seed(obs, "abc")
+    with TestClient(app) as client:
+        r = client.get("/runs/abc")
+        assert 'href="http://localhost:3000/trace/abc"' in r.text

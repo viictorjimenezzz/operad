@@ -10,6 +10,9 @@
   <header>
     <h1><a href="/" class="home-link">operad</a> / run {{ run_id[:12] }}</h1>
     <span class="badge badge-{{ state }}">{{ state }}</span>
+    {% if langfuse_trace_url %}
+    <a class="langfuse-link" href="{{ langfuse_trace_url }}" target="_blank" rel="noopener">View in Langfuse →</a>
+    {% endif %}
   </header>
 
   <main class="run-detail">

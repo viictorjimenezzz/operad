@@ -23,8 +23,17 @@ async def run_detail(request: Request, run_id: str) -> HTMLResponse:
     info = obs.registry.get(run_id)
     if info is None:
         raise HTTPException(status_code=404, detail="unknown run_id")
+    langfuse_base: str | None = getattr(request.app.state, "langfuse_url", None)
+    langfuse_trace_url = (
+        f"{langfuse_base}/trace/{run_id}" if langfuse_base else None
+    )
     return _templates.TemplateResponse(
         request,
         "run_detail.html",
-        {"run_id": run_id, "state": info.state, "has_graph": info.mermaid is not None},
+        {
+            "run_id": run_id,
+            "state": info.state,
+            "has_graph": info.mermaid is not None,
+            "langfuse_trace_url": langfuse_trace_url,
+        },
     )
