@@ -28,6 +28,7 @@ from .talker_reasoner import (
     Transcript,
     Turn,
 )
+from .self_refine import RefineInput, SelfRefine, SelfRefineState
 from .verifier_loop import VerifierLoop
 
 __all__ = [
@@ -50,5 +51,8 @@ __all__ = [
     "TalkerReasoner",
     "Transcript",
     "Turn",
+    "RefineInput",
+    "SelfRefine",
+    "SelfRefineState",
     "VerifierLoop",
 ]

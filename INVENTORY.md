@@ -204,6 +204,7 @@ metric feedback. Plain classes with `run(...)` — not `Agent` subclasses.
 | `VerifierLoop`   | Generator loops until `Verifier` approves or `max_iter` hits. |
 | `Sweep`          | Cartesian grid over dotted-path parameters of a seed agent. Returns a `SweepReport` with one `SweepCell` per grid point. |
 | `AutoResearcher` | Planner → Retriever → Reasoner → Critic → Reflector loop, wrapped in best-of-N. Plus `ResearchPlan`, `ResearchInput`, `ResearchContext` types. |
+| `SelfRefine`     | Generator → Reflector → Refiner loop; on-policy (shared generator/refiner) or cross-policy; `stop_when` callback. |
 
 ```python
 from operad.algorithms import Beam, AutoResearcher
@@ -219,7 +220,6 @@ absorbed there.
 
 ### Planned
 
-- `SelfRefine` — Generator → Reflector → Refiner.
 - `TalkerReasoner` — interleaved chat + reasoning.
 
 ## 8. Metrics — `operad.metrics`
