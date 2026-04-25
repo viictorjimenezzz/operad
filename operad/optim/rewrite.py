@@ -18,7 +18,7 @@ import json
 from inspect import cleandoc
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from operad.core.agent import Agent
 from operad.core.example import Example
@@ -177,6 +177,7 @@ class TextRewriter(RewriteAgent):
 
     The LR mapping is documented on `RewriteAgent`: high `lr` fully
     rewrites the string, low `lr` performs a minimal surgical edit.
+    On retry, surfaces coercion-failure details (e.g. max-length exceeded).
     """
 
     role = "You are a focused prompt engineer rewriting a single string field."
@@ -212,6 +213,7 @@ class RuleListRewriter(RewriteAgent):
 
     `old_value` and `new_value` are both JSON-encoded `list[str]`.
     The prompt stresses orthogonal, short rules.
+    On retry, surfaces coercion-failure details (e.g. item count or type mismatch).
     """
 
     role = "You are a careful editor of prompt rule lists."
@@ -258,6 +260,8 @@ class ExampleListRewriter(RewriteAgent):
     `Example[In, Out]` dicts (`{"input": {...}, "output": {...}}`). The
     caller adds the Pydantic `In` and `Out` JSON schemas to
     `constraint_hint` so the model can emit items that validate.
+    On retry after a `ValidationError`, surfaces the exact field path, expected
+    type, and bad value for up to 5 errors so the model can correct them.
     """
 
     role = "You are a careful editor of few-shot example sets."
@@ -282,6 +286,7 @@ class FloatRewriter(RewriteAgent):
 
     `old_value` is a stringified number; `new_value` must parse as a
     single float literal (no units, no prose).
+    On retry, surfaces the numeric-bounds coercion details.
     """
 
     role = "You are a precise tuner of numeric sampling knobs."
@@ -318,6 +323,7 @@ class CategoricalRewriter(RewriteAgent):
 
     The response must be exactly one of the allowed tokens listed in
     `constraint_hint`; anything else is a constraint violation.
+    On retry, surfaces the out-of-vocab coercion details.
     """
 
     role = "You are a decisive picker of a single vocabulary token."
@@ -481,6 +487,21 @@ def _enrich_hint_for_examples(hint: str, param: Parameter[Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Validation-error formatting
+# ---------------------------------------------------------------------------
+
+
+def _format_validation_hint(err: ValidationError) -> str:
+    lines = ["\nSchema validation failed — previous attempt errors (up to 5 shown):"]
+    for e in err.errors()[:5]:
+        loc = ".".join(str(p) for p in e.get("loc", ()))
+        msg = e.get("msg", "")
+        got = repr(e.get("input", ""))[:200]
+        lines.append(f"  - {loc}: {msg} (got: {got})")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # apply_rewrite
 # ---------------------------------------------------------------------------
 
@@ -536,7 +557,13 @@ async def apply_rewrite(
         new_value = _parse(resp.new_value, param)
         validated = _check(new_value)
     except Exception as first_err:
+        schema_hint = (
+            _format_validation_hint(first_err)
+            if isinstance(first_err, ValidationError)
+            else ""
+        )
         tightened = (
+            f"{schema_hint}"
             f"\nSTRICT: the previous attempt violated the constraint — "
             f"{first_err}. Return a value that strictly satisfies every "
             f"bullet above."
