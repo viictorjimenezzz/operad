@@ -46,6 +46,10 @@ SECTION_DESCRIPTIONS: dict[str, str] = {
         "Objective accomplished on each invocation; the single most "
         "important instruction."
     ),
+    "style": (
+        "How the agent should express itself: tone, register, verbosity. "
+        "Independent of the task — what to say vs. how to say it."
+    ),
     "context": (
         "Runtime context supplied by the enclosing caller (e.g. an "
         "algorithm) so the agent knows the larger problem it is part of."
@@ -137,9 +141,21 @@ def render_system_input(x: BaseModel) -> str:
     return _section("system_input", body)
 
 
-def render_output_schema(out_cls: type[BaseModel]) -> str:
-    """Render an ``<output_schema>`` listing expected Out fields."""
+def render_output_schema(
+    out_cls: type[BaseModel], *, reasoning_field: str | None = None
+) -> str:
+    """Render an ``<output_schema>`` listing expected Out fields.
+
+    When ``reasoning_field`` is given, prepend a synthetic text field of
+    that name to the schema rendering so the model is told to commit
+    its reasoning before the typed answer.
+    """
     fields: list[str] = []
+    if reasoning_field:
+        fields.append(
+            f'    <field name="{_xml_text_escape(reasoning_field)}" type="str"'
+            f" desc={_xml_attr_quote('Step-by-step reasoning written before the typed answer.')}/>"
+        )
     for name, info in out_cls.model_fields.items():
         attrs = [
             f'name="{_xml_text_escape(name)}"',
@@ -179,11 +195,19 @@ def render_system(agent: "Agent[Any, Any]") -> str:
         parts.append(_section("role", _xml_text_escape(agent.role)))
     if agent.task:
         parts.append(_section("task", _xml_text_escape(agent.task)))
+    if agent.style:
+        parts.append(_section("style", _xml_text_escape(agent.style)))
     if agent.context:
         parts.append(_section("context", _xml_text_escape(agent.context)))
     if agent.rules:
         parts.append(_section("rules", render_rules(list(agent.rules))))
     if agent.examples:
         parts.append(_section("examples", render_examples(list(agent.examples))))
-    parts.append(render_output_schema(agent.output))  # type: ignore[arg-type]
+    reasoning_field = getattr(agent, "reasoning_field", None)
+    parts.append(
+        render_output_schema(
+            agent.output,  # type: ignore[arg-type]
+            reasoning_field=reasoning_field,
+        )
+    )
     return "\n\n".join(parts)

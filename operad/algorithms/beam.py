@@ -82,27 +82,16 @@ class Beam(Generic[In, Out]):
                 started_at=started,
             )
             try:
-                # Concurrent calls to one Agent corrupt the strands-owned
-                # conversation history, so give each candidate its own
-                # instance.
-                gens = [self.generator] + [
-                    self.generator.clone() for _ in range(self.n - 1)
-                ]
-                judges = [self.judge] + [
-                    self.judge.clone() for _ in range(self.n - 1)
-                ]
-                if self.n > 1:
-                    await asyncio.gather(
-                        *(a.abuild() for a in gens[1:] + judges[1:])
-                    )
-
+                # forward() is reentrant under stateless=True (the default),
+                # so n concurrent calls on the same generator/judge instance
+                # do not race on shared strands state.
                 gen_outputs = await asyncio.gather(
-                    *(gens[i](x) for i in range(self.n))
+                    *(self.generator(x) for _ in range(self.n))
                 )
                 candidates: list[Out] = [g.response for g in gen_outputs]
                 judge_outputs = await asyncio.gather(
                     *(
-                        judges[i](Candidate(input=x, output=candidates[i]))
+                        self.judge(Candidate(input=x, output=candidates[i]))
                         for i in range(self.n)
                     )
                 )

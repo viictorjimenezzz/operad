@@ -69,6 +69,65 @@ afterward also works (`leaf.task = "..."`). Components also declare
 opinionated `default_sampling` dicts that merge with the caller's
 `Configuration.sampling` (e.g. `Classifier` pins `temperature=0.0`).
 
+### Prompt attributes at a glance
+
+Every Agent renders its system prompt from these class-level (and
+instance-overridable) attributes:
+
+| Attribute         | Type            | Purpose                                                                 |
+| ----------------- | --------------- | ----------------------------------------------------------------------- |
+| `role`            | `str`           | Persona the agent adopts.                                               |
+| `task`            | `str`           | Single most important instruction; *what* the agent does.               |
+| `style`           | `str`           | *How* the agent expresses itself (tone, register, verbosity).           |
+| `context`         | `str`           | Static task-at-hand guidelines for *this deployment*.                   |
+| `rules`           | `tuple[str, …]` | Hard constraints.                                                       |
+| `examples`        | `tuple[Example, …]` | Typed few-shot demonstrations.                                      |
+| `reasoning_field` | `str \| None`   | Opt-in: emit chain-of-thought on the wire under this field name.        |
+| `stateless`       | `bool` (True)   | Each `invoke()` is independent; reuse one instance for fan-out.         |
+
+`role` / `task` / `style` / `rules` / `examples` are all `Parameter`s
+optimizers can move (see [`../optim/`](../optim/README.md)).
+`reasoning_field` and `stateless` are structural — class-level switches,
+not part of the trainable surface.
+
+#### `context` semantics
+
+`context` is a **static system-prompt section provisioned per-instance
+at construction time** by the script or algorithm wiring this agent into
+a deployment. Use it to hand the agent task-at-hand guidelines that are
+constant for its lifetime in this deployment — *not* for per-call
+iteration awareness inside a loop.
+
+If an algorithm needs to send slow-changing per-call awareness (e.g.
+"you are arguing the affirmative; the prior speaker said …"), add a
+field to your **input class** marked with the system flag — it routes
+into the per-call system prompt without busting the cached static base:
+
+```python
+from pydantic import BaseModel, Field
+
+class DebateTurn(BaseModel):
+    side: str = Field(
+        json_schema_extra={"operad": {"system": True}},
+        description="Which side this agent is arguing on this turn.",
+    )
+    transcript_so_far: str = Field(default="", description="Prior turns.")
+```
+
+#### `stateless` semantics
+
+The default (`stateless = True`) means every `invoke()` runs against a
+fresh, transient strands.Agent built from the leaf's resolved model and
+the freshly-composed system + user message. No conversation history
+carries across calls, and the operad Agent's own `system_prompt` /
+`messages` are never mutated — so concurrent fan-out on a single shared
+instance (e.g. `await asyncio.gather(*(agent(x) for x in batch))`)
+is safe.
+
+Subclasses that genuinely depend on multi-turn dialogue history opt out
+with `stateless = False`. That re-enables strands' sliding-window
+conversation manager and is single-threaded by contract.
+
 ## Smallest meaningful composite
 
 ```python

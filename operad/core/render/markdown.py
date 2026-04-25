@@ -72,10 +72,17 @@ def render_system_input(x: BaseModel) -> str:
     return "## System inputs\n" + _model_values_md_subset(x, sys_names)
 
 
-def render_output_schema(out_cls: type[BaseModel]) -> str:
+def render_output_schema(
+    out_cls: type[BaseModel], *, reasoning_field: str | None = None
+) -> str:
     rows = ["| Field | Type | Description |", "| --- | --- | --- |"]
     fields = out_cls.model_fields
-    if not fields:
+    if reasoning_field:
+        rows.append(
+            f"| {_escape_pipes(reasoning_field)} | str "
+            "| Step-by-step reasoning written before the typed answer. |"
+        )
+    if not fields and not reasoning_field:
         rows.append("| _(none)_ | | |")
     for name, info in fields.items():
         desc = _escape_pipes(info.description) if info.description else ""
@@ -105,11 +112,19 @@ def render_system(agent: "Agent[Any, Any]") -> str:
         parts.append(f"# Role\n{agent.role}")
     if agent.task:
         parts.append(f"# Task\n{agent.task}")
+    if agent.style:
+        parts.append(f"# Style\n{agent.style}")
     if agent.context:
         parts.append(f"# Context\n{agent.context}")
     if agent.rules:
         parts.append("# Rules\n" + render_rules(list(agent.rules)))
     if agent.examples:
         parts.append("# Examples\n" + render_examples(list(agent.examples)))
-    parts.append(render_output_schema(agent.output))  # type: ignore[arg-type]
+    reasoning_field = getattr(agent, "reasoning_field", None)
+    parts.append(
+        render_output_schema(
+            agent.output,  # type: ignore[arg-type]
+            reasoning_field=reasoning_field,
+        )
+    )
     return "\n\n".join(parts)

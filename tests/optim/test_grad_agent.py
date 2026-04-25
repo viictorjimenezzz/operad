@@ -371,6 +371,7 @@ async def test_parameter_grad_null_gradient_short_circuits(cfg):
 _EXPECTED_KINDS: set[ParameterKind] = {
     "role",
     "task",
+    "style",
     "rules",
     "rule_i",
     "examples",

@@ -31,6 +31,7 @@ def test_leaf_default_parameter_set_without_top_p(cfg: Configuration) -> None:
     assert names == {
         "role",
         "task",
+        "style",
         "rules",
         "examples",
         "config.sampling.temperature",
@@ -63,6 +64,7 @@ def test_parameter_subclasses_match_expected_types(cfg: Configuration) -> None:
     by_path = dict(leaf.named_parameters(recurse=False))
     assert isinstance(by_path["role"], TextParameter)
     assert isinstance(by_path["task"], TextParameter)
+    assert isinstance(by_path["style"], TextParameter)
     assert isinstance(by_path["rules"], RuleListParameter)
     assert isinstance(by_path["examples"], ExampleListParameter)
     assert isinstance(by_path["config.sampling.temperature"], FloatParameter)
@@ -75,8 +77,10 @@ def test_parameters_recurse_false_excludes_children(cfg: Configuration) -> None:
     a, b = _leaf(cfg), _leaf(cfg)
     pipe = Pipeline(a, b, input=A, output=B)
     local = list(pipe.named_parameters(recurse=False))
-    # Pipeline has config=None → only role/task/rules/examples.
-    assert {path for path, _ in local} == {"role", "task", "rules", "examples"}
+    # Pipeline has config=None → only role/task/style/rules/examples.
+    assert {path for path, _ in local} == {
+        "role", "task", "style", "rules", "examples",
+    }
 
 
 def test_named_parameters_recurse_prefixes_child_names(cfg: Configuration) -> None:

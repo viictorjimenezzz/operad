@@ -262,6 +262,7 @@ class CategoricalParameterGrad(ParameterGradAgent):
 PARAMETER_GRAD_AGENTS: dict[ParameterKind, type[ParameterGradAgent]] = {
     "role": TextParameterGrad,
     "task": TextParameterGrad,
+    "style": TextParameterGrad,
     "rules": RuleListParameterGrad,
     "rule_i": TextParameterGrad,
     "examples": ExampleListParameterGrad,
