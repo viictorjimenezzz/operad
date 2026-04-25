@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 from dataclasses import asdict
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -31,12 +32,9 @@ _WEB_DIR = _PKG_DIR / "web"
 _WEB_INDEX = _WEB_DIR / "index.html"
 _WEB_ASSETS = _WEB_DIR / "assets"
 
-# Legacy Jinja shell — only mounted when OPERAD_DASHBOARD_LEGACY=1.
-_TEMPLATES_DIR = _PKG_DIR / "templates"
-_LEGACY_STATIC_DIR = _PKG_DIR / "static"
-
 _SNAPSHOT_INTERVAL_SECONDS = 2.0
 _MAX_EVENTS_PER_REQUEST = 500
+_KNOWN_ENVELOPE_TYPES = {"agent_event", "algo_event", "slot_occupancy", "cost_update", "stats_update"}
 
 def _dashboard_version() -> str:
     try:
@@ -84,28 +82,23 @@ def create_app(
             name="web",
         )
 
-    legacy_mode = os.environ.get("OPERAD_DASHBOARD_LEGACY") == "1"
-    if legacy_mode and _LEGACY_STATIC_DIR.is_dir():
-        app.mount(
-            "/static",
-            StaticFiles(directory=str(_LEGACY_STATIC_DIR)),
-            name="legacy-static",
-        )
-
     @app.get("/api/manifest")
     async def manifest() -> JSONResponse:
+        mode = "production" if os.environ.get("OPERAD_ENV") == "production" else "development"
         return JSONResponse(
             {
-                "mode": "dashboard",
+                "mode": mode,
                 "version": _dashboard_version(),
                 "langfuseUrl": app.state.langfuse_url,
             }
         )
 
     @app.get("/runs")
-    async def runs() -> JSONResponse:
-        items = [r.summary() for r in obs.registry.list()]
-        return JSONResponse(items)
+    async def runs(include: str | None = None) -> JSONResponse:
+        all_runs = obs.registry.list()
+        if include != "synthetic":
+            all_runs = [r for r in all_runs if not r.synthetic]
+        return JSONResponse([r.summary() for r in all_runs])
 
     @app.get("/stats")
     async def stats() -> JSONResponse:
@@ -140,6 +133,33 @@ def create_app(
         data["cost"] = totals
         return JSONResponse(data)
 
+    @app.get("/runs/{run_id}/children")
+    async def run_children(run_id: str) -> JSONResponse:
+        if obs.registry.get(run_id) is None:
+            raise HTTPException(status_code=404, detail="unknown run_id")
+        children = obs.registry.list_children(run_id)
+        return JSONResponse([c.summary() for c in children])
+
+    @app.get("/runs/{run_id}/parent")
+    async def run_parent(run_id: str) -> JSONResponse:
+        info = obs.registry.get(run_id)
+        if info is None:
+            raise HTTPException(status_code=404, detail="unknown run_id")
+        if not info.synthetic or info.parent_run_id is None:
+            raise HTTPException(status_code=404, detail="run is not synthetic")
+        parent = obs.registry.get(info.parent_run_id)
+        if parent is None:
+            raise HTTPException(status_code=404, detail="parent run not found")
+        return JSONResponse(parent.summary())
+
+    @app.get("/runs/{run_id}/tree")
+    async def run_tree(run_id: str) -> JSONResponse:
+        info = obs.registry.get(run_id)
+        if info is None:
+            raise HTTPException(status_code=404, detail="unknown run_id")
+        children = obs.registry.list_children(run_id)
+        return JSONResponse({"root": info.summary(), "children": [c.summary() for c in children]})
+
     @app.get("/runs/{run_id}/events")
     async def run_events(run_id: str, limit: int = 200) -> JSONResponse:
         info = obs.registry.get(run_id)
@@ -150,9 +170,25 @@ def create_app(
         return JSONResponse({"run_id": run_id, "events": events})
 
     @app.post("/_ingest")
-    async def ingest(envelope: dict[str, Any]) -> JSONResponse:
-        """HTTP-attach ingestion endpoint. Accepts a pre-serialised envelope."""
-        await obs.broadcast(envelope)
+    async def ingest(request: Request) -> JSONResponse:
+        """HTTP-attach ingestion endpoint. Accepts a single envelope or a JSON array."""
+        body = await request.json()
+        envelopes: list[dict[str, Any]] = body if isinstance(body, list) else [body]
+        for envelope in envelopes:
+            env_type = envelope.get("type")
+            if env_type == "graph_envelope":
+                run_id = envelope.get("run_id") or ""
+                mermaid = envelope.get("mermaid")
+                if run_id and isinstance(mermaid, str):
+                    info = obs.registry._ensure(run_id, time.time())
+                    info.mermaid = mermaid
+            elif env_type in _KNOWN_ENVELOPE_TYPES:
+                await obs.broadcast(envelope)
+            else:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"unknown envelope type: {env_type!r}",
+                )
         return JSONResponse({"ok": True})
 
     @app.get("/stream")
@@ -180,25 +216,20 @@ def create_app(
 
 
 def _render_shell() -> str:
-    """Return the SPA index.html if present; otherwise a minimal stub.
+    """Return the SPA index.html if present; otherwise an informative stub.
 
-    Tests run without a built frontend; the stub keeps the legacy
-    `"operad" in r.text.lower()` assertion green and points at the
-    fallback Jinja layout when OPERAD_DASHBOARD_LEGACY=1.
+    Tests run without a built frontend; the stub satisfies the
+    `"operad" in r.text.lower()` assertion and explains what to do.
     """
     if _WEB_INDEX.is_file():
         return _WEB_INDEX.read_text(encoding="utf-8")
-    legacy_mode = os.environ.get("OPERAD_DASHBOARD_LEGACY") == "1"
-    legacy_index = _TEMPLATES_DIR / "index.html"
-    if legacy_mode and legacy_index.is_file():
-        return legacy_index.read_text(encoding="utf-8")
     return (
         "<!doctype html><html><head><meta charset=\"utf-8\">"
         "<title>operad - dashboard</title></head><body>"
         "<h1>operad</h1>"
-        "<p>frontend bundle not built. Run "
-        "<code>make build-frontend</code> or <code>cd apps/frontend &amp;&amp; pnpm dev:dashboard</code>.</p>"
-        "<!-- /static/app.js -->"
+        "<p>Frontend bundle not built. Run "
+        "<code>make build-frontend</code> or "
+        "<code>cd apps/frontend &amp;&amp; pnpm dev:dashboard</code>.</p>"
         "</body></html>"
     )
 

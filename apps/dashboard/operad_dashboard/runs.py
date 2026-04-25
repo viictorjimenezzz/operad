@@ -5,6 +5,19 @@ plus aggregated per-run state the UI needs: event counts by kind,
 generation payloads (for evolutionary runs), cached Mermaid graph,
 and running token totals. The registry is bounded; oldest runs drop
 out via `OrderedDict.popitem(last=False)`.
+
+Synthetic runs
+--------------
+When an algorithm orchestrates many inner agent invocations (e.g.
+EvoGradient running 96 candidates), each inner invocation emits its own
+``run_id`` but carries ``metadata.parent_run_id`` pointing at the
+algorithm's top-level run. The registry marks those as *synthetic*
+(``RunInfo.synthetic = True``) and links them via ``parent_run_id``.
+
+``GET /runs`` hides synthetic runs by default; pass ``?include=synthetic``
+to see them. Use ``GET /runs/{id}/children`` to enumerate the synthetic
+children of an algorithm run, and ``GET /runs/{id}/tree`` for the full
+subtree in one call.
 """
 
 from __future__ import annotations
@@ -44,6 +57,14 @@ class RunInfo:
     total_completion_tokens: int = 0
     error_message: str | None = None
     algorithm_terminal_score: float | None = None
+    parent_run_id: str | None = None
+    synthetic: bool = False
+
+    @property
+    def algorithm_class(self) -> str | None:
+        if self.algorithm_path is None:
+            return None
+        return self.algorithm_path.rsplit(".", 1)[-1]
 
     @property
     def is_algorithm(self) -> bool:
@@ -80,6 +101,9 @@ class RunInfo:
             "completion_tokens": self.total_completion_tokens,
             "error": self.error_message,
             "algorithm_terminal_score": self.algorithm_terminal_score,
+            "parent_run_id": self.parent_run_id,
+            "synthetic": self.synthetic,
+            "algorithm_class": self.algorithm_class,
         }
 
 
@@ -122,6 +146,12 @@ class RunRegistry:
     def list(self) -> list[RunInfo]:
         # Newest first.
         return list(reversed(self._runs.values()))
+
+    def list_children(self, parent_run_id: str) -> list[RunInfo]:
+        return [r for r in self._runs.values() if r.parent_run_id == parent_run_id]
+
+    def clear(self) -> None:
+        self._runs.clear()
 
     def all_generations(self) -> list[dict[str, Any]]:
         """Flatten generation events across all runs, ordered by time."""
@@ -168,7 +198,14 @@ class RunRegistry:
             return
         ts_raw = envelope.get("started_at")
         ts = float(ts_raw) if isinstance(ts_raw, (int, float)) else time.time()
+        is_new = run_id not in self._runs
         info = self._ensure(run_id, ts)
+        if is_new:
+            meta = envelope.get("metadata") or {}
+            parent = meta.get("parent_run_id")
+            if isinstance(parent, str) and parent:
+                info.parent_run_id = parent
+                info.synthetic = True
         info.events.append(envelope)
         env_type = envelope.get("type")
         kind = envelope.get("kind") or "unknown"
