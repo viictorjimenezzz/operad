@@ -235,6 +235,7 @@ underlying compose details.
 ```bash
 uv run pytest tests/                    # offline unit tests
 bash   scripts/verify.sh                # tests + every offline example + demo.py --offline
+make cassettes-check                    # report cassettes that may need re-recording
 ```
 
 Integration tests are opt-in via `OPERAD_INTEGRATION=<backend>`; one

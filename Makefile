@@ -23,7 +23,8 @@ STUDIO_PORT         ?= 7870
         env header \
         dashboard studio demo \
         test test-otel test-dashboard \
-        verify
+        verify \
+        cassettes-refresh cassettes-check
 
 # ------------------------------------------------------------------
 # Help (default target)
@@ -48,10 +49,12 @@ help:
 	@printf '  Demos:\n'
 	@printf '    make demo         agent_evolution offline + dashboard attach + Langfuse OTel\n\n'
 	@printf '  Tests:\n'
-	@printf '    make test         Full offline suite\n'
-	@printf '    make test-otel    Just the OtelObserver tests\n'
-	@printf '    make test-dashboard  Just the dashboard tests\n'
-	@printf '    make verify       scripts/verify.sh — tests + every offline example + demo.py --offline\n\n'
+	@printf '    make test               Full offline suite\n'
+	@printf '    make test-otel          Just the OtelObserver tests\n'
+	@printf '    make test-dashboard     Just the dashboard tests\n'
+	@printf '    make verify             scripts/verify.sh — tests + every offline example + demo.py --offline\n'
+	@printf '    make cassettes-refresh  Re-record all offline cassettes (needs a live backend)\n'
+	@printf '    make cassettes-check    Report cassettes older than their agent source files\n\n'
 
 # ------------------------------------------------------------------
 # Stack
@@ -147,3 +150,9 @@ test-dashboard:
 
 verify:
 	bash scripts/verify.sh
+
+cassettes-refresh:
+	OPERAD_CASSETTE=record uv run pytest tests/ -v -k "cassette"
+
+cassettes-check:
+	uv run python scripts/cassettes_check.py

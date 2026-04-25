@@ -474,6 +474,21 @@ CassetteMiss: no cassette entry for key 3abc12ef
 Most likely: prompt drift.
 ```
 
+### Refresh workflow
+
+Re-record after changing a prompt or agent:
+
+```bash
+make cassettes-refresh        # record mode against a live backend
+make cassettes-check          # report cassettes that may be stale
+make cassettes-check --strict # non-zero exit — use as a CI gate
+```
+
+Cassette files embed `hash_prompt`, `hash_model`, and `hash_input` at
+record time. `cassettes-check` uses file mtime as a heuristic (flags
+cassettes older than any `operad/**/*.py` source file); a `CassetteMiss`
+during pytest is the authoritative signal that re-recording is needed.
+
 ## 18. YAML + CLI
 
 `operad run|trace|graph|tail` operates on a YAML config naming a
