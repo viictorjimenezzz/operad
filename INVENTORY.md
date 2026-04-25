@@ -58,17 +58,6 @@ leaf = MyLeaf(config=Configuration(backend="llamacpp",
 | `clone()`                    | Deep copy of state, unbuilt.                                                  |
 | `diff(other)`                | Structured `AgentDiff` between two agents.                                    |
 
-### Breaking change (0.1 → 0.2)
-
-`Agent` no longer inherits from `strands.Agent`. Subclasses that
-previously called `super().__init__(...)` with Strands kwargs
-(`model=`, `tools=`, `messages=`, etc.) must drop them — the call is
-now a plain `Agent.__init__` and accepts only the kwargs documented
-above. The Strands runtime is wrapped internally by
-`operad.core._strands_runner.StrandsRunner`; nothing else in operad
-imports `strands.Agent`. Existing freeze artefacts will reject on
-load (the version hash bumps with the package), so re-freeze any
-persisted agents.
 
 ## 2. Structural composition
 
@@ -218,11 +207,6 @@ Schemas: `Proposal`, `Critique`, `DebateContext`, `DebateRecord`,
 | `DebateAgent` | `Agent[DebateContext, Answer]` | Wraps `algorithms.Debate`; accepts `proposers`, `critic`, `synthesizer`, `rounds` kwargs. |
 | `VerifierAgent` | `Agent[Task, Answer]` | Wraps `algorithms.VerifierLoop`; accepts `generator`, `verifier`, `threshold`, `max_iter` kwargs. |
 
-### Shipped (iter-3)
-
-- `agents/conversational/TurnTaker` — turn-gating leaf (`Utterance →
-  TurnChoice`). Ships with `Safeguard`, `Persona`, `RefusalLeaf`, and a
-  composite `Talker` that pipelines all four.
 
 ### Planned
 
