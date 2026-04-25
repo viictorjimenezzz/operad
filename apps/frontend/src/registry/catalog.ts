@@ -39,6 +39,7 @@ export const catalog = createCatalog({
     },
     MetaList: { props: z.object({ source: sourceProp }) },
     LangfuseLink: { props: z.object({ runId: sourceProp }) },
+    LangfuseSummaryCard: { props: z.object({ runId: sourceProp, source: sourceProp }) },
 
     // Charts
     FitnessCurve: { props: z.object({ source: sourceProp, height: z.number().optional() }) },

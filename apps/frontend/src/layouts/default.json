@@ -21,7 +21,7 @@
         },
         "children": ["t-overview", "t-events", "t-graph", "t-io", "t-raw"]
       },
-      "t-overview": { "type": "Col", "props": { "gap": 12 }, "children": ["kpis", "meta-card"] },
+      "t-overview": { "type": "Col", "props": { "gap": 12 }, "children": ["kpis", "meta-card", "langfuse-card"] },
       "kpis": {
         "type": "Row",
         "props": { "gap": 12 },
@@ -58,6 +58,10 @@
       },
       "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
       "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
+      "langfuse-card": {
+        "type": "LangfuseSummaryCard",
+        "props": { "runId": "$context.runId", "source": "$queries.summary" }
+      },
       "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } },
       "t-graph": { "type": "Card", "props": { "title": "agent graph" }, "children": ["graph"] },
       "graph": { "type": "AgentGraph", "props": { "source": "$queries.graph" } },
