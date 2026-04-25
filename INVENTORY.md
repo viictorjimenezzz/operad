@@ -329,7 +329,7 @@ Global observer `registry` receives `AgentEvent`s on every invoke.
 | ------------------------ | ------------------------------------------------------------------------------------ |
 | `JsonlObserver`          | One NDJSON line per event; `save()` to a file.                                       |
 | `RichDashboardObserver`  | Live Rich TUI; needs `[observers]`.                                                  |
-| `OtelObserver`           | Real OpenTelemetry spans with all operad hashes as span attributes; needs `[otel]`. |
+| `OtelObserver`           | Real OpenTelemetry spans with all operad hashes as span attributes; needs `[otel]`. The OTel `trace_id` of the root span is derived from `run_id` (`int(run_id, 16)`), so deep-links of the form `{backend}/trace/{run_id}` resolve in any OTLP-receiving backend (e.g. Langfuse). Also emits `gen_ai.*` semantic-convention attributes (`gen_ai.system`, `gen_ai.request.model`, `gen_ai.usage.{prompt,completion,total}_tokens`) for richer rendering in LLM-aware backends. |
 | `TraceObserver`          | Accumulate into a `Trace` artefact.                                                  |
 | `TrainerProgressObserver`| Rich nested progress bars driven by Trainer lifecycle + DataLoader batch events.     |
 
@@ -357,6 +357,17 @@ with four per-run panels wired onto the existing event stream:
 The dashboard keeps a bounded per-run event buffer (default 1000
 envelopes) so these panels can reconstruct historical state when a
 page is opened mid-run.
+
+### Self-hosted Langfuse stack
+
+A `docker-compose.yml` at the repo root brings up Langfuse v3 (web,
+worker, postgres, clickhouse, redis, minio) alongside both operad
+apps. operad's `OtelObserver` ships spans to Langfuse via OTLP/HTTP;
+the dashboard renders a "View in Langfuse" deep-link on the
+run-detail page. Bootstrap via `LANGFUSE_INIT_*` env vars (admin user,
+organization, project, API keys) and seed `OTEL_EXPORTER_OTLP_HEADERS`
+with `scripts/langfuse_otel_header.sh`. See
+[`apps/README.md`](apps/README.md).
 
 ### `Trace` + `trace_diff` + schema-drift replay
 

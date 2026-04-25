@@ -39,12 +39,17 @@ def create_app(
     observer: WebDashboardObserver | None = None,
     cost_observer: CostObserver | None = None,
     auto_register: bool = True,
+    langfuse_url: str | None = None,
 ) -> FastAPI:
     """Build a FastAPI app wired to a `WebDashboardObserver`.
 
     `auto_register=True` registers the observers with operad's process-wide
     registry so the dashboard sees in-process events without further
     setup. Tests pass `auto_register=False` and feed events directly.
+
+    `langfuse_url`, when set, is the *browser-reachable* base URL of a
+    Langfuse instance (e.g. `http://localhost:3000`); the run-detail
+    page renders a "View in Langfuse" link to `{base}/trace/{run_id}`.
     """
     app = FastAPI(title="operad-dashboard")
     obs = observer or WebDashboardObserver()
@@ -55,6 +60,7 @@ def create_app(
 
     app.state.observer = obs
     app.state.cost_observer = cost
+    app.state.langfuse_url = (langfuse_url or "").rstrip("/") or None
 
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 
 import uvicorn
@@ -28,6 +29,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=1.0,
         help="Replay speed multiplier; 0 = as fast as possible",
     )
+    p.add_argument(
+        "--langfuse-url",
+        default=os.environ.get("LANGFUSE_PUBLIC_URL"),
+        help=(
+            "Public base URL of a Langfuse instance reachable from the "
+            "user's browser (e.g. http://localhost:3000). When set, "
+            "run-detail pages render a 'View in Langfuse' link to "
+            "{base}/trace/{run_id}. Defaults to the LANGFUSE_PUBLIC_URL "
+            "environment variable."
+        ),
+    )
     return p.parse_args(argv)
 
 
@@ -39,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run_live(args: argparse.Namespace) -> int:
-    app = create_app()
+    app = create_app(langfuse_url=args.langfuse_url)
     print(
         f"Dashboard live at http://{args.host}:{args.port}\n"
         "Run your operad agent in the same Python process, "
@@ -53,7 +65,9 @@ def _run_live(args: argparse.Namespace) -> int:
 
 def _run_replay(args: argparse.Namespace) -> int:
     observer = WebDashboardObserver()
-    app = create_app(observer=observer, auto_register=False)
+    app = create_app(
+        observer=observer, auto_register=False, langfuse_url=args.langfuse_url
+    )
 
     async def _replay_then_idle() -> None:
         count = await replay_file(args.replay, observer, speed=args.speed)

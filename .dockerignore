@@ -1,0 +1,40 @@
+# Don't bloat docker build context with venv / git / caches.
+.venv
+**/.venv
+.git
+.github
+.pytest_cache
+**/.pytest_cache
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+node_modules
+
+# App-internal artifacts that should not leak into the image.
+.env
+.env.*
+!.env.example
+*.log
+
+# Tests are not needed at runtime; copying them anyway is fine but slow.
+tests
+**/tests
+
+# Local dev artifacts.
+.context
+.conductor
+.construct
+.claude
+.idea
+.vscode
+*.swp
+.DS_Store
+
+# Build artifacts.
+dist
+build
+*.egg-info
+**/dist
+**/build
+**/*.egg-info

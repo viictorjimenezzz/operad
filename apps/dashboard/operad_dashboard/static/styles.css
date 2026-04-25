@@ -524,6 +524,13 @@ pre, code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .badge-running { background: #1e4d2b; }
 .badge-ended { background: #2d3340; }
 .badge-error { background: #5a1f24; }
+.langfuse-link {
+  margin-left: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--accent, #8ab4f8);
+  text-decoration: none;
+}
+.langfuse-link:hover { text-decoration: underline; }
 .run-detail {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));

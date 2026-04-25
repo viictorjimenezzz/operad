@@ -200,6 +200,57 @@ async def test_concurrent_runs_keyed_by_run_id(cfg, exporter) -> None:
     assert len(run_ids) == 2
 
 
+async def test_root_span_trace_id_matches_run_id(cfg, exporter) -> None:
+    """The root span's OTel trace_id must equal int(run_id, 16) so that
+    Langfuse / OTel-backend deep-links of the form
+    ``{backend}/trace/{run_id}`` resolve without any external mapping."""
+    leaf = await FakeLeaf(
+        config=cfg, input=A, output=B, canned={"value": 1}
+    ).abuild()
+
+    obs_registry.register(OtelObserver())
+    out = await leaf(A())
+
+    spans = exporter.get_finished_spans()
+    assert len(spans) == 1
+    span = spans[0]
+    # OTel trace_id is a 128-bit int; render it as 32-hex to compare.
+    rendered_trace_id = format(span.context.trace_id, "032x")
+    assert rendered_trace_id == out.run_id
+
+
+async def test_nested_spans_share_trace_id(cfg, exporter) -> None:
+    first = FakeLeaf(config=cfg, input=A, output=B, canned={"value": 1})
+    second = FakeLeaf(config=cfg, input=B, output=C, canned={"label": "ok"})
+    pipe = await Pipeline(first, second, input=A, output=C).abuild()
+
+    obs_registry.register(OtelObserver())
+    out = await pipe(A(text="hi"))
+
+    spans = exporter.get_finished_spans()
+    # Every span produced inside one root invocation must share the
+    # root's trace_id, which itself must equal the run_id.
+    trace_ids = {format(s.context.trace_id, "032x") for s in spans}
+    assert trace_ids == {out.run_id}
+
+
+async def test_gen_ai_attributes_on_leaf(cfg, exporter) -> None:
+    leaf = await FakeLeaf(
+        config=cfg, input=A, output=B, canned={"value": 7}
+    ).abuild()
+
+    obs_registry.register(OtelObserver())
+    await leaf(A(text="hello"))
+
+    spans = exporter.get_finished_spans()
+    assert len(spans) == 1
+    a = _attrs(spans[0])
+    # `cfg` in tests is a llamacpp Configuration with a non-empty model;
+    # gen_ai.* attributes are populated from the OperadOutput envelope.
+    assert a.get("gen_ai.system")
+    assert a.get("gen_ai.request.model")
+
+
 async def test_missing_opentelemetry_raises(monkeypatch) -> None:
     import builtins
     import sys

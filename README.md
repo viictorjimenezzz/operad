@@ -206,6 +206,28 @@ replays a recorded NDJSON trace. See
 The dashboard and studio are independent editable installs in this
 monorepo — they consume `operad` like external users.
 
+## Self-hosted observability (Langfuse + OTel)
+
+A `docker-compose.yml` at the repo root brings up Langfuse v3
+alongside both apps with one command. operad's `OtelObserver` already
+emits a hierarchical span tree (one span per `(run_id, agent_path)`,
+nested per the agent topology) and aligns the OTel `trace_id` with
+operad's `run_id`, so the dashboard's run-detail page renders a
+"View in Langfuse" link that resolves directly to the matching trace
+without any external mapping.
+
+```bash
+cp .env.example .env
+# Set LANGFUSE_INIT_PROJECT_*_KEY pair + user password in .env, then:
+bash scripts/langfuse_otel_header.sh --update    # populates OTEL_EXPORTER_OTLP_HEADERS
+docker compose up -d
+```
+
+Exposed: Langfuse on **3000**, dashboard on **7860**, studio on
+**7870**. The stack also includes Postgres, Clickhouse, Redis, and
+MinIO (S3-compatible blob); expect ~3 GB RAM. See
+[`apps/README.md`](apps/README.md) for details.
+
 ## Tests
 
 ```bash
