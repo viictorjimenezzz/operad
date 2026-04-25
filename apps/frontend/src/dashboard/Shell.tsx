@@ -9,7 +9,7 @@ export function Shell() {
   return (
     <div className="flex h-screen flex-col">
       <GlobalStatsBar subtitle="dashboard" />
-      <div className="grid flex-1 grid-cols-[260px_1fr] overflow-hidden">
+      <div className="grid flex-1 grid-cols-[300px_1fr] overflow-hidden">
         <RunListSidebar />
         <main aria-label="run detail" className="flex h-full flex-col overflow-hidden">
           <Outlet />
