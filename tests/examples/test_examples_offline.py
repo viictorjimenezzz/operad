@@ -1,8 +1,13 @@
-"""Run each offline-capable example's ``main(offline=True)`` end-to-end.
+"""Run each offline-capable example's ``main`` end-to-end.
 
 Stronger than a smoke-import: confirms every offline example actually
-completes its ``asyncio.run`` without contacting a network. The eight
+completes its ``asyncio.run`` without contacting a network. The four
 scripts listed here are the same set that ``scripts/verify.sh`` runs.
+
+Each example exposes ``_parse_args`` (constructs the example's
+``argparse.Namespace``) and ``main(args)``. We construct args via the
+parser and override ``offline=True`` so the call shape matches what
+``verify.sh`` does on the command line.
 """
 
 from __future__ import annotations
@@ -17,14 +22,10 @@ import pytest
 EXAMPLES_DIR = Path(__file__).resolve().parent.parent.parent / "examples"
 
 OFFLINE_SCRIPTS = [
-    "mermaid_export.py",
-    "custom_agent.py",
-    "eval_loop.py",
-    "evolutionary_demo.py",
-    "observer_demo.py",
-    "sweep_demo.py",
-    "sandbox_pool_demo.py",
-    "sandbox_tooluser.py",
+    "01_composition_research_analyst.py",
+    "02_talker_reasoner_intake.py",
+    "03_train_config_temperature.py",
+    "04_evolutionary_best_of_n.py",
 ]
 
 
@@ -44,5 +45,10 @@ def test_example_offline(name: str) -> None:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    assert hasattr(module, "main"), f"{name} missing async main(offline=...)"
-    asyncio.run(module.main(offline=True))
+    assert hasattr(module, "main"), f"{name} missing async main(args)"
+    assert hasattr(module, "_parse_args"), f"{name} missing _parse_args"
+
+    # Construct the example's args via its own parser, then force --offline.
+    sys.argv = [name, "--offline"]
+    args = module._parse_args()
+    asyncio.run(module.main(args))
