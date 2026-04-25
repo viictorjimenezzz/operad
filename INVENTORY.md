@@ -496,6 +496,19 @@ record time. `cassettes-check` uses file mtime as a heuristic (flags
 cassettes older than any `operad/**/*.py` source file); a `CassetteMiss`
 during pytest is the authoritative signal that re-recording is needed.
 
+### Training replay
+
+`training_cassette_context(path, mode)` wraps `Trainer.fit()` to make
+training runs replayable. In record mode each optimizer step is logged
+— mean loss, post-step parameter values, LR scheduler state — to a
+sibling `<name>.train.jsonl` file. In replay mode the trainer skips
+every LLM call inside `_run_batch` and `optimizer.step()` and restores
+recorded state directly, reproducing a byte-equal `TrainingReport`.
+
+A `TrainCassetteMiss` is raised when the key is absent and names the
+offending segment (`hash_agent`, `hash_inputs`, or `hash_params`) so
+prompt-level regressions are immediately visible.
+
 ## 18. YAML + CLI
 
 `operad run|trace|graph|tail` operates on a YAML config naming a

@@ -187,9 +187,9 @@ Surrounding extras live outside `operad/`:
 
 Items not yet in code, ordered by priority:
 
-1. **Cassette-replay determinism validation** — the full validation
-   matrix for offline-deterministic training under
-   `OPERAD_CASSETTE=record/replay`.
+1. ~~**Cassette-replay determinism validation**~~ — done in stream 5-2;
+   `training_cassette_context` records/replays at the optimizer-step
+   level (`*.train.jsonl`), yielding byte-equal `TrainingReport`s.
 2. **Pre-wired composition wrappers** at `operad/agents/reasoning/`:
    `debate.py` and `verifier.py`. The corresponding algorithms exist
    under `operad/algorithms/`; the agent-level pre-wirings (parallel
