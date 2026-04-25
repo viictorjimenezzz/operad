@@ -6,6 +6,7 @@ from .active import UncertaintySampler
 from .loader import (
     Batch,
     DataLoader,
+    PermutableSampler,
     RandomSampler,
     Sampler,
     SequentialSampler,
@@ -18,6 +19,7 @@ from .split import random_split, stratified_split
 __all__ = [
     "Batch",
     "DataLoader",
+    "PermutableSampler",
     "RandomSampler",
     "Sampler",
     "SequentialSampler",
