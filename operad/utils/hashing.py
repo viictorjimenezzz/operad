@@ -14,10 +14,15 @@ for correlation and audit, not cryptographic integrity.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import re
+from datetime import date, datetime, timezone
+from decimal import Decimal
+from pathlib import Path, PurePath
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -29,13 +34,61 @@ def hash_str(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()[:16]
 
 
+def _canonicalize(obj: Any) -> Any:
+    """JSON ``default`` that produces environment-independent representations.
+
+    Stable types and their canonical forms:
+    - ``datetime`` → ISO 8601 UTC (naive datetimes are assumed UTC)
+    - ``date`` → ISO 8601 (YYYY-MM-DD)
+    - ``Path`` → POSIX string (forward slashes)
+    - ``UUID`` → canonical hyphenated lowercase string
+    - ``Decimal`` → exact decimal string
+    - ``bytes`` → base-64 string
+    - ``set`` / ``frozenset`` → sorted list (elements must be JSON-native)
+    - ``BaseModel`` → ``model_dump(mode="json")``
+
+    Raises ``TypeError`` for any other type so that platform-specific
+    ``str()`` representations never silently pollute a hash.
+    """
+    if isinstance(obj, datetime):
+        if obj.tzinfo is None:
+            return obj.replace(tzinfo=timezone.utc).isoformat()
+        return obj.astimezone(timezone.utc).isoformat()
+    if isinstance(obj, date):
+        return obj.isoformat()
+    if isinstance(obj, PurePath):
+        return obj.as_posix()
+    if isinstance(obj, UUID):
+        return str(obj)
+    if isinstance(obj, Decimal):
+        return str(obj)
+    if isinstance(obj, (bytes, bytearray)):
+        return base64.b64encode(bytes(obj)).decode()
+    if isinstance(obj, (set, frozenset)):
+        return sorted(obj)
+    if isinstance(obj, BaseModel):
+        # Python-mode dump keeps datetime/Path/etc. as Python objects so they
+        # flow back through _canonicalize for UTC normalization and POSIX paths.
+        return obj.model_dump()
+    raise TypeError(
+        f"Object of type {type(obj).__name__} is not JSON-serializable with a"
+        " stable canonical form. Convert to a supported type before hashing."
+    )
+
+
 def hash_json(obj: Any) -> str:
-    """Stable hash of a JSON-serialisable object."""
-    return hash_str(json.dumps(obj, sort_keys=True, default=str))
+    """Stable, environment-independent hash of a JSON-serialisable object.
+
+    Uses a typed canonicalizer instead of ``default=str`` so that
+    cross-platform ``str()`` differences (timezone names, locale separators,
+    OS path separators) cannot affect the digest.  Raises ``TypeError`` for
+    types with no deterministic representation.
+    """
+    return hash_str(json.dumps(obj, sort_keys=True, default=_canonicalize, separators=(",", ":")))
 
 
 def _stable_json(obj: object) -> str:
-    return json.dumps(obj, sort_keys=True, default=str, separators=(",", ":"))
+    return json.dumps(obj, sort_keys=True, default=_canonicalize, separators=(",", ":"))
 
 
 # Matches a `user:pass@` authority prefix, with or without a leading scheme.
