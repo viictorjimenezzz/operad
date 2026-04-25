@@ -91,6 +91,37 @@ async def test_operad_trace_env_var_auto_attach(cfg, tmp_path, monkeypatch) -> N
     assert {"start", "end"} <= kinds
 
 
+async def test_operad_otel_env_var_auto_attach(cfg, monkeypatch) -> None:
+    """OPERAD_OTEL=1 at import time registers an OtelObserver."""
+    pytest.importorskip("opentelemetry")
+    import operad.tracing as tracing
+    from operad.runtime.observers import OtelObserver
+
+    monkeypatch.setenv("OPERAD_OTEL", "1")
+    importlib.reload(tracing)
+    try:
+        types = [type(o).__name__ for o in _obs.registry._observers]
+        assert "OtelObserver" in types
+        # Truthy variants also work.
+        for val in ("true", "yes", "ON"):
+            _obs.registry.clear()
+            monkeypatch.setenv("OPERAD_OTEL", val)
+            importlib.reload(tracing)
+            assert any(
+                isinstance(o, OtelObserver) for o in _obs.registry._observers
+            )
+        # Falsy values do not register.
+        for val in ("0", "false", "no", ""):
+            _obs.registry.clear()
+            monkeypatch.setenv("OPERAD_OTEL", val)
+            importlib.reload(tracing)
+            assert not any(
+                isinstance(o, OtelObserver) for o in _obs.registry._observers
+            )
+    finally:
+        _obs.registry.clear()
+
+
 def test_cli_tail_prints_events(capsys) -> None:
     from operad.cli import main
 

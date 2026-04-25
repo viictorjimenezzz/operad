@@ -7,12 +7,18 @@ Usage::
     with tracing.watch(jsonl="run.jsonl"):
         out = await agent(x)
 
-Module-level side effect: if the ``OPERAD_TRACE`` environment variable
-is set at import time, a :class:`JsonlObserver` writing to that path is
-registered on the process-wide observer registry. Unset the env-var (or
-avoid importing this module) to opt out. The Rich TUI is never attached
-automatically — keep explicit control over terminal output via
-``watch(rich=True)``.
+Module-level side effects, both opt-in via env var:
+
+* ``OPERAD_TRACE=<path>`` registers a :class:`JsonlObserver` writing
+  every event to that file.
+* ``OPERAD_OTEL=1`` registers an :class:`OtelObserver` so spans flow to
+  whatever OTLP endpoint the standard ``OTEL_EXPORTER_OTLP_ENDPOINT`` /
+  ``OTEL_EXPORTER_OTLP_HEADERS`` env vars point at (e.g. a self-hosted
+  Langfuse). Requires the ``[otel]`` extra; if the deps are missing,
+  the registration emits a warning and skips silently.
+
+The Rich TUI is never attached automatically — keep explicit control
+over terminal output via ``watch(rich=True)``.
 """
 
 from __future__ import annotations
@@ -89,3 +95,21 @@ def watch(
 
 if (_path := os.environ.get("OPERAD_TRACE")):
     registry.register(JsonlObserver(_path))
+
+
+def _otel_env_truthy() -> bool:
+    val = os.environ.get("OPERAD_OTEL", "")
+    return val.lower() in ("1", "true", "yes", "on")
+
+
+if _otel_env_truthy():
+    try:
+        from .runtime.observers import OtelObserver
+
+        registry.register(OtelObserver())
+    except (ImportError, RuntimeError) as exc:
+        warnings.warn(
+            f"OPERAD_OTEL=1 is set but OtelObserver could not be installed "
+            f"({exc}). Install the `[otel]` extra to enable OTLP export.",
+            stacklevel=2,
+        )
