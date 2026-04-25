@@ -1,0 +1,68 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": { "ignoreUnknown": true, "ignore": ["dist-dashboard", "dist-studio", "coverage"] },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "organizeImports": { "enabled": true },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "suspicious": { "noExplicitAny": "error" },
+      "style": {
+        "useImportType": "error",
+        "useNodejsImportProtocol": "error",
+        "useTemplate": "off"
+      },
+      "correctness": { "noUnusedVariables": "error" },
+      "complexity": { "noUselessFragments": "error" },
+      "nursery": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "@/dashboard/*": "Files under src/studio/ must not import from src/dashboard/.",
+              "@/studio/*": "Files under src/dashboard/ must not import from src/studio/."
+            }
+          }
+        }
+      }
+    }
+  },
+  "javascript": {
+    "formatter": { "quoteStyle": "double", "trailingCommas": "all", "semicolons": "always" }
+  },
+  "overrides": [
+    {
+      "include": ["src/dashboard/**"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": { "paths": { "@/studio/*": "Dashboard code must not import studio code." } }
+            }
+          }
+        }
+      }
+    },
+    {
+      "include": ["src/studio/**"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": { "paths": { "@/dashboard/*": "Studio code must not import dashboard code." } }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
