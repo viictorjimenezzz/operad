@@ -136,6 +136,16 @@ and they share no surface with other groups:
 
 ### Iteration 6 — depends on iteration 5
 
+#### Group I-dash-3 · Debate synthesis event gap → filed by stream 3-2
+- **D-1 (Med).** `Debate.run()` does not emit a `"synthesis"` algo_event
+  after the synthesizer produces the final answer. `algo_end` only carries
+  `{"rounds": int}`, so the final answer and rationale are not observable
+  by dashboards or any downstream observer. The "Final" tab in the debate
+  bespoke page (stream 3-2) was omitted because there is no event to
+  aggregate. Fix: emit `algo_event("synthesis", payload={"final_answer":
+  result.answer, "rationale": result.rationale})` after line 119 in
+  `operad/algorithms/debate.py`.
+
 #### Group J · Showcase demos (app) → `.conductor/6-1-demos-showcase.md`
 One flagship `agent_evolution` demo that combines `auto_tune` (H) with
 the dashboard (I). Lives in `apps/demos/` — same library-vs-apps

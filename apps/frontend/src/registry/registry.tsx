@@ -1,6 +1,8 @@
 import { AgentGraph } from "@/shared/charts/agent-graph";
 import { BeamCandidateChart } from "@/shared/charts/beam-candidate-chart";
+import { DebateConsensusTracker } from "@/shared/charts/debate-consensus-tracker";
 import { DebateRoundView } from "@/shared/charts/debate-round-view";
+import { DebateTranscript } from "@/shared/charts/debate-transcript";
 import { DriftTimeline } from "@/shared/charts/drift-timeline";
 import { FitnessCurve } from "@/shared/charts/fitness-curve";
 import { MutationHeatmap } from "@/shared/charts/mutation-heatmap";
@@ -129,6 +131,13 @@ export const registry: ComponentRegistry = {
   DebateRoundView: ({ element }) => (
     <DebateRoundView data={(element.props as { data?: unknown }).data} />
   ),
+  DebateTranscript: ({ element }) => (
+    <DebateTranscript data={(element.props as { data?: unknown }).data} />
+  ),
+  DebateConsensusTracker: ({ element }) => {
+    const p = element.props as { data?: unknown; height?: number };
+    return <DebateConsensusTracker data={p.data} height={p.height ?? 220} />;
+  },
   BeamCandidateChart: ({ element }) => {
     const p = element.props as { data?: unknown; height?: number };
     return <BeamCandidateChart data={p.data} height={p.height ?? 220} />;

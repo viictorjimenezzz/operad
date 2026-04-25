@@ -21,6 +21,7 @@ from operad.runtime.observers.base import registry as operad_registry
 from operad.runtime.slots import registry as slot_registry
 
 from .observer import WebDashboardObserver, serialize_event
+from .routes import debate as debate_routes
 from .routes import drift as drift_routes
 from .routes import fitness as fitness_routes
 from .routes import mutations as mutations_routes
@@ -195,6 +196,7 @@ def create_app(
     async def stream(request: Request) -> EventSourceResponse:
         return EventSourceResponse(_event_stream(request, obs, cost))
 
+    app.include_router(debate_routes.router)
     app.include_router(fitness_routes.router)
     app.include_router(mutations_routes.router)
     app.include_router(drift_routes.router)
