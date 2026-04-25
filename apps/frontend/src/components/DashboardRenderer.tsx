@@ -1,3 +1,4 @@
+import { autoMerge } from "@/lib/data-source";
 import { type LayoutSpec, resolvePath } from "@/lib/layout-schema";
 import { SSEDispatcher } from "@/lib/sse-dispatcher";
 import type { EventEnvelope } from "@/lib/types";
@@ -11,13 +12,18 @@ import { useEventBufferStore } from "@/stores";
  * expression against the running query results, and forwards a
  * fully-typed UITree into <Renderer />.
  *
+ * Backfill model: TanStack Query fetches the JSON snapshot immediately
+ * on mount (staleTime 30s). SSE deltas are merged into the same cache
+ * entry via queryClient.setQueryData so there is one source of truth.
+ * On SSE reconnect the query is invalidated to re-backfill any gap.
+ *
  * Layout JSON shape lives in src/lib/layout-schema.ts; UITree shape
  * is from @json-render/core.
  */
 import type { UITree } from "@json-render/core";
 import { Renderer } from "@json-render/react";
-import { useQueries } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useQueryClient, useQueries } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
 import { z } from "zod";
 
 interface DashboardRendererProps {
@@ -29,6 +35,7 @@ const passThrough = z.unknown();
 
 export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
   const entries = useMemo(() => Object.entries(layout.dataSources), [layout]);
+  const queryClient = useQueryClient();
 
   const queries = useQueries({
     queries: entries.map(([name, src]) => {
@@ -45,17 +52,27 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
     }),
   });
 
-  const [streamed, setStreamed] = useState<Record<string, unknown>>({});
-
   useEffect(() => {
     const dispatchers: SSEDispatcher[] = [];
     for (const [name, src] of entries) {
       if (!src.stream) continue;
-      const url = resolvePath(src.stream, context);
+      const streamUrl = resolvePath(src.stream, context);
+      const endpointUrl = resolvePath(src.endpoint, context);
+      const queryKey = src.queryKey ?? (["layout", name, endpointUrl] as readonly unknown[]);
+
       const d = new SSEDispatcher({
-        url,
+        url: streamUrl,
         schema: passThrough,
-        onMessage: (snap) => setStreamed((prev) => ({ ...prev, [name]: snap })),
+        onMessage: (delta) => {
+          queryClient.setQueryData(queryKey, (current: unknown) => autoMerge(current, delta));
+        },
+        onStatus: (status) => {
+          // Re-backfill the JSON snapshot when the SSE connection is lost so
+          // we don't miss events that arrived during the disconnect window.
+          if (status === "reconnecting") {
+            queryClient.invalidateQueries({ queryKey: queryKey as unknown[] });
+          }
+        },
       });
       d.open();
       dispatchers.push(d);
@@ -63,20 +80,17 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
     return () => {
       for (const d of dispatchers) d.close();
     };
-  }, [entries, context]);
+  }, [entries, context, queryClient]);
 
   const runId = context.runId ?? "";
   const runEvents = useEventBufferStore((s) => s.eventsByRun.get(runId) ?? EMPTY_EVENTS);
 
-  // Snapshot every query's data array so we can pass them as a stable
-  // dependency to useMemo (queries[i].data is the underlying primitive
-  // we depend on; rolling them up keeps the dep list tidy).
   const queryDatas = queries.map((q) => q.data);
 
   const tree: UITree = useMemo(() => {
     const queryData: Record<string, unknown> = {};
     entries.forEach(([name], i) => {
-      queryData[name] = streamed[name] ?? queryDatas[i];
+      queryData[name] = queryDatas[i];
     });
     const ctx = {
       context,
@@ -94,7 +108,7 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
       elements[id] = node;
     }
     return { root: layout.spec.root, elements };
-  }, [entries, layout, runEvents, context, queryDatas, streamed]);
+  }, [entries, layout, runEvents, context, queryDatas]);
 
   return <Renderer tree={tree} registry={registry} />;
 }
@@ -113,8 +127,6 @@ function resolveProps(
   for (const [k, v] of Object.entries(props)) {
     if (typeof v === "string" && v.startsWith("$")) {
       const resolved = resolveSource(v, ctx);
-      // `source` -> `data` so the registry components don't have to know
-      // about the layout-language naming convention.
       const targetKey =
         k === "source" ? "data" : k.startsWith("source") ? `data${k.slice("source".length)}` : k;
       out[targetKey] = resolved;
