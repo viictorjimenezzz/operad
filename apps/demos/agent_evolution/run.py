@@ -1,15 +1,15 @@
 """`agent_evolution` — the operad flagship demo.
 
-A seed agent is evolved over N generations via `Agent.auto_tune`. The
-fitness curve climbs monotonically as the offline metric rewards
-longer rule lists. Prints a before/after diff; if ``--dashboard`` is
-passed and a local dashboard server is running, events stream to it
-live.
+A seed agent is evolved over N generations via an explicit `EvoGradient`
+population loop. Each generation: mutate the population, score all
+individuals, keep the top half, refill from survivors. The fitness curve
+climbs as the offline metric rewards longer rule lists; diversity collapses
+as the population converges. Runs entirely offline — no model server needed.
 
 Run:
     uv run python apps/demos/agent_evolution/run.py --offline
     uv run python apps/demos/agent_evolution/run.py --offline --dashboard
-    uv run python apps/demos/agent_evolution/run.py --offline --generations 6 --population 8
+    uv run python apps/demos/agent_evolution/run.py --offline --generations 5 --population 8
 """
 
 from __future__ import annotations
@@ -25,39 +25,17 @@ from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from operad.runtime.events import AlgorithmEvent  # noqa: E402
-from operad.runtime.observers.base import Event, registry  # noqa: E402
+from operad.optim.evo import EvoGradient  # noqa: E402
+from operad.runtime.observers.base import registry  # noqa: E402
+from operad.utils.ops import default_mutations  # noqa: E402
 
 from metric import RuleCountMetric  # noqa: E402
+from population import GENERATIONS, POPULATION_SIZE, diversity  # noqa: E402
 from seed import Q, R, build_seed  # noqa: E402
 
 
 DEFAULT_DASHBOARD = "127.0.0.1:7860"
 TRACE_PATH = Path("/tmp/agent-evolution-trace.jsonl")
-
-
-class FitnessTraceObserver:
-    """Append one JSONL row per `generation` AlgorithmEvent."""
-
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("")
-
-    async def on_event(self, event: Event) -> None:
-        if not isinstance(event, AlgorithmEvent):
-            return
-        if event.kind != "generation":
-            return
-        scores = event.payload.get("population_scores", [])
-        row = {
-            "gen_index": event.payload.get("gen_index"),
-            "best": max(scores) if scores else None,
-            "mean": sum(scores) / len(scores) if scores else None,
-            "population_scores": scores,
-        }
-        with self.path.open("a") as f:
-            f.write(json.dumps(row) + "\n")
 
 
 def _parse_dashboard_target(value: str) -> tuple[str, int]:
@@ -94,6 +72,7 @@ def _attach_dashboard(target: str, *, open_browser: bool = True) -> bool:
     if open_browser:
         try:
             import webbrowser
+
             webbrowser.open_new_tab(url)
         except Exception:
             pass
@@ -101,7 +80,6 @@ def _attach_dashboard(target: str, *, open_browser: bool = True) -> bool:
 
 
 async def main(args: argparse.Namespace) -> None:
-    registry.register(FitnessTraceObserver(TRACE_PATH))
     attached = False
     if args.dashboard is not None:
         attached = _attach_dashboard(args.dashboard, open_browser=not args.no_open)
@@ -111,22 +89,45 @@ async def main(args: argparse.Namespace) -> None:
 
     dataset = [(Q(text=str(i)), R(value=3)) for i in range(5)]
     metric = RuleCountMetric(target=3)
+    ops = default_mutations(seed)
 
-    improved = await seed.auto_tune(
-        dataset,
-        metric,
-        generations=args.generations,
+    optimizer = EvoGradient(
+        list(seed.parameters()),
+        mutations=ops,
+        metric=metric,
+        dataset=dataset,
         population_size=args.population,
         rng=random.Random(args.seed),
     )
 
-    print("=" * 60)
-    print(f"seed rules={len(seed.rules)}")
-    print(f"evolved rules={len(improved.rules)}")
-    print("=" * 60)
-    print("diff (seed → evolved):")
-    print(seed.diff(improved))
-    print("=" * 60)
+    TRACE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    TRACE_PATH.write_text("")
+
+    print(f"{'gen':>4}  {'best':>6}  {'mean':>6}  {'diversity':>9}")
+    print("-" * 34)
+
+    with TRACE_PATH.open("a") as trace_file:
+        for gen in range(args.generations):
+            await optimizer.step()
+            scores = list(optimizer._last_scores or [])
+            pop = optimizer._population or []
+            d = diversity(pop)
+            best = max(scores) if scores else 0.0
+            mean = sum(scores) / len(scores) if scores else 0.0
+            print(f"{gen:>4}  {best:>6.3f}  {mean:>6.3f}  {d:>9}")
+            row = {
+                "gen": gen,
+                "best": best,
+                "mean": mean,
+                "population_scores": scores,
+                "diversity": d,
+            }
+            trace_file.write(json.dumps(row) + "\n")
+            trace_file.flush()
+
+    print("=" * 34)
+    print(f"seed rules  : {0}")
+    print(f"evolved rules: {len(seed.rules)}")
     print(f"fitness trace → {TRACE_PATH}")
     if attached:
         host, port = _parse_dashboard_target(args.dashboard)
@@ -149,8 +150,8 @@ def _parse_args() -> argparse.Namespace:
         metavar="HOST:PORT",
         help="Attach to a running operad-dashboard server (default 127.0.0.1:7860).",
     )
-    parser.add_argument("--generations", type=int, default=4)
-    parser.add_argument("--population", type=int, default=6)
+    parser.add_argument("--generations", type=int, default=GENERATIONS)
+    parser.add_argument("--population", type=int, default=POPULATION_SIZE)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--no-open",
