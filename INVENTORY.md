@@ -54,7 +54,7 @@ leaf = MyLeaf(config=Configuration(backend="llamacpp",
 | `__rich__()`                 | Structured tree for `rich.print(agent)`.                                      |
 | `a >> b`                     | Build a `Pipeline(a, b)`; chains flatten (`a >> b >> c` → three stages).      |
 | `freeze(path)` / `thaw(path)`| Persist a built graph to disk, reconstitute without re-tracing (secrets stripped). |
-| `state()` / `load_state(…)`  | Snapshot / restore declared attributes.                                       |
+| `state()` / `load_state(…)`  | Snapshot / restore declared attributes. PyTorch-style aliases: `state_dict()` / `load_state_dict()`. |
 | `clone()`                    | Deep copy of state, unbuilt.                                                  |
 | `diff(other)`                | Structured `AgentDiff` between two agents.                                    |
 
@@ -666,11 +666,9 @@ Samplers: `RandomSampler`, `SequentialSampler`,
 ### `state_dict` / `load_state_dict`
 
 Live on `Optimizer` and `LRScheduler` today (step counts, momentum
-summaries, epoch state). On `Agent` the declared-state snapshot APIs
-are `state()` / `load_state()`; PyTorch-muscle aliases
-(`state_dict` / `load_state_dict`) are tracked in stream
-`5-3-state-dict-freeze-integration` and land alongside
-`freeze()` / `thaw()` integration.
+summaries, epoch state). On `Agent`, `state_dict()` / `load_state_dict()`
+are PyTorch-style aliases for `state()` / `load_state()` — both pairs
+are equally first-class.
 
 ## 22. PromptTraceback
 

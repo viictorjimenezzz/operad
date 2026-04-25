@@ -39,3 +39,8 @@ async def test_load_state_dict_matches_load_state(cfg: Configuration) -> None:
     assert b.task == a.task
     assert b.rules == a.rules
     assert b.hash_content == a.hash_content
+
+
+def test_both_names_in_dir() -> None:
+    assert "state_dict" in dir(FakeLeaf)
+    assert "load_state_dict" in dir(FakeLeaf)
