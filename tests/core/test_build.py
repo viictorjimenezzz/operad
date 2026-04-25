@@ -434,3 +434,92 @@ async def test_sentinel_is_instance_of_input() -> None:
         _ = sentinel.text
     assert exc.value.cls_name == "A"
     assert exc.value.field_name == "text"
+
+
+async def test_custom_forward_leaf_with_requires_config_raises() -> None:
+    """A custom-forward leaf that declares requires_config_at_build=True
+    and omits config must fail at build time, not runtime."""
+
+    class CustomLeaf(Agent):
+        input = A
+        output = B
+        requires_config_at_build = True
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            return B.model_construct()
+
+    with pytest.raises(BuildError) as exc:
+        await CustomLeaf().abuild()
+    assert exc.value.reason == "prompt_incomplete"
+    assert exc.value.agent == "CustomLeaf"
+    assert "--- mermaid ---" in str(exc.value)
+
+
+async def test_custom_forward_leaf_without_flag_allows_no_config() -> None:
+    """A custom-forward leaf that does not set requires_config_at_build
+    is allowed to omit config (it manages its own dependencies)."""
+
+    class NoConfigLeaf(Agent):
+        input = A
+        output = B
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            return B.model_construct()
+
+    leaf = await NoConfigLeaf().abuild()
+    assert leaf._built is True
+
+
+async def test_sentinel_bypass_in_nested_composite_raises(cfg) -> None:
+    class BypassChild(Agent):
+        input = A
+        output = B
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+            self.leaf = FakeLeaf(config=cfg, input=A, output=B)
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            return B.model_construct()
+
+    class Outer(Agent):
+        input = A
+        output = B
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+            self.child = BypassChild()
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            return await self.child(x)
+
+    with pytest.raises(BuildError) as exc:
+        await Outer().abuild()
+    assert exc.value.reason == "sentinel_bypass"
+    assert "BypassChild" in str(exc.value)
+    assert "--- mermaid ---" in str(exc.value)
+
+
+async def test_sentinel_bypass_in_root_composite_raises(cfg) -> None:
+    class BypassRoot(Agent):
+        input = A
+        output = B
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=B)
+            self.leaf = FakeLeaf(config=cfg, input=A, output=B)
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            return B.model_construct()
+
+    with pytest.raises(BuildError) as exc:
+        await BypassRoot().abuild()
+    assert exc.value.reason == "sentinel_bypass"
+    assert "BypassRoot" in str(exc.value)
+    assert "--- mermaid ---" in str(exc.value)

@@ -17,6 +17,7 @@ BuildReason = Literal[
     "payload_branch",
     "router_miss",
     "schema_drift",
+    "sentinel_bypass",
 ]
 
 
