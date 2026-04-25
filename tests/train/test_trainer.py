@@ -398,6 +398,64 @@ async def test_residual_grads_flush_step_at_epoch_end(
     assert opt.step_calls == 1
 
 
+async def test_accumulation_preserves_each_sample_once(
+    cfg: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each per-sample message must appear exactly once in the merged grad.
+
+    Regression for the bug where backward() overwrote p.grad (which held
+    the prior-batch accumulated gradient) before the old pending-capture
+    code could read it, silently dropping earlier samples.
+    """
+    leaf = await _built_leaf(cfg)
+    loss = StubLoss(severities=[1.0])
+    params = list(leaf.parameters())
+    opt = StubOptimizer(params)
+
+    call_count = 0
+
+    async def _stub_backward_unique(
+        _t: Any,
+        _loss: TextualGradient,
+        *,
+        parameters: Any = None,
+        **_: Any,
+    ) -> None:
+        nonlocal call_count
+        for p in parameters or []:
+            p.grad = TextualGradient(
+                message=f"sample-{call_count}", severity=1.0
+            )
+        call_count += 1
+
+    monkeypatch.setattr("operad.train.trainer.backward", _stub_backward_unique)
+
+    captured_grads: list[TextualGradient] = []
+
+    async def _capturing_step() -> None:
+        opt.step_calls += 1
+        for p in params:
+            if p.grad is not None and p.grad.severity > 0:
+                captured_grads.append(p.grad)
+
+    opt.step = _capturing_step  # type: ignore[method-assign]
+
+    # 3 batches of 1 sample each; step fires once after all 3.
+    trainer = Trainer(leaf, opt, loss, accumulation_steps=3)
+    await trainer.fit(_loader(_dataset(n=3), batch_size=1), epochs=1)
+
+    assert opt.step_calls == 1
+    assert len(captured_grads) > 0
+    merged_message = captured_grads[0].message
+    for i in range(3):
+        assert f"sample-{i}" in merged_message, (
+            f"sample-{i} missing from merged gradient message: {merged_message!r}"
+        )
+        assert merged_message.count(f"sample-{i}") == 1, (
+            f"sample-{i} appears more than once: {merged_message!r}"
+        )
+
+
 # ---------------------------------------------------------------------------
 # max_grad_norm auto-install
 # ---------------------------------------------------------------------------
