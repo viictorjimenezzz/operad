@@ -659,9 +659,17 @@ train, val = random_split(dataset, [0.8, 0.2], seed=0)
 loader = DataLoader(train, batch_size=8, shuffle=True)
 ```
 
-Samplers: `RandomSampler`, `SequentialSampler`,
-`WeightedRandomSampler`. Batches arrive as
-`Batch[In, Out](inputs, expected)`.
+Samplers: `RandomSampler`, `SequentialSampler`, `WeightedRandomSampler`,
+`StratifiedSampler`. Batches arrive as `Batch[In, Out](inputs, expected)`.
+
+`StratifiedSampler(dataset, key, batch_size, shuffle, seed)` interleaves
+indices so each contiguous window of `batch_size` mirrors the dataset's
+class distribution. `key` is a callable or dotted path on
+`entry.expected_output` (e.g. `"label"`). Single-key stratification only.
+
+`stratified_split(dataset, fractions, key, seed)` mirrors `random_split`
+but splits each class bucket proportionally before merging, so every shard
+preserves the original class ratios.
 
 ### `state_dict` / `load_state_dict`
 
