@@ -1,6 +1,6 @@
 """operad showcase — run this once, love the framework forever.
 
-Requires: local llama-server at 127.0.0.1:9000 serving google/gemma-4-e4b
+Requires: local llama-server at 127.0.0.1:9000 serving google/gemma-4-e2b
 (see examples/_config.py). Run with:
 
     uv run python demo.py [--offline]

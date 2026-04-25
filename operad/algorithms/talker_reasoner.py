@@ -188,69 +188,65 @@ class AssistantMessage(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Default Reasoner / Talker subclasses with focused prompts.
+# Default navigator / talker prompts — installed onto vanilla `Reasoner`
+# instances at class-level. No subclassing needed: callers customise via
+# `TalkerReasoner.reasoner.config = ...` (or by subclassing the algorithm).
 # ---------------------------------------------------------------------------
 
 
-class _NavigationReasoner(Reasoner):
-    input = NavigationInput
-    output = NavigationDecision
-    role = cleandoc("""
-        You are the navigator of a guided conversational process. You see
-        the current scenario node, the available children (if any), the
-        conversation history, and the user's latest message. You decide
-        whether to stay on this node, advance, branch to a specific child,
-        or finish the conversation.
-    """)
-    task = cleandoc("""
-        Read every input and produce a typed NavigationDecision:
+_NAV_ROLE = cleandoc("""
+    You are the navigator of a guided conversational process. You see
+    the current scenario node, the available children (if any), the
+    conversation history, and the user's latest message. You decide
+    whether to stay on this node, advance, branch to a specific child,
+    or finish the conversation.
+""")
+_NAV_TASK = cleandoc("""
+    Read every input and produce a typed NavigationDecision:
 
-        - kind = "stay" when the user needs more clarification at this step.
-        - kind = "advance" when the current node has exactly one child and the
-          user has supplied what was needed to move on.
-        - kind = "branch" when there are multiple children and the user's
-          message clearly maps to one of them — set branch_to to its id.
-        - kind = "finish" when the process is complete or the user opted out.
+    - kind = "stay" when the user needs more clarification at this step.
+    - kind = "advance" when the current node has exactly one child and the
+      user has supplied what was needed to move on.
+    - kind = "branch" when there are multiple children and the user's
+      message clearly maps to one of them — set branch_to to its id.
+    - kind = "finish" when the process is complete or the user opted out.
 
-        Always populate next_message_brief with a one-or-two-sentence
-        instruction telling the Talker what to write. Do NOT write the
-        user-facing message yourself; that is the Talker's job.
-    """)
-    rules = (
-        "Use the current_node_instructions to break ties; they are author-supplied.",
-        "If branching, branch_to MUST appear in available_children; otherwise stay.",
-        "Never invent a node id; never guess across rounds.",
-        "Be conservative: prefer stay/clarify when the user's message is ambiguous.",
-        "Write rationale in one sentence — it is read by maintainers, not the user.",
-    )
+    Always populate next_message_brief with a one-or-two-sentence
+    instruction telling the Talker what to write. Do NOT write the
+    user-facing message yourself; that is the Talker's job.
+""")
+_NAV_RULES = (
+    "Use the current_node_instructions to break ties; they are author-supplied.",
+    "If branching, branch_to MUST appear in available_children; otherwise stay.",
+    "Never invent a node id; never guess across rounds.",
+    "Be conservative: prefer stay/clarify when the user's message is ambiguous.",
+    "Write rationale in one sentence — it is read by maintainers, not the user.",
+)
 
 
-class _UserFacingTalker(Reasoner):
-    input = TalkerInput
-    output = AssistantMessage
-    role = cleandoc("""
-        You are the user-facing voice of a guided conversational process.
-        Another component has already decided which scenario node we are
-        on next; your job is to produce the actual message the user will
-        read. Stay warm, concise, and on-process.
-    """)
-    task = cleandoc("""
-        Write the next assistant message. Combine three signals:
+_TALKER_ROLE = cleandoc("""
+    You are the user-facing voice of a guided conversational process.
+    Another component has already decided which scenario node we are
+    on next; your job is to produce the actual message the user will
+    read. Stay warm, concise, and on-process.
+""")
+_TALKER_TASK = cleandoc("""
+    Write the next assistant message. Combine three signals:
 
-        - the target node's prompt — what the assistant should accomplish;
-        - the reasoner's next_message_brief — exactly what to convey now;
-        - the conversation history — to maintain continuity and avoid repetition.
+    - the target node's prompt — what the assistant should accomplish;
+    - the reasoner's next_message_brief — exactly what to convey now;
+    - the conversation history — to maintain continuity and avoid repetition.
 
-        On terminal turns, acknowledge completion and offer one concrete
-        next step outside the process (e.g. an artefact, a recap, a hand-off).
-    """)
-    rules = (
-        "Two to five sentences is the default; expand only when explicitly asked.",
-        "Never restate the user's words verbatim; reflect understanding instead.",
-        "Do NOT mention scenario node ids, branches, or routing decisions.",
-        "Keep the same language the user used.",
-        "End every non-terminal turn with one concrete prompt or question.",
-    )
+    On terminal turns, acknowledge completion and offer one concrete
+    next step outside the process (e.g. an artefact, a recap, a hand-off).
+""")
+_TALKER_RULES = (
+    "Two to five sentences is the default; expand only when explicitly asked.",
+    "Never restate the user's words verbatim; reflect understanding instead.",
+    "Do NOT mention scenario node ids, branches, or routing decisions.",
+    "Keep the same language the user used.",
+    "End every non-terminal turn with one concrete prompt or question.",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -308,11 +304,19 @@ class TalkerReasoner:
         transcript = await tr.run([...])    # or run a whole script
     """
 
-    reasoner: ClassVar[Agent] = _NavigationReasoner(
-        input=NavigationInput, output=NavigationDecision
+    reasoner: ClassVar[Agent] = Reasoner(
+        input=NavigationInput,
+        output=NavigationDecision,
+        role=_NAV_ROLE,
+        task=_NAV_TASK,
+        rules=_NAV_RULES,
     )
-    talker: ClassVar[Agent] = _UserFacingTalker(
-        input=TalkerInput, output=AssistantMessage
+    talker: ClassVar[Agent] = Reasoner(
+        input=TalkerInput,
+        output=AssistantMessage,
+        role=_TALKER_ROLE,
+        task=_TALKER_TASK,
+        rules=_TALKER_RULES,
     )
 
     def __init__(
@@ -322,6 +326,7 @@ class TalkerReasoner:
         start_node_id: str | None = None,
         max_turns: int = 12,
         context: str = "",
+        config: Any | None = None,
     ) -> None:
         if max_turns < 1:
             raise ValueError(f"max_turns must be >= 1, got {max_turns}")
@@ -332,9 +337,14 @@ class TalkerReasoner:
 
         cls = type(self)
         # Distinct clones so concurrent invocation in tests doesn't share
-        # strands history.
+        # strands history. `config` (when provided) wins over the class-
+        # level default so callers can use the algorithm's stock prompts
+        # against any backend without subclassing.
         self.reasoner = cls.reasoner.clone(context=context)
         self.talker = cls.talker.clone(context=context)
+        if config is not None:
+            self.reasoner.config = config
+            self.talker.config = config
 
         self.tree = tree
         self.context = context
