@@ -1,9 +1,15 @@
-# operad — Feature catalog
+# operad — capability inventory
 
-A concise enumeration of what the library provides, how the pieces fit
-together, and the one-liner you need to use each one. For design
-rationale, see [VISION.md](VISION.md); for the README-level intro, see
-[README.md](README.md).
+> *Audience: coding agents and contributors.*
+> *Every entry below corresponds to code that exists today. Items not yet
+> shipped are isolated under "Planned" subsections (§6, §7, §22). For
+> design rationale see [VISION.md](VISION.md); for the user-facing intro
+> see [README.md](README.md); for training internals see
+> [TRAINING.md](TRAINING.md) and
+> [`operad/optim/README.md`](operad/optim/README.md).*
+
+This file is the agent-facing catalog of operad's surface. It is
+table-heavy, signal-dense, and exhaustive by design.
 
 ---
 
@@ -133,34 +139,58 @@ Domain-organised leaves + composed patterns. Each domain ships under
 `operad.agents.<domain>`:
 
 ### `reasoning/`
-`Reasoner`, `Actor`, `Classifier`, `Critic`, `Evaluator`, `Extractor`,
-`Planner`, `Reflector`, `Retriever`, `Router`, `ToolUser`; plus `ReAct`
-composition.
+Leaves: `Reasoner`, `ChatReasoner`, `Actor`, `Classifier`, `Critic`,
+`Evaluator`, `Extractor`, `Planner`, `Reflector`, `Retriever` (plus
+`BM25Retriever` and `FakeRetriever` variants), `Router`, `ToolUser`.
+Pre-wired composites: `ReAct` (in `react.py`), `Switch` (in
+`switch.py`).
 
 ### `coding/`
 `CodeReviewer`, `DiffSummarizer`, `ContextOptimizer`, and `PRReviewer`
 top-level composite.
 
 ### `conversational/`
-`Persona`, `Safeguard`, `TurnTaker`, `RefusalLeaf`, and `Talker`
-(end-to-end safeguarded chat pipeline).
+`Talker` (turn-level chat leaf), `ConversationTitler` (titles a whole
+conversation), `InteractionTitler` (titles a single interaction).
+Disambiguated as `ConversationalTalker` at the top-level
+`operad.agents` re-export to avoid clashing with `safeguard.Talker`.
 
 ### `memory/`
-`BeliefExtractor`, `EpisodicSummarizer`, `UserModelExtractor`.
+`Beliefs` (belief-state manager), `User` (session-memory updater),
+`MemoryStore` (typed key-value store consumed by both leaves).
+Schemas: `BeliefItem`, `BeliefOp`, `BeliefOperation`, `SessionItem`,
+`SessionOp`, `SessionOperation`, `SessionTarget`,
+`SessionNamespace`, `SessionStatus`.
 
 ### `safeguard/`
-Task-agnostic guardrails: `InputSanitizer[T]` (redact / truncate /
-lowercase before forward) and `OutputModerator[T]` (classify any
-payload). Compose via `Pipeline` or `forward_in`/`forward_out` hooks:
+Chat-scope guardrail leaves. `Context` evaluates whether a prompt is
+in-scope (returns a `SafeguardCategory`); `Talker` produces a refusal
+or pass-through response when called as a guard. Disambiguated as
+`SafeguardTalker` at the top-level `operad.agents` re-export.
 
 ```python
-from operad.agents.safeguard import InputSanitizer, OutputModerator
-safe_pipeline = Pipeline(
-    InputSanitizer(schema=Question),
-    Reasoner(config=cfg, input=Question, output=Answer),
-    OutputModerator(schema=Answer, config=cfg),
-)
+from operad.agents.safeguard import Context, Talker as SafeguardTalker
+guard_pipeline = Pipeline(Context(config=cfg), SafeguardTalker(config=cfg))
 ```
+
+### `retrieval/`
+`CitationGist` (extracts citations from text), `EvidencePlanner`
+(plans evidence-gathering steps for a claim), `FactFilter` (filters
+candidate facts by quality). Schemas: `ClaimItem`, `GistItem`,
+`GistBlock`, `GistBatchOutput`, plus their `Input`/`Output` pairs.
+
+### `debate/`
+`Proposer`, `DebateCritic`, `Synthesizer` — the three components of
+the multi-agent debate algorithm. Used by `operad.algorithms.debate`.
+Schemas: `Proposal`, `Critique`, `DebateContext`, `DebateRecord`,
+`DebateTurn`.
+
+### Planned
+
+- `agents/reasoning/debate.py` and `agents/reasoning/verifier.py` —
+  pre-wired multi-agent compositions parallel to `react.py`.
+  Algorithms exist; the agent-level pre-wirings do not.
+- `agents/conversational/TurnTaker`.
 
 ## 7. Algorithms — `operad.algorithms`
 
@@ -169,19 +199,28 @@ metric feedback. Plain classes with `run(...)` — not `Agent` subclasses.
 
 | Algorithm        | Shape                                                      |
 | ---------------- | ---------------------------------------------------------- |
-| `BestOfN`        | Generate N candidates; pick highest-scored under a Metric. |
-| `Debate`         | Proposer + Critique rounds; converges on a winning `Proposal`. |
-| `SelfRefine`     | Generator → Reflector → Refiner loop until satisfied.      |
-| `VerifierLoop`   | Actor loops until `Verifier` approves or `max_iter` hits.  |
-| `Evolutionary`   | Population of agent variants; mutate + select on metric.   |
-| `Sweep`          | Cartesian grid over dotted-path parameters of a seed agent.|
-| `AutoResearcher` | Planner → Retriever → Reasoner → Critic → Reflector loop, wrapped in `BestOfN`. |
+| `Beam`           | Generate N candidates; pick top-K by metric.               |
+| `Debate`         | Proposer + DebateCritic rounds; Synthesizer final.         |
+| `VerifierLoop`   | Generator loops until `Verifier` approves or `max_iter` hits. |
+| `Sweep`          | Cartesian grid over dotted-path parameters of a seed agent. Returns a `SweepReport` with one `SweepCell` per grid point. |
+| `AutoResearcher` | Planner → Retriever → Reasoner → Critic → Reflector loop, wrapped in best-of-N. Plus `ResearchPlan`, `ResearchInput`, `ResearchContext` types. |
 
 ```python
-from operad.algorithms import BestOfN, AutoResearcher
-bon = BestOfN(generator=reasoner, critic=critic, n=5)
-best = await bon.run(Question(text="…"))
+from operad.algorithms import Beam, AutoResearcher
+beam = Beam(generator=reasoner, critic=critic, n=5)
+best = await beam.run(Question(text="…"))
 ```
+
+Population-search over agent prompts now lives in
+[`operad.optim.EvoGradient`](operad/optim/evo.py) as a first-class
+optimizer (rewrites agents from textual gradients within a
+`Trainer.fit` loop). The previous `Evolutionary` algorithm has been
+absorbed there.
+
+### Planned
+
+- `SelfRefine` — Generator → Reflector → Refiner.
+- `TalkerReasoner` — interleaved chat + reasoning.
 
 ## 8. Metrics — `operad.metrics`
 
@@ -622,10 +661,29 @@ are `state()` / `load_state()`; PyTorch-muscle aliases
 `5-3-state-dict-freeze-integration` and land alongside
 `freeze()` / `thaw()` integration.
 
-## 22. PromptTraceback — planned
+## 22. PromptTraceback
 
-A per-sample debugging view that links each training-loop rewrite
-back to the tape entry, critic rationale, and parameter it came
-from — the optim-layer counterpart to a Python traceback. Tracked in
-[`.conductor/optim/5-4-prompt-traceback.md`](.conductor/optim/5-4-prompt-traceback.md);
-not yet merged.
+`PromptTraceback` is the optim-layer counterpart to a Python
+traceback: given a `Tape` and a `path -> TextualGradient` map, it
+renders each recorded node in reverse call order so a user can debug
+a bad training batch the same way they debug a bad call.
+
+```python
+from operad.optim import tape, traceback as ptb
+async with tape() as t:
+    out = await agent(x)
+score, loss = await loss_fn.compute(out.response, expected)
+tb = ptb.PromptTraceback.from_run(t, loss)
+print(str(tb))                 # plain-text stanzas
+print(tb.to_markdown())        # PR-body friendly
+tb.save("traceback.ndjson")    # NDJSON, one frame per line
+```
+
+Lives in [`operad/optim/traceback.py`](operad/optim/traceback.py) —
+exports `PromptTraceback`, `TracebackFrame`, and `traceback`.
+
+### Planned
+
+- **Cassette-replay determinism validation** — full validation
+  matrix for offline-deterministic training under
+  `OPERAD_CASSETTE=record/replay`.

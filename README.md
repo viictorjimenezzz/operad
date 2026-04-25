@@ -1,65 +1,19 @@
 # operad
 
-**Typed, composable agent architectures with PyTorch-style training for local-first LLM servers.**
-Agents are Python modules in the `torch.nn` sense: you build them, nest
-them, trace them, and run them against local or hosted LLMs. Composition
-is the whole mental model — hence the name.
+**Agentic workflows you can build, compose, observe, and improve.**
 
-```python
-import asyncio
-from pydantic import BaseModel, Field
-from operad import Configuration, Parallel, Pipeline
-from operad.agents.reasoning import Reasoner
+`operad` is an agentic framework on top of
+[strands-agents](https://strandsagents.com/). It adds typed
+compositional definition, prompt parametrization, and an algorithm
+layer where coordinated agents improve other agents — so you can
+**train your agentic workflow at the prompt level**, not just write
+it.
 
-class Q(BaseModel): text: str = Field(default="", description="The user's question.")
-class A(BaseModel): answer: str = Field(default="", description="Concise answer.")
-class Report(BaseModel): answers: dict[str, str] = {}
+For the design rationale see [VISION.md](VISION.md). For the
+exhaustive capability inventory see [INVENTORY.md](INVENTORY.md). For
+training internals see [TRAINING.md](TRAINING.md).
 
-cfg = Configuration(backend="llamacpp", host="127.0.0.1:8080", model="your-model")
-
-root = Parallel(
-    {
-        "poet":  Reasoner(config=cfg, input=Q, output=A, role="You are a poet."),
-        "coder": Reasoner(config=cfg, input=Q, output=A, role="You write Python."),
-    },
-    input=Q, output=Report,
-    combine=lambda r: Report(answers={k: v.answer for k, v in r.items()}),
-)
-
-async def main():
-    await root.abuild()
-    out = await root(Q(text="Write something about concurrency."))
-    print(out.response)  # the typed Out
-    print(out.run_id, out.hash_input, out.latency_ms)  # reproducibility + timing
-
-asyncio.run(main())
-```
-
-Every invocation returns an `OperadOutput[Out]`: `out.response` is the
-user's typed payload, and the envelope carries `run_id`, `agent_path`,
-`latency_ms`, optional `prompt_tokens` / `completion_tokens`, plus a
-stable `hash_*` fingerprint (model, prompt, graph, input, schema) for
-reproducibility.
-
-That's the whole program. `build()` walks the tree, resolves the model
-backend, checks every typed edge, and returns a computation graph you
-can export as Mermaid or JSON — all *before* a single token is generated.
-The system prompt is rendered from each Agent's `role`, `task`, `rules`,
-`examples`, and — DSPy-style — every `Field(description=...)` on your `In`
-and `Out` classes gets threaded into the model's context.
-
-For the full feature catalog see [FEATURES.md](FEATURES.md). For the
-design rationale see [VISION.md](VISION.md).
-
-## Why the name
-
-An **operad** is the mathematical structure of abstract operations that
-compose by trees: `n`-ary operations whose outputs plug into the inputs
-of other operations, with the whole composition obeying the obvious
-associativity laws. That is precisely what this library builds: every
-`Agent[In, Out]` is a typed operation; `Pipeline` and `Parallel` wire
-them together; `build()` captures the resulting tree as a first-class
-object you can inspect, export, mutate, and run.
+---
 
 ## Install
 
@@ -67,185 +21,150 @@ object you can inspect, export, mutate, and run.
 uv sync
 ```
 
-Python 3.12+. Runtime deps are
-[strands-agents](https://strandsagents.com/), pydantic v2, and the
-`openai` SDK (pulled in by Strands' OpenAI-compatible adapters).
-Optional extras: `[observers]` (Rich TUI), `[otel]` (OpenTelemetry),
-`[gemini]`, `[huggingface]`.
+Python 3.12+. Runtime deps: `strands-agents`, `pydantic` v2, `openai`,
+`pyyaml`. Optional extras: `[observers]` (Rich TUI), `[otel]`
+(OpenTelemetry), `[gemini]`, `[huggingface]`,
+`[dashboard]` (the editable `apps/dashboard/` install).
 
-## Play the demo
+## Two-minute tour
 
-One command, no model server required:
-
-```bash
-uv run python apps/demos/agent_evolution/run.py --offline
-```
-
-A seed agent evolves over a handful of generations; the fitness curve
-climbs; the before/after diff prints at the end.
-
-**Watch it live.** In one terminal:
-
-```bash
-uv run operad-dashboard --port 7860
-```
-
-In another:
-
-```bash
-uv run python apps/demos/agent_evolution/run.py --offline --dashboard
-```
-
-Your browser opens http://127.0.0.1:7860 automatically. The dashboard
-shows the live event stream, the rendered Mermaid graph, a fitness
-chart per generation (best + mean), a population scatter, mutation
-operator success rates, cost totals, slot occupancy, and raw
-per-event input/output drill-downs. See
-[apps/demos/agent_evolution/README.md](apps/demos/agent_evolution/README.md)
-for the story.
-
-## Core ideas
-
-**An `Agent` is a `strands.Agent` subclass with typed I/O.** Composites
-override `forward()`; leaves use the default, which does a single
-structured-output call.
-
-**Everything an agent needs lives on the agent itself** — `config`,
-`role`, `task`, `rules`, `examples`, `input`, `output`. No separate
-`Prompt` wrapper. Mutate them in place, serialize them, sweep over them.
-
-**Components declare their contract as class attributes.** A subclass
-of `Reasoner` / `Classifier` / `Extractor` sets `input`, `output`, and
-any prompt-level overrides at the class level; instantiation is
-`Leaf(config=cfg)`.
-
-**Each component ships a `default_sampling` dict.** Class-level
-opinions (e.g. `Classifier` → `temperature=0.0`) merge into the
-caller's `Configuration` at construction; user-explicit fields
-always win.
-
-**`build()` symbolically traces the architecture**, type-checking every
-parent-to-child handoff before any model is contacted. Out pops an
-`AgentGraph`. Built graphs can be `freeze()`-ed to disk and `thaw()`-ed
-elsewhere to skip the symbolic trace (useful for CLIs, Lambdas, tests).
-
-**Agents are trainable.** Every mutable field on an Agent —
-`role`, `task`, `rules`, `examples`, sampling knobs — is a
-`Parameter`. `operad.optim` ships `TextualGradientDescent`,
-`MomentumTextGrad`, `EvoGradient`, `OPROOptimizer`, and
-`APEOptimizer` (subclasses of a shared `Optimizer` base), plus
-`operad.train.Trainer`, which wraps fit/evaluate/predict with
-callbacks and LR schedulers. See [TRAINING.md](TRAINING.md).
-
-**Components compose; algorithms orchestrate.** Everything in
-`operad.agents` is an `Agent[In, Out]` that nests freely. Everything
-in `operad.algorithms` is a plain class that takes Agents as parameters
-and closes a loop over their outputs (`BestOfN`, `Debate`, `SelfRefine`,
-`VerifierLoop`, `Evolutionary`, `Sweep`, `AutoResearcher`).
-
-**Metrics are either pure Python or Agents.** A rubric-driven LLM
-judge is a `Critic`, which is an `Agent[Candidate[In, Out], Score]` —
-the same `build()` story applies.
-
-## Run the demo
-
-```bash
-# 1. Start a local llama-server on 127.0.0.1:9000 serving your model.
-# 2. Then:
-uv run --extra observers python demo.py
-```
-
-`demo.py` is a ~30-second, Rich-formatted showcase: rendered prompts,
-Mermaid graph, live invocation, trace dump, and a mutation diff. Pass
-`--offline` to run only the schema-only stages (rendered prompts,
-Mermaid graph, mutation diff) with no server. To exercise the full
-offline surface — the test suite plus every offline-capable example
-plus `demo.py --offline` — run `bash scripts/verify.sh`.
-
-Every network-backed example in `examples/` uses the same canonical
-target via `examples/_config.py` — set `OPERAD_LLAMACPP_HOST` and
-`OPERAD_LLAMACPP_MODEL` to override host or model.
-
-## Train an agent
-
-Every field that matters — `role`, `task`, `rules`, `examples`,
-sampling — is a first-class `Parameter`. Pick a loss, an optimizer,
-and a trainer, and you have a real fit loop:
+**Inference — fan out two reasoners over a question.**
 
 ```python
-from operad import Pipeline
+import asyncio
+from pydantic import BaseModel, Field
+from operad import Configuration, Parallel
+from operad.agents.reasoning import Reasoner
+
+class Q(BaseModel): text: str = Field(default="", description="The user's question.")
+class A(BaseModel): answer: str = Field(default="", description="Concise answer.")
+class Report(BaseModel): answers: dict[str, str] = {}
+
+cfg = Configuration(backend="llamacpp", host="127.0.0.1:8080", model="qwen2.5-7b")
+
+root = Parallel(
+    {"poet": Reasoner(config=cfg, input=Q, output=A, role="You are a poet."),
+     "coder": Reasoner(config=cfg, input=Q, output=A, role="You write Python.")},
+    input=Q, output=Report,
+    combine=lambda r: Report(answers={k: v.answer for k, v in r.items()}),
+)
+
+async def main():
+    await root.abuild()
+    out = await root(Q(text="Write something about concurrency."))
+    print(out.response, out.run_id, out.latency_ms)
+
+asyncio.run(main())
+```
+
+`build()` walks the tree, type-checks every edge, resolves the model
+backend, and returns a computation graph — all *before* a single token
+is generated. Every invocation returns an `OperadOutput[Out]` envelope
+with `run_id`, `agent_path`, `latency_ms`, token counts, and stable
+`hash_*` fingerprints for reproducibility.
+
+**Training — a fit loop in 10 lines.**
+
+```python
 from operad.optim import CriticLoss, TextualGradientDescent
-from operad.optim.lr_scheduler import CosineExplorationLR
 from operad.train import Trainer
 from operad.data import DataLoader, random_split
 
-agent = Pipeline(Planner(...), Reasoner(...), Critic(...))
 agent.mark_trainable(role=True, task=True, rules=True)
 await agent.abuild()
 
 train, val = random_split(dataset, [0.8, 0.2])
 loader     = DataLoader(train, batch_size=8, shuffle=True)
 
-loss_fn   = CriticLoss(rubric_critic)
-optimizer = TextualGradientDescent(agent.parameters(), lr=1.0)
-scheduler = CosineExplorationLR(optimizer, T_max=10)
-
-trainer = Trainer(agent, optimizer, loss_fn, scheduler=scheduler)
+trainer = Trainer(agent,
+                  TextualGradientDescent(agent.parameters(), lr=1.0),
+                  CriticLoss(rubric_critic))
 report  = await trainer.fit(loader, val_ds=val, epochs=5)
 ```
 
-`TextualGradient` is a Pydantic critique, not a float; `backward()`
-walks the runtime tape, and every `Parameter` that took blame gets
-rewritten by its optimizer. Full walkthrough in
-[TRAINING.md](TRAINING.md).
+Gradients are LLM critiques in natural language; `backward()` walks
+the runtime tape; `RewriteAgent`s apply them to the agent's
+`Parameter`s. Walkthrough in [TRAINING.md](TRAINING.md).
 
-## Observe and label training
+## Project layout
 
-Two local-first apps sit on top of the training loop.
-
-**Dashboard.** Start `operad-dashboard` and navigate to
-`/runs/<run_id>` to see per-run panels wired up to the event stream:
-
-- **fitness curve** — best-so-far / population mean / spread band,
-  driven by `generation` events.
-- **mutation heatmap** — per-op success rate over generations, driven
-  by `op_success_counts` / `op_attempt_counts` on those same events.
-- **PromptDrift timeline** — epoch-wise hash delta and changed
-  parameter paths, emitted by the `PromptDrift` callback.
-- **training progress** — nested epoch + batch bars with ETA, driven
-  by `batch_start` / `batch_end` from `DataLoader` plus lifecycle
-  events from `Trainer`.
-
-```bash
-uv run operad-dashboard --port 7860 &
-uv run python examples/talker_evolution.py --dashboard
+```
+operad/        — the library (types, build, agents, algorithms, optim, train, runtime…)
+apps/          — surrounding apps: dashboard, studio, demos
+examples/      — runnable scripts, one per major abstraction
+scripts/       — verify.sh = full offline test suite + example sweep
+tests/         — offline unit tests + opt-in integration suite
 ```
 
-For terminal-side progress, register `TrainerProgressObserver`:
+Each directory has its own README. Start with
+[`operad/README.md`](operad/README.md) for the library tour, or jump
+straight into a submodule:
+[`operad/core/`](operad/core/README.md) ·
+[`operad/agents/`](operad/agents/README.md) ·
+[`operad/algorithms/`](operad/algorithms/README.md) ·
+[`operad/optim/`](operad/optim/README.md) ·
+[`operad/train/`](operad/train/README.md) ·
+[`operad/runtime/`](operad/runtime/README.md).
+
+## Writing an agent
+
+A leaf agent declares its contract on the class body:
 
 ```python
-from operad.runtime.observers import registry
-from operad.train import TrainerProgressObserver
-registry.register(TrainerProgressObserver())
+from pydantic import BaseModel
+from operad import Agent, Configuration
+
+class Q(BaseModel): text: str
+class A(BaseModel): answer: str
+
+class Concise(Agent[Q, A]):
+    input  = Q
+    output = A
+    role   = "You are terse."
+    task   = "Answer the question in one sentence."
+    rules  = ("Never exceed 20 words.",)
+
+leaf = Concise(config=Configuration(backend="llamacpp",
+                                    host="127.0.0.1:8080",
+                                    model="qwen2.5-7b"))
 ```
 
-**Studio.** A sibling app for human-in-the-loop labeling.
-`HumanFeedbackCallback` dumps `(input, predicted, rating=null)`
-rows to an NDJSON file during `Trainer.fit`; a human assigns 1-5
-ratings via Studio; clicking *Train* relaunches `Trainer.fit` with
-`HumanFeedbackLoss` against the rated file.
+Compose leaves with `Pipeline` (sequential), `Parallel` (fan-out), or
+`Switch` (runtime routing). For the full component library — domain
+folders for reasoning, coding, conversational, memory, retrieval,
+safeguard, debate — see
+[`operad/agents/README.md`](operad/agents/README.md).
 
-```bash
-uv run operad-studio --port 7870 \
-  --data-dir /tmp/operad-feedback \
-  --agent-bundle /tmp/talker.json \
-  --dashboard-port 7860
+## Writing an algorithm
+
+Algorithms orchestrate agents through outer loops with metric
+feedback. They are plain classes with custom `run(...)` signatures —
+not `Agent` subclasses.
+
+```python
+from operad.algorithms import BestOfN
+from operad.metrics import RubricCritic
+
+bon  = BestOfN(generator=reasoner, critic=RubricCritic(critic), n=5)
+best = await bon.run(Q(text="..."))
 ```
 
-## Run from YAML
+Components vs. algorithms is a load-bearing distinction — see
+[`operad/algorithms/README.md`](operad/algorithms/README.md).
 
-You can run an agent end-to-end without writing Python by pointing the
-`operad` CLI at a YAML config:
+## Train an agent
+
+Every mutable field on an `Agent` is a `Parameter`; every `Metric`
+lifts to a `Loss`; the spine is `Parameter → tape → backward →
+Optimizer → Trainer`. Optimizers in the fleet:
+`TextualGradientDescent`, `MomentumTextGrad`, `EvoGradient`,
+`OPROOptimizer`, `APEOptimizer`. Full walkthrough:
+[TRAINING.md](TRAINING.md). Design doc:
+[`operad/optim/README.md`](operad/optim/README.md).
+
+## CLI & YAML
+
+Run an agent end-to-end from a YAML config without writing Python:
 
 ```yaml
 # examples/config-react.yaml
@@ -269,94 +188,36 @@ uv run operad graph examples/config-react.yaml --format json
 uv run operad tail  run.jsonl --speed=0
 ```
 
-`run` validates the input JSON against the agent's `input` model, builds
-the graph, invokes, and prints the `Out` as JSON. `trace` prints the
-Mermaid rendering of the built graph; `graph` dumps it as JSON;
-`tail` replays a recorded NDJSON trace.
+`run` validates the input JSON against the agent's `input` model,
+builds the graph, invokes, and prints the `Out` as JSON. `trace`
+prints the Mermaid rendering. `graph` dumps it as JSON. `tail`
+replays a recorded NDJSON trace. See
+[`operad/configs/README.md`](operad/configs/README.md).
 
-## Examples
+## Apps
 
-One narrative example per major abstraction, in `examples/`:
+| Command                | Port  | What it does                                                         |
+| ---------------------- | ----- | -------------------------------------------------------------------- |
+| `uv run operad-dashboard --port 7860` | 7860 | Live event stream, graph view, fitness/mutation/drift/training panels per `run_id`. See [`apps/dashboard/`](apps/dashboard/README.md). |
+| `uv run operad-studio --port 7870 --data-dir … --agent-bundle …` | 7870 | Human-feedback labeling + relaunch `Trainer.fit` with `HumanFeedbackLoss`. See [`apps/studio/`](apps/studio/README.md). |
+| `uv run python apps/demos/agent_evolution/run.py --offline` | — | Fully-offline showcase: a seed agent evolved over generations. See [`apps/demos/`](apps/demos/README.md). |
+| `uv run --extra observers python demo.py` | — | ~30-second Rich-formatted end-to-end (prompts, graph, invoke, trace, mutation diff). `--offline` runs the schema-only stages without a server. |
 
-- `parallel.py`, `pipeline.py`, `federated.py` — structural composition.
-- `react.py`, `router_switch.py` — reasoning patterns.
-- `best_of_n.py`, `evolutionary_demo.py`, `sweep_demo.py` — algorithms.
-- `talker.py`, `pr_reviewer.py`, `memory_demo.py` — per-domain composites.
-- `custom_agent.py` — minimal user-defined `Agent[In, Out]` subclass.
-- `sandbox_tooluser.py`, `sandbox_add_tool.py`, `sandbox_pool_demo.py` —
-  isolated process-pool tool execution.
-- `observer_demo.py` — trace + Rich dashboard observers in action.
-- `eval_loop.py` — `evaluate(agent, dataset, metrics)` end-to-end.
-- `mermaid_export.py` — **offline** demo: `build()` a small composite
-  and print its Mermaid graph.
-
-All network-requiring examples read `OPERAD_LLAMACPP_HOST` /
-`OPERAD_LLAMACPP_MODEL`; `mermaid_export.py` runs without a model.
+The dashboard and studio are independent editable installs in this
+monorepo — they consume `operad` like external users.
 
 ## Tests
 
 ```bash
-uv run pytest tests/
+uv run pytest tests/                    # offline unit tests
+bash   scripts/verify.sh                # tests + every offline example + demo.py --offline
 ```
 
-### Integration tests (opt-in)
-
-Gated by `OPERAD_INTEGRATION=<backend>`; never run in CI by default. One
-backend at a time — each test skips unless its specific value is set.
-
-| Backend     | `OPERAD_INTEGRATION` | Required env        | Optional env (with defaults)                                                   |
-| ----------- | -------------------- | ------------------- | ------------------------------------------------------------------------------ |
-| llamacpp    | `llamacpp`           | —                   | `OPERAD_LLAMACPP_HOST` (`127.0.0.1:8080`), `OPERAD_LLAMACPP_MODEL` (`default`) |
-| lmstudio    | `lmstudio`           | —                   | `OPERAD_LMSTUDIO_HOST` (`127.0.0.1:1234`), `OPERAD_LMSTUDIO_MODEL` (`default`) |
-| ollama      | `ollama`             | —                   | `OPERAD_OLLAMA_HOST` (`127.0.0.1:11434`), `OPERAD_OLLAMA_MODEL` (`llama3.2`)   |
-| openai      | `openai`             | `OPENAI_API_KEY`    | `OPERAD_OPENAI_MODEL` (`gpt-4o-mini`)                                          |
-| anthropic   | `anthropic`          | `ANTHROPIC_API_KEY` | `OPERAD_ANTHROPIC_MODEL` (`claude-haiku-4-5`)                                  |
-| gemini      | `gemini`             | `GEMINI_API_KEY`    | `OPERAD_GEMINI_MODEL` (`gemini-1.5-flash`)                                     |
-| huggingface | `huggingface`        | —                   | `OPERAD_HF_MODEL` (`HuggingFaceTB/SmolLM2-135M`)                               |
-| batch       | `batch`              | `OPENAI_API_KEY`    | `OPERAD_OPENAI_MODEL`                                                          |
-
-## Layout
-
-```
-operad/
-  core/              Agent, Example, Configuration, build, freeze, graph,
-                     models (all backend adapters), render, state
-  utils/             errors, hashing, ops (typed in-place mutations),
-                     paths, cassette (record/replay)
-  runtime/           slots (concurrency + RPM/TPM), trace, trace_diff,
-                     replay, streaming, retry, observers (Rich/OTel/JSONL),
-                     launchers (subprocess + pool)
-  agents/            the torch.nn-style library, organised by domain:
-    pipeline.py      structural operators (domain-agnostic)
-    parallel.py
-    reasoning/       Reasoner, Actor, Extractor, Evaluator, Classifier,
-                     Planner, Critic, Reflector, Retriever, Router,
-                     ToolUser + ReAct composition
-    coding/          CodeReviewer, DiffSummarizer, PRReviewer, ContextOptimizer
-    conversational/  Persona, Safeguard, TurnTaker, Talker, RefusalLeaf
-    memory/          BeliefExtractor, EpisodicSummarizer, UserModelExtractor
-    safeguard/       InputSanitizer, OutputModerator (task-agnostic)
-  algorithms/        AutoResearcher, BestOfN, Debate, SelfRefine,
-                     VerifierLoop, Evolutionary, Sweep
-  benchmark/         Dataset, Entry, AggregatedMetric, evaluate, EvalReport
-  metrics/           Metric protocol, ExactMatch, JsonValid, Latency,
-                     Contains, RegexMatch, Rouge1, RubricCritic, CostTracker
-  optim/             Parameter, TextualGradient, tape()/backward(),
-                     Loss + CriticLoss + LossFromMetric,
-                     Optimizer fleet (TextualGradientDescent,
-                     MomentumTextGrad, EvoGradient, OPROOptimizer,
-                     APEOptimizer), lr_scheduler family,
-                     BackpropAgent, RewriteAgent
-  train/             Trainer (fit/evaluate/predict), callbacks
-                     (EarlyStopping, BestCheckpoint, GradClip,
-                     PromptDrift, LearningRateLogger, MemoryRotation),
-                     EpochReport / TrainingReport
-  data/              DataLoader, Batch, Sampler family, random_split
-  cli.py             operad run/trace/graph/tail
-  tracing.py         watch() context manager + OPERAD_TRACE env
-tests/               offline tests + opt-in integration
-examples/
-```
+Integration tests are opt-in via `OPERAD_INTEGRATION=<backend>`; one
+backend at a time. The matrix and per-backend env vars live in
+[INVENTORY.md §17](INVENTORY.md#17-cassette-based-offline-tests) and
+the per-adapter docs under
+[`operad/core/models.py`](operad/core/models.py).
 
 ## License
 

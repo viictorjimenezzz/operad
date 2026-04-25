@@ -1,16 +1,17 @@
 # operad.optim — training & optimization for agents
 
-**Status.** Under active construction. See `.construct/optim/*.md`
-for the per-iteration task plan; see `.context/NEXT_ITERATION.md`
-for the design rationale.
+`operad.optim` is the textual-gradient training stack: first-class
+`Parameter` handles over mutable agent state (`role`, `task`, `rules`,
+`examples`, sampling), a runtime tape + `backward()` walker that
+distributes a `TextualGradient` through the `AgentGraph`, and an
+optimizer fleet that applies those gradients via LLM-driven rewrite
+agents. The surface mirrors `torch.optim` (`Parameter` →
+`backward()` → `Optimizer` → scheduler), but the gradient is a
+Pydantic critique in natural language, not a float.
 
-`operad.optim` completes the PyTorch analogy on the learning side.
-The same way `torch.optim` sits next to `torch.nn`, `operad.optim`
-sits next to `operad.agents`: it provides the primitives needed to
-*improve* an agent — its `role`, `task`, `rules`, `examples`, sampling
-knobs — against a signal. The signal is **text** (LLM-generated
-critique), not floats, but the surface area and ergonomics are
-deliberately the same as PyTorch.
+The fit-loop wrapper (`Trainer.fit / evaluate / predict`) lives in
+[`../train/`](../train/README.md). For an end-to-end walkthrough see
+[`../../TRAINING.md`](../../TRAINING.md).
 
 ---
 
@@ -203,27 +204,28 @@ task operates on disjoint files and can safely run in parallel.
 
 ## Further reading
 
-- `.context/NEXT_ITERATION.md` — full design rationale and roadmap
-- `.construct/optim/0-0-orchestration.md` — wave-by-wave execution plan
-- `.construct/optim/<wave>-<slot>-<title>.md` — individual task briefs
-- `VISION.md §7` — the original "Evolutionary outputs an improved Agent" milestone
-- Yuksekgonul et al. (2024), *TextGrad: Automatic Differentiation via Text* — intellectual ancestor of the textual-gradient concept
-- Zhou et al. (2022), *Large Language Models Are Human-Level Prompt Engineers* — APE
-- Yang et al. (2023), *Large Language Models as Optimizers* — OPRO
+- [`../train/README.md`](../train/README.md) — the `Trainer` fit-loop
+  wrapper that orchestrates this stack.
+- [`../../TRAINING.md`](../../TRAINING.md) — end-to-end training
+  tutorial.
+- [`../../VISION.md`](../../VISION.md) §3 — why prompt-level training
+  is the right unit.
+- Yuksekgonul et al. (2024), *TextGrad: Automatic Differentiation via Text* — the textual-gradient idea.
+- Zhou et al. (2022), *Large Language Models Are Human-Level Prompt Engineers* — APE.
+- Yang et al. (2023), *Large Language Models as Optimizers* — OPRO.
 
 ---
 
-## Implemented
+## Status
 
-- **Wave 1 slot 1-1 — Parameter foundation.** `Parameter[T]`,
-  `ParameterKind`, `TextualGradient`, and the `ParameterConstraint`
-  discriminated union (`TextConstraint`, `NumericConstraint`,
-  `VocabConstraint`, `ListConstraint`) are live in
-  `operad/optim/parameter.py`. Typed subclasses: `TextParameter`,
-  `RuleListParameter`, `ExampleListParameter`, `FloatParameter`,
-  `CategoricalParameter`. `Parameter.from_agent(...)` reads via
-  dotted paths (including `rules[i]` / `examples[i]` sub-indexing)
-  and holds a weakref back to the owning agent.
+The stack is shipped end-to-end. `Parameter` (with all five typed
+subclasses + constraints), `tape` / `backward`, the full `Optimizer`
+fleet (`TextualGradientDescent`, `MomentumTextGrad`, `EvoGradient`,
+`OPROOptimizer`, `APEOptimizer`), every LR scheduler, hooks +
+`no_grad()` + `inference_mode()`, `BackpropAgent`, `RewriteAgent`,
+and `PromptTraceback` are all live. The `Trainer` glue lives in
+[`../train/`](../train/README.md).
 
-`Agent.parameters()` / `named_parameters()` / hooks, losses, backward,
-optimizers, and the trainer land in subsequent waves.
+Remaining tracked item: cassette-replay determinism validation —
+the full validation matrix for offline-deterministic training under
+`OPERAD_CASSETTE=record/replay`.

@@ -1,7 +1,7 @@
 # TRAINING.md — training agents with `operad.optim`
 
 This tutorial is for a reader who already scanned
-[README.md](README.md) and [FEATURES.md](FEATURES.md) but has not yet
+[README.md](README.md) and [INVENTORY.md](INVENTORY.md) but has not yet
 written a fit loop. By the end you will have built a trainable agent,
 picked a loss and an optimizer, run a `Trainer`, checkpointed the
 best epoch, and know where to reach for hooks and debugging.
@@ -291,12 +291,25 @@ async with operad.no_grad():
     out = await agent(x)           # no tape entries written
 ```
 
-> **Planned.** `PromptTraceback` — an optim-layer traceback that
-> links each rewrite back to the tape entry, critic rationale, and
-> parameter it came from — is tracked in
-> [`.conductor/optim/5-4-prompt-traceback.md`](.conductor/optim/5-4-prompt-traceback.md)
-> and not yet merged. Until it lands, use the forward / backward
-> hooks to trace grads by hand.
+For a structured view of *which* parameter took blame for *which*
+sample, use `PromptTraceback`:
+
+```python
+from operad.optim import tape, traceback as ptb
+
+async with tape() as t:
+    out = await agent(x)
+score, loss = await loss_fn.compute(out.response, expected)
+tb = ptb.PromptTraceback.from_run(t, loss)
+print(str(tb))                  # plain-text stanzas (stdlib only)
+print(tb.to_markdown())         # PR-body friendly
+tb.save("traceback.ndjson")     # NDJSON, one frame per line
+```
+
+Each frame carries the agent path, depth, leaf-or-composite flag,
+input/output payloads, the rendered prompt, and the per-node
+gradient. See [INVENTORY.md §22](INVENTORY.md#22-prompttraceback) and
+[`operad/optim/traceback.py`](operad/optim/traceback.py).
 
 ---
 
@@ -304,7 +317,7 @@ async with operad.no_grad():
 
 Every `optimizer.step()` rewrites one or more `Parameter`s and
 produces a new `hash_content` on the agent (see §20 of
-[FEATURES.md](FEATURES.md)). Two consequences:
+[INVENTORY.md](INVENTORY.md)). Two consequences:
 
 - **Best-epoch pinning.** `TrainingReport.best_hash_content` is the
   content-addressable identity of the agent after the best epoch. A
@@ -312,9 +325,8 @@ produces a new `hash_content` on the agent (see §20 of
 - **Cassette replay.** Offline training runs can be fully recorded
   via `OPERAD_CASSETTE=record` and replayed deterministically — no
   live LLM calls required, either for the learner's forward passes
-  or for LLM-driven optimizers. Stream
-  [`.conductor/optim/5-5-cassette-replay.md`](.conductor/optim/5-5-cassette-replay.md)
-  tracks the full validation matrix.
+  or for LLM-driven optimizers. The full validation matrix for
+  offline-deterministic training is still on the roadmap.
 
 Determinism invariants: `random_split(..., seed=0)` + fixed
 sampler + no temperature on the agents under training ⇒ reproducible
@@ -392,18 +404,18 @@ the human has actually rated.
 
 ## 11. Further reading
 
-- [`operad/optim/README.md`](operad/optim/README.md) — the design
-  document: the four-word spine, the full dependency graph, the
+- [`operad/optim/README.md`](operad/optim/README.md) — the optim-layer
+  design doc: the four-word spine, the full dependency graph, the
   non-goals.
-- [`.conductor/optim/0-0-orchestration.md`](.conductor/optim/0-0-orchestration.md)
-  — wave-by-wave execution plan.
+- [`operad/train/README.md`](operad/train/README.md) — the `Trainer`
+  fit-loop wrapper that orchestrates this stack.
 - [`apps/demos/agent_evolution/run.py`](apps/demos/agent_evolution/run.py)
   — a fully-offline, deterministic showcase of
   agents-optimizing-agents: a seed agent evolved over N generations,
   driven by `Agent.auto_tune` on the algorithm side. The
   `Trainer`-driven fit loop above is the equivalent pathway on the
   `operad.optim` / `operad.train` side.
-- [FEATURES.md §21](FEATURES.md#21-training--optimization) — the
+- [INVENTORY.md §21](INVENTORY.md#21-training--optimization) — the
   catalog entry with every exported symbol.
 - Yuksekgonul et al. (2024), *TextGrad: Automatic Differentiation
   via Text* — the textual-gradient idea.
