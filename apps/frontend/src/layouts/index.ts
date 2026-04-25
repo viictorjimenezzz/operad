@@ -1,33 +1,55 @@
 /**
- * Per-algorithm layout selector. Layouts are imported as JSON
- * (Vite bundles them as objects), Zod-parsed at module load to fail
- * fast on schema regressions, and looked up by `algorithm_path`.
+ * Per-algorithm layout resolver. Layouts are discovered at build time via
+ * import.meta.glob — just drop a new `<algo>.json` into this directory and
+ * it is automatically available without touching any other file.
  *
- * Add a new algorithm by dropping a `<algo>.json` here, importing it,
- * and registering it in `algorithmLayouts`. Anything not in the map
- * falls back to `default.json`.
+ * Resolution order: exact match on `algorithm_path` → prefix match →
+ * `default.json` fallback.
  */
 import { LayoutSpec } from "@/lib/layout-schema";
-import beamRaw from "./beam.json";
-import debateRaw from "./debate.json";
-import defaultRaw from "./default.json";
-import evogradientRaw from "./evogradient.json";
-import trainerRaw from "./trainer.json";
 
-const defaultLayout = LayoutSpec.parse(defaultRaw);
-const algorithmLayouts: Record<string, LayoutSpec> = {
-  EvoGradient: LayoutSpec.parse(evogradientRaw),
-  Trainer: LayoutSpec.parse(trainerRaw),
-  Debate: LayoutSpec.parse(debateRaw),
-  Beam: LayoutSpec.parse(beamRaw),
-};
+const modules = import.meta.glob("../layouts/*.json", {
+  eager: true,
+}) as Record<string, { default?: unknown } | unknown>;
 
-export function pickLayout(algorithmPath: string | null | undefined): LayoutSpec {
-  if (!algorithmPath) return defaultLayout;
-  return algorithmLayouts[algorithmPath] ?? defaultLayout;
+const algorithmLayouts: Record<string, LayoutSpec> = {};
+let defaultLayout: LayoutSpec | null = null;
+
+for (const [path, mod] of Object.entries(modules)) {
+  const raw = (mod as { default?: unknown }).default ?? mod;
+  const parsed = LayoutSpec.parse(raw);
+  if (path.endsWith("/default.json")) {
+    defaultLayout = parsed;
+  } else {
+    algorithmLayouts[parsed.algorithm] = parsed;
+  }
 }
 
-export const layouts = {
-  default: defaultLayout,
+if (!defaultLayout) {
+  throw new Error("layouts/default.json is required but was not found");
+}
+
+// biome-ignore lint/style/noNonNullAssertion: guarded by the throw above
+const _defaultLayout: LayoutSpec = defaultLayout!;
+
+export function resolveLayout(algorithmPath: string | null | undefined): LayoutSpec {
+  if (!algorithmPath) return _defaultLayout;
+  // Exact match
+  const exact = algorithmLayouts[algorithmPath];
+  if (exact) return exact;
+  // Prefix match: "EvoGradient_v2" → "EvoGradient"
+  const prefix = Object.keys(algorithmLayouts).find((k) => algorithmPath.startsWith(k));
+  const prefixLayout = prefix !== undefined ? algorithmLayouts[prefix] : undefined;
+  if (prefixLayout) return prefixLayout;
+  return _defaultLayout;
+}
+
+/** @deprecated use resolveLayout */
+export function pickLayout(algorithmPath: string | null | undefined): LayoutSpec {
+  return resolveLayout(algorithmPath);
+}
+
+export const layouts: Record<string, LayoutSpec> = {
+  default: _defaultLayout,
   ...algorithmLayouts,
-} as const;
+};

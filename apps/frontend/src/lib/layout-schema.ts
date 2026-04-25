@@ -18,6 +18,7 @@ export const DataSourceSpec = z.object({
   endpoint: z.string(),
   queryKey: z.array(z.unknown()).optional(),
   stream: z.string().optional(),
+  mergeMode: z.enum(["replace", "append", "map"]).optional(),
 });
 export type DataSourceSpec = z.infer<typeof DataSourceSpec>;
 
