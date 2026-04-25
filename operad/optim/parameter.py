@@ -30,6 +30,7 @@ T = TypeVar("T")
 ParameterKind = Literal[
     "role",
     "task",
+    "style",
     "rules",
     "examples",
     "temperature",

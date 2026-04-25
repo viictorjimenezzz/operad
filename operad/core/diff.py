@@ -120,6 +120,8 @@ def _diff_states(
         out.append(Change(path=path, kind="role", detail=_string_diff(a.role, b.role)))
     if a.task != b.task:
         out.append(Change(path=path, kind="task", detail=_string_diff(a.task, b.task)))
+    if a.style != b.style:
+        out.append(Change(path=path, kind="style", detail=_string_diff(a.style, b.style)))
 
     if list(a.rules) != list(b.rules):
         out.append(

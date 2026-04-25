@@ -32,6 +32,7 @@ class AgentState(BaseModel):
     class_name: str
     role: str
     task: str
+    style: str = ""
     context: str = ""
     rules: list[str]
     examples: list[dict[str, Any]]

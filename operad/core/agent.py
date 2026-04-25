@@ -75,6 +75,7 @@ _TRACER: ContextVar["Tracer | None"] = ContextVar("_TRACER", default=None)
 _LOCAL_FIELD_TO_PATH: dict[str, str] = {
     "role": "role",
     "task": "task",
+    "style": "style",
     "rules": "rules",
     "examples": "examples",
     "temperature": "config.sampling.temperature",
@@ -102,6 +103,49 @@ class Handle:
         except ValueError:
             pass
         self._removed = True
+
+
+_REASONING_FIELD_DESC = (
+    "Step-by-step reasoning written before the typed answer."
+)
+_REASONING_WRAPPER_CACHE: dict[tuple[type[BaseModel], str], type[BaseModel]] = {}
+
+
+def _wrap_with_reasoning(
+    out_cls: type[BaseModel], field_name: str
+) -> type[BaseModel]:
+    """Build a Pydantic subclass with `field_name` declared first.
+
+    Cached per `(out_cls, field_name)` so repeat calls return the same
+    class — strands and any downstream caching key on identity.
+    """
+    key = (out_cls, field_name)
+    cached = _REASONING_WRAPPER_CACHE.get(key)
+    if cached is not None:
+        return cached
+    fields: dict[str, Any] = {
+        field_name: (
+            str,
+            Field(default="", description=_REASONING_FIELD_DESC),
+        ),
+    }
+    for name, info in out_cls.model_fields.items():
+        fields[name] = (info.annotation, info)
+    wrapped = create_model(  # type: ignore[call-overload]
+        f"{out_cls.__name__}WithReasoning",
+        **fields,
+    )
+    _REASONING_WRAPPER_CACHE[key] = wrapped
+    return wrapped
+
+
+def _strip_reasoning(
+    raw: BaseModel, out_cls: type[BaseModel], field_name: str
+) -> BaseModel:
+    """Drop the reasoning field from a wrapped instance and revalidate."""
+    data = raw.model_dump()
+    data.pop(field_name, None)
+    return out_cls.model_validate(data)
 
 
 def _extract_text(result: Any) -> str:
@@ -164,11 +208,23 @@ class Agent(strands.Agent, Generic[In, Out]):
     output: ClassVar[type[BaseModel] | None] = None
     role: ClassVar[str] = ""
     task: ClassVar[str] = ""
+    style: ClassVar[str] = ""
     context: ClassVar[str] = ""
     rules: ClassVar[Sequence[str]] = ()
     examples: ClassVar[Sequence[Example[Any, Any]]] = ()
     renderer: ClassVar[str | None] = None
     default_sampling: ClassVar[dict[str, Any]] = {}
+    # Each invoke() depends only on the freshly-composed system + user
+    # message; strands' per-instance `messages` log is cleared before
+    # every call so iterative algorithms can reuse one Agent without
+    # earlier turns leaking into later ones. Subclasses that genuinely
+    # want chat-style memory (e.g. multi-turn dialogue) override to False.
+    stateless: ClassVar[bool] = True
+    # Opt-in DSPy-style ChainOfThought: when set, the effective output
+    # schema sent to strands is augmented with a leading text field of
+    # this name so the model commits its reasoning before the typed
+    # answer. Structural — not part of the trainable surface.
+    reasoning_field: ClassVar[str | None] = None
 
     # --- instance state (populated by __init__ / build) ---------------------
     config: Configuration | None
@@ -182,6 +238,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         config: Configuration | None = None,
         role: str | None = None,
         task: str | None = None,
+        style: str | None = None,
         context: str | None = None,
         rules: Sequence[str] | None = None,
         examples: Sequence[Example[In, Out]] | None = None,
@@ -221,6 +278,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         self.config = config
         self.role = role if role is not None else cls.role
         self.task = task if task is not None else cls.task
+        self.style = style if style is not None else cls.style
         self.context = context if context is not None else cls.context
         self.rules = list(rules if rules is not None else cls.rules)
         self.examples = list(examples if examples is not None else cls.examples)
@@ -258,6 +316,7 @@ class Agent(strands.Agent, Generic[In, Out]):
             class_name=type(self).__name__,
             role=self.role,
             task=self.task,
+            style=self.style,
             context=self.context,
             rules=list(self.rules),
             examples=[e.model_dump(mode="json") for e in self.examples],
@@ -291,6 +350,7 @@ class Agent(strands.Agent, Generic[In, Out]):
 
         self.role = s.role
         self.task = s.task
+        self.style = s.style
         self.context = s.context
         self.rules = list(s.rules)
         self.examples = [
@@ -348,6 +408,7 @@ class Agent(strands.Agent, Generic[In, Out]):
 
         new.role = self.role
         new.task = self.task
+        new.style = self.style
         new.context = context if context is not None else self.context
         new.rules = list(self.rules)
         new.examples = [e.model_copy(deep=True) for e in self.examples]
@@ -372,7 +433,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         # this to avoid copying strands internals from `_init_strands`.
         if type(self).forward is not Agent.forward:
             _known = {
-                "role", "task", "context", "rules", "examples", "config",
+                "role", "task", "style", "context", "rules", "examples", "config",
                 "input", "output",
                 "_children", "_built", "_graph",
                 "_requires_grad_overrides",
@@ -439,6 +500,7 @@ class Agent(strands.Agent, Generic[In, Out]):
 
         yield _mk("role", TextParameter, "role")
         yield _mk("task", TextParameter, "task")
+        yield _mk("style", TextParameter, "style")
 
         if element_wise:
             for i in range(len(self.rules)):
@@ -521,6 +583,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         *,
         role: bool = False,
         task: bool = False,
+        style: bool = False,
         rules: bool = False,
         examples: bool = False,
         temperature: bool = False,
@@ -544,7 +607,8 @@ class Agent(strands.Agent, Generic[In, Out]):
         path).
         """
         flags = {
-            "role": role, "task": task, "rules": rules, "examples": examples,
+            "role": role, "task": task, "style": style,
+            "rules": rules, "examples": examples,
             "temperature": temperature, "top_p": top_p,
         }
         for field, on in flags.items():
@@ -555,7 +619,8 @@ class Agent(strands.Agent, Generic[In, Out]):
             for child in self._children.values():
                 child._set_requires_grad(
                     value,
-                    role=role, task=task, rules=rules, examples=examples,
+                    role=role, task=task, style=style,
+                    rules=rules, examples=examples,
                     temperature=temperature, top_p=top_p,
                     recurse=True, _strict=False,
                 )
@@ -586,6 +651,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         *,
         role: bool = False,
         task: bool = False,
+        style: bool = False,
         rules: bool = False,
         examples: bool = False,
         temperature: bool = False,
@@ -605,7 +671,8 @@ class Agent(strands.Agent, Generic[In, Out]):
         """
         self._set_requires_grad(
             True,
-            role=role, task=task, rules=rules, examples=examples,
+            role=role, task=task, style=style,
+            rules=rules, examples=examples,
             temperature=temperature, top_p=top_p, recurse=recurse,
             **per_path,
         )
@@ -615,6 +682,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         *,
         role: bool = False,
         task: bool = False,
+        style: bool = False,
         rules: bool = False,
         examples: bool = False,
         temperature: bool = False,
@@ -626,7 +694,8 @@ class Agent(strands.Agent, Generic[In, Out]):
         `mark_trainable`)."""
         self._set_requires_grad(
             False,
-            role=role, task=task, rules=rules, examples=examples,
+            role=role, task=task, style=style,
+            rules=rules, examples=examples,
             temperature=temperature, top_p=top_p, recurse=recurse,
             **per_path,
         )
@@ -636,6 +705,7 @@ class Agent(strands.Agent, Generic[In, Out]):
         *,
         role: bool = False,
         task: bool = False,
+        style: bool = False,
         rules: bool = False,
         examples: bool = False,
         temperature: bool = False,
@@ -645,7 +715,8 @@ class Agent(strands.Agent, Generic[In, Out]):
     ) -> None:
         """Alias for `mark_trainable` — included for PyTorch muscle memory."""
         self.mark_trainable(
-            role=role, task=task, rules=rules, examples=examples,
+            role=role, task=task, style=style,
+            rules=rules, examples=examples,
             temperature=temperature, top_p=top_p, recurse=recurse,
             **per_path,
         )
@@ -836,6 +907,45 @@ class Agent(strands.Agent, Generic[In, Out]):
             return graph._repr_html_()  # type: ignore[no-any-return]
         return f"<pre>{_html.escape(repr(self))}</pre>"
 
+    def _effective_output_schema(self) -> type[BaseModel]:
+        """Return the Pydantic class actually sent to strands as the wire schema.
+
+        Equals ``self.output`` unless ``reasoning_field`` is set, in which
+        case a cached subclass is returned with the reasoning field declared
+        first so the model commits its reasoning before the typed answer.
+        """
+        if not self.reasoning_field or self.output is None:
+            return self.output  # type: ignore[return-value]
+        return _wrap_with_reasoning(self.output, self.reasoning_field)
+
+    def _build_transient_strands(
+        self, system_prompt: str | None
+    ) -> "strands.Agent | None":
+        """Build a fresh strands.Agent for one invoke, sharing this leaf's model.
+
+        When ``stateless`` is True (default) every ``forward`` call routes
+        through one of these transients so concurrent fan-out on a single
+        operad Agent doesn't race on shared ``self.system_prompt`` /
+        ``self.messages``. The transient lives only for the duration of
+        the call and carries the per-call composed system prompt.
+
+        Returns ``None`` when ``self.model`` hasn't been set — a leaf
+        whose ``_init_strands`` was skipped (e.g. tests that bypass
+        ``abuild``). The caller falls back to mutating ``self`` for
+        that single call; reentrancy still holds in the normal built-
+        leaf case.
+        """
+        model = getattr(self, "model", None)
+        if model is None:
+            return None
+        from strands.types.agent import ConcurrentInvocationMode
+
+        return strands.Agent(
+            model=model,
+            system_prompt=system_prompt,
+            concurrent_invocation_mode=ConcurrentInvocationMode.UNSAFE_REENTRANT,
+        )
+
     # --- default leaf forward ------------------------------------------------
     async def forward(self, x: In) -> Out:
         """Default leaf behavior: single Strands call with structured output.
@@ -869,14 +979,33 @@ class Agent(strands.Agent, Generic[In, Out]):
 
         structuredio = self.config.io.structuredio  # type: ignore[union-attr]
         user_msg = self.format_user_message(x)
-        self.system_prompt = self._compose_system_for_call(x) or None
+        composed_system = self._compose_system_for_call(x) or None
+        effective_out = self._effective_output_schema()
+        stateless = self.stateless
 
         async with _acquire_slot(self.config) as slot:  # type: ignore[arg-type]
             async def _call() -> Any:
+                transient = (
+                    self._build_transient_strands(composed_system)
+                    if stateless
+                    else None
+                )
+                if transient is not None:
+                    if structuredio:
+                        return await transient.invoke_async(
+                            user_msg,
+                            structured_output_model=effective_out,
+                        )
+                    return await transient.invoke_async(user_msg)
+                # Stateful path (or fallback when no resolved model is
+                # cached): mutate self so strands carries conversation
+                # history across calls. Concurrent fan-out on a
+                # stateless=False agent is undefined by contract.
+                self.system_prompt = composed_system
                 if structuredio:
                     return await super(Agent, self).invoke_async(  # type: ignore[misc]
                         user_msg,
-                        structured_output_model=self.output,
+                        structured_output_model=effective_out,
                     )
                 return await super(Agent, self).invoke_async(user_msg)  # type: ignore[misc]
 
@@ -892,16 +1021,26 @@ class Agent(strands.Agent, Generic[In, Out]):
             finally:
                 slot.settle(tokens=_extract_tokens(result))
         if structuredio:
-            return result.structured_output  # type: ignore[return-value,no-any-return]
+            raw = result.structured_output
+            if self.reasoning_field is not None:
+                return _strip_reasoning(  # type: ignore[return-value]
+                    raw, self.output, self.reasoning_field  # type: ignore[arg-type]
+                )
+            return raw  # type: ignore[no-any-return]
         text = _extract_text(result)
         try:
-            return self.output.model_validate_json(text)  # type: ignore[no-any-return,union-attr]
+            parsed = effective_out.model_validate_json(text)
         except Exception as e:
             raise BuildError(
                 "output_mismatch",
-                f"could not parse textual response as {self.output.__name__}: {e}",  # type: ignore[union-attr]
+                f"could not parse textual response as {effective_out.__name__}: {e}",
                 agent=type(self).__name__,
             ) from e
+        if self.reasoning_field is not None:
+            return _strip_reasoning(  # type: ignore[return-value]
+                parsed, self.output, self.reasoning_field  # type: ignore[arg-type]
+            )
+        return parsed  # type: ignore[return-value]
 
     async def _default_chunk_sink(self, i: int, piece: str) -> None:
         from ..runtime.observers import base as _obs
@@ -934,12 +1073,24 @@ class Agent(strands.Agent, Generic[In, Out]):
         idx = 0
         structured: Any = None
         final_result: Any = None
-        self.system_prompt = self._compose_system_for_call(x) or None
+        composed_system = self._compose_system_for_call(x) or None
+        effective_out = self._effective_output_schema()
+        user_msg = self.format_user_message(x)
+        transient = (
+            self._build_transient_strands(composed_system)
+            if self.stateless
+            else None
+        )
+        if transient is not None:
+            stream_source: Any = transient
+        else:
+            self.system_prompt = composed_system
+            stream_source = self
         async with _acquire_slot(self.config) as slot:  # type: ignore[arg-type]
             try:
-                async for event in super().stream_async(  # type: ignore[misc]
-                    self.format_user_message(x),
-                    structured_output_model=self.output,
+                async for event in stream_source.stream_async(  # type: ignore[misc]
+                    user_msg,
+                    structured_output_model=effective_out,
                 ):
                     if not isinstance(event, dict):
                         continue
@@ -957,16 +1108,25 @@ class Agent(strands.Agent, Generic[In, Out]):
             finally:
                 slot.settle(tokens=_extract_tokens(final_result))
         if structured is not None:
+            if self.reasoning_field is not None:
+                return _strip_reasoning(  # type: ignore[return-value]
+                    structured, self.output, self.reasoning_field  # type: ignore[arg-type]
+                )
             return structured  # type: ignore[no-any-return]
         text = "".join(accumulated)
         try:
-            return self.output.model_validate_json(text)  # type: ignore[union-attr,return-value]
+            parsed = effective_out.model_validate_json(text)
         except Exception as e:
             raise BuildError(
                 "output_mismatch",
-                f"streamed text did not parse as {self.output.__name__}: {e}",  # type: ignore[union-attr]
+                f"streamed text did not parse as {effective_out.__name__}: {e}",
                 agent=type(self).__name__,
             ) from e
+        if self.reasoning_field is not None:
+            return _strip_reasoning(  # type: ignore[return-value]
+                parsed, self.output, self.reasoning_field  # type: ignore[arg-type]
+            )
+        return parsed  # type: ignore[return-value]
 
     # --- run-context helpers ----------------------------------------------
 

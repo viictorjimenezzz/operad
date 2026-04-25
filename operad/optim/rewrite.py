@@ -357,6 +357,7 @@ class CategoricalRewriter(RewriteAgent):
 REWRITE_AGENTS: dict[ParameterKind, type[RewriteAgent]] = {
     "role": TextRewriter,
     "task": TextRewriter,
+    "style": TextRewriter,
     "rule_i": TextRewriter,
     "extra": TextRewriter,
     "rules": RuleListRewriter,
