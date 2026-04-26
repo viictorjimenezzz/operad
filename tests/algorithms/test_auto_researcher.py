@@ -21,7 +21,6 @@ from operad.agents.reasoning.schemas import (
     Reflection,
     ReflectionInput,
     Score,
-    Task,
 )
 from operad.algorithms import (
     AutoResearcher,
@@ -35,14 +34,14 @@ pytestmark = pytest.mark.asyncio
 
 
 class _Planner(Planner):
-    input = Task
+    input = ResearchContext
     output = ResearchPlan
 
     def __init__(self, cfg: Configuration) -> None:
-        super().__init__(config=cfg, input=Task, output=ResearchPlan)
+        super().__init__(config=cfg, input=ResearchContext, output=ResearchPlan)
         self.calls = 0
 
-    async def forward(self, x: Task) -> ResearchPlan:  # type: ignore[override]
+    async def forward(self, x: ResearchContext) -> ResearchPlan:  # type: ignore[override]
         self.calls += 1
         return ResearchPlan(query=f"q-{self.calls}")
 
@@ -125,14 +124,14 @@ async def _make_ar(
 
 async def test_auto_researcher_runs_end_to_end(cfg) -> None:
     ar, _ = await _make_ar(cfg, n=1, max_iter=0)
-    out = await ar.run(Task(goal="what is TCP?"))
+    out = await ar.run(ResearchContext(goal="what is TCP?"))
     assert isinstance(out, Answer)
     assert out.answer.startswith("a-")
 
 
 async def test_auto_researcher_produces_n_candidates(cfg) -> None:
     ar, seen = await _make_ar(cfg, n=4, max_iter=0)
-    await ar.run(Task(goal="go"))
+    await ar.run(ResearchContext(goal="go"))
     assert ar.planner.calls == 4
     assert len(seen) == 4
     assert ar.reasoner.calls == 4
@@ -144,7 +143,7 @@ async def test_auto_researcher_picks_highest_scoring(cfg) -> None:
     ar, _ = await _make_ar(
         cfg, scores=[0.1, 0.9, 0.2], n=3, max_iter=0, threshold=0.0
     )
-    out = await ar.run(Task(goal="go"))
+    out = await ar.run(ResearchContext(goal="go"))
     assert isinstance(out, Answer)
     # Reasoner emits a-1, a-2, a-3 across the three attempts (in gather
     # order). Critic assigns 0.1, 0.9, 0.2 respectively; a-2 wins.
@@ -155,7 +154,7 @@ async def test_auto_researcher_max_iter_zero_skips_reflection(cfg) -> None:
     ar, _ = await _make_ar(
         cfg, scores=[0.0], n=2, max_iter=0, threshold=0.99,
     )
-    await ar.run(Task(goal="go"))
+    await ar.run(ResearchContext(goal="go"))
     assert ar.reflector.calls == 0
     assert ar.reasoner.calls == 2  # one per attempt, no revisions
 
@@ -166,7 +165,7 @@ async def test_auto_researcher_loops_when_score_below_threshold(cfg) -> None:
     ar, _ = await _make_ar(
         cfg, scores=[0.1, 0.95], n=1, max_iter=3, threshold=0.9,
     )
-    await ar.run(Task(goal="go"))
+    await ar.run(ResearchContext(goal="go"))
     assert ar.reasoner.calls == 2
     assert ar.reflector.calls == 1
     assert ar.critic.calls == 2
@@ -205,23 +204,12 @@ async def test_auto_researcher_not_promoted_to_operad_top_level() -> None:
     assert "AutoResearcher" not in getattr(operad, "__all__", ())
 
 
-async def test_research_context_renders_to_multiline_string() -> None:
+async def test_research_context_is_algorithm_input() -> None:
     ctx = ResearchContext(
+        goal="Summarize the REPowerEU plan.",
         domain="climate science",
         audience="policy researchers",
         constraints="no paywalled sources",
         notes="focus on EU",
     )
-    rendered = ctx.render()
-    assert "Domain: climate science" in rendered
-    assert "Audience: policy researchers" in rendered
-    assert "Constraints: no paywalled sources" in rendered
-    assert "Notes: focus on EU" in rendered
-
-
-async def test_auto_researcher_propagates_context_to_components() -> None:
-    ar = AutoResearcher(context="a bespoke research topic")
-    assert ar.planner.context == "a bespoke research topic"
-    assert ar.reasoner.context == "a bespoke research topic"
-    assert ar.critic.context == "a bespoke research topic"
-    assert ar.reflector.context == "a bespoke research topic"
+    assert ctx.goal == "Summarize the REPowerEU plan."

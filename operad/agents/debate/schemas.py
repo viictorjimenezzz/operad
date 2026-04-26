@@ -10,7 +10,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class DebateContext(BaseModel):
+class DebateTopic(BaseModel):
     """What to debate.
 
     The concrete subject of a debate. ``topic`` is required; additional
@@ -59,7 +59,7 @@ class Critique(BaseModel):
 class DebateRecord(BaseModel):
     """The accumulated state of a debate: request, proposals, critiques."""
 
-    request: DebateContext | None = Field(
+    request: DebateTopic | None = Field(
         default=None,
         description="The original context every proposer answered.",
     )
@@ -83,7 +83,7 @@ class DebateTurn(BaseModel):
 
 __all__ = [
     "Critique",
-    "DebateContext",
+    "DebateTopic",
     "DebateRecord",
     "DebateTurn",
     "Proposal",

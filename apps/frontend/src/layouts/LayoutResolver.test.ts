@@ -75,10 +75,10 @@ describe("resolveLayout integration (real layouts/)", () => {
     expect(layout.algorithm).toBe("EvoGradient");
   });
 
-  it("resolves VerifierLoop to the verifier layout", async () => {
+  it("resolves VerifierAgent to the verifier layout", async () => {
     const { resolveLayout } = await import("./index");
-    const layout = resolveLayout("VerifierLoop");
-    expect(layout.algorithm).toBe("VerifierLoop");
+    const layout = resolveLayout("VerifierAgent");
+    expect(layout.algorithm).toBe("VerifierAgent");
   });
 
   it("resolves SelfRefine to the selfrefine layout", async () => {
@@ -102,7 +102,7 @@ describe("resolveLayout integration (real layouts/)", () => {
   it("beam/verifier/selfrefine layouts reference iteration sources/components", async () => {
     const { resolveLayout } = await import("./index");
     const beam = resolveLayout("Beam");
-    const verifier = resolveLayout("VerifierLoop");
+    const verifier = resolveLayout("VerifierAgent");
     const selfrefine = resolveLayout("SelfRefine");
 
     expect(beam.dataSources.iterations?.endpoint).toContain("/iterations.json");

@@ -8,7 +8,7 @@ from operad import Agent
 from operad.agents import DebateAgent, VerifierAgent
 from operad.agents.debate.schemas import (
     Critique,
-    DebateContext,
+    DebateTopic,
     DebateRecord,
     DebateTurn,
     Proposal,
@@ -27,15 +27,15 @@ pytestmark = pytest.mark.asyncio
 # ---------------------------------------------------------------------------
 
 
-class _Proposer(Agent[DebateContext, Proposal]):
-    input = DebateContext
+class _Proposer(Agent[DebateTopic, Proposal]):
+    input = DebateTopic
     output = Proposal
 
     def __init__(self, cfg, name: str = "p") -> None:
-        super().__init__(config=cfg, input=DebateContext, output=Proposal)
+        super().__init__(config=cfg, input=DebateTopic, output=Proposal)
         self._name = name
 
-    async def forward(self, x: DebateContext) -> Proposal:  # type: ignore[override]
+    async def forward(self, x: DebateTopic) -> Proposal:  # type: ignore[override]
         return Proposal(content=f"{self._name}:{x.topic}", author=self._name)
 
 
@@ -103,7 +103,7 @@ async def test_debate_agent_returns_answer(cfg) -> None:
         rounds=0,
     )
     await agent.abuild()
-    result = await agent(DebateContext(topic="best lang"))
+    result = await agent(DebateTopic(topic="best lang"))
     assert isinstance(result.response, Answer)
     assert result.response.answer == "final"
 
@@ -158,7 +158,7 @@ async def test_verifier_agent_children_registered(cfg) -> None:
 
 async def test_debate_agent_in_pipeline(cfg) -> None:
     """Sequential(leaf -> DebateAgent -> leaf) builds and runs end-to-end."""
-    pre = FakeLeaf(config=cfg, input=A, output=DebateContext, canned={"topic": "test", "details": ""})
+    pre = FakeLeaf(config=cfg, input=A, output=DebateTopic, canned={"topic": "test", "details": ""})
     debate = DebateAgent(
         proposers=[_Proposer(cfg, "p1")],
         critic=_DebateCritic(cfg),
@@ -219,7 +219,7 @@ async def test_debate_agent_emits_algo_events(cfg) -> None:
             rounds=1,
         )
         await agent.abuild()
-        await agent(DebateContext(topic="events?"))
+        await agent(DebateTopic(topic="events?"))
     finally:
         registry.unregister(capture)
 

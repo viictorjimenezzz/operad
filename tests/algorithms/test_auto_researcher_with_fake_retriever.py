@@ -19,22 +19,21 @@ from operad.agents.reasoning.schemas import (
     Reflection,
     ReflectionInput,
     Score,
-    Task,
 )
-from operad.algorithms import AutoResearcher, ResearchInput, ResearchPlan
+from operad.algorithms import AutoResearcher, ResearchContext, ResearchInput, ResearchPlan
 
 
 pytestmark = pytest.mark.asyncio
 
 
 class _Planner(Planner):
-    input = Task
+    input = ResearchContext
     output = ResearchPlan
 
     def __init__(self, cfg: Configuration) -> None:
-        super().__init__(config=cfg, input=Task, output=ResearchPlan)
+        super().__init__(config=cfg, input=ResearchContext, output=ResearchPlan)
 
-    async def forward(self, x: Task) -> ResearchPlan:  # type: ignore[override]
+    async def forward(self, x: ResearchContext) -> ResearchPlan:  # type: ignore[override]
         return ResearchPlan(query="capital of France")
 
 
@@ -87,7 +86,7 @@ async def test_auto_researcher_runs_with_fake_retriever(cfg) -> None:
     ar.reasoner = reasoner
     ar.critic = critic
     ar.reflector = reflector
-    out = await ar.run(Task(goal="What is the capital of France?"))
+    out = await ar.run(ResearchContext(goal="What is the capital of France?"))
 
     assert isinstance(out, Answer)
     assert out.answer == "Paris is the capital of France."

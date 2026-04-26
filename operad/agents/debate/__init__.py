@@ -8,13 +8,13 @@ loop.
 from __future__ import annotations
 
 from .components import DebateCritic, Proposer, Synthesizer
-from .schemas import Critique, DebateContext, DebateRecord, DebateTurn, Proposal
+from .schemas import Critique, DebateRecord, DebateTopic, DebateTurn, Proposal
 
 __all__ = [
     "Critique",
-    "DebateContext",
     "DebateCritic",
     "DebateRecord",
+    "DebateTopic",
     "DebateTurn",
     "Proposal",
     "Proposer",

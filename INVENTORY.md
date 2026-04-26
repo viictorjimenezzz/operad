@@ -210,15 +210,15 @@ candidate facts by quality). Schemas: `ClaimItem`, `GistItem`,
 ### `debate/`
 `Proposer`, `DebateCritic`, `Synthesizer` — the three components of
 the multi-agent debate algorithm. Used by `operad.algorithms.debate`.
-Schemas: `Proposal`, `Critique`, `DebateContext`, `DebateRecord`,
+Schemas: `Proposal`, `Critique`, `DebateTopic`, `DebateRecord`,
 `DebateTurn`.
 
 ### `reasoning/` — pre-wired composites
 
 | Class | Shape | Description |
 | -------------- | ------------------------------ | -------------------------------------------------- |
-| `DebateAgent` | `Agent[DebateContext, Answer]` | Wraps `algorithms.Debate`; accepts `proposers`, `critic`, `synthesizer`, `rounds` kwargs. |
-| `VerifierAgent` | `Agent[Task, Answer]` | Wraps `algorithms.VerifierLoop`; accepts `generator`, `verifier`, `threshold`, `max_iter` kwargs. |
+| `DebateAgent` | `Agent[DebateTopic, Answer]` | Wraps `algorithms.Debate`; accepts `proposers`, `critic`, `synthesizer`, `rounds` kwargs. |
+| `VerifierAgent` | `Agent[Task, Answer]` | Runs generator + verifier until `threshold` or `max_iter`; accepts `generator`, `verifier`, `threshold`, `max_iter` kwargs. |
 
 
 ### Planned
@@ -232,7 +232,6 @@ metric feedback. Plain classes with `run(...)` — not `Agent` subclasses.
 | ---------------- | ---------------------------------------------------------- |
 | `Beam`           | Generate N candidates; pick top-K by metric.               |
 | `Debate`         | Proposer + DebateCritic rounds; Synthesizer final.         |
-| `VerifierLoop`   | Generator loops until `Verifier` approves or `max_iter` hits. |
 | `Sweep`          | Cartesian grid over dotted-path parameters of a seed agent. Returns a `SweepReport` with one `SweepCell` per grid point. |
 | `AutoResearcher` | Planner → Retriever → Reasoner → Critic → Reflector loop, wrapped in best-of-N. Plus `ResearchPlan`, `ResearchInput`, `ResearchContext` types. |
 | `SelfRefine`     | Generator → Reflector → Refiner loop; on-policy (shared generator/refiner) or cross-policy; `stop_when` callback. |

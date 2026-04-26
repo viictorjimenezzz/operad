@@ -33,7 +33,7 @@ def _seed(obs: WebDashboardObserver, run_id: str) -> None:
 def _verifier_start(run_id: str, max_iter: int, threshold: float) -> AlgorithmEvent:
     return AlgorithmEvent(
         run_id=run_id,
-        algorithm_path="VerifierLoop",
+        algorithm_path="VerifierAgent",
         kind="algo_start",
         payload={"max_iter": max_iter, "threshold": threshold},
         started_at=1.0,
@@ -44,7 +44,7 @@ def _verifier_start(run_id: str, max_iter: int, threshold: float) -> AlgorithmEv
 def _verifier_iter(run_id: str, iter_index: int, score: float) -> AlgorithmEvent:
     return AlgorithmEvent(
         run_id=run_id,
-        algorithm_path="VerifierLoop",
+        algorithm_path="VerifierAgent",
         kind="iteration",
         payload={
             "iter_index": iter_index,
@@ -60,7 +60,7 @@ def _verifier_iter(run_id: str, iter_index: int, score: float) -> AlgorithmEvent
 def _verifier_end(run_id: str, iterations: int, score: float, converged: bool) -> AlgorithmEvent:
     return AlgorithmEvent(
         run_id=run_id,
-        algorithm_path="VerifierLoop",
+        algorithm_path="VerifierAgent",
         kind="algo_end",
         payload={"iterations": iterations, "score": score, "converged": converged},
         started_at=1.0,
@@ -105,7 +105,7 @@ def test_iterations_json_404_for_unknown(app_and_obs) -> None:
         assert client.get("/runs/nope/iterations.json").status_code == 404
 
 
-async def test_iterations_json_verifier_loop(app_and_obs) -> None:
+async def test_iterations_json_verifier_agent(app_and_obs) -> None:
     app, obs = app_and_obs
     _seed(obs, "r1")
     await obs.on_event(_verifier_start("r1", max_iter=5, threshold=0.8))
@@ -231,4 +231,3 @@ def _beam_iter(
         started_at=1.0 + iter_index,
         finished_at=1.1 + iter_index,
     )
-

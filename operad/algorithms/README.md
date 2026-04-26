@@ -19,7 +19,7 @@ idea formalized into a fit loop lives in
 | `beam.py`           | `Beam`                                                             | Best-of-N over candidate generations; pick top-K by metric. |
 | `debate.py`         | `Debate`                                                           | Multi-agent debate: `Proposer` + `DebateCritic` rounds, `Synthesizer` final. |
 | `sweep.py`          | `Sweep`, `SweepCell`, `SweepReport`                                | Cartesian grid search over dotted-path parameters of a seed agent. |
-| `verifier_loop.py`  | `VerifierLoop`                                                     | Generator → Verifier loop until accept or `max_iter`. |
+| `srefine.py`        | `SelfRefine`, `RefineInput`, `SelfRefineState`                     | Generate → reflect → refine until accept or `max_iter`. |
 | `autoresearch.py`   | `AutoResearcher`, `ResearchPlan`, `ResearchInput`, `ResearchContext` | Plan → retrieve → reason → critique → reflect, wrapped in best-of-N. |
 
 ## Public API
@@ -30,7 +30,7 @@ from operad.algorithms import (
     Beam,
     Debate,
     Sweep, SweepCell, SweepReport,
-    VerifierLoop,
+    SelfRefine, RefineInput, SelfRefineState,
 )
 ```
 
@@ -64,8 +64,10 @@ report = await sweep.run(dataset)
 **Debate.**
 
 ```python
+from operad.agents.debate import DebateTopic
 from operad.algorithms import Debate
-result = await Debate(rounds=3).run(Q(text="Should I buy the car?"))
+
+result = await Debate(rounds=3).run(DebateTopic(topic="Should I buy the car?"))
 ```
 
 ## How to extend
@@ -84,11 +86,6 @@ from; the contract is structural:
 Components are class-level defaults; callers supply only the
 algorithm's own knobs at construction time. To swap a component,
 subclass and override the class attribute.
-
-## Roadmap
-
-- `SelfRefine` — Generator → Reflector → Refiner.
-- `TalkerReasoner` — interleaved chat + reasoning.
 
 ## Why algorithms are not `Agent`s
 

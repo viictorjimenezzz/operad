@@ -17,7 +17,7 @@ must tolerate unknown keys):
 | `round`       | `round_index:int, proposals:list[dict], critiques:list[dict], scores:list[float]`                                                   | Debate (aggregated per round) |
 | `cell`        | `cell_index:int, parameters:dict, score: None`                                                                                      | Sweep (score is a None placeholder; SweepCell has no native score) |
 | `candidate`   | `candidate_index:int, score:float`                                                                                                  | BestOfN      |
-| `iteration`   | `iter_index:int, phase:str, score:float \\| None`                                                                                   | SelfRefine, VerifierLoop, AutoResearcher |
+| `iteration`   | `iter_index:int, phase:str, score:float \\| None`                                                                                   | SelfRefine, VerifierAgent, AutoResearcher |
 | `batch_start` | `batch_index:int, batch_size:int, hash_batch:str, epoch:int \\| None`                                                                | DataLoader   |
 | `batch_end`   | `batch_index:int, batch_size:int, duration_ms:float, epoch:int \\| None`                                                             | DataLoader (fires on *next* `__anext__` or `StopAsyncIteration`; measures how long the consumer held the batch) |
 

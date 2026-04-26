@@ -1,5 +1,5 @@
 {
-  "algorithm": "VerifierLoop",
+  "algorithm": "VerifierAgent",
   "version": 1,
   "dataSources": {
     "summary": { "endpoint": "/runs/$context.runId/summary" },

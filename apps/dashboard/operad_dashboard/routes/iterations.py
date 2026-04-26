@@ -1,4 +1,4 @@
-"""`/runs/{run_id}/iterations.{json,sse}` — iteration events for Beam, VerifierLoop, SelfRefine."""
+"""`/runs/{run_id}/iterations.{json,sse}` — iteration events for Beam, VerifierAgent, SelfRefine."""
 
 from __future__ import annotations
 

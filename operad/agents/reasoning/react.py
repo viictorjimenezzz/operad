@@ -16,7 +16,7 @@ so it nests inside any higher-level composition exactly like any other
 leaf.
 
 This is *single-pass* ReAct — no iteration, no tool execution. The
-iterative looping variant is an algorithm (future ``VerifierLoop``)
+iterative verification variant is ``VerifierAgent``
 because the loop is metric-driven, not purely structural.
 """
 

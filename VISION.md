@@ -76,7 +76,7 @@ clipping, applied before every update.
 
 `operad/algorithms/` are plain classes whose `run(...)` methods
 orchestrate `Agent`s through outer loops with metric feedback
-(`Beam`, `Debate`, `Sweep`, `VerifierLoop`, `AutoResearcher`). They
+(`Beam`, `Debate`, `Sweep`, `SelfRefine`, `AutoResearcher`). They
 are deliberately **not** `Agent` subclasses — their natural API is
 not `__call__(x: In) -> Out`.
 
@@ -178,7 +178,7 @@ rationale of every submodule and links to per-submodule READMEs.
 | `utils/`          | hashing, errors, mutation primitives (`Op`/`CompoundOp`), cassette record/replay  |
 | `runtime/`        | concurrency slots, traces, observer registry (Rich/JSONL/OTel/Web), cost, retry, sandbox launcher |
 | `agents/`         | the component library: `reasoning/`, `coding/`, `conversational/`, `memory/`, `retrieval/`, `safeguard/`, `debate/` + `Sequential` / `Parallel` |
-| `algorithms/`     | `Beam`, `Debate`, `Sweep`, `VerifierLoop`, `AutoResearcher`                       |
+| `algorithms/`     | `Beam`, `Debate`, `Sweep`, `SelfRefine`, `AutoResearcher`                         |
 | `metrics/`        | deterministic scorers + `RubricCritic` + `CostTracker`                            |
 | `benchmark/`      | `Dataset`, `Entry`, `evaluate`, `Experiment`, `SensitivityReport`, `RegressionReport` |
 | `data/`           | `DataLoader`, samplers (incl. `UncertaintySampler`), `random_split`               |
