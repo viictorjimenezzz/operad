@@ -3,7 +3,7 @@
 ``RouteClassifier`` is the leaf half of structural routing. It is a
 standard default-forward leaf that, given some input, returns a
 ``Choice[T]`` — a typed label plus an optional short rationale. The
-paired ``Router`` composite (``operad.agents.core.pipelines.Router``) then
+paired ``Router`` composite (``operad.core.pipelines.Router``) then
 dispatches on that typed label.
 
 Narrow ``Choice`` per site by subclassing with a ``Literal`` label, and

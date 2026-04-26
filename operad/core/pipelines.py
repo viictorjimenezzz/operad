@@ -1,4 +1,4 @@
-"""Domain-agnostic composition primitives.
+"""Core domain-agnostic composition primitives.
 
 `Sequential` chains stages end-to-end.
 `Parallel` fans out a shared input to multiple children and combines results.
@@ -16,8 +16,8 @@ from typing import Any, Hashable
 
 from pydantic import BaseModel
 
-from ...core.agent import Agent, In, Out, _TRACER
-from ...utils.errors import BuildError, SideEffectDuringTrace
+from .agent import Agent, In, Out, _TRACER
+from ..utils.errors import BuildError, SideEffectDuringTrace
 
 
 class Sequential(Agent[In, Out]):
@@ -171,7 +171,7 @@ class Router(Agent[In, Out]):
         label = getattr(choice, self._key_field, None)
         branch = self._branches.get(label)
         if branch is None:
-            from ...core.graph import to_mermaid_node
+            from .graph import to_mermaid_node
 
             raise BuildError(
                 "router_miss",

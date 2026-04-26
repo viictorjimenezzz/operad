@@ -18,7 +18,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from ...core.agent import Agent
-from ..core.pipelines import Parallel, Sequential
+from ...core.pipelines import Parallel, Sequential
 from ...core.config import Configuration
 from .components import CodeReviewer, ContextOptimizer, DiffSummarizer
 from .components.context_optimizer import ReadFile
