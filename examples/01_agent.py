@@ -71,7 +71,7 @@ class BranchView(BaseModel):
     answer: str = Field(description="Committed branch answer.")
 
 
-class _PerspectiveBundle(BaseModel):
+class PerspectiveBundle(BaseModel):
     biology: BranchView = Field(description="Biology branch output.")
     policy: BranchView = Field(description="Policy branch output.")
     economic: BranchView = Field(description="Economic branch output.")
@@ -82,7 +82,7 @@ class ResearchReport(BaseModel):
     reasoning: str = Field(description="Why the stance is justified.")
 
 
-_PerspectiveBundle.model_rebuild()
+PerspectiveBundle.model_rebuild()
 
 
 # ---------------------------------------------------------------------------
@@ -90,8 +90,8 @@ _PerspectiveBundle.model_rebuild()
 # ---------------------------------------------------------------------------
 
 
-def _combine(views: dict[str, BaseModel]) -> _PerspectiveBundle:
-    return _PerspectiveBundle(
+def _combine(views: dict[str, BaseModel]) -> PerspectiveBundle:
+    return PerspectiveBundle(
         biology=views["biology"],  # type: ignore[arg-type]
         policy=views["policy"],  # type: ignore[arg-type]
         economic=views["economic"],  # type: ignore[arg-type]
@@ -194,14 +194,14 @@ def assemble(*, cfg: Configuration) -> Sequential:
     parallel = Parallel(
         branches,
         input=ResearchPlan,
-        output=_PerspectiveBundle,
+        output=PerspectiveBundle,
         combine=_combine,
         name="perspective_parallel",
     )
 
     editor = Reasoner(
         config=cfg,
-        input=_PerspectiveBundle,
+        input=PerspectiveBundle,
         output=ResearchReport,
         role="You are the final editor synthesizing all perspectives.",
         task=(
