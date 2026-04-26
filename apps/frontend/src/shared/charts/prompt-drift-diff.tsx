@@ -1,8 +1,3 @@
-/**
- * Three-pane side-by-side diff viewer: before / after / critique.
- * Uses simple line-by-line comparison without an external diff library.
- */
-
 type DiffLine = { text: string; type: "added" | "removed" | "unchanged" };
 
 function diffLines(before: string, after: string): { left: DiffLine[]; right: DiffLine[] } {
@@ -29,7 +24,7 @@ function DiffPane({ lines, label }: { lines: DiffLine[]; label: string }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col">
       <div className="mb-1 text-[0.68rem] uppercase tracking-[0.08em] text-muted">{label}</div>
-      <pre className="overflow-auto rounded border border-border bg-bg-2 p-2 text-[11px] leading-5">
+      <div className="overflow-auto rounded border border-border bg-bg-2 p-2 text-[11px] leading-5">
         {lines.map((l, i) => (
           <div
             key={i}
@@ -44,7 +39,7 @@ function DiffPane({ lines, label }: { lines: DiffLine[]; label: string }) {
             {l.text || " "}
           </div>
         ))}
-      </pre>
+      </div>
     </div>
   );
 }
@@ -52,10 +47,12 @@ function DiffPane({ lines, label }: { lines: DiffLine[]; label: string }) {
 export function PromptDriftDiff({
   before,
   after,
+  selectedPath,
   critique,
 }: {
   before: string;
   after: string;
+  selectedPath?: string;
   critique?: string;
 }) {
   const { left, right } = diffLines(before, after);
@@ -64,11 +61,13 @@ export function PromptDriftDiff({
       <DiffPane lines={left} label="before" />
       <DiffPane lines={right} label="after" />
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="mb-1 text-[0.68rem] uppercase tracking-[0.08em] text-muted">critique</div>
+        <div className="mb-1 text-[0.68rem] uppercase tracking-[0.08em] text-muted">
+          critique {selectedPath ? `(${selectedPath})` : ""}
+        </div>
         {critique ? (
-          <pre className="overflow-auto rounded border border-border bg-bg-2 p-2 text-[11px] leading-5 text-muted">
+          <div className="overflow-auto whitespace-pre-wrap rounded border border-border bg-bg-2 p-2 text-[11px] leading-5 text-muted">
             {critique}
-          </pre>
+          </div>
         ) : (
           <div className="rounded border border-border bg-bg-2 p-2 text-[11px] text-muted">
             no gradient critique available

@@ -211,16 +211,7 @@ class PromptDrift(Callback):
     """Warn when ``agent.hash_content`` changes too many times in a fit.
 
     Also emits an `AlgorithmEvent(kind="iteration", algorithm_path="PromptDrift")`
-    every ``emit_every`` epochs so the dashboard's drift timeline panel
-    can visualise epoch-by-epoch prompt evolution. Event payload:
-
-        {
-          "epoch":          int,
-          "hash_before":    str,           # 16-hex
-          "hash_after":     str,           # 16-hex
-          "changed_params": list[str],     # dotted paths whose value mutated
-          "delta_count":    int,
-        }
+    every ``emit_every`` epochs so the dashboard can render prompt text diffs.
     """
 
     def __init__(
@@ -262,17 +253,25 @@ class PromptDrift(Callback):
         self, trainer: "Trainer[Any, Any]", report: EpochReport
     ) -> None:
         h = report.hash_content
-        hash_before = self._last_hash or trainer.agent.hash_content
         if self._last_hash is not None and h != self._last_hash:
             self._changes += 1
         self._last_hash = h
 
         current_values = self._snapshot_values(trainer)
-        changed_params = [
+        changed_params = sorted(
             path
             for path, value in current_values.items()
             if value != self._prev_values.get(path)
+        )
+        changes = [
+            {
+                "path": path,
+                "before_text": self._prev_values.get(path, ""),
+                "after_text": current_values.get(path, ""),
+            }
+            for path in changed_params
         ]
+        selected = changes[0] if changes else None
         self._prev_values = current_values
 
         if self.emit_every > 0 and (report.epoch % self.emit_every) == 0:
@@ -281,9 +280,11 @@ class PromptDrift(Callback):
                 algorithm_path="PromptDrift",
                 payload={
                     "epoch": int(report.epoch),
-                    "hash_before": hash_before,
-                    "hash_after": h,
-                    "changed_params": sorted(changed_params),
+                    "before_text": selected["before_text"] if selected else "",
+                    "after_text": selected["after_text"] if selected else "",
+                    "selected_path": selected["path"] if selected else "",
+                    "changes": changes,
+                    "changed_params": changed_params,
                     "delta_count": len(changed_params),
                 },
             )

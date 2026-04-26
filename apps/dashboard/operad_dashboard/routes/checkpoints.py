@@ -52,12 +52,21 @@ def _to_entry(env: dict[str, Any]) -> dict[str, Any]:
     payload = env.get("payload") or {}
     train_loss = payload.get("train_loss")
     val_loss = payload.get("val_loss")
-    score = val_loss if val_loss is not None else train_loss
+    score = payload.get("checkpoint_score")
+    if score is None:
+        score = val_loss if val_loss is not None else train_loss
     return {
         "epoch": int(payload.get("epoch", 0)),
         "train_loss": train_loss,
         "val_loss": val_loss,
         "score": score,
+        "lr": payload.get("lr"),
+        "metric_snapshot": {
+            "train_loss": train_loss,
+            "val_loss": val_loss,
+            "score": score,
+        },
+        "parameter_snapshot": dict(payload.get("parameter_snapshot") or {}),
         "is_best": False,
     }
 

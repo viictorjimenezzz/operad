@@ -22,6 +22,8 @@ import json
 import statistics
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -398,7 +400,30 @@ def _parse_args() -> argparse.Namespace:
         default="report.json",
         help="Output path for report.json.",
     )
+    p.add_argument(
+        "--dashboard",
+        default=None,
+        help="Optional dashboard base URL to POST report to /benchmarks/_ingest.",
+    )
     return p.parse_args()
+
+
+def _post_to_dashboard(base_url: str, report: dict[str, Any]) -> None:
+    url = f"{base_url.rstrip('/')}/benchmarks/_ingest"
+    body = json.dumps(report).encode("utf-8")
+    req = urllib.request.Request(
+        url=url,
+        data=body,
+        method="POST",
+        headers={"content-type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310
+        payload = json.loads(resp.read().decode("utf-8"))
+    bench_id = payload.get("id")
+    if isinstance(bench_id, str) and bench_id:
+        print(f"Dashboard benchmark id: {bench_id}")
+    else:
+        print("Dashboard ingest succeeded.")
 
 
 async def main(args: argparse.Namespace) -> None:
@@ -456,6 +481,20 @@ async def main(args: argparse.Namespace) -> None:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(report, indent=2))
         print(f"\nReport written to {out_path}")
+    if args.dashboard:
+        try:
+            _post_to_dashboard(args.dashboard, report)
+        except (
+            OSError,
+            TimeoutError,
+            ValueError,
+            urllib.error.URLError,
+            urllib.error.HTTPError,
+        ) as exc:
+            print(
+                f"[WARN] dashboard ingest failed ({args.dashboard}): {exc}",
+                file=sys.stderr,
+            )
 
     print("\n" + "=" * 72)
     _print_markdown(summary, findings)

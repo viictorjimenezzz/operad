@@ -15,7 +15,7 @@ from . import iter_run_events, per_run_sse
 
 router = APIRouter(tags=["fitness"])
 
-_GEN_KINDS = ("generation", "iteration")
+_GEN_KINDS = ("generation", "iteration", "batch_end")
 
 
 @router.get("/runs/{run_id}/fitness.json")
@@ -62,6 +62,46 @@ def _to_entry(env: dict[str, Any]) -> dict[str, Any] | None:
     payload = env.get("payload") or {}
     timestamp = env.get("finished_at") or env.get("started_at") or 0.0
 
+    if env.get("algorithm_path") == "Trainer":
+        if env.get("kind") == "batch_end":
+            train_loss = payload.get("train_loss")
+            if not isinstance(train_loss, (int, float)):
+                return None
+            lr = payload.get("lr")
+            return {
+                "gen_index": float(payload.get("step", 0)),
+                "best": float(train_loss),
+                "mean": float(train_loss),
+                "worst": float(train_loss),
+                "train_loss": float(train_loss),
+                "val_loss": None,
+                "lr": float(lr) if isinstance(lr, (int, float)) else None,
+                "population_scores": [float(train_loss)],
+                "timestamp": timestamp,
+            }
+        if env.get("kind") == "iteration" and payload.get("phase") == "epoch_end":
+            train_loss = payload.get("train_loss")
+            val_loss = payload.get("val_loss")
+            if not isinstance(train_loss, (int, float)):
+                return None
+            lr = payload.get("lr")
+            score = (
+                float(val_loss)
+                if isinstance(val_loss, (int, float))
+                else float(train_loss)
+            )
+            return {
+                "gen_index": int(payload.get("epoch", 0)),
+                "best": float(train_loss),
+                "mean": float(train_loss),
+                "worst": float(train_loss),
+                "train_loss": float(train_loss),
+                "val_loss": float(val_loss) if isinstance(val_loss, (int, float)) else None,
+                "lr": float(lr) if isinstance(lr, (int, float)) else None,
+                "population_scores": [score],
+                "timestamp": timestamp,
+            }
+
     scores = payload.get("population_scores")
     if isinstance(scores, list) and scores:
         numeric = [float(s) for s in scores if isinstance(s, (int, float))]
@@ -86,6 +126,9 @@ def _to_entry(env: dict[str, Any]) -> dict[str, Any] | None:
                 "best": float(score),
                 "mean": float(score),
                 "worst": float(score),
+                "train_loss": None,
+                "val_loss": None,
+                "lr": None,
                 "population_scores": [float(score)],
                 "timestamp": timestamp,
             }

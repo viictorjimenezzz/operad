@@ -39,7 +39,7 @@ def _gradient_event(run_id: str, epoch: int, batch: int, message: str) -> Algori
             "epoch": epoch,
             "batch": batch,
             "message": message,
-            "severity": "medium",
+            "severity": 0.6,
             "target_paths": ["role", "task"],
             "by_field": {"role": "role critique", "task": "task critique"},
             "applied_diff": f"- old role\n+ new role (epoch {epoch})",
@@ -74,7 +74,7 @@ async def test_gradients_returns_gradient_entries(app_and_obs) -> None:
     assert entries[0]["epoch"] == 0
     assert entries[0]["batch"] == 5
     assert entries[0]["message"] == "role too vague"
-    assert entries[0]["severity"] == "medium"
+    assert entries[0]["severity"] == pytest.approx(0.6)
     assert "role" in entries[0]["target_paths"]
     assert entries[1]["epoch"] == 1
 

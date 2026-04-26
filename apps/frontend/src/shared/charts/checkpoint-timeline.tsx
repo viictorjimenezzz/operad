@@ -26,11 +26,21 @@ export function CheckpointTimeline({ data }: { data: unknown }) {
             <span className="text-[0.68rem] uppercase tracking-[0.08em] text-muted">
               epoch {entry.epoch}
             </span>
+            {entry.lr != null && (
+              <span className="font-mono text-[10px] text-muted">lr {entry.lr.toFixed(5)}</span>
+            )}
             {entry.is_best && (
               <span className="rounded border border-accent px-1.5 py-0.5 text-[10px] text-accent">
                 best
               </span>
             )}
+            <button
+              type="button"
+              disabled
+              className="ml-auto rounded border border-border px-1.5 py-0.5 text-[10px] text-muted opacity-70"
+            >
+              restore
+            </button>
           </div>
           <div className="mt-0.5 flex gap-3 font-mono text-[11px]">
             <span>
@@ -48,6 +58,16 @@ export function CheckpointTimeline({ data }: { data: unknown }) {
               {fmt(entry.score)}
             </span>
           </div>
+          {entry.parameter_snapshot && Object.keys(entry.parameter_snapshot).length > 0 && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-[10px] text-muted">parameter snapshot</summary>
+              <pre className="mt-1 overflow-auto whitespace-pre-wrap rounded border border-border bg-bg-3 p-2 text-[10px]">
+                {Object.entries(entry.parameter_snapshot)
+                  .map(([k, v]) => `${k}: ${v}`)
+                  .join("\n")}
+              </pre>
+            </details>
+          )}
         </li>
       ))}
     </ol>

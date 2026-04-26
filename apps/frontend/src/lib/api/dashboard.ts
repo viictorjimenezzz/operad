@@ -1,9 +1,19 @@
 import {
+  BenchmarkDetailResponse,
+  BenchmarkIngestResponse,
+  BenchmarkListItem,
+  BenchmarkOkResponse,
+  CassetteDeterminismResponse,
+  CassettePreviewResponse,
+  CassetteReplayResponse,
+  CassetteSummary,
+  DebateRoundsResponse,
   DriftEntry,
   EvolutionResponse,
   ArchivedRunRecord,
   FitnessEntry,
   GraphResponse,
+  IterationsResponse,
   Manifest,
   MutationsMatrix,
   ProgressSnapshot,
@@ -30,6 +40,38 @@ async function getJson<T extends z.ZodTypeAny>(url: string, schema: T): Promise<
     throw new ParseError(url, parsed.error);
   }
   return parsed.data;
+}
+
+async function sendJson<T extends z.ZodTypeAny>(
+  method: "POST" | "DELETE",
+  url: string,
+  schema: T,
+  body?: unknown,
+): Promise<z.infer<T>> {
+  const init: RequestInit = {
+    method,
+    headers: {
+      accept: "application/json",
+      ...(body !== undefined ? { "content-type": "application/json" } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  };
+  const r = await fetch(url, init);
+  if (!r.ok) throw new HttpError(r.status, `${r.status} ${r.statusText} ← ${url}`);
+  const raw: unknown = await r.json();
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    throw new ParseError(url, parsed.error);
+  }
+  return parsed.data;
+}
+
+async function postJson<T extends z.ZodTypeAny>(
+  url: string,
+  body: unknown,
+  schema: T,
+): Promise<z.infer<T>> {
+  return sendJson("POST", url, schema, body);
 }
 
 export class HttpError extends Error {
@@ -64,11 +106,36 @@ export const dashboardApi = {
     getJson(`/runs/${runId}/events?limit=${limit}`, RunEventsResponse),
   graph: (runId: string) => getJson(`/graph/${runId}`, GraphResponse),
   fitness: (runId: string) => getJson(`/runs/${runId}/fitness.json`, z.array(FitnessEntry)),
+  iterations: (runId: string) => getJson(`/runs/${runId}/iterations.json`, IterationsResponse),
+  debate: (runId: string) => getJson(`/runs/${runId}/debate.json`, DebateRoundsResponse),
   mutations: (runId: string) => getJson(`/runs/${runId}/mutations.json`, MutationsMatrix),
   drift: (runId: string) => getJson(`/runs/${runId}/drift.json`, z.array(DriftEntry)),
   progress: (runId: string) => getJson(`/runs/${runId}/progress.json`, ProgressSnapshot),
+  benchmarks: () => getJson("/benchmarks", z.array(BenchmarkListItem)),
+  benchmarkDetail: (benchmarkId: string) =>
+    getJson(`/benchmarks/${benchmarkId}`, BenchmarkDetailResponse),
+  benchmarkIngest: (report: unknown) =>
+    sendJson("POST", "/benchmarks/_ingest", BenchmarkIngestResponse, report),
+  benchmarkTag: (benchmarkId: string, tag: string) =>
+    sendJson("POST", `/benchmarks/${benchmarkId}/tag`, BenchmarkOkResponse, { tag }),
+  benchmarkDelete: (benchmarkId: string) =>
+    sendJson("DELETE", `/benchmarks/${benchmarkId}`, BenchmarkOkResponse),
   stats: () => getJson("/stats", StatsResponse),
   evolution: () => getJson("/evolution", EvolutionResponse),
+  cassettes: () => getJson("/cassettes", z.array(CassetteSummary)),
+  cassetteReplay: (params: { path: string; runIdOverride?: string; delayMs?: number }) =>
+    postJson(
+      `/cassettes/replay?delay_ms=${params.delayMs ?? 50}`,
+      { path: params.path, run_id_override: params.runIdOverride ?? null },
+      CassetteReplayResponse,
+    ),
+  cassetteDeterminism: (path: string) =>
+    postJson("/cassettes/determinism-check", { path }, CassetteDeterminismResponse),
+  cassettePreview: (path: string, limit = 100) =>
+    getJson(
+      `/cassettes/preview?path=${encodeURIComponent(path)}&limit=${limit}`,
+      CassettePreviewResponse,
+    ),
   manifest: () => getJson("/api/manifest", Manifest),
   archive: (params: { from?: number; to?: number; algorithm?: string; limit?: number }) => {
     const qs = new URLSearchParams();
