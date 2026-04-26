@@ -1,27 +1,15 @@
-"""Example 3 — training: tune `config.sampling.temperature` of a real `Reasoner`.
-
-A vanilla `Reasoner(input=Question, output=Answer, role=..., task=..., rules=...)`
-answers science questions. `EvoGradient` mutates only
-`config.sampling.temperature` (via a `SetTemperature` mutation pool)
-and selects the agents whose answers land closest to a target length
-band — a reference-free metric that's fast to evaluate (no second LLM
-call), so the loop converges in just a few minutes against a local
-model.
-
-Per-generation rows are streamed to a Rich table; the seed-vs-final
-temperature, hash, and score are highlighted at the end.
+"""Example 3 - training: evolve `config.sampling.temperature` with MutationBeam.
 
 Run modes:
 
-    uv run python examples/03_train_config_temperature.py            # hits the local llama-server
-    uv run python examples/03_train_config_temperature.py --offline  # no-op for verify.sh
+    uv run python examples/03_train_config_temperature.py
+    uv run python examples/03_train_config_temperature.py --offline
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
-import random
 import sys
 from typing import Any
 
@@ -29,21 +17,23 @@ from pydantic import BaseModel, Field
 
 from operad import evaluate
 from operad.agents import Reasoner
+from operad.agents.reasoning.components import Critic
+from operad.algorithms import MutationBeam
 from operad.core.config import Resilience, Sampling
-from operad.metrics.base import MetricBase
-from operad.optim import EvoGradient
 from operad.runtime import set_limit
 from operad.runtime.events import AlgorithmEvent
 from operad.runtime.observers.base import Event, registry
-from operad.utils.ops import SetTemperature
 
 from _config import local_config, server_reachable
 from utils import (
+    LengthBandMetric,
     attach_dashboard,
+    op_histogram,
     parse_dashboard_target,
     print_panel,
     print_rule,
     rich_available,
+    score_stats,
 )
 
 try:
@@ -57,11 +47,7 @@ except ImportError:
 
 _SCRIPT = "03_train_config_temperature"
 DEFAULT_DASHBOARD = "127.0.0.1:7860"
-
-
-# ---------------------------------------------------------------------------
-# Domain.
-# ---------------------------------------------------------------------------
+_TARGET_LO, _TARGET_HI = 200, 450
 
 
 class Question(BaseModel):
@@ -72,39 +58,6 @@ class Answer(BaseModel):
     text: str = Field(default="", description="The answer body.")
 
 
-# ---------------------------------------------------------------------------
-# Reference-free length-band metric: rewards answers whose length lands in
-# the target [LO, HI] character range. With a real LLM, output length
-# varies with temperature (and with sampling noise per-call), so the
-# optimiser has a real signal to climb without needing a second LLM judge.
-# ---------------------------------------------------------------------------
-
-
-_TARGET_LO, _TARGET_HI = 200, 450
-
-
-class _LengthBandMetric(MetricBase):
-    """Score = 1.0 if `len(predicted.text) ∈ [LO, HI]`, decays linearly outside."""
-
-    name = "length_band"
-
-    async def score(self, predicted: BaseModel, expected: BaseModel) -> float:
-        _ = expected
-        text = str(getattr(predicted, "text", ""))
-        n = len(text)
-        if _TARGET_LO <= n <= _TARGET_HI:
-            return 1.0
-        if n < _TARGET_LO:
-            return max(0.0, 0.99 * n / _TARGET_LO)
-        over = n - _TARGET_HI
-        return max(0.0, 1.0 - over / 300)
-
-
-# ---------------------------------------------------------------------------
-# Per-generation observer for the Rich table.
-# ---------------------------------------------------------------------------
-
-
 class _GenerationLogger:
     def __init__(self) -> None:
         self.rows: list[dict[str, Any]] = []
@@ -112,65 +65,48 @@ class _GenerationLogger:
     async def on_event(self, event: Event) -> None:
         if not isinstance(event, AlgorithmEvent) or event.kind != "generation":
             return
-        scores = event.payload.get("population_scores", [])
-        ops = [m["op"] for m in event.payload.get("mutations", [])]
+        candidates = event.payload.get("candidates", [])
+        metric_scores = [float(c.get("metric_score", 0.0)) for c in candidates]
+        best, mean, spread = score_stats(metric_scores)
         self.rows.append(
             {
-                "gen": event.payload.get("gen_index", -1),
-                "best": max(scores) if scores else None,
-                "mean": sum(scores) / len(scores) if scores else None,
-                "spread": (max(scores) - min(scores)) if scores else None,
-                "ops": ops,
-                "survivors": event.payload.get("survivor_indices", []),
+                "gen": int(event.payload.get("generation_index", -1)),
+                "best": best,
+                "mean": mean,
+                "spread": spread,
+                "ops": [str(c.get("op", "")) for c in candidates],
+                "selected": list(event.payload.get("selected_candidate_ids", [])),
             }
         )
 
 
-# ---------------------------------------------------------------------------
-# Pretty terminal output.
-# ---------------------------------------------------------------------------
-
-
-_rule = print_rule
-_panel = print_panel
-
-
 def _print_generation_table(logger: _GenerationLogger) -> None:
     if not _RICH:
-        print("\ngen | best | mean | spread | survivors")
-        for r in logger.rows:
+        print("\ngen | best | mean | spread | ops | selected")
+        for row in logger.rows:
             print(
-                f"  {r['gen']:>2} | "
-                f"{r['best']:.3f} | {r['mean']:.3f} | {r['spread']:.3f} | "
-                f"{r['survivors']}"
+                f"  {row['gen']:>2} | {row['best']:.3f} | {row['mean']:.3f} | "
+                f"{row['spread']:.3f} | {op_histogram(row['ops'])} | {row['selected']}"
             )
         return
-    table = Table(title="Per-generation training report", border_style="cyan")
+
+    table = Table(title="MutationBeam generations", border_style="cyan")
     table.add_column("gen", justify="right")
     table.add_column("best", justify="right")
     table.add_column("mean", justify="right")
     table.add_column("spread", justify="right")
-    table.add_column("ops applied this gen", justify="left")
-    table.add_column("survivors", justify="left")
-    for r in logger.rows:
-        op_counts: dict[str, int] = {}
-        for op in r["ops"]:
-            op_counts[op] = op_counts.get(op, 0) + 1
-        ops_str = ", ".join(f"{k}×{v}" for k, v in sorted(op_counts.items()))
+    table.add_column("ops", justify="left")
+    table.add_column("selected", justify="left")
+    for row in logger.rows:
         table.add_row(
-            str(r["gen"]),
-            f"{r['best']:.3f}",
-            f"{r['mean']:.3f}",
-            f"{r['spread']:.3f}",
-            ops_str,
-            str(r["survivors"]),
+            str(row["gen"]),
+            f"{row['best']:.3f}",
+            f"{row['mean']:.3f}",
+            f"{row['spread']:.3f}",
+            op_histogram(row["ops"]),
+            str(row["selected"]),
         )
     Console(width=120).print(table)
-
-
-# ---------------------------------------------------------------------------
-# Main.
-# ---------------------------------------------------------------------------
 
 
 async def main(args: argparse.Namespace) -> None:
@@ -180,6 +116,7 @@ async def main(args: argparse.Namespace) -> None:
             "exiting 0 as no-op."
         )
         return
+
     attached = False
     if args.dashboard is not None:
         attached = attach_dashboard(
@@ -192,21 +129,17 @@ async def main(args: argparse.Namespace) -> None:
         sampling=Sampling(temperature=0.0, max_tokens=1024),
         resilience=Resilience(max_retries=2, backoff_base=0.5, timeout=180.0),
     )
-    print(
-        f"[{_SCRIPT}] backend={cfg.backend} host={cfg.host} model={cfg.model}"
-    )
+    print(f"[{_SCRIPT}] backend={cfg.backend} host={cfg.host} model={cfg.model}")
     if not server_reachable(cfg.host or ""):
         print(
-            f"[{_SCRIPT}] cannot reach {cfg.host} — start llama-server",
+            f"[{_SCRIPT}] cannot reach {cfg.host} - start llama-server",
             file=sys.stderr,
         )
         raise SystemExit(1)
     set_limit(backend=cfg.backend, host=cfg.host, concurrency=2)
 
-    _rule("Stage 1 — assemble seed agent + dataset + metric")
+    print_rule("Stage 1 - seed agent + dataset + metric")
 
-    # Seed: a vanilla Reasoner with a focused role/task. The only thing
-    # the optimiser will tune is `config.sampling.temperature`.
     seed = Reasoner(
         config=cfg.model_copy(deep=True),
         input=Question,
@@ -218,11 +151,9 @@ async def main(args: argparse.Namespace) -> None:
             "Cite at least one concrete example or mechanism.",
         ),
     )
-    seed.mark_trainable(temperature=True)
     await seed.abuild()
 
-    metric = _LengthBandMetric()
-
+    metric = LengthBandMetric(lo=_TARGET_LO, hi=_TARGET_HI, over_decay=300)
     dataset = [
         (Question(text="Why is the sky blue?"), Answer()),
         (Question(text="What causes ocean tides?"), Answer()),
@@ -235,85 +166,75 @@ async def main(args: argparse.Namespace) -> None:
     sample_question = Question(text="Why is the sky blue?")
     seed_answer = (await seed(sample_question)).response.text
 
-    _panel(
+    print_panel(
         "Seed",
         (
             f"agent class:        {type(seed).__name__}\n"
-            f"trainable:          config.sampling.temperature\n"
             f"target length band: [{_TARGET_LO}, {_TARGET_HI}] chars\n"
-            f"metric:             reference-free length-band score\n"
             f"seed temperature:   {seed_temp:.2f}\n"
             f"seed length:        {len(seed_answer)} chars\n"
             f"seed score:         {seed_score:.3f}\n"
             f"seed hash:          {seed_hash}\n"
             f"sample answer:      {seed_answer[:200]}"
-            + ("…" if len(seed_answer) > 200 else "")
+            + ("..." if len(seed_answer) > 200 else "")
         ),
     )
 
-    _rule("Stage 2 — build EvoGradient with SetTemperature mutations")
-    mutations = [
-        SetTemperature(path="", temperature=0.1),
-        SetTemperature(path="", temperature=0.3),
-        SetTemperature(path="", temperature=0.5),
-        SetTemperature(path="", temperature=0.7),
-        SetTemperature(path="", temperature=0.9),
-    ]
-    optimizer = EvoGradient(
-        list(seed.parameters()),
-        mutations=mutations,
+    print_rule("Stage 2 - MutationBeam (typed mutation proposals)")
+    optimizer = MutationBeam(
+        seed,
         metric=metric,
         dataset=dataset,
-        population_size=3,
-        rng=random.Random(0),
+        allowed_mutations=["set_temperature"],
+        branches_per_parent=args.branches,
+        frontier_size=1,
+        top_k=1,
+        judge=Critic(config=cfg.model_copy(deep=True)),
+        config=cfg.model_copy(deep=True),
     )
-    _panel(
+    await optimizer.abuild()
+    print_panel(
         "Optimizer",
         (
-            f"class:           {type(optimizer).__name__}\n"
-            f"population_size: 3\n"
-            f"mutation pool:   {len(mutations)} × SetTemperature ∈ "
-            "{0.1, 0.3, 0.5, 0.7, 0.9}\n"
-            "rng seed:        0"
+            f"class:             {type(optimizer).__name__}\n"
+            f"allowed_mutations: set_temperature\n"
+            f"branches/parent:   {args.branches}\n"
+            f"generations:       {args.generations}\n"
+            "selection:         Beam + judge (top_k=1)"
         ),
     )
 
-    _rule("Stage 3 — fit (2 generations)")
+    print_rule("Stage 3 - fit")
     logger = _GenerationLogger()
     registry.register(logger)
-    n_generations = 2
     try:
-        for gen in range(n_generations):
-            print(
-                f"  gen {gen + 1}/{n_generations} — "
-                "evaluating population (each individual runs the dataset)…"
-            )
-            await optimizer.step()
+        await optimizer.run(generations=args.generations)
     finally:
         registry.unregister(logger)
 
     _print_generation_table(logger)
 
-    _rule("Stage 4 — final evaluation")
+    print_rule("Stage 4 - final evaluation")
     final_report = await evaluate(seed, dataset, [metric])
     final_score = float(final_report.summary[metric.name])
     final_temp = seed.config.sampling.temperature
     final_hash = seed.hash_content
     final_answer = (await seed(sample_question)).response.text
 
-    _panel(
+    print_panel(
         "Result",
         (
-            f"seed temperature:   {seed_temp:.2f}     →  final: {final_temp:.2f}\n"
-            f"seed length:        {len(seed_answer)} chars  →  final: {len(final_answer)} chars\n"
-            f"seed score:         {seed_score:.3f}    →  final: {final_score:.3f}\n"
+            f"seed temperature:   {seed_temp:.2f}  ->  final: {final_temp:.2f}\n"
+            f"seed length:        {len(seed_answer)} chars  ->  final: {len(final_answer)} chars\n"
+            f"seed score:         {seed_score:.3f}  ->  final: {final_score:.3f}\n"
             f"seed hash:          {seed_hash}\n"
             f"final hash:         {final_hash}\n"
             f"hash changed:       {seed_hash != final_hash}\n\n"
             f"sample answer at final temperature:\n  {final_answer[:_TARGET_HI + 50]}"
-            + ("…" if len(final_answer) > _TARGET_HI + 50 else "")
+            + ("..." if len(final_answer) > _TARGET_HI + 50 else "")
         ),
     )
+
     if attached:
         host, port = parse_dashboard_target(args.dashboard, default=DEFAULT_DASHBOARD)
         print(
@@ -324,6 +245,8 @@ async def main(args: argparse.Namespace) -> None:
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--generations", type=int, default=2)
+    p.add_argument("--branches", type=int, default=4)
     p.add_argument(
         "--offline",
         action="store_true",
