@@ -1,14 +1,21 @@
-"""Tests for operad/dashboard.py transport reliability (stream 1-1)."""
+"""Tests for operad/dashboard.py transport reliability (stream 1-1).
+
+The transport is thread-decoupled from asyncio: a daemon worker drains
+a stdlib ``queue.Queue`` and POSTs batches via blocking urllib. The
+worker survives event-loop teardown so atexit can flush residual items
+without needing a live loop.
+"""
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
+import queue
+import time
 from typing import Any
 
 import pytest
 
-from operad.dashboard import _HttpForwardObserver, _post_batch_sync
+from operad.dashboard import _HttpForwardObserver
 from operad.runtime.observers.base import (
     AgentEvent,
     _ALGO_RUN_ID,
@@ -40,12 +47,12 @@ def _clear_registry():
 
 
 # ---------------------------------------------------------------------------
-# Test 1: atexit flush drains queue synchronously
+# Test 1: atexit flush drains residual items synchronously after the worker
+#         has been stopped.
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_atexit_flush_posts_queued_items(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_atexit_flush_posts_queued_items(monkeypatch: pytest.MonkeyPatch) -> None:
     """Items still in the queue when _flush_sync is called are posted."""
     posted: list[list] = []
 
@@ -55,23 +62,27 @@ async def test_atexit_flush_posts_queued_items(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr("operad.dashboard._post_batch_sync", fake_post)
 
     obs = _HttpForwardObserver("http://127.0.0.1:7860/_ingest")
-    obs._queue = asyncio.Queue(maxsize=2000)
+    # Stop the worker first so it does not race the test on draining.
+    obs._stop.set()
+    obs._thread.join(timeout=2.0)
     for i in range(5):
         obs._queue.put_nowait({"type": "agent_event", "seq": i})
 
     obs._flush_sync()
 
-    assert len(posted) == 1
-    assert len(posted[0]) == 5
+    # Either one batch (residual flush) or zero — depending on whether the
+    # worker beat _flush_sync to anything. Regardless, all 5 items must
+    # have made it to fake_post in total.
+    total = sum(len(b) for b in posted)
+    assert total == 5
 
 
 # ---------------------------------------------------------------------------
-# Test 2: drain task batches events and delivers them
+# Test 2: the worker thread batches events and delivers them.
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_drain_task_batches_and_posts(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_drain_thread_batches_and_posts(monkeypatch: pytest.MonkeyPatch) -> None:
     """Events queued via on_event are collected and delivered via _post_batch_sync."""
     posted: list[list] = []
 
@@ -81,29 +92,36 @@ async def test_drain_task_batches_and_posts(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr("operad.dashboard._post_batch_sync", fake_post)
 
     obs = _HttpForwardObserver("http://127.0.0.1:7860/_ingest")
-    for _ in range(3):
-        await obs.on_event(
-            AgentEvent(
-                run_id="r1",
-                agent_path="L",
-                kind="start",
-                input=None,
-                output=None,
-                error=None,
-                started_at=1.0,
-                finished_at=None,
-            )
-        )
-    # Wait longer than the 50 ms drain interval so at least one batch fires.
-    await asyncio.sleep(0.15)
-
-    total = sum(len(b) for b in posted)
-    assert total == 3
-
-    if obs._drain_task:
-        obs._drain_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await obs._drain_task
+    try:
+        # `on_event` is async but its body is sync (queue.put_nowait). Drive
+        # it from a fresh event loop so the test stays sync-friendly.
+        loop = asyncio.new_event_loop()
+        try:
+            for _ in range(3):
+                loop.run_until_complete(
+                    obs.on_event(
+                        AgentEvent(
+                            run_id="r1",
+                            agent_path="L",
+                            kind="start",
+                            input=None,
+                            output=None,
+                            error=None,
+                            started_at=1.0,
+                            finished_at=None,
+                        )
+                    )
+                )
+        finally:
+            loop.close()
+        # Allow the worker to wake up (50 ms get-timeout) and drain.
+        deadline = time.monotonic() + 1.0
+        while sum(len(b) for b in posted) < 3 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert sum(len(b) for b in posted) == 3
+    finally:
+        obs._stop.set()
+        obs._thread.join(timeout=2.0)
 
 
 # ---------------------------------------------------------------------------

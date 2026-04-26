@@ -111,18 +111,20 @@ _ALGO_RUN_ID: ContextVar[str | None] = ContextVar("_ALGO_RUN_ID", default=None)
 
 
 @contextmanager
-def _enter_algorithm_run() -> Iterator[str]:
-    """Reuse the enclosing run_id if one is set; otherwise mint a new one
-    for the duration of the scope so nested `AgentEvent`s share it.
+def _enter_algorithm_run(rid: str | None = None) -> Iterator[str]:
+    """Reuse the enclosing run_id if one is set; otherwise mint or adopt
+    one for the duration of the scope so nested `AgentEvent`s share it.
 
-    When a new run_id is minted, `_ALGO_RUN_ID` is also set to that id
-    so that nested `AgentEvent` metadata can carry `parent_run_id`.
+    When a new run_id is minted (or `rid` is adopted), `_ALGO_RUN_ID`
+    is also set to that id so that nested `AgentEvent` metadata can
+    carry `parent_run_id`. `rid` lets a long-lived caller (e.g. an
+    `Optimizer.session()`) pin a stable id across multiple entries.
     """
     existing = _RUN_ID.get()
     if existing is not None:
         yield existing
         return
-    rid = uuid4().hex
+    rid = rid or uuid4().hex
     tok_r = _RUN_ID.set(rid)
     tok_a = _ALGO_RUN_ID.set(rid)
     try:

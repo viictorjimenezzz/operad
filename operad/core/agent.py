@@ -1116,7 +1116,7 @@ class Agent(Generic[In, Out]):
         await _obs.registry.notify(
             _obs.AgentEvent(
                 run_id, path, "chunk", None, None, None,
-                time.monotonic(), None,
+                time.time(), None,
                 {"chunk_index": i, "text": piece},
             )
         )
@@ -1325,7 +1325,7 @@ class Agent(Generic[In, Out]):
         try:
             await _obs.registry.notify(
                 _obs.AgentEvent(
-                    run_id, path, "start", x, None, None, started, None, start_meta
+                    run_id, path, "start", x, None, None, started_wall, None, start_meta
                 )
             )
 
@@ -1359,7 +1359,7 @@ class Agent(Generic[In, Out]):
                 end_meta["parent_run_id"] = algo_parent
             await _obs.registry.notify(
                 _obs.AgentEvent(
-                    run_id, path, "end", x, envelope, None, started, finished, end_meta
+                    run_id, path, "end", x, envelope, None, started_wall, finished_wall, end_meta
                 )
             )
             return envelope
@@ -1370,7 +1370,7 @@ class Agent(Generic[In, Out]):
                 err_meta["parent_run_id"] = algo_parent
             await _obs.registry.notify(
                 _obs.AgentEvent(
-                    run_id, path, "error", x, None, e, started, time.monotonic(), err_meta
+                    run_id, path, "error", x, None, e, started_wall, time.time(), err_meta
                 )
             )
             raise
@@ -1451,7 +1451,7 @@ class Agent(Generic[In, Out]):
         try:
             await _obs.registry.notify(
                 _obs.AgentEvent(
-                    run_id, path, "start", x, None, None, started, None, start_meta
+                    run_id, path, "start", x, None, None, started_wall, None, start_meta
                 )
             )
 
@@ -1463,7 +1463,7 @@ class Agent(Generic[In, Out]):
                 await _obs.registry.notify(
                     _obs.AgentEvent(
                         run_id, path, "chunk", None, None, None,
-                        time.monotonic(), None,
+                        time.time(), None,
                         {"chunk_index": i, "text": piece},
                     )
                 )
@@ -1521,11 +1521,11 @@ class Agent(Generic[In, Out]):
                 end_meta["output_type"] = _qualified(self.output)  # type: ignore[arg-type]
             if algo_parent_s is not None and not is_root:
                 end_meta["parent_run_id"] = algo_parent_s
-            finished = time.monotonic()
+            finished_wall = time.time()
             await _obs.registry.notify(
                 _obs.AgentEvent(
                     run_id, path, "end", x, final_envelope, None,
-                    started, finished, end_meta,
+                    started_wall, finished_wall, end_meta,
                 )
             )
         except BaseException as e:
@@ -1534,7 +1534,7 @@ class Agent(Generic[In, Out]):
                 err_meta["parent_run_id"] = algo_parent_s
             await _obs.registry.notify(
                 _obs.AgentEvent(
-                    run_id, path, "error", x, None, e, started, time.monotonic(), err_meta
+                    run_id, path, "error", x, None, e, started_wall, time.time(), err_meta
                 )
             )
             raise
