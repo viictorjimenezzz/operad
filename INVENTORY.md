@@ -288,6 +288,13 @@ print(report.hash_dataset)  # stable content hash
 `Entry` can carry a per-row metric override; `AggregatedMetric` reduces
 a list of per-row scores via `mean`/`median`/`min`/`max`/`sum`.
 
+`BenchmarkSuite` is the small repeated-run harness used by
+`examples/benchmark`: declare `BenchmarkTask`s, select methods/seeds
+with `BenchmarkRunConfig`, and receive a dashboard-compatible
+`BenchmarkReport` (`cells`, `summary`, `headline_findings`,
+`metadata`). The default method fleet uses `evaluate`, dataset-level
+sweep with `clone`/`set_path`, and `Agent.auto_tune(kind=...)`.
+
 ## 10. Configuration & model backends
 
 `Configuration` describes a single model call: backend, model, host,

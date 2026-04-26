@@ -192,6 +192,7 @@ def _validate_report(raw_report: Any) -> dict[str, Any]:
     cells = raw_report.get("cells")
     summary = raw_report.get("summary")
     headline = raw_report.get("headline_findings")
+    metadata = raw_report.get("metadata", {})
 
     if not isinstance(cells, list):
         raise ValueError("report.cells must be a list")
@@ -199,6 +200,8 @@ def _validate_report(raw_report: Any) -> dict[str, Any]:
         raise ValueError("report.summary must be a list")
     if not isinstance(headline, dict):
         raise ValueError("report.headline_findings must be an object")
+    if not isinstance(metadata, dict):
+        raise ValueError("report.metadata must be an object")
 
     norm_cells: list[dict[str, Any]] = []
     for i, cell in enumerate(cells):
@@ -249,10 +252,17 @@ def _validate_report(raw_report: Any) -> dict[str, Any]:
             raise ValueError("report.headline_findings must map string to string")
         norm_findings[k] = v
 
+    norm_metadata: dict[str, Any] = {}
+    for k, v in metadata.items():
+        if not isinstance(k, str):
+            raise ValueError("report.metadata keys must be strings")
+        norm_metadata[k] = v
+
     return {
         "cells": norm_cells,
         "summary": norm_summary,
         "headline_findings": norm_findings,
+        "metadata": norm_metadata,
     }
 
 

@@ -1,7 +1,7 @@
 """Task: tool-call selection.
 
 50 instructions across 5 tools.
-Primary metric: ExactMatch on tool_name.
+Primary metric: exact match on tool_name.
 Secondary metric: Contains on tool_args (expected key present).
 """
 
@@ -10,22 +10,23 @@ from __future__ import annotations
 from typing import Any
 
 from operad import Agent
-from operad.metrics import Contains, ExactMatch
+from operad.benchmark import BenchmarkTask
+from operad.metrics import Contains
 from operad.optim.loss import LossFromMetric
 
 from ._config import default_config
-from ._shared import (
-    OFFLINE_CFG,
-    OfflineToolLeaf,
+from ._data import (
     ToolIn,
     ToolOut,
     _TOOLS,
     make_tool_use_dataset,
 )
+from ._metrics import ToolNameExactMatch
+from ._offline import OFFLINE_CFG, OfflineToolLeaf
 
 DATASET = make_tool_use_dataset(n=50, seed=42)
 
-METRICS = [ExactMatch(), Contains(field="tool_args")]
+METRICS = [ToolNameExactMatch(), Contains(field="tool_args")]
 
 LOSS_FN = LossFromMetric(METRICS[0])
 
@@ -88,3 +89,15 @@ def make_sweep_grid() -> dict[str, list[Any]]:
             ),
         ],
     }
+
+
+TASK = BenchmarkTask(
+    key="tool",
+    name="tool_use",
+    dataset=DATASET,
+    metrics=METRICS,
+    make_seed_agent=make_seed_agent,
+    make_hand_edit_agent=make_hand_edit_agent,
+    make_sweep_grid=make_sweep_grid,
+    loss=LOSS_FN,
+)
