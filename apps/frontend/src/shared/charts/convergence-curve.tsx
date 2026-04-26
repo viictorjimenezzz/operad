@@ -46,12 +46,14 @@ export function ConvergenceCurve({
     return <EmptyState title="no iteration data" />;
   }
 
-  const { iterations, threshold } = resp;
+  const { iterations, threshold, converged } = resp;
 
   const convergedIter =
     threshold != null
       ? iterations.find((p) => p.score != null && p.score >= threshold)?.iter_index
-      : undefined;
+      : converged
+        ? [...iterations].reverse().find((p) => p.score != null)?.iter_index
+        : undefined;
 
   return (
     <ResponsiveContainer width="100%" height={height}>

@@ -299,11 +299,18 @@ class RunRegistry:
                 }
             )
         elif kind == "iteration":
+            metadata = {
+                k: v
+                for k, v in payload.items()
+                if k not in {"iter_index", "phase", "score", "text"}
+            }
             info.iterations.append(
                 {
                     "iter_index": payload.get("iter_index"),
                     "phase": payload.get("phase"),
                     "score": payload.get("score"),
+                    "text": payload.get("text"),
+                    "metadata": metadata,
                     "timestamp": ts,
                 }
             )
@@ -318,8 +325,10 @@ class RunRegistry:
         elif kind == "candidate":
             info.candidates.append(
                 {
+                    "iter_index": payload.get("iter_index"),
                     "candidate_index": payload.get("candidate_index"),
                     "score": payload.get("score"),
+                    "text": payload.get("text"),
                     "timestamp": ts,
                 }
             )

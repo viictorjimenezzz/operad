@@ -32,6 +32,15 @@ def _compose_judge_context(context: str, criteria: str | None) -> str:
     return context
 
 
+def _as_text(x: object) -> str:
+    if x is None:
+        return ""
+    answer = getattr(x, "answer", None)
+    if isinstance(answer, str):
+        return answer
+    return str(x)
+
+
 class Beam(Generic[In, Out]):
     """Generate N candidates with ``generator``, return the top ``top_k``
     by ``judge`` score.
@@ -100,10 +109,27 @@ class Beam(Generic[In, Out]):
                     await emit_algorithm_event(
                         "candidate",
                         algorithm_path=path,
-                        payload={"candidate_index": i, "score": s.score},
+                        payload={
+                            "iter_index": 0,
+                            "candidate_index": i,
+                            "score": s.score,
+                            "text": _as_text(candidates[i]),
+                        },
                     )
                 order = sorted(range(self.n), key=lambda i: -scores[i].score)
                 top = order[: self.top_k]
+                dropped = [i for i in order if i not in top]
+                await emit_algorithm_event(
+                    "iteration",
+                    algorithm_path=path,
+                    payload={
+                        "iter_index": 0,
+                        "phase": "prune",
+                        "score": max((s.score for s in scores), default=None),
+                        "top_indices": top,
+                        "dropped_indices": dropped,
+                    },
+                )
                 await emit_algorithm_event(
                     "algo_end",
                     algorithm_path=path,

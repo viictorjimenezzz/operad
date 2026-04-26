@@ -22,6 +22,15 @@ from ..core.agent import Agent, In, Out
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 
 
+def _as_text(x: object) -> str:
+    if x is None:
+        return ""
+    answer = getattr(x, "answer", None)
+    if isinstance(answer, str):
+        return answer
+    return str(x)
+
+
 class VerifierLoop(Generic[In, Out]):
     generator: ClassVar[Agent] = Reasoner(input=Task, output=Answer)
     critic: ClassVar[Agent] = Critic()
@@ -70,6 +79,7 @@ class VerifierLoop(Generic[In, Out]):
                             "iter_index": iter_index,
                             "phase": "verify",
                             "score": score.score,
+                            "text": _as_text(last),
                         },
                     )
                     if score.score >= self.threshold:

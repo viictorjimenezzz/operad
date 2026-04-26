@@ -3,6 +3,10 @@
   "version": 1,
   "dataSources": {
     "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "iterations": {
+      "endpoint": "/runs/$context.runId/iterations.json",
+      "stream": "/runs/$context.runId/iterations.sse"
+    },
     "graph": { "endpoint": "/graph/$context.runId" }
   },
   "spec": {
@@ -22,7 +26,7 @@
       "t-candidates": {
         "type": "Col",
         "props": { "gap": 12 },
-        "children": ["meta-card", "candidates-card"]
+        "children": ["meta-card", "curve-card", "progression-card", "candidates-card"]
       },
       "meta-card": {
         "type": "Card",
@@ -31,6 +35,24 @@
       },
       "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
       "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
+      "curve-card": {
+        "type": "Card",
+        "props": { "title": "convergence" },
+        "children": ["curve"]
+      },
+      "curve": {
+        "type": "ConvergenceCurve",
+        "props": { "source": "$queries.iterations", "height": 220 }
+      },
+      "progression-card": {
+        "type": "Card",
+        "props": { "title": "iterations" },
+        "children": ["progression"]
+      },
+      "progression": {
+        "type": "IterationProgression",
+        "props": { "source": "$queries.iterations" }
+      },
       "candidates-card": {
         "type": "Card",
         "props": { "title": "candidates" },
@@ -38,7 +60,11 @@
       },
       "candidates": {
         "type": "BeamCandidateChart",
-        "props": { "source": "$queries.summary.candidates", "height": 240 }
+        "props": {
+          "source": "$queries.summary.candidates",
+          "iterationsSource": "$queries.iterations",
+          "height": 240
+        }
       },
       "t-graph": { "type": "Card", "props": { "title": "agent graph" }, "children": ["graph"] },
       "graph": { "type": "AgentGraph", "props": { "source": "$queries.graph" } },

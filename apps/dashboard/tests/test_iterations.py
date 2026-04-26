@@ -46,7 +46,12 @@ def _verifier_iter(run_id: str, iter_index: int, score: float) -> AlgorithmEvent
         run_id=run_id,
         algorithm_path="VerifierLoop",
         kind="iteration",
-        payload={"iter_index": iter_index, "phase": "verify", "score": score},
+        payload={
+            "iter_index": iter_index,
+            "phase": "verify",
+            "score": score,
+            "text": f"candidate-{iter_index}",
+        },
         started_at=1.0 + iter_index,
         finished_at=1.5 + iter_index,
     )
@@ -63,19 +68,19 @@ def _verifier_end(run_id: str, iterations: int, score: float, converged: bool) -
     )
 
 
-def _selfrefine_iter_refine(run_id: str, iter_index: int) -> AlgorithmEvent:
+def _selfrefine_iter_refine(run_id: str, iter_index: int, text: str) -> AlgorithmEvent:
     return AlgorithmEvent(
         run_id=run_id,
         algorithm_path="SelfRefine",
         kind="iteration",
-        payload={"iter_index": iter_index, "phase": "refine"},
+        payload={"iter_index": iter_index, "phase": "refine", "text": text},
         started_at=1.0 + iter_index,
         finished_at=1.5 + iter_index,
     )
 
 
 def _selfrefine_iter_reflect(
-    run_id: str, iter_index: int, needs_revision: bool, critique_summary: str
+    run_id: str, iter_index: int, needs_revision: bool, critique_summary: str, score: float, text: str
 ) -> AlgorithmEvent:
     return AlgorithmEvent(
         run_id=run_id,
@@ -84,8 +89,10 @@ def _selfrefine_iter_reflect(
         payload={
             "iter_index": iter_index,
             "phase": "reflect",
+            "score": score,
             "needs_revision": needs_revision,
             "critique_summary": critique_summary,
+            "text": text,
         },
         started_at=1.0 + iter_index,
         finished_at=1.5 + iter_index,
@@ -118,14 +125,33 @@ async def test_iterations_json_verifier_loop(app_and_obs) -> None:
     assert [it["iter_index"] for it in iters] == [0, 1, 2]
     assert all(it["phase"] == "verify" for it in iters)
     assert iters[2]["score"] == pytest.approx(0.9)
+    assert iters[2]["text"] == "candidate-2"
 
 
 async def test_iterations_json_selfrefine(app_and_obs) -> None:
     app, obs = app_and_obs
     _seed(obs, "r2")
-    await obs.on_event(_selfrefine_iter_refine("r2", 1))
-    await obs.on_event(_selfrefine_iter_reflect("r2", 0, needs_revision=True, critique_summary="too vague"))
-    await obs.on_event(_selfrefine_iter_reflect("r2", 1, needs_revision=False, critique_summary="looks good"))
+    await obs.on_event(_selfrefine_iter_refine("r2", 1, text="draft-1"))
+    await obs.on_event(
+        _selfrefine_iter_reflect(
+            "r2",
+            0,
+            needs_revision=True,
+            critique_summary="too vague",
+            score=0.2,
+            text="draft-0",
+        )
+    )
+    await obs.on_event(
+        _selfrefine_iter_reflect(
+            "r2",
+            1,
+            needs_revision=False,
+            critique_summary="looks good",
+            score=0.92,
+            text="draft-1",
+        )
+    )
 
     with TestClient(app) as client:
         resp = client.get("/runs/r2/iterations.json").json()
@@ -139,6 +165,45 @@ async def test_iterations_json_selfrefine(app_and_obs) -> None:
     # critique_summary lands in metadata
     reflect_iters = [it for it in iters if it["phase"] == "reflect"]
     assert reflect_iters[0]["metadata"]["critique_summary"] == "too vague"
+    assert reflect_iters[0]["score"] == pytest.approx(0.2)
+    assert reflect_iters[0]["text"] == "draft-0"
+
+
+async def test_iterations_json_beam_metadata_passthrough(app_and_obs) -> None:
+    app, obs = app_and_obs
+    _seed(obs, "r4")
+    await obs.on_event(_beam_iter("r4", 0, top_indices=[2, 1], dropped_indices=[0, 3], score=0.9))
+
+    with TestClient(app) as client:
+        resp = client.get("/runs/r4/iterations.json").json()
+
+    iters = resp["iterations"]
+    assert len(iters) == 1
+    assert iters[0]["phase"] == "prune"
+    assert iters[0]["metadata"]["top_indices"] == [2, 1]
+    assert iters[0]["metadata"]["dropped_indices"] == [0, 3]
+
+
+async def test_iterations_json_sorts_same_iter_by_phase_order(app_and_obs) -> None:
+    app, obs = app_and_obs
+    _seed(obs, "r5")
+    await obs.on_event(
+        _selfrefine_iter_reflect(
+            "r5",
+            2,
+            needs_revision=True,
+            critique_summary="first",
+            score=0.4,
+            text="draft-before",
+        )
+    )
+    await obs.on_event(_selfrefine_iter_refine("r5", 2, text="draft-after"))
+
+    with TestClient(app) as client:
+        resp = client.get("/runs/r5/iterations.json").json()
+
+    phases = [row["phase"] for row in resp["iterations"]]
+    assert phases == ["refine", "reflect"]
 
 
 async def test_iterations_json_empty_run(app_and_obs) -> None:
@@ -149,3 +214,21 @@ async def test_iterations_json_empty_run(app_and_obs) -> None:
     assert resp["iterations"] == []
     assert resp["threshold"] is None
     assert resp["converged"] is None
+def _beam_iter(
+    run_id: str, iter_index: int, top_indices: list[int], dropped_indices: list[int], score: float
+) -> AlgorithmEvent:
+    return AlgorithmEvent(
+        run_id=run_id,
+        algorithm_path="Beam",
+        kind="iteration",
+        payload={
+            "iter_index": iter_index,
+            "phase": "prune",
+            "score": score,
+            "top_indices": top_indices,
+            "dropped_indices": dropped_indices,
+        },
+        started_at=1.0 + iter_index,
+        finished_at=1.1 + iter_index,
+    )
+

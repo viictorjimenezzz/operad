@@ -214,7 +214,7 @@ class _StubReflector(Reflector):
 
 
 async def test_reflector_class_level_defaults_are_preserved() -> None:
-    canned = Reflection(needs_revision=False, deficiencies=[], suggested_revision="")
+    canned = Reflection(score=1.0, needs_revision=False, deficiencies=[], suggested_revision="")
     r = _StubReflector(canned=canned)
     assert r.role == Reflector.role
     assert r.task == Reflector.task
@@ -224,6 +224,7 @@ async def test_reflector_class_level_defaults_are_preserved() -> None:
 
 async def test_reflector_stub_produces_typed_reflection() -> None:
     canned = Reflection(
+        score=0.2,
         needs_revision=True,
         deficiencies=["off-by-one"],
         suggested_revision="Use < instead of <=.",
@@ -236,7 +237,7 @@ async def test_reflector_stub_produces_typed_reflection() -> None:
 
 
 async def test_reflector_is_registered_as_a_leaf_agent() -> None:
-    r = _StubReflector(canned=Reflection(needs_revision=False))
+    r = _StubReflector(canned=Reflection(score=1.0, needs_revision=False))
     assert isinstance(r, Agent)
     assert not r._children
 

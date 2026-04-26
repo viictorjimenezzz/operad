@@ -105,6 +105,9 @@ class ReflectionInput(BaseModel):
 
 
 class Reflection(BaseModel):
+    score: float = Field(
+        description="Overall quality/confidence score for the candidate answer in [0, 1].",
+    )
     needs_revision: bool = Field(
         description="True iff the candidate answer should be revised.",
     )

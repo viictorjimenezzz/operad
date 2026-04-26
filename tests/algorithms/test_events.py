@@ -115,7 +115,7 @@ async def test_beam_emits_candidate_events(cfg, col) -> None:
     await beam.run(A(text="go"))
 
     kinds = _algo_kinds(col.events)
-    assert kinds == ["algo_start", "candidate", "candidate", "candidate", "algo_end"]
+    assert kinds == ["algo_start", "candidate", "candidate", "candidate", "iteration", "algo_end"]
     algo = _algo_events(col.events)
     assert all(e.algorithm_path == "Beam" for e in algo)
     candidates = [e for e in algo if e.kind == "candidate"]
@@ -288,7 +288,7 @@ class _ARReflector(Reflector):
         super().__init__(config=cfg, input=ReflectionInput, output=Reflection)
 
     async def forward(self, x: ReflectionInput) -> Reflection:  # type: ignore[override]
-        return Reflection(needs_revision=True)
+        return Reflection(score=0.1, needs_revision=True)
 
 
 async def test_auto_researcher_emits_iteration_events(cfg, col) -> None:
