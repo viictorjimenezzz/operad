@@ -15,6 +15,13 @@ from .observer import WebDashboardObserver
 from .replay import replay_file
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw not in {"", "0", "false", "False", "no", "NO"}
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="operad-dashboard")
     p.add_argument("--host", default="127.0.0.1")
@@ -55,6 +62,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Defaults to OPERAD_DASHBOARD_BENCHMARK_DIR or ./.benchmarks/."
         ),
     )
+    p.add_argument(
+        "--allow-experiment",
+        action="store_true",
+        default=_env_flag("OPERAD_DASHBOARD_ALLOW_EXPERIMENT", default=False),
+        help=(
+            "Enable POST /runs/{id}/agent/{path}/invoke experiment endpoint. "
+            "Defaults to OPERAD_DASHBOARD_ALLOW_EXPERIMENT."
+        ),
+    )
     return p.parse_args(argv)
 
 
@@ -70,6 +86,7 @@ def _run_live(args: argparse.Namespace) -> int:
         langfuse_url=args.langfuse_url,
         data_dir=args.data_dir,
         benchmark_dir=args.benchmark_dir,
+        allow_experiment=args.allow_experiment,
     )
     print(
         f"Dashboard live at http://{args.host}:{args.port}\n"
@@ -90,6 +107,7 @@ def _run_replay(args: argparse.Namespace) -> int:
         langfuse_url=args.langfuse_url,
         data_dir=args.data_dir,
         benchmark_dir=args.benchmark_dir,
+        allow_experiment=args.allow_experiment,
     )
 
     async def _replay_then_idle() -> None:

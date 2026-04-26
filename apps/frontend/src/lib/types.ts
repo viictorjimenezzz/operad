@@ -547,6 +547,8 @@ export const AgentInvocation = z.object({
   error: z.string().nullable().default(null),
   langfuse_url: z.string().nullable().default(null),
   script: z.string().nullable().default(null),
+  input: z.unknown().optional(),
+  output: z.unknown().optional(),
 });
 export type AgentInvocation = z.infer<typeof AgentInvocation>;
 
@@ -596,6 +598,57 @@ export const AgentEventsResponse = z.object({
   events: z.array(Envelope),
 });
 export type AgentEventsResponse = z.infer<typeof AgentEventsResponse>;
+
+export const AgentInvokeOverrides = z.object({
+  role: z.string().optional(),
+  task: z.string().optional(),
+  rules: z.array(z.string()).optional(),
+  examples: z
+    .array(
+      z.object({
+        input: z.unknown(),
+        output: z.unknown(),
+      }),
+    )
+    .optional(),
+  config: z.record(z.unknown()).optional(),
+});
+export type AgentInvokeOverrides = z.infer<typeof AgentInvokeOverrides>;
+
+export const AgentInvokeRequest = z.object({
+  input: z.record(z.unknown()),
+  overrides: AgentInvokeOverrides.optional(),
+  stream: z.boolean().optional(),
+});
+export type AgentInvokeRequest = z.infer<typeof AgentInvokeRequest>;
+
+export const AgentInvokeResponse = z.object({
+  response: z.unknown(),
+  hash_operad_version: z.string().optional(),
+  hash_python_version: z.string().optional(),
+  hash_model: z.string().optional(),
+  hash_prompt: z.string().optional(),
+  hash_graph: z.string().optional(),
+  hash_input: z.string().optional(),
+  hash_output_schema: z.string().optional(),
+  run_id: z.string().optional(),
+  agent_path: z.string().optional(),
+  backend: z.string().optional(),
+  model: z.string().optional(),
+  started_at: z.number().optional(),
+  finished_at: z.number().optional(),
+  latency_ms: z.number().optional(),
+  prompt_tokens: z.number().nullable().optional(),
+  completion_tokens: z.number().nullable().optional(),
+  cost_usd: z.number().nullable().optional(),
+  metadata: z.object({
+    experiment: z.boolean(),
+    hash_content: z.string(),
+    agent_path: z.string(),
+    run_id: z.string(),
+  }),
+});
+export type AgentInvokeResponse = z.infer<typeof AgentInvokeResponse>;
 
 export const RunEventsResponse = z.object({
   run_id: z.string(),

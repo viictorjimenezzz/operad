@@ -5,6 +5,7 @@ import type { ComponentRegistry } from "@json-render/react";
 
 import "@/components/agent-view/drawer/views/events";
 import "@/components/agent-view/drawer/views/langfuse";
+import "@/components/agent-view/drawer/views/experiment";
 
 export const drawerDefinitions = {} as const;
 export const drawerComponents: ComponentRegistry = {

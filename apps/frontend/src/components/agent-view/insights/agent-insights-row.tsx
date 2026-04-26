@@ -1,6 +1,7 @@
 import { BackendBadges } from "@/components/agent-view/insights/backend-badges";
 import { CostLatencySparklines } from "@/components/agent-view/insights/cost-latency-sparklines";
 import { DriftStrip } from "@/components/agent-view/insights/drift-strip";
+import { ExampleChips } from "@/components/agent-view/insights/example-chips";
 import { FingerprintCard } from "@/components/agent-view/insights/fingerprint-card";
 import { ValueDistribution } from "@/components/agent-view/insights/value-distribution";
 import { Card, CardContent } from "@/components/ui/card";
@@ -83,6 +84,7 @@ export function AgentInsightsRow(props: AgentInsightsRowProps) {
         <BackendBadges invocations={invocations} summaryRaw={rawSummary} meta={meta} />
         <CostLatencySparklines invocations={invocations} />
       </div>
+      {meta ? <ExampleChips agentPath={meta.agent_path} examples={meta.examples} /> : null}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {distributions.length === 0 ? (
           <Card className="md:col-span-2 xl:col-span-4">

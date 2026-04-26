@@ -62,6 +62,14 @@ describe("useUIStore", () => {
     });
   });
 
+  it("supports experiment drawer kind", () => {
+    useUIStore.getState().openDrawer("experiment", { agentPath: "Root.stage_0", input: { q: "x" } });
+    expect(useUIStore.getState().drawer).toEqual({
+      kind: "experiment",
+      payload: { agentPath: "Root.stage_0", input: { q: "x" } },
+    });
+  });
+
   it("persists sidebarCollapsed and drawerWidth", () => {
     useUIStore.getState().setSidebarCollapsed(true);
     useUIStore.getState().setDrawerWidth(512);

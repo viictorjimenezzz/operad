@@ -10,6 +10,7 @@ const TITLE_BY_KIND: Record<Exclude<DrawerKind, null>, string> = {
   prompts: "Prompt diff",
   values: "Value timeline",
   "find-runs": "Find runs",
+  experiment: "Prompt experiment",
 };
 
 function subtitleFromPayload(payload: DrawerPayload): string | null {

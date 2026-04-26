@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass
+import json
+from pathlib import Path
+import time
+import uuid
 from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ValidationError
 
+from operad.core.config import Configuration
 from operad.core.graph import TypeRegistry, from_json, to_io_graph
+from operad.core.example import Example
+from operad.runtime.observers.base import suppress_notifications
 
 from .runs import RunInfo
 
@@ -37,6 +46,20 @@ class _Invocation:
     row: dict[str, Any]
     start: dict[str, Any] | None
     terminal: dict[str, Any]
+
+
+class _InvokeOverrides(BaseModel):
+    role: str | None = None
+    task: str | None = None
+    rules: list[str] | None = None
+    examples: list[dict[str, Any]] | None = None
+    config: dict[str, Any] | None = None
+
+
+class _InvokeBody(BaseModel):
+    input: dict[str, Any]
+    overrides: _InvokeOverrides | None = None
+    stream: bool = False
 
 
 def _not_found(reason: str) -> JSONResponse:
@@ -240,6 +263,8 @@ def _build_invocations(
                         f"{langfuse_url}/trace/{run_id}" if langfuse_url is not None else None
                     ),
                     "script": script,
+                    "input": start.get("input") if isinstance(start, dict) else None,
+                    "output": output.get("response"),
                 },
                 start=start,
                 terminal=env,
@@ -305,6 +330,51 @@ def _value_type_name(value: Any) -> str:
     if isinstance(value, dict):
         return "dict"
     return type(value).__name__
+
+
+def _error(status_code: int, reason: str, *, code: str) -> JSONResponse:
+    return JSONResponse(status_code=status_code, content={"error": code, "reason": reason})
+
+
+def _deep_merge(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)  # type: ignore[arg-type]
+            continue
+        merged[key] = value
+    return merged
+
+
+def _apply_overrides(agent: Any, overrides: _InvokeOverrides | None) -> None:
+    if overrides is None:
+        return
+    if overrides.role is not None:
+        agent.role = overrides.role
+    if overrides.task is not None:
+        agent.task = overrides.task
+    if overrides.rules is not None:
+        agent.rules = list(overrides.rules)
+    if overrides.examples is not None:
+        agent.examples = [
+            Example(
+                input=agent.input.model_validate(e.get("input")),
+                output=agent.output.model_validate(e.get("output")),
+            )
+            for e in overrides.examples
+        ]
+    if overrides.config is not None:
+        if agent.config is None:
+            raise ValueError("config overrides require a live config on the target agent")
+        merged = _deep_merge(agent.config.model_dump(mode="json"), overrides.config)
+        agent.config = Configuration.model_validate(merged)
+
+
+def _append_experiment_log(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(row, default=str))
+        handle.write("\n")
 
 
 @router.get("/runs/{run_id}/io_graph")
@@ -387,6 +457,96 @@ async def agent_invocations(request: Request, run_id: str, path: str) -> JSONRes
         langfuse_url=langfuse_url,
     )
     return JSONResponse({"agent_path": path, "invocations": [inv.row for inv in invocations]})
+
+
+@router.post("/runs/{run_id}/agent/{path:path}/invoke")
+async def agent_invoke(request: Request, run_id: str, path: str) -> JSONResponse:
+    if not bool(getattr(request.app.state, "allow_experiment", False)):
+        return _error(403, "experiment endpoint disabled", code="experiment_disabled")
+
+    try:
+        body = _InvokeBody.model_validate(await request.json())
+    except ValidationError as exc:
+        return _error(400, f"invalid request body: {exc}", code="bad_request")
+
+    resolver = getattr(request.app.state, "experiment_resolver", None)
+    if resolver is None:
+        return _error(
+            409,
+            "experiment resolver is not configured for this dashboard process",
+            code="experiment_unavailable",
+        )
+
+    resolved = resolver(run_id, path)
+    if resolved is None:
+        return _error(
+            409,
+            "no live in-process agent found for this run_id/agent_path",
+            code="experiment_unavailable",
+        )
+
+    log_path = Path(getattr(request.app.state, "experiment_log_path"))
+    start_wall = time.time()
+    log_base = {
+        "ts": start_wall,
+        "kind": "invoke",
+        "run_id": run_id,
+        "agent_path": path,
+        "stream": bool(body.stream),
+    }
+
+    try:
+        agent = resolved.clone()
+        _apply_overrides(agent, body.overrides)
+        x = agent.input.model_validate(body.input)
+    except (ValidationError, ValueError) as exc:
+        await asyncio.to_thread(
+            _append_experiment_log,
+            log_path,
+            {**log_base, "status": "invalid", "error": str(exc)},
+        )
+        return _error(400, f"input/override validation failed: {exc}", code="bad_request")
+    except Exception as exc:
+        await asyncio.to_thread(
+            _append_experiment_log,
+            log_path,
+            {**log_base, "status": "resolver_error", "error": str(exc)},
+        )
+        return _error(409, f"failed to prepare experiment agent: {exc}", code="experiment_unavailable")
+
+    try:
+        await agent.abuild()
+        with suppress_notifications():
+            envelope = await agent.invoke(x)
+    except Exception as exc:
+        await asyncio.to_thread(
+            _append_experiment_log,
+            log_path,
+            {**log_base, "status": "error", "error": str(exc)},
+        )
+        return _error(500, f"experiment invoke failed: {exc}", code="invoke_failed")
+
+    payload = envelope.model_dump(mode="json")
+    metadata = {
+        "experiment": True,
+        "hash_content": agent.hash_content,
+        "agent_path": path,
+        "run_id": run_id,
+    }
+    payload["metadata"] = metadata
+
+    await asyncio.to_thread(
+        _append_experiment_log,
+        log_path,
+        {
+            **log_base,
+            "status": "ok",
+            "latency_ms": payload.get("latency_ms"),
+            "hash_prompt": payload.get("hash_prompt"),
+            "hash_content": metadata["hash_content"],
+        },
+    )
+    return JSONResponse(payload)
 
 
 @router.get("/runs/{run_id}/agent/{path:path}/prompts")
