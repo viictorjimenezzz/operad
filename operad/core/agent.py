@@ -1356,6 +1356,7 @@ class Agent(Generic[In, Out]):
             if is_root:
                 end_meta["is_root"] = True
                 end_meta["output_type"] = _qualified(self.output)  # type: ignore[arg-type]
+            end_meta.update(self._dashboard_end_metadata(x))
             end_meta.update(retry_meta)
             if algo_parent is not None and not is_root:
                 end_meta["parent_run_id"] = algo_parent
@@ -1415,6 +1416,28 @@ class Agent(Generic[In, Out]):
             finished_at=finished_wall,
             latency_ms=(finished - started) * 1000.0,
         )
+
+    def _dashboard_end_metadata(self, x: In) -> dict[str, Any]:
+        examples = [e.model_dump(mode="json") for e in self.examples]
+        config = self.config.model_dump(mode="json") if self.config is not None else None
+        trainable_paths = sorted(
+            path for path, p in self.named_parameters(recurse=True) if p.requires_grad
+        )
+        return {
+            "class_name": type(self).__name__,
+            "kind": "composite" if self._children else "leaf",
+            "hash_content": self.hash_content,
+            "role": self.role,
+            "task": self.task,
+            "rules": list(self.rules),
+            "examples": examples,
+            "config": config,
+            "forward_in_overridden": type(self).forward_in is not Agent.forward_in,
+            "forward_out_overridden": type(self).forward_out is not Agent.forward_out,
+            "trainable_paths": trainable_paths,
+            "prompt_system": self._compose_system_for_call(x),
+            "prompt_user": self.format_user_message(x),
+        }
 
     # --- streaming ---------------------------------------------------------
     async def stream(
@@ -1521,6 +1544,7 @@ class Agent(Generic[In, Out]):
             if is_root:
                 end_meta["is_root"] = True
                 end_meta["output_type"] = _qualified(self.output)  # type: ignore[arg-type]
+            end_meta.update(self._dashboard_end_metadata(x))
             if algo_parent_s is not None and not is_root:
                 end_meta["parent_run_id"] = algo_parent_s
             finished_wall = time.time()

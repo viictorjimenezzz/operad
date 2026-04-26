@@ -10,7 +10,12 @@ escape hatch when `importlib` lookup isn't enough.
 from __future__ import annotations
 
 import importlib
-from typing import Any
+from types import UnionType
+from typing import Any, Literal, Union, get_args, get_origin
+
+from pydantic import BaseModel
+
+from .fields import is_system_field
 
 from .build import AgentGraph, Edge, Node
 
@@ -131,6 +136,117 @@ def to_json(graph: AgentGraph) -> dict[str, Any]:
     }
 
 
+def _annotation_name(annotation: Any) -> str:
+    if annotation is Any:
+        return "Any"
+    if annotation is None:
+        return "None"
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+    if origin is None:
+        if isinstance(annotation, type):
+            return annotation.__name__
+        raw = str(annotation)
+        return raw.replace("typing.", "")
+    if origin in {Union, UnionType}:
+        names = [_annotation_name(a) for a in args]
+        non_none = [n for n in names if n != "None"]
+        if len(non_none) + 1 == len(names) and "None" in names:
+            return f"Optional[{non_none[0]}]" if non_none else "Optional[Any]"
+        return f"Union[{', '.join(names)}]"
+    if origin is Literal:
+        vals = ",".join(repr(a) for a in args)
+        return f"Literal[{vals}]"
+    origin_name = getattr(origin, "__name__", str(origin).replace("typing.", ""))
+    if args:
+        return f"{origin_name}[{', '.join(_annotation_name(a) for a in args)}]"
+    return origin_name
+
+
+def _type_fields(t: type) -> list[dict[str, Any]]:
+    if not isinstance(t, type):
+        return []
+    if not issubclass(t, BaseModel):
+        return []
+    out: list[dict[str, Any]] = []
+    for name, info in t.model_fields.items():
+        out.append(
+            {
+                "name": name,
+                "type": _annotation_name(info.annotation),
+                "description": info.description or "",
+                "system": is_system_field(info),
+            }
+        )
+    return out
+
+
+def _type_node(t: type) -> dict[str, Any]:
+    key = _qualified_name(t)
+    name = getattr(t, "__name__", key.rsplit(".", 1)[-1])
+    return {
+        "key": key,
+        "name": name,
+        "fields": _type_fields(t),
+    }
+
+
+def _nearest_composite(
+    leaf_path: str, *, root: str, composites: set[str]
+) -> str | None:
+    parts = leaf_path.split(".")
+    if len(parts) < 2:
+        return None
+    nearest: str | None = None
+    for i in range(1, len(parts)):
+        prefix = ".".join(parts[:i])
+        if prefix in composites:
+            nearest = prefix
+    if nearest is None or nearest == root:
+        return None
+    return nearest
+
+
+def to_io_graph(graph: AgentGraph) -> dict[str, Any]:
+    """Inverted view: input/output types as nodes, leaves as typed edges.
+
+    Type nodes are deduplicated by ``module.qualname``. Composite graph nodes
+    are not emitted as edges; each leaf contributes one edge from its input
+    type node to its output type node.
+    """
+    composite_paths = {n.path for n in graph.nodes if n.kind == "composite"}
+    type_nodes: dict[str, dict[str, Any]] = {}
+    edges: list[dict[str, Any]] = []
+
+    for node in graph.nodes:
+        if node.kind != "leaf":
+            continue
+        from_key = _qualified_name(node.input_type)
+        to_key = _qualified_name(node.output_type)
+        if from_key not in type_nodes:
+            type_nodes[from_key] = _type_node(node.input_type)
+        if to_key not in type_nodes:
+            type_nodes[to_key] = _type_node(node.output_type)
+        edges.append(
+            {
+                "agent_path": node.path,
+                "class_name": node.path.rsplit(".", 1)[-1],
+                "kind": "leaf",
+                "from": from_key,
+                "to": to_key,
+                "composite_path": _nearest_composite(
+                    node.path, root=graph.root, composites=composite_paths
+                ),
+            }
+        )
+
+    return {
+        "root": graph.root,
+        "nodes": list(type_nodes.values()),
+        "edges": edges,
+    }
+
+
 # --- round-trip -------------------------------------------------------------
 
 
@@ -195,6 +311,7 @@ def from_json(
 __all__ = [
     "TypeRegistry",
     "from_json",
+    "to_io_graph",
     "to_json",
     "to_mermaid",
     "to_mermaid_edge",
