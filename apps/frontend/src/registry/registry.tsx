@@ -1,10 +1,18 @@
 import { AgentGraph } from "@/shared/charts/agent-graph";
+import { SweepBestCellCard } from "@/shared/charts/sweep-best-cell-card";
+import { SweepCostTotalizer } from "@/shared/charts/sweep-cost-totalizer";
+import { SweepHeatmap } from "@/shared/charts/sweep-heatmap";
 import { BeamCandidateChart } from "@/shared/charts/beam-candidate-chart";
+import { CheckpointTimeline } from "@/shared/charts/checkpoint-timeline";
+import { ConvergenceCurve } from "@/shared/charts/convergence-curve";
 import { DebateConsensusTracker } from "@/shared/charts/debate-consensus-tracker";
+import { IterationProgression } from "@/shared/charts/iteration-progression";
 import { DebateRoundView } from "@/shared/charts/debate-round-view";
 import { DebateTranscript } from "@/shared/charts/debate-transcript";
 import { DriftTimeline } from "@/shared/charts/drift-timeline";
 import { FitnessCurve } from "@/shared/charts/fitness-curve";
+import { GradientLog } from "@/shared/charts/gradient-log";
+import { LrScheduleCurve } from "@/shared/charts/lr-schedule-curve";
 import { MutationHeatmap } from "@/shared/charts/mutation-heatmap";
 import { OpSuccessTable } from "@/shared/charts/op-success-table";
 import { PopulationScatter } from "@/shared/charts/population-scatter";
@@ -14,6 +22,7 @@ import { EventTimeline } from "@/shared/panels/event-timeline";
 import { IODetail } from "@/shared/panels/io-detail";
 import { KpiTile } from "@/shared/panels/kpi-tile";
 import { LangfuseLink } from "@/shared/panels/langfuse-link";
+import { LangfuseSummaryCard } from "@/shared/panels/langfuse-summary-card";
 import { MetaListPanel } from "@/shared/panels/meta-list-panel";
 import { RawEnvelopePanel } from "@/shared/panels/raw-envelope-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -103,6 +112,10 @@ export const registry: ComponentRegistry = {
   LangfuseLink: ({ element }) => (
     <LangfuseLink runId={(element.props as { runId?: string }).runId ?? null} />
   ),
+  LangfuseSummaryCard: ({ element }) => {
+    const p = element.props as { runId?: string; data?: unknown };
+    return <LangfuseSummaryCard runId={p.runId ?? null} data={p.data} />;
+  },
 
   FitnessCurve: ({ element }) => {
     const p = element.props as { data?: unknown; height?: number };
@@ -122,8 +135,8 @@ export const registry: ComponentRegistry = {
     <TrainingProgress data={(element.props as { data?: unknown }).data} />
   ),
   TrainingLossCurve: ({ element }) => {
-    const p = element.props as { data?: unknown; height?: number };
-    return <TrainingLossCurve data={p.data} height={p.height ?? 220} />;
+    const p = element.props as { data?: unknown; dataCheckpoint?: unknown; height?: number };
+    return <TrainingLossCurve data={p.data} checkpointData={p.dataCheckpoint} height={p.height ?? 220} />;
   },
   DriftTimeline: ({ element }) => (
     <DriftTimeline data={(element.props as { data?: unknown }).data} />
@@ -142,6 +155,38 @@ export const registry: ComponentRegistry = {
     const p = element.props as { data?: unknown; height?: number };
     return <BeamCandidateChart data={p.data} height={p.height ?? 220} />;
   },
+  ConvergenceCurve: ({ element }) => {
+    const p = element.props as { data?: unknown; height?: number };
+    return <ConvergenceCurve data={p.data} height={p.height ?? 220} />;
+  },
+  IterationProgression: ({ element }) => {
+    const p = element.props as { data?: unknown; phaseFilter?: string };
+    return (
+      <IterationProgression
+        data={p.data}
+        {...(p.phaseFilter !== undefined ? { phaseFilter: p.phaseFilter } : {})}
+      />
+    );
+  },
+  GradientLog: ({ element }) => (
+    <GradientLog data={(element.props as { data?: unknown }).data} />
+  ),
+  LrScheduleCurve: ({ element }) => {
+    const p = element.props as { data?: unknown; height?: number };
+    return <LrScheduleCurve data={p.data} height={p.height ?? 220} />;
+  },
+  CheckpointTimeline: ({ element }) => (
+    <CheckpointTimeline data={(element.props as { data?: unknown }).data} />
+  ),
+  SweepHeatmap: ({ element }) => (
+    <SweepHeatmap data={(element.props as { data?: unknown }).data} />
+  ),
+  SweepBestCellCard: ({ element }) => (
+    <SweepBestCellCard data={(element.props as { data?: unknown }).data} />
+  ),
+  SweepCostTotalizer: ({ element }) => (
+    <SweepCostTotalizer data={(element.props as { data?: unknown }).data} />
+  ),
   AgentGraph: ({ element }) => {
     const p = element.props as { data?: unknown; dataMutations?: unknown };
     return <AgentGraph data={p.data} mutations={p.dataMutations} />;

@@ -1,0 +1,107 @@
+{
+  "algorithm": "Sweep",
+  "version": 1,
+  "dataSources": {
+    "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "sweep": {
+      "endpoint": "/runs/$context.runId/sweep.json",
+      "stream": "/runs/$context.runId/sweep.sse"
+    },
+    "graph": { "endpoint": "/graph/$context.runId" }
+  },
+  "spec": {
+    "root": "page",
+    "elements": {
+      "page": {
+        "type": "Tabs",
+        "props": {
+          "tabs": [
+            { "id": "overview", "label": "overview" },
+            { "id": "heatmap", "label": "heatmap" },
+            { "id": "cells", "label": "cells" },
+            { "id": "graph", "label": "graph" },
+            { "id": "events", "label": "events" }
+          ]
+        },
+        "children": ["t-overview", "t-heatmap", "t-cells", "t-graph", "t-events"]
+      },
+
+      "t-overview": {
+        "type": "Col",
+        "props": { "gap": 12 },
+        "children": ["kpis", "best-card", "cost-card", "meta-card"]
+      },
+      "kpis": {
+        "type": "Row",
+        "props": { "gap": 12 },
+        "children": ["k-events", "k-tokens", "k-cost"]
+      },
+      "k-events": {
+        "type": "KPI",
+        "props": { "label": "events", "source": "$queries.summary.event_total", "format": "int" }
+      },
+      "k-tokens": {
+        "type": "KPI",
+        "props": { "label": "tokens", "source": "$queries.summary.prompt_tokens", "format": "tokens" }
+      },
+      "k-cost": {
+        "type": "KPI",
+        "props": { "label": "cost", "source": "$queries.summary.cost.cost_usd", "format": "cost" }
+      },
+      "best-card": {
+        "type": "Card",
+        "props": { "title": "best cell" },
+        "children": ["best-cell"]
+      },
+      "best-cell": {
+        "type": "SweepBestCellCard",
+        "props": { "source": "$queries.sweep" }
+      },
+      "cost-card": {
+        "type": "Card",
+        "props": { "title": "cell progress" },
+        "children": ["cost-total"]
+      },
+      "cost-total": {
+        "type": "SweepCostTotalizer",
+        "props": { "source": "$queries.sweep" }
+      },
+      "meta-card": {
+        "type": "Card",
+        "props": { "title": "meta" },
+        "children": ["meta", "langfuse"]
+      },
+      "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
+      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
+
+      "t-heatmap": {
+        "type": "Card",
+        "props": { "title": "parameter grid" },
+        "children": ["heatmap"]
+      },
+      "heatmap": {
+        "type": "SweepHeatmap",
+        "props": { "source": "$queries.sweep" }
+      },
+
+      "t-cells": {
+        "type": "Card",
+        "props": { "title": "all cells" },
+        "children": ["cells-timeline"]
+      },
+      "cells-timeline": {
+        "type": "EventTimeline",
+        "props": { "source": "$run.events", "kindFilter": "cell" }
+      },
+
+      "t-graph": {
+        "type": "Card",
+        "props": { "title": "agent graph" },
+        "children": ["graph"]
+      },
+      "graph": { "type": "AgentGraph", "props": { "source": "$queries.graph" } },
+
+      "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } }
+    }
+  }
+}

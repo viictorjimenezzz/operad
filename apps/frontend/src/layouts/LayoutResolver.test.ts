@@ -69,6 +69,18 @@ describe("resolveLayout integration (real layouts/)", () => {
     expect(layout.algorithm).toBe("EvoGradient");
   });
 
+  it("resolves VerifierLoop to the verifier layout", async () => {
+    const { resolveLayout } = await import("./index");
+    const layout = resolveLayout("VerifierLoop");
+    expect(layout.algorithm).toBe("VerifierLoop");
+  });
+
+  it("resolves SelfRefine to the selfrefine layout", async () => {
+    const { resolveLayout } = await import("./index");
+    const layout = resolveLayout("SelfRefine");
+    expect(layout.algorithm).toBe("SelfRefine");
+  });
+
   it("resolves unknown path to default layout", async () => {
     const { resolveLayout } = await import("./index");
     const layout = resolveLayout("DoesNotExist");
@@ -78,5 +90,11 @@ describe("resolveLayout integration (real layouts/)", () => {
   it("resolves null to default layout", async () => {
     const { resolveLayout } = await import("./index");
     expect(resolveLayout(null).algorithm).toBe("*");
+  });
+
+  it("resolves Sweep to the sweep layout", async () => {
+    const { resolveLayout } = await import("./index");
+    const layout = resolveLayout("Sweep");
+    expect(layout.algorithm).toBe("Sweep");
   });
 });
