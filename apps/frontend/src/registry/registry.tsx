@@ -1,5 +1,7 @@
 import { AgentGraph } from "@/shared/charts/agent-graph";
 import { BeamCandidateChart } from "@/shared/charts/beam-candidate-chart";
+import { ConvergenceCurve } from "@/shared/charts/convergence-curve";
+import { IterationProgression } from "@/shared/charts/iteration-progression";
 import { DebateRoundView } from "@/shared/charts/debate-round-view";
 import { DriftTimeline } from "@/shared/charts/drift-timeline";
 import { FitnessCurve } from "@/shared/charts/fitness-curve";
@@ -132,6 +134,19 @@ export const registry: ComponentRegistry = {
   BeamCandidateChart: ({ element }) => {
     const p = element.props as { data?: unknown; height?: number };
     return <BeamCandidateChart data={p.data} height={p.height ?? 220} />;
+  },
+  ConvergenceCurve: ({ element }) => {
+    const p = element.props as { data?: unknown; height?: number };
+    return <ConvergenceCurve data={p.data} height={p.height ?? 220} />;
+  },
+  IterationProgression: ({ element }) => {
+    const p = element.props as { data?: unknown; phaseFilter?: string };
+    return (
+      <IterationProgression
+        data={p.data}
+        {...(p.phaseFilter !== undefined ? { phaseFilter: p.phaseFilter } : {})}
+      />
+    );
   },
   AgentGraph: ({ element }) => {
     const p = element.props as { data?: unknown; dataMutations?: unknown };

@@ -50,6 +50,12 @@ export const catalog = createCatalog({
     DriftTimeline: { props: z.object({ source: sourceProp }) },
     DebateRoundView: { props: z.object({ source: sourceProp }) },
     BeamCandidateChart: { props: z.object({ source: sourceProp, height: z.number().optional() }) },
+    ConvergenceCurve: {
+      props: z.object({ source: sourceProp, height: z.number().optional() }),
+    },
+    IterationProgression: {
+      props: z.object({ source: sourceProp, phaseFilter: z.string().optional() }),
+    },
     AgentGraph: {
       props: z.object({
         source: sourceProp,

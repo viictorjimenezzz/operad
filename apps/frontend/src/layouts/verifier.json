@@ -1,0 +1,75 @@
+{
+  "algorithm": "VerifierLoop",
+  "version": 1,
+  "dataSources": {
+    "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "iterations": {
+      "endpoint": "/runs/$context.runId/iterations.json",
+      "stream": "/runs/$context.runId/iterations.sse"
+    },
+    "graph": { "endpoint": "/graph/$context.runId" }
+  },
+  "spec": {
+    "root": "page",
+    "elements": {
+      "page": {
+        "type": "Tabs",
+        "props": {
+          "tabs": [
+            { "id": "overview", "label": "overview" },
+            { "id": "feedback", "label": "verifier feedback" },
+            { "id": "graph", "label": "graph" },
+            { "id": "events", "label": "events" }
+          ]
+        },
+        "children": ["t-overview", "t-feedback", "t-graph", "t-events"]
+      },
+
+      "t-overview": {
+        "type": "Col",
+        "props": { "gap": 12 },
+        "children": ["meta-card", "curve-card", "progression-card"]
+      },
+      "meta-card": {
+        "type": "Card",
+        "props": { "title": "meta" },
+        "children": ["meta", "langfuse"]
+      },
+      "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
+      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
+      "curve-card": {
+        "type": "Card",
+        "props": { "title": "convergence" },
+        "children": ["curve"]
+      },
+      "curve": {
+        "type": "ConvergenceCurve",
+        "props": { "source": "$queries.iterations", "height": 240 }
+      },
+      "progression-card": {
+        "type": "Card",
+        "props": { "title": "iterations" },
+        "children": ["progression"]
+      },
+      "progression": {
+        "type": "IterationProgression",
+        "props": { "source": "$queries.iterations" }
+      },
+
+      "t-feedback": {
+        "type": "Card",
+        "props": { "title": "verifier feedback" },
+        "children": ["feedback"]
+      },
+      "feedback": {
+        "type": "IterationProgression",
+        "props": { "source": "$queries.iterations", "phaseFilter": "verify" }
+      },
+
+      "t-graph": { "type": "Card", "props": { "title": "agent graph" }, "children": ["graph"] },
+      "graph": { "type": "AgentGraph", "props": { "source": "$queries.graph" } },
+
+      "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } }
+    }
+  }
+}

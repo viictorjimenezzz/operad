@@ -23,6 +23,7 @@ from operad.runtime.slots import registry as slot_registry
 from .observer import WebDashboardObserver, serialize_event
 from .routes import drift as drift_routes
 from .routes import fitness as fitness_routes
+from .routes import iterations as iterations_routes
 from .routes import mutations as mutations_routes
 from .routes import progress as progress_routes
 
@@ -199,6 +200,7 @@ def create_app(
     app.include_router(mutations_routes.router)
     app.include_router(drift_routes.router)
     app.include_router(progress_routes.router)
+    app.include_router(iterations_routes.router)
 
     @app.get("/", response_class=HTMLResponse)
     async def index() -> HTMLResponse:
