@@ -45,6 +45,8 @@ def _epoch_end_event(
             "epoch": epoch,
             "train_loss": train_loss,
             "val_loss": val_loss,
+            "lr": 0.1 / (epoch + 1),
+            "parameter_snapshot": {"role": f"role-{epoch}"},
             "hash_content": f"hash{epoch}",
         },
         started_at=1.0 + epoch,
@@ -70,6 +72,9 @@ async def test_checkpoints_returns_epoch_end_events(app_and_obs) -> None:
     assert entries[0]["train_loss"] == pytest.approx(0.9)
     assert entries[0]["val_loss"] == pytest.approx(0.95)
     assert entries[0]["score"] == pytest.approx(0.95)
+    assert entries[0]["lr"] == pytest.approx(0.1)
+    assert entries[0]["parameter_snapshot"]["role"] == "role-0"
+    assert entries[0]["metric_snapshot"]["score"] == pytest.approx(0.95)
 
 
 async def test_checkpoints_is_best_marks_lowest_score(app_and_obs) -> None:

@@ -5,15 +5,22 @@ import { z } from "zod";
 
 const Schema = z.array(GradientEntry);
 
-const severityClass: Record<string, string> = {
+const severityClass = {
   high: "bg-red-900/40 text-red-300 border-red-700",
   medium: "bg-yellow-900/40 text-yellow-300 border-yellow-700",
   low: "bg-blue-900/40 text-blue-300 border-blue-700",
   info: "bg-bg-3 text-muted border-border",
 };
 
-function badge(severity: string) {
-  return severityClass[severity] ?? severityClass["info"];
+function severityLabel(severity: number): keyof typeof severityClass {
+  if (severity >= 0.75) return "high";
+  if (severity >= 0.4) return "medium";
+  if (severity > 0.0) return "low";
+  return "info";
+}
+
+function badge(severity: number) {
+  return severityClass[severityLabel(severity)];
 }
 
 export function GradientLog({ data }: { data: unknown }) {
@@ -37,7 +44,8 @@ export function GradientLog({ data }: { data: unknown }) {
       (e) =>
         !q ||
         e.message.toLowerCase().includes(q) ||
-        e.target_paths.some((p) => p.toLowerCase().includes(q)),
+        e.target_paths.some((p) => p.toLowerCase().includes(q)) ||
+        e.applied_diff.toLowerCase().includes(q),
     );
 
   function toggleExpand(i: number) {
@@ -70,7 +78,7 @@ export function GradientLog({ data }: { data: unknown }) {
                 <span
                   className={`rounded border px-1.5 py-0.5 text-[10px] ${badge(entry.severity)}`}
                 >
-                  {entry.severity}
+                  {severityLabel(entry.severity)} ({entry.severity.toFixed(2)})
                 </span>
                 {entry.target_paths.map((p) => (
                   <span
@@ -91,14 +99,22 @@ export function GradientLog({ data }: { data: unknown }) {
                 </button>
               )}
               {expanded.has(i) && (
-                <dl className="mt-1 flex flex-col gap-1">
+                <div className="mt-1 flex flex-col gap-1">
                   {Object.entries(entry.by_field).map(([field, critique]) => (
                     <div key={field}>
-                      <dt className="font-mono text-[10px] text-muted">{field}</dt>
-                      <dd className="whitespace-pre-wrap text-[11px]">{critique}</dd>
+                      <div className="font-mono text-[10px] text-muted">{field}</div>
+                      <div className="whitespace-pre-wrap text-[11px]">{critique}</div>
                     </div>
                   ))}
-                </dl>
+                  {entry.applied_diff && (
+                    <div>
+                      <div className="font-mono text-[10px] text-muted">applied diff</div>
+                      <pre className="overflow-auto whitespace-pre-wrap text-[11px]">
+                        {entry.applied_diff}
+                      </pre>
+                    </div>
+                  )}
+                </div>
               )}
             </li>
           ))}

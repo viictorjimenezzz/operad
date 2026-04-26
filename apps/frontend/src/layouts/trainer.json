@@ -44,7 +44,7 @@
         "children": ["t-loss", "t-drift", "t-gradients", "t-checkpoints", "t-progress", "t-graph", "t-events"]
       },
 
-      "t-loss": { "type": "Card", "props": { "title": "loss curve" }, "children": ["loss"] },
+      "t-loss": { "type": "Card", "props": { "title": "loss curve" }, "children": ["loss", "lr"] },
       "loss": {
         "type": "TrainingLossCurve",
         "props": {
@@ -52,6 +52,10 @@
           "checkpointSource": "$queries.checkpoints",
           "height": 240
         }
+      },
+      "lr": {
+        "type": "LrScheduleCurve",
+        "props": { "source": "$queries.fitness", "height": 160 }
       },
 
       "t-drift": { "type": "Card", "props": { "title": "prompt drift" }, "children": ["drift"] },

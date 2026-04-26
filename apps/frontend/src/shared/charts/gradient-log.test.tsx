@@ -9,7 +9,7 @@ const mockEntries = [
     epoch: 1,
     batch: 3,
     message: "role is too vague",
-    severity: "medium",
+    severity: 0.6,
     target_paths: ["role"],
     by_field: { role: "needs more specificity" },
     applied_diff: "- old\n+ new",
@@ -18,7 +18,7 @@ const mockEntries = [
     epoch: 0,
     batch: 5,
     message: "task ambiguous",
-    severity: "high",
+    severity: 0.9,
     target_paths: ["task", "rules"],
     by_field: {},
     applied_diff: "",
@@ -46,8 +46,8 @@ describe("GradientLog", () => {
 
   it("shows severity badge", () => {
     render(<GradientLog data={mockEntries} />);
-    expect(screen.getByText("medium")).toBeTruthy();
-    expect(screen.getByText("high")).toBeTruthy();
+    expect(screen.getByText("medium (0.60)")).toBeTruthy();
+    expect(screen.getByText("high (0.90)")).toBeTruthy();
   });
 
   it("shows target_paths chips", () => {
