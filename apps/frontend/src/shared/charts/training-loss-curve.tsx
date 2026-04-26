@@ -37,10 +37,13 @@ export function TrainingLossCurve({
   const valByEpoch = new Map(checkpoints.map((c) => [c.epoch, c.val_loss]));
   const merged = rows.map((r) => ({
     ...r,
+    train_loss: r.train_loss ?? r.best,
     val_loss: valByEpoch.get(r.gen_index) ?? null,
+    lr: r.lr ?? null,
   }));
 
   const hasVal = merged.some((r) => r.val_loss != null);
+  const hasLr = merged.some((r) => r.lr != null);
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -57,7 +60,15 @@ export function TrainingLossCurve({
             style: { fill: "var(--color-muted)", fontSize: 10 },
           }}
         />
-        <YAxis stroke="var(--color-muted)" tick={{ fontSize: 11 }} />
+        <YAxis yAxisId="left" stroke="var(--color-muted)" tick={{ fontSize: 11 }} />
+        {hasLr && (
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            stroke="var(--color-muted)"
+            tick={{ fontSize: 11 }}
+          />
+        )}
         <Tooltip
           contentStyle={{
             background: "var(--color-bg-2)",
@@ -67,7 +78,8 @@ export function TrainingLossCurve({
         />
         <Line
           type="monotone"
-          dataKey="best"
+          yAxisId="left"
+          dataKey="train_loss"
           stroke="var(--color-accent)"
           strokeWidth={2}
           dot={{ r: 3 }}
@@ -76,12 +88,25 @@ export function TrainingLossCurve({
         {hasVal && (
           <Line
             type="monotone"
+            yAxisId="left"
             dataKey="val_loss"
             stroke="var(--color-warn)"
             strokeWidth={2}
             strokeDasharray="5 3"
             dot={{ r: 3 }}
             name="val loss"
+            connectNulls
+          />
+        )}
+        {hasLr && (
+          <Line
+            type="monotone"
+            yAxisId="right"
+            dataKey="lr"
+            stroke="var(--color-algo)"
+            strokeWidth={1.5}
+            dot={false}
+            name="lr"
             connectNulls
           />
         )}

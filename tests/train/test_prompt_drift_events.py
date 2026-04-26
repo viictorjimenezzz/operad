@@ -102,15 +102,12 @@ async def test_prompt_drift_emits_iteration_event_per_epoch(cfg: Any) -> None:
     assert len(drift_events) == 3
     for i, e in enumerate(drift_events):
         assert e.payload["epoch"] == i
-        assert isinstance(e.payload["hash_before"], str)
-        assert isinstance(e.payload["hash_after"], str)
+        assert isinstance(e.payload["before_text"], str)
+        assert isinstance(e.payload["after_text"], str)
+        assert isinstance(e.payload["changes"], list)
         assert isinstance(e.payload["changed_params"], list)
         assert isinstance(e.payload["delta_count"], int)
-    # The hash_content should have changed between epochs.
-    assert (
-        drift_events[0].payload["hash_after"]
-        != drift_events[0].payload["hash_before"]
-    )
+    assert drift_events[0].payload["before_text"] != drift_events[0].payload["after_text"]
 
 
 async def test_prompt_drift_records_changed_param_paths(cfg: Any) -> None:

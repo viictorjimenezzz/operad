@@ -249,6 +249,7 @@ class Trainer(Generic[In, Out]):
                 epoch_loss_sum = 0.0
                 epoch_sample_count = 0
                 step_idx = 0
+                epoch_batch = 0
                 window_inputs: list[Any] = []
                 tc = get_train_ctx()
                 all_params = _flatten_params(self.optimizer)
@@ -260,6 +261,7 @@ class Trainer(Generic[In, Out]):
 
                     window_inputs.extend(batch.inputs)
                     batch_counter += 1
+                    epoch_batch += 1
                     should_step = batch_counter % self.accumulation_steps == 0
 
                     if tc is not None and tc.mode == "replay" and should_step:
@@ -292,6 +294,20 @@ class Trainer(Generic[In, Out]):
                             self.scheduler.load_state_dict(json.loads(lr_state_json))
                         window_inputs.clear()
                         step_idx += 1
+                        lrs = self._current_lrs()
+                        await emit_algorithm_event(
+                            "batch_end",
+                            algorithm_path="Trainer",
+                            payload={
+                                "phase": "batch_end",
+                                "epoch": epoch,
+                                "batch": epoch_batch,
+                                "step": step,
+                                "train_loss": mean_loss,
+                                "lr": lrs[0] if lrs else None,
+                                "lr_groups": lrs,
+                            },
+                        )
                         for cb in cbs:
                             await cb.on_batch_end(self, batch, step, mean_loss)
                     else:
@@ -302,13 +318,40 @@ class Trainer(Generic[In, Out]):
                         for cb in cbs:
                             await cb.on_batch_end(self, batch, step, batch_loss)
 
+                        lrs = self._current_lrs()
+                        await emit_algorithm_event(
+                            "batch_end",
+                            algorithm_path="Trainer",
+                            payload={
+                                "phase": "batch_end",
+                                "epoch": epoch,
+                                "batch": epoch_batch,
+                                "step": step,
+                                "train_loss": batch_loss,
+                                "lr": lrs[0] if lrs else None,
+                                "lr_groups": lrs,
+                            },
+                        )
+
                         if should_step:
+                            grad_payload = self._prepare_gradient_payload(
+                                params=all_params, epoch=epoch, batch=epoch_batch
+                            )
                             if tc is not None and tc.mode == "record":
                                 h_agent = self.agent.hash_content
                                 h_inputs = _hash_train_inputs(window_inputs)
                                 h_params = _hash_train_params(all_params)
                                 key = _compose_train_key(epoch, step_idx, h_agent, h_inputs, h_params)
                             await self.optimizer.step()
+                            if grad_payload is not None:
+                                payload = self._finalize_gradient_payload(
+                                    grad_payload, params=all_params
+                                )
+                                await emit_algorithm_event(
+                                    "gradient_applied",
+                                    algorithm_path="Trainer",
+                                    payload=payload,
+                                )
                             self.optimizer.zero_grad()
                             if tc is not None and tc.mode == "record":
                                 post_params = {p.path: p.value for p in all_params}
@@ -336,12 +379,24 @@ class Trainer(Generic[In, Out]):
                 # Residual flush: some accumulated grads may still be on params.
                 if tc is None or tc.mode != "replay":
                     if self._has_pending_grad():
+                        grad_payload = self._prepare_gradient_payload(
+                            params=all_params, epoch=epoch, batch=epoch_batch
+                        )
                         if tc is not None and tc.mode == "record":
                             h_agent = self.agent.hash_content
                             h_inputs = _hash_train_inputs(window_inputs)
                             h_params = _hash_train_params(all_params)
                             key = _compose_train_key(epoch, step_idx, h_agent, h_inputs, h_params)
                         await self.optimizer.step()
+                        if grad_payload is not None:
+                            payload = self._finalize_gradient_payload(
+                                grad_payload, params=all_params
+                            )
+                            await emit_algorithm_event(
+                                "gradient_applied",
+                                algorithm_path="Trainer",
+                                payload=payload,
+                            )
                         self.optimizer.zero_grad()
                         if tc is not None and tc.mode == "record":
                             post_params = {p.path: p.value for p in all_params}
@@ -410,7 +465,11 @@ class Trainer(Generic[In, Out]):
                     "epoch": epoch,
                     "train_loss": train_loss,
                     "val_loss": val_loss,
+                    "lr": report.lr[0] if report.lr else None,
+                    "lr_groups": list(report.lr),
                     "hash_content": report.hash_content,
+                    "checkpoint_score": val_loss if val_loss is not None else train_loss,
+                    "parameter_snapshot": self._snapshot_named_parameters(),
                 },
             )
 
@@ -573,6 +632,86 @@ class Trainer(Generic[In, Out]):
                 if p.grad is not None and p.grad.severity > 0:
                     return True
         return False
+
+    def _current_lrs(self) -> list[float]:
+        return [float(g.lr) for g in self.optimizer.param_groups]
+
+    def _snapshot_named_parameters(self) -> dict[str, str]:
+        named = getattr(self.agent, "named_parameters", None)
+        if not callable(named):
+            return {}
+        return {
+            path: repr(getattr(param, "value", None))
+            for path, param in named()
+        }
+
+    def _prepare_gradient_payload(
+        self,
+        *,
+        params: list[Parameter[Any]],
+        epoch: int,
+        batch: int,
+    ) -> dict[str, Any] | None:
+        active: list[tuple[Parameter[Any], TextualGradient]] = []
+        for p in params:
+            g = p.grad
+            if g is not None and g.severity > 0:
+                active.append((p, g))
+        if not active:
+            return None
+
+        target_paths: list[str] = []
+        seen: set[str] = set()
+        by_field: dict[str, str] = {}
+        messages: list[str] = []
+        severity = 0.0
+        before_values: dict[str, str] = {}
+        for p, g in active:
+            before_values[p.path] = repr(p.value)
+            if g.message:
+                messages.append(g.message)
+            severity = max(severity, float(g.severity))
+            paths = g.target_paths or [p.path]
+            for path in paths:
+                if path in seen:
+                    continue
+                seen.add(path)
+                target_paths.append(path)
+            if g.by_field:
+                for field, critique in g.by_field.items():
+                    by_field[field] = critique
+            elif g.message:
+                by_field[p.path] = g.message
+
+        return {
+            "epoch": int(epoch),
+            "batch": int(batch),
+            "message": "\n\n".join(messages),
+            "severity": float(severity),
+            "target_paths": target_paths,
+            "by_field": by_field,
+            "_before_values": before_values,
+        }
+
+    def _finalize_gradient_payload(
+        self,
+        payload: dict[str, Any],
+        *,
+        params: list[Parameter[Any]],
+    ) -> dict[str, Any]:
+        before_values = dict(payload.pop("_before_values", {}))
+        after_values: dict[str, str] = {}
+        for p in params:
+            if p.path in before_values:
+                after_values[p.path] = repr(p.read())
+
+        changes = []
+        for path, before in before_values.items():
+            after = after_values.get(path, before)
+            if before != after:
+                changes.append(f"{path}\n- {before}\n+ {after}")
+        payload["applied_diff"] = "\n\n".join(changes)
+        return payload
 
     def _build_training_report(
         self,
