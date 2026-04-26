@@ -183,6 +183,35 @@ def test_summary_postbuild_includes_graph_hash(cfg) -> None:
     assert "hash_content=" in s
 
 
+# --- graph render helpers --------------------------------------------------
+
+
+def test_graph_outline_hides_sequential_stage_names(cfg) -> None:
+    from operad.agents.pipelines import Sequential
+
+    a = FakeLeaf(config=cfg, input=A, output=B)
+    b = FakeLeaf(config=cfg, input=B, output=C)
+    p = Sequential(a, b, input=A, output=C).build()
+    text = p.graph_outline()
+    assert "stage_0" not in text
+    assert "stage_1" not in text
+    assert "Sequential" in text
+
+
+def test_graph_mermaid_uses_agent_names_and_io_edges(cfg) -> None:
+    from operad.agents.pipelines import Sequential
+
+    a = FakeLeaf(config=cfg, input=A, output=B)
+    b = FakeLeaf(config=cfg, input=B, output=C)
+    p = Sequential(a, b, input=A, output=C).build()
+    text = p.graph_mermaid()
+    assert '["Sequential"]' in text
+    assert "A -> B" in text
+    assert "B -> C" in text
+    assert "stage_0" not in text
+    assert "stage_1" not in text
+
+
 # --- E1: __rshift__ ---------------------------------------------------------
 
 

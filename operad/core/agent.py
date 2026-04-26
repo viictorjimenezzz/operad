@@ -1003,12 +1003,31 @@ class Agent(Generic[In, Out]):
                 "agent graph is missing; call .abuild() first",
                 agent=self.name,
             )
-        from .graph import to_mermaid as _graph_to_mermaid
+        labels = {path: agent.name for path, agent in _labelled_tree(self)}
 
-        return _graph_to_mermaid(graph)
+        def _type_name(t: type[Any]) -> str:
+            return getattr(t, "__name__", repr(t))
+
+        def _escape(label: str) -> str:
+            return label.replace('"', "'")
+
+        node_ids = {node.path: f"n{i}" for i, node in enumerate(graph.nodes)}
+        lines: list[str] = ["flowchart LR"]
+        for node in graph.nodes:
+            nid = node_ids[node.path]
+            label = labels.get(node.path, node.path.rsplit(".", 1)[-1])
+            lines.append(f'    {nid}["{_escape(label)}"]')
+        for edge in graph.edges:
+            caller_id = node_ids[edge.caller]
+            callee_id = node_ids[edge.callee]
+            edge_label = f"{_type_name(edge.input_type)} -> {_type_name(edge.output_type)}"
+            lines.append(
+                f'    {caller_id} -->|"{_escape(edge_label)}"| {callee_id}'
+            )
+        return "\n".join(lines)
 
     def graph_outline(self) -> str:
-        """Return a compact text outline of the built graph."""
+        """Return a tree-style text outline of the built graph."""
         graph = self.__dict__.get("_graph")
         if graph is None:
             raise BuildError(
@@ -1016,15 +1035,44 @@ class Agent(Generic[In, Out]):
                 "agent graph is missing; call .abuild() first",
                 agent=self.name,
             )
-        lines: list[str] = []
-        for node in graph.nodes:
-            kind = "composite" if node.kind == "composite" else "leaf"
-            in_name = getattr(node.input_type, "__name__", repr(node.input_type))
-            out_name = getattr(node.output_type, "__name__", repr(node.output_type))
-            cls = node.class_name or node.path.rsplit(".", 1)[-1]
-            lines.append(f"{node.path} [{kind}] {cls}: {in_name} -> {out_name}")
-        for edge in graph.edges:
-            lines.append(f"{edge.caller} -> {edge.callee}")
+        def _type_name(t: type[Any] | None) -> str:
+            if t is None:
+                return "?"
+            return getattr(t, "__name__", repr(t))
+
+        def _node_label(agent: "Agent[Any, Any]") -> str:
+            return (
+                f"{agent.name} "
+                f"({type(agent).__name__}: {_type_name(agent.input)} -> {_type_name(agent.output)})"
+            )
+
+        def _hide_attr(parent: "Agent[Any, Any]", attr: str) -> bool:
+            return type(parent).__name__ in {"Sequential", "Loop"} and attr.startswith("stage_")
+
+        lines: list[str] = [_node_label(self)]
+        seen: set[int] = {id(self)}
+
+        def _walk(parent: "Agent[Any, Any]", prefix: str) -> None:
+            children = list(parent._children.items())
+            for idx, (attr, child) in enumerate(children):
+                is_last = idx == len(children) - 1
+                branch = "`- " if is_last else "|- "
+                child_prefix = prefix + ("   " if is_last else "|  ")
+                if id(child) in seen:
+                    label = f"{child.name} (shared)"
+                    if not _hide_attr(parent, attr) and attr != child.name:
+                        label = f"{attr}: {label}"
+                    lines.append(f"{prefix}{branch}{label}")
+                    continue
+
+                seen.add(id(child))
+                label = _node_label(child)
+                if not _hide_attr(parent, attr) and attr != child.name:
+                    label = f"{attr}: {label}"
+                lines.append(f"{prefix}{branch}{label}")
+                _walk(child, child_prefix)
+
+        _walk(self, "")
         return "\n".join(lines)
 
     def _apply_default_sampling(self) -> None:
