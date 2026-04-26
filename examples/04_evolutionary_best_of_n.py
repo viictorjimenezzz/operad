@@ -35,10 +35,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import random
+import socket
 import statistics
 import sys
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
@@ -77,6 +79,7 @@ except ImportError:
 
 
 _SCRIPT = "04_evolutionary_best_of_n"
+DEFAULT_DASHBOARD = "127.0.0.1:7860"
 
 
 # ---------------------------------------------------------------------------
@@ -434,6 +437,47 @@ def _print_generations(logger: _GenerationLogger) -> None:
     Console(width=140).print(table)
 
 
+def _parse_dashboard_target(value: str) -> tuple[str, int]:
+    raw = value or DEFAULT_DASHBOARD
+    if "://" not in raw:
+        raw = "http://" + raw
+    parsed = urlparse(raw)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or 7860
+    return host, port
+
+
+def _server_up(host: str, port: int, timeout: float = 0.5) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _attach_dashboard(target: str, *, open_browser: bool = True) -> bool:
+    host, port = _parse_dashboard_target(target)
+    if not _server_up(host, port):
+        print(
+            f"[dashboard] no server at {host}:{port} — "
+            "start one with `operad-dashboard --port 7860` then re-run with --dashboard"
+        )
+        return False
+    from operad.dashboard import attach
+
+    attach(host=host, port=port)
+    url = f"http://{host}:{port}"
+    print(f"[dashboard] attached → {url}")
+    if open_browser:
+        try:
+            import webbrowser
+
+            webbrowser.open_new_tab(url)
+        except Exception:
+            pass
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Main.
 # ---------------------------------------------------------------------------
@@ -446,6 +490,9 @@ async def main(args: argparse.Namespace) -> None:
             "exiting 0 as no-op."
         )
         return
+    attached = False
+    if args.dashboard is not None:
+        attached = _attach_dashboard(args.dashboard, open_browser=not args.no_open)
 
     cfg = local_config(
         sampling=Sampling(temperature=0.7, max_tokens=1024),
@@ -593,6 +640,12 @@ async def main(args: argparse.Namespace) -> None:
             + ("…" if len(final_text) > 300 else "")
         ),
     )
+    if attached:
+        host, port = _parse_dashboard_target(args.dashboard)
+        print(
+            f"[dashboard] still live at http://{host}:{port}  "
+            "(ctrl+c the dashboard server to stop)"
+        )
 
     # Intentionally NO assert on seed_score vs final_score — a real LLM
     # judge is noisy. The per-generation table is what shows the
@@ -610,6 +663,19 @@ def _parse_args() -> argparse.Namespace:
         "--offline",
         action="store_true",
         help="No-op for verify.sh; this example needs a real LLM to run.",
+    )
+    p.add_argument(
+        "--dashboard",
+        nargs="?",
+        const=DEFAULT_DASHBOARD,
+        default=None,
+        metavar="HOST:PORT",
+        help="Attach to a running operad-dashboard server (default 127.0.0.1:7860).",
+    )
+    p.add_argument(
+        "--no-open",
+        action="store_true",
+        help="Do not open the browser when --dashboard attaches.",
     )
     return p.parse_args()
 

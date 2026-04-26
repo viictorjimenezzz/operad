@@ -210,8 +210,9 @@ replays a recorded NDJSON trace. See
 | ---------------------- | ----- | -------------------------------------------------------------------- |
 | `uv run operad-dashboard --port 7860` | 7860 | Live event stream, graph view, fitness/mutation/drift/training panels per `run_id`. See [`apps/dashboard/`](apps/dashboard/README.md). |
 | `uv run operad-studio --port 7870 --data-dir … --agent-bundle …` | 7870 | Human-feedback labeling + relaunch `Trainer.fit` with `HumanFeedbackLoss`. See [`apps/studio/`](apps/studio/README.md). |
-| `uv run python apps/demos/agent_evolution/run.py --offline` | — | Fully-offline showcase: a seed agent evolved over generations. See [`apps/demos/`](apps/demos/README.md). |
-| `uv run --extra observers python demo.py` | — | ~30-second Rich-formatted end-to-end (prompts, graph, invoke, trace, mutation diff). `--offline` runs the schema-only stages without a server. |
+| `uv run python apps/demos/agent_evolution/run.py --offline --dashboard` | — | Fully-offline showcase: a seed agent evolved over generations, streamed to the web dashboard. See [`apps/demos/`](apps/demos/README.md). |
+| `uv run python apps/demos/triage_reply/run.py --dashboard` | — | Compositional support-triage demo with evolution panels in the dashboard. |
+| `uv run --extra observers python demo.py --dashboard` | — | ~30-second Rich-formatted end-to-end (prompts, graph, invoke, trace, mutation diff) with optional dashboard attach. `--offline` runs the schema-only stages without a server. |
 
 The dashboard and studio are independent editable installs in this
 monorepo — they consume `operad` like external users.
@@ -232,7 +233,14 @@ make env          # cp .env.example .env (first time only)
 make header       # populate OTEL_EXPORTER_OTLP_HEADERS from those keys
 make up           # bring up the 8-service stack (~2-3 min on first boot)
 make demo         # run agent_evolution with dashboard + Langfuse OTel wired
+make demo-script  # run demo.py with dashboard + Langfuse OTel wired
+make demo-triage  # run triage_reply with dashboard + Langfuse OTel wired
+make example-observed EXAMPLE=01_composition_research_analyst.py
 ```
+
+All top-level scripts in `examples/` plus `demo.py` accept
+`--dashboard [HOST:PORT]` and `--no-open`. Keep OTel export opt-in by
+setting `OPERAD_OTEL=1` with OTLP env vars.
 
 Exposed: Langfuse on **3000**, dashboard on **7860**, studio on
 **7870**. The stack also includes Postgres, Clickhouse, Redis, and

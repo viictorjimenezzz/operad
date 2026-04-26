@@ -3,7 +3,7 @@
 Requires: local llama-server at 127.0.0.1:9000 serving google/gemma-4-e2b
 (see examples/_config.py). Run with:
 
-    uv run python demo.py [--offline]
+    uv run python demo.py [--offline] [--dashboard [HOST:PORT]]
 
 Override with OPERAD_LLAMACPP_HOST / OPERAD_LLAMACPP_MODEL. In
 ``--offline`` mode, only the schema-only stages (1, 2, 5) run; the live
@@ -15,9 +15,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import io
+import socket
 import sys
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, Field
 
@@ -37,6 +39,7 @@ from _config import DEFAULT_HOST, DEFAULT_MODEL, local_config, server_reachable 
 
 
 TRACE_PATH = Path("/tmp/operad-demo-trace.json")
+DEFAULT_DASHBOARD = "127.0.0.1:7860"
 
 
 class Question(BaseModel):
@@ -73,9 +76,57 @@ def _build_agent() -> Pipeline:
     return Pipeline(answerer, grader, input=Question, output=Verdict)
 
 
-async def main(offline: bool = False) -> int:
+def _parse_dashboard_target(value: str) -> tuple[str, int]:
+    raw = value or DEFAULT_DASHBOARD
+    if "://" not in raw:
+        raw = "http://" + raw
+    parsed = urlparse(raw)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or 7860
+    return host, port
+
+
+def _server_up(host: str, port: int, timeout: float = 0.5) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _attach_dashboard(target: str, *, open_browser: bool = True) -> bool:
+    host, port = _parse_dashboard_target(target)
+    if not _server_up(host, port):
+        print(
+            f"[dashboard] no server at {host}:{port} — "
+            "start one with `operad-dashboard --port 7860` then re-run with --dashboard"
+        )
+        return False
+    from operad.dashboard import attach
+
+    attach(host=host, port=port)
+    url = f"http://{host}:{port}"
+    print(f"[dashboard] attached → {url}")
+    if open_browser:
+        try:
+            import webbrowser
+
+            webbrowser.open_new_tab(url)
+        except Exception:
+            pass
+    return True
+
+
+async def main(
+    offline: bool = False,
+    dashboard: str | None = None,
+    no_open: bool = False,
+) -> int:
     console = Console(width=120)
     cfg_host = local_config().host
+    attached = False
+    if dashboard is not None:
+        attached = _attach_dashboard(dashboard, open_browser=not no_open)
 
     if not offline and not server_reachable(cfg_host):
         console.print(
@@ -142,6 +193,12 @@ async def main(offline: bool = False) -> int:
     mutated = _build_agent()
     AppendRule(path="", rule="Be terse.").apply(mutated)
     console.print(Panel(str(base.diff(mutated)), title="5. Mutation diff", border_style="cyan"))
+    if attached:
+        host, port = _parse_dashboard_target(dashboard or DEFAULT_DASHBOARD)
+        console.print(
+            f"[dashboard] still live at http://{host}:{port}  "
+            "(ctrl+c the dashboard server to stop)"
+        )
 
     return 0
 
@@ -153,5 +210,22 @@ if __name__ == "__main__":
         action="store_true",
         help="Run schema-only stages without contacting a model server.",
     )
+    parser.add_argument(
+        "--dashboard",
+        nargs="?",
+        const=DEFAULT_DASHBOARD,
+        default=None,
+        metavar="HOST:PORT",
+        help="Attach to a running operad-dashboard server (default 127.0.0.1:7860).",
+    )
+    parser.add_argument(
+        "--no-open",
+        action="store_true",
+        help="Do not open the browser when --dashboard attaches.",
+    )
     args = parser.parse_args()
-    sys.exit(asyncio.run(main(offline=args.offline)))
+    sys.exit(
+        asyncio.run(
+            main(offline=args.offline, dashboard=args.dashboard, no_open=args.no_open)
+        )
+    )
