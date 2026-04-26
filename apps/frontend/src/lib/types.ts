@@ -208,6 +208,26 @@ export const DriftEntry = z.object({
 });
 export type DriftEntry = z.infer<typeof DriftEntry>;
 
+export const CheckpointEntry = z.object({
+  epoch: z.number(),
+  train_loss: z.number().nullable(),
+  val_loss: z.number().nullable(),
+  score: z.number().nullable(),
+  is_best: z.boolean(),
+});
+export type CheckpointEntry = z.infer<typeof CheckpointEntry>;
+
+export const GradientEntry = z.object({
+  epoch: z.number(),
+  batch: z.number(),
+  message: z.string(),
+  severity: z.string(),
+  target_paths: z.array(z.string()),
+  by_field: z.record(z.string()),
+  applied_diff: z.string(),
+});
+export type GradientEntry = z.infer<typeof GradientEntry>;
+
 export const SweepCell = z.object({
   cell_index: z.number(),
   parameters: z.record(z.unknown()),

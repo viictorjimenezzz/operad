@@ -39,6 +39,7 @@ export const catalog = createCatalog({
     },
     MetaList: { props: z.object({ source: sourceProp }) },
     LangfuseLink: { props: z.object({ runId: sourceProp }) },
+    LangfuseSummaryCard: { props: z.object({ runId: sourceProp, source: sourceProp }) },
 
     // Charts
     FitnessCurve: { props: z.object({ source: sourceProp, height: z.number().optional() }) },
@@ -46,10 +47,25 @@ export const catalog = createCatalog({
     MutationHeatmap: { props: z.object({ source: sourceProp }) },
     OpSuccessTable: { props: z.object({ source: sourceProp }) },
     TrainingProgress: { props: z.object({ source: sourceProp }) },
-    TrainingLossCurve: { props: z.object({ source: sourceProp, height: z.number().optional() }) },
+    TrainingLossCurve: {
+      props: z.object({
+        source: sourceProp,
+        checkpointSource: sourceProp,
+        height: z.number().optional(),
+      }),
+    },
     DriftTimeline: { props: z.object({ source: sourceProp }) },
+    GradientLog: { props: z.object({ source: sourceProp }) },
+    LrScheduleCurve: { props: z.object({ source: sourceProp, height: z.number().optional() }) },
+    CheckpointTimeline: { props: z.object({ source: sourceProp }) },
     DebateRoundView: { props: z.object({ source: sourceProp }) },
     BeamCandidateChart: { props: z.object({ source: sourceProp, height: z.number().optional() }) },
+    ConvergenceCurve: {
+      props: z.object({ source: sourceProp, height: z.number().optional() }),
+    },
+    IterationProgression: {
+      props: z.object({ source: sourceProp, phaseFilter: z.string().optional() }),
+    },
     SweepHeatmap: { props: z.object({ source: sourceProp }) },
     SweepBestCellCard: { props: z.object({ source: sourceProp }) },
     SweepCostTotalizer: { props: z.object({ source: sourceProp }) },

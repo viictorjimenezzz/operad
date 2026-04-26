@@ -1,46 +1,56 @@
+import { useState } from "react";
 import { DriftEntry } from "@/lib/types";
-import { truncateMiddle } from "@/lib/utils";
 import { EmptyState } from "@/shared/ui/empty-state";
+import { PromptDriftDiff } from "./prompt-drift-diff";
 import { z } from "zod";
 
 const Schema = z.array(DriftEntry);
 
 export function DriftTimeline({ data }: { data: unknown }) {
   const parsed = Schema.safeParse(data);
+  const [selectedEpoch, setSelectedEpoch] = useState<number | null>(null);
+
   if (!parsed.success || parsed.data.length === 0) {
     return <EmptyState title="no drift events" description="PromptDrift callback hasn't fired" />;
   }
+
+  const entries = [...parsed.data].sort((a, b) => a.epoch - b.epoch);
+  const lastEntry = entries[entries.length - 1]!;
+  const epoch = selectedEpoch ?? lastEntry.epoch;
+  const entry = entries.find((e) => e.epoch === epoch) ?? lastEntry;
+
   return (
-    <ol className="flex flex-col gap-2 text-xs">
-      {parsed.data.map((entry) => (
-        <li key={entry.epoch} className="rounded-md border border-border bg-bg-2 px-3 py-2">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-[0.68rem] uppercase tracking-[0.08em] text-muted">
-              epoch {entry.epoch}
-            </span>
-            <span className="font-mono text-muted">
-              {truncateMiddle(entry.hash_before, 10)} → {truncateMiddle(entry.hash_after, 10)}
-            </span>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-muted">epoch</span>
+        <select
+          className="rounded border border-border bg-bg-2 px-2 py-0.5 text-xs"
+          value={epoch}
+          onChange={(e) => setSelectedEpoch(Number(e.target.value))}
+        >
+          {entries.map((e) => (
+            <option key={e.epoch} value={e.epoch}>
+              {e.epoch}
+            </option>
+          ))}
+        </select>
+        {entry.changed_params.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {entry.changed_params.map((p) => (
+              <span
+                key={p}
+                className="rounded border border-border bg-bg-3 px-1.5 py-0.5 font-mono text-[10px]"
+              >
+                {p}
+              </span>
+            ))}
           </div>
-          {entry.changed_params.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {entry.changed_params.map((p) => (
-                <span
-                  key={p}
-                  className="rounded border border-border bg-bg-3 px-1.5 py-0.5 font-mono text-[10px]"
-                >
-                  {p}
-                </span>
-              ))}
-            </div>
-          )}
-          {entry.delta_count > 0 && (
-            <div className="mt-1 text-[10px] text-warn">
-              {entry.delta_count} param{entry.delta_count === 1 ? "" : "s"} changed
-            </div>
-          )}
-        </li>
-      ))}
-    </ol>
+        )}
+        <span className="ml-auto text-[10px] text-muted">
+          prompt text not yet available — showing parameter hashes
+        </span>
+      </div>
+      <PromptDriftDiff before={entry.hash_before} after={entry.hash_after} />
+    </div>
   );
 }

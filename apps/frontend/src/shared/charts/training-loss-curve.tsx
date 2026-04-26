@@ -1,9 +1,10 @@
-import { FitnessEntry } from "@/lib/types";
+import { CheckpointEntry, FitnessEntry } from "@/lib/types";
 import { EmptyState } from "@/shared/ui/empty-state";
 import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -12,23 +13,38 @@ import {
 import { z } from "zod";
 
 const FitnessRows = z.array(FitnessEntry);
+const CheckpointRows = z.array(CheckpointEntry);
 
-/**
- * Trainer's per-epoch fitness signal lands in /runs/{id}/fitness.json
- * as `iteration` events with `score`. We re-purpose that endpoint as
- * a loss curve for training runs (Trainer's `iteration` events fire
- * on epoch_end with `score = train_loss` when the trainer wires it
- * that way; otherwise the curve still represents the epoch metric).
- */
-export function TrainingLossCurve({ data, height = 220 }: { data: unknown; height?: number }) {
+export function TrainingLossCurve({
+  data,
+  checkpointData,
+  height = 220,
+}: {
+  data: unknown;
+  checkpointData?: unknown;
+  height?: number;
+}) {
   const parsed = FitnessRows.safeParse(data);
   if (!parsed.success || parsed.data.length === 0) {
     return <EmptyState title="no loss data yet" />;
   }
   const rows = [...parsed.data].sort((a, b) => a.gen_index - b.gen_index);
+
+  const checkpoints = CheckpointRows.safeParse(checkpointData).data ?? [];
+  const bestCheckpoint = checkpoints.find((c) => c.is_best);
+
+  // Merge val_loss from checkpoints into rows keyed by epoch (gen_index)
+  const valByEpoch = new Map(checkpoints.map((c) => [c.epoch, c.val_loss]));
+  const merged = rows.map((r) => ({
+    ...r,
+    val_loss: valByEpoch.get(r.gen_index) ?? null,
+  }));
+
+  const hasVal = merged.some((r) => r.val_loss != null);
+
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={rows} margin={{ top: 12, right: 16, bottom: 8, left: 0 }}>
+      <LineChart data={merged} margin={{ top: 12, right: 16, bottom: 8, left: 0 }}>
         <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
         <XAxis
           dataKey="gen_index"
@@ -55,8 +71,32 @@ export function TrainingLossCurve({ data, height = 220 }: { data: unknown; heigh
           stroke="var(--color-accent)"
           strokeWidth={2}
           dot={{ r: 3 }}
-          name="loss"
+          name="train loss"
         />
+        {hasVal && (
+          <Line
+            type="monotone"
+            dataKey="val_loss"
+            stroke="var(--color-warn)"
+            strokeWidth={2}
+            strokeDasharray="5 3"
+            dot={{ r: 3 }}
+            name="val loss"
+            connectNulls
+          />
+        )}
+        {bestCheckpoint != null && (
+          <ReferenceLine
+            x={bestCheckpoint.epoch}
+            stroke="var(--color-accent)"
+            strokeDasharray="4 2"
+            label={{
+              value: "best",
+              position: "top",
+              style: { fill: "var(--color-accent)", fontSize: 10 },
+            }}
+          />
+        )}
       </LineChart>
     </ResponsiveContainer>
   );
