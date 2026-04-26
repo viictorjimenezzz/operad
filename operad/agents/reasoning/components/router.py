@@ -1,24 +1,24 @@
-"""Router leaf: emits a typed ``Choice`` for downstream dispatch.
+"""RouteClassifier leaf: emits a typed ``Choice`` for downstream dispatch.
 
-``Router`` is the leaf half of the ``Router + Switch`` pattern. It is a
+``RouteClassifier`` is the leaf half of structural routing. It is a
 standard default-forward leaf that, given some input, returns a
 ``Choice[T]`` — a typed label plus an optional short rationale. The
-paired ``Switch`` composite (``operad.agents.reasoning.switch``) then
+paired ``Router`` composite (``operad.agents.pipelines.Router``) then
 dispatches on that typed label.
 
 Narrow ``Choice`` per site by subclassing with a ``Literal`` label, and
 pass the concrete types to the constructor::
 
     from typing import Literal
-    from operad import Agent, Router, Choice, RouteInput
+    from operad import Agent, RouteClassifier, Choice, RouteInput
 
     class Mode(Choice[Literal["search", "compute"]]):
         pass
 
-    router = Router(config=cfg, input=RouteInput, output=Mode)
+    router = RouteClassifier(config=cfg, input=RouteInput, output=Mode)
 
 This keeps the set of allowable labels *in the type*, not a free-form
-string, so ``Switch`` can reason about exhaustiveness at compose time.
+string, so the structural ``Router`` can reason about exhaustiveness at compose time.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from ....core.agent import Agent, Example
 from ..schemas import Choice, RouteInput
 
 
-class Router(Agent[RouteInput, Choice[str]]):
+class RouteClassifier(Agent[RouteInput, Choice[str]]):
     input = RouteInput
     output = Choice[str]  # type: ignore[assignment]
 
@@ -47,4 +47,4 @@ class Router(Agent[RouteInput, Choice[str]]):
     default_sampling = {"temperature": 0.0, "max_tokens": 64}
 
 
-__all__ = ["Choice", "RouteInput", "Router"]
+__all__ = ["Choice", "RouteInput", "RouteClassifier"]

@@ -9,7 +9,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from operad import Agent, Parallel, Sequential
-from operad.agents import Choice, Router, Switch
+from operad.agents import Choice, RouteClassifier, Router
 from operad.core.graph import to_io_graph, to_io_graph_from_json, to_json
 
 from ..conftest import A, B, C, D, FakeLeaf
@@ -28,7 +28,7 @@ class Label(Choice[Literal["in", "out"]]):
     pass
 
 
-class _StubRouter(Router):
+class _StubRouter(RouteClassifier):
     def __init__(self) -> None:
         super().__init__(config=None, input=A, output=Label)
 
@@ -118,7 +118,7 @@ async def test_parallel_inversion_fans_out_from_shared_input_type(cfg) -> None:
 
 
 async def test_switch_inversion_contains_router_and_branch_edges() -> None:
-    s = Switch(
+    s = Router(
         router=_StubRouter(),
         branches={"in": _Branch(tag="in"), "out": _Branch(tag="out")},
         input=A,
@@ -130,9 +130,9 @@ async def test_switch_inversion_contains_router_and_branch_edges() -> None:
     assert len(data["edges"]) == 3
     assert {e["from"] for e in data["edges"]} == {_q(A)}
     class_names = {e["agent_path"]: e["class_name"] for e in data["edges"]}
-    assert class_names["Switch.router"] == "_StubRouter"
-    assert class_names["Switch.branch_in"] == "_Branch"
-    assert class_names["Switch.branch_out"] == "_Branch"
+    assert class_names["Router.router"] == "_StubRouter"
+    assert class_names["Router.branch_in"] == "_Branch"
+    assert class_names["Router.branch_out"] == "_Branch"
 
 
 async def test_io_graph_field_metadata_includes_system_and_extended_fields(cfg) -> None:

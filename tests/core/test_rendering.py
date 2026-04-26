@@ -20,7 +20,7 @@ from typing import Any
 from pydantic import BaseModel
 from operad.agents.reasoning.components.classifier import Classifier
 from operad.agents.reasoning.components.critic import Critic
-from operad.agents.reasoning.components.router import Router
+from operad.agents.reasoning.components.router import RouteClassifier
 from ..conftest import A, B, FakeLeaf
 
 
@@ -397,8 +397,8 @@ def test_critic_defaults() -> None:
     assert leaf.config.sampling.max_tokens == 512
 
 
-def test_router_defaults() -> None:
-    leaf = Router(config=_bare_cfg())
+def test_route_classifier_defaults() -> None:
+    leaf = RouteClassifier(config=_bare_cfg())
     leaf._apply_default_sampling()
     assert leaf.config is not None
     assert leaf.config.sampling.temperature == 0.0

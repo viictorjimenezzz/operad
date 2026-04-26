@@ -19,6 +19,8 @@ from pydantic import BaseModel
 from .build import AgentGraph, Edge, Node
 from .fields import is_system_field
 
+_PIPELINE_KINDS = {"Sequential", "Parallel", "Router", "Loop"}
+
 
 def _mermaid_id(path: str) -> str:
     return path.replace(".", "_")
@@ -26,6 +28,38 @@ def _mermaid_id(path: str) -> str:
 
 def _type_label(t: type) -> str:
     return getattr(t, "__name__", repr(t))
+
+
+def _dedupe_nodes(nodes: list[Node]) -> list[Node]:
+    """Keep first-seen node per path for display/export stability."""
+    seen: set[str] = set()
+    out: list[Node] = []
+    for n in nodes:
+        if n.path in seen:
+            continue
+        seen.add(n.path)
+        out.append(n)
+    return out
+
+
+def _dedupe_edges(edges: list[Edge]) -> list[Edge]:
+    """Keep first-seen structural edge to avoid repeated Loop traces."""
+    seen: set[tuple[str, str, type, type]] = set()
+    out: list[Edge] = []
+    for e in edges:
+        key = (e.caller, e.callee, e.input_type, e.output_type)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(e)
+    return out
+
+
+def _mermaid_node_label(n: Node) -> str:
+    io = f"{_type_label(n.input_type)} -> {_type_label(n.output_type)}"
+    if n.kind == "composite" and n.class_name in _PIPELINE_KINDS:
+        return f"{n.class_name}<br/>{n.path}<br/>{io}"
+    return f"{n.path}<br/>{io}"
 
 
 def _qualified_name(t: type) -> str:
@@ -178,16 +212,42 @@ def _nearest_composite_path(
 def to_mermaid(graph: AgentGraph) -> str:
     """Render an `AgentGraph` as a Mermaid `flowchart LR`."""
     lines: list[str] = ["flowchart LR"]
-    for n in graph.nodes:
+    nodes = _dedupe_nodes(graph.nodes)
+    edges = _dedupe_edges(graph.edges)
+    classes: dict[str, list[str]] = {}
+
+    for n in nodes:
         nid = _mermaid_id(n.path)
-        label = f"{n.path}<br/>{_type_label(n.input_type)} -> {_type_label(n.output_type)}"
+        label = _mermaid_node_label(n)
         shape_open, shape_close = ("((", "))") if n.kind == "leaf" else ("[", "]")
         lines.append(f'    {nid}{shape_open}"{label}"{shape_close}')
-    for e in graph.edges:
+
+        cls = "compositeNode"
+        if n.kind == "leaf":
+            cls = "leafNode"
+        elif n.class_name in _PIPELINE_KINDS:
+            cls = f"pipeline{n.class_name}"
+        classes.setdefault(cls, []).append(nid)
+
+    for e in edges:
         caller_id = _mermaid_id(e.caller)
         callee_id = _mermaid_id(e.callee)
         edge_label = f"{_type_label(e.input_type)} -> {_type_label(e.output_type)}"
         lines.append(f'    {caller_id} -->|"{edge_label}"| {callee_id}')
+
+    lines.extend(
+        [
+            "    classDef compositeNode fill:#f8fafc,stroke:#334155,stroke-width:1px;",
+            "    classDef leafNode fill:#ffffff,stroke:#334155,stroke-width:1px;",
+            "    classDef pipelineSequential fill:#e8f3ff,stroke:#1d4ed8,stroke-width:1px;",
+            "    classDef pipelineParallel fill:#ecfdf3,stroke:#15803d,stroke-width:1px;",
+            "    classDef pipelineRouter fill:#fff7ed,stroke:#c2410c,stroke-width:1px;",
+            "    classDef pipelineLoop fill:#f5f3ff,stroke:#6d28d9,stroke-width:1px;",
+        ]
+    )
+    for cls, ids in classes.items():
+        lines.append(f"    class {','.join(ids)} {cls}")
+
     return "\n".join(lines)
 
 
@@ -234,7 +294,7 @@ def to_mermaid_node(
 ) -> str:
     """Render a single-node Mermaid fragment for BuildError footers.
 
-    Used for errors with no failing edge (e.g. `router_miss`: the Switch
+    Used for errors with no failing edge (e.g. `router_miss`: the Router
     received a label no branch matched). When `note` is given it is
     appended as a second line inside the node label.
     """

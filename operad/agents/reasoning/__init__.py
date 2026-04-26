@@ -24,11 +24,12 @@ from .components import (
     Reformulator,
     Reflector,
     Retriever,
-    Router,
+    RouteClassifier,
     Summarizer,
     Tool,
     ToolUser,
 )
+from ..pipelines import Router
 from .debate import DebateAgent
 from .react import ReAct
 from .schemas import (
@@ -50,7 +51,6 @@ from .schemas import (
     ToolCall,
     ToolResult,
 )
-from .switch import Switch
 from .verifier import VerifierAgent
 
 __all__ = [
@@ -83,9 +83,9 @@ __all__ = [
     "Reflector",
     "Retriever",
     "RouteInput",
+    "RouteClassifier",
     "Router",
     "Summarizer",
-    "Switch",
     "Task",
     "Thought",
     "Tool",

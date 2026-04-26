@@ -1,11 +1,11 @@
 """`triage_reply` — operad's compositionality + evolution showcase.
 
-A small customer-support tree (Switch + Router + Sequential + four
-responders) is evolved over N generations via `Agent.auto_tune`. Every
-sub-agent is a deterministic offline leaf, so the whole demo runs
-without a model server. The mutation pool targets specific sub-paths,
-so different generations improve different branches — visible live in
-the dashboard's graph and mutation panels.
+A small customer-support tree (Router + Sequential + four responders)
+is evolved over N generations via `Agent.auto_tune`. Every sub-agent is
+a deterministic offline leaf, so the whole demo runs without a model
+server. The mutation pool targets specific sub-paths, so different
+generations improve different branches — visible live in the dashboard's
+graph and mutation panels.
 
 Run:
     uv run python apps/demos/triage_reply/run.py

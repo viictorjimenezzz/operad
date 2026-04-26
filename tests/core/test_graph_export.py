@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from operad import Sequential
+from operad import Agent, Sequential
+from operad.agents import Loop
 from operad.core.graph import to_json, to_mermaid
 
 from ..conftest import A, B, C, FakeLeaf
@@ -28,6 +29,41 @@ async def test_to_mermaid_contains_nodes_and_edges(cfg) -> None:
     assert "Sequential_stage_0" in text
     assert "Sequential_stage_1" in text
     assert "A -> B" in text and "B -> C" in text
+    assert "classDef pipelineSequential" in text
+
+
+async def test_to_mermaid_dedupes_repeated_loop_stage(cfg) -> None:
+    stage = FakeLeaf(config=cfg, input=A, output=A)
+    loop = Loop(stage, input=A, output=A, n_loops=2)
+    await loop.abuild()
+
+    text = to_mermaid(loop._graph)
+    # Loop traces the body twice; mermaid should still render one stage node.
+    assert text.count('Loop_stage_0(("') == 1
+    assert "classDef pipelineLoop" in text
+
+
+async def test_to_mermaid_pipeline_label_shows_class_name(cfg) -> None:
+    class _Wrapper(Agent[A, C]):
+        input = A
+        output = C
+
+        def __init__(self) -> None:
+            super().__init__(config=None, input=A, output=C)
+            self.pipeline = Sequential(
+                FakeLeaf(config=cfg, input=A, output=B),
+                FakeLeaf(config=cfg, input=B, output=C),
+                input=A,
+                output=C,
+            )
+
+        async def forward(self, x: A) -> C:  # type: ignore[override]
+            return (await self.pipeline(x)).response
+
+    root = _Wrapper()
+    await root.abuild()
+    text = to_mermaid(root._graph)
+    assert "Sequential<br/>_Wrapper.pipeline" in text
 
 
 async def test_to_json_is_serializable(cfg) -> None:

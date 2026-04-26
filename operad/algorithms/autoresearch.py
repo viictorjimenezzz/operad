@@ -25,6 +25,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
+from ..agents.pipelines import Loop
 from ..agents.reasoning.components import (
     Critic,
     FakeRetriever,
@@ -40,7 +41,7 @@ from ..agents.reasoning.schemas import (
     ReflectionInput,
     Task,
 )
-from ..core.agent import Agent
+from ..core.agent import Agent, _TRACER
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 
 
@@ -111,6 +112,108 @@ def _render_context(ctx: "ResearchContext | str") -> str:
     return ctx
 
 
+async def _ensure_built(*agents: Agent) -> None:
+    pending = [a.abuild() for a in agents if not a._built]
+    if pending:
+        await asyncio.gather(*pending)
+
+
+async def _invoke_stage(stage: Agent, x: BaseModel) -> BaseModel:
+    if stage._built:
+        return (await stage(x)).response
+    return await stage.forward(x)
+
+
+async def _run_loop(loop: Loop, x: BaseModel) -> BaseModel:
+    current = x
+    for _ in range(loop.n_loops):
+        for stage in loop._stages:
+            current = await _invoke_stage(stage, current)
+    return current
+
+
+class _AttemptState(BaseModel):
+    task: Task | None = None
+    hits: Hits = Field(default_factory=Hits)
+    draft: Answer | None = None
+    score: float = 0.0
+    iter_index: int = 0
+
+
+class _RefineStep(Agent[_AttemptState, _AttemptState]):
+    input = _AttemptState
+    output = _AttemptState
+
+    def __init__(
+        self,
+        *,
+        reasoner: Agent,
+        critic: Agent,
+        reflector: Agent,
+        threshold: float,
+        algorithm_path: str,
+    ) -> None:
+        super().__init__(config=None, input=_AttemptState, output=_AttemptState)
+        self.reasoner = reasoner
+        self.critic = critic
+        self.reflector = reflector
+        self.threshold = threshold
+        self.algorithm_path = algorithm_path
+
+    async def forward(self, x: _AttemptState) -> _AttemptState:  # type: ignore[override]
+        if x.score >= self.threshold:
+            return x
+
+        task = x.task if x.task is not None else Task.model_construct()
+        draft = x.draft if x.draft is not None else Answer.model_construct()
+        iter_index = x.iter_index + 1
+        r = (
+            await self.reflector(
+                ReflectionInput(
+                    original_request=task.goal,
+                    candidate_answer=draft.answer,
+                )
+            )
+        ).response
+        await emit_algorithm_event(
+            "iteration",
+            algorithm_path=self.algorithm_path,
+            payload={
+                "iter_index": iter_index,
+                "phase": "reflect",
+                "score": x.score,
+            },
+        )
+        draft = (
+            await self.reasoner(
+                ResearchInput(
+                    task=task,
+                    hits=x.hits,
+                    prior_reflection=r.suggested_revision,
+                )
+            )
+        ).response
+        score = (
+            await self.critic(Candidate(input=task, output=draft))
+        ).response.score
+        await emit_algorithm_event(
+            "iteration",
+            algorithm_path=self.algorithm_path,
+            payload={
+                "iter_index": iter_index,
+                "phase": "reason",
+                "score": score,
+            },
+        )
+        return _AttemptState(
+            task=task,
+            hits=x.hits,
+            draft=draft,
+            score=score,
+            iter_index=iter_index,
+        )
+
+
 class AutoResearcher:
     """Planner → Retriever → Reasoner → Critic → Reflector, best of N.
 
@@ -168,7 +271,7 @@ class AutoResearcher:
         path = type(self).__name__
         plan = (await self.planner(x)).response
         hits = (await self.retriever(Query(text=plan.query))).response
-        draft: Answer = (
+        draft = (
             await self.reasoner(ResearchInput(task=x, hits=hits))
         ).response
         score = (
@@ -179,48 +282,34 @@ class AutoResearcher:
             algorithm_path=path,
             payload={"iter_index": 0, "phase": "reason", "score": score},
         )
-        for iter_index in range(self.max_iter):
-            if score >= self.threshold:
-                break
-            r = (
-                await self.reflector(
-                    ReflectionInput(
-                        original_request=x.goal,
-                        candidate_answer=draft.answer,
-                    )
-                )
-            ).response
-            await emit_algorithm_event(
-                "iteration",
-                algorithm_path=path,
-                payload={
-                    "iter_index": iter_index + 1,
-                    "phase": "reflect",
-                    "score": score,
-                },
-            )
-            draft = (
-                await self.reasoner(
-                    ResearchInput(
-                        task=x,
-                        hits=hits,
-                        prior_reflection=r.suggested_revision,
-                    )
-                )
-            ).response
-            score = (
-                await self.critic(Candidate(input=x, output=draft))
-            ).response.score
-            await emit_algorithm_event(
-                "iteration",
-                algorithm_path=path,
-                payload={
-                    "iter_index": iter_index + 1,
-                    "phase": "reason",
-                    "score": score,
-                },
-            )
-        return draft, score
+        if self.max_iter == 0:
+            return draft, score
+
+        step = _RefineStep(
+            reasoner=self.reasoner,
+            critic=self.critic,
+            reflector=self.reflector,
+            threshold=self.threshold,
+            algorithm_path=path,
+        )
+        loop = Loop(
+            step,
+            input=_AttemptState,
+            output=_AttemptState,
+            n_loops=self.max_iter,
+        )
+        final = await _run_loop(
+            loop,
+            _AttemptState(
+                task=x,
+                hits=hits,
+                draft=draft,
+                score=score,
+                iter_index=0,
+            ),
+        )
+        attempt_draft = final.draft if final.draft is not None else Answer.model_construct()
+        return attempt_draft, final.score
 
     async def run(self, x: Task) -> Answer:
         path = type(self).__name__
@@ -237,6 +326,14 @@ class AutoResearcher:
                 started_at=started,
             )
             try:
+                if _TRACER.get() is None:
+                    await _ensure_built(
+                        self.planner,
+                        self.retriever,
+                        self.reasoner,
+                        self.critic,
+                        self.reflector,
+                    )
                 pairs = await asyncio.gather(
                     *(self._one_attempt(x) for _ in range(self.n))
                 )

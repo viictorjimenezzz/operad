@@ -17,16 +17,18 @@ Self-Feedback", NeurIPS 2023.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, ClassVar, Generic
 
 from pydantic import BaseModel, Field
 
+from ..agents.pipelines import Loop
 from ..agents.reasoning.components import Reflector
 from ..agents.reasoning.components.reasoner import Reasoner
 from ..agents.reasoning.schemas import Answer, Reflection, ReflectionInput, Task
-from ..core.agent import Agent, In, Out
+from ..core.agent import Agent, In, Out, _TRACER
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 
 
@@ -56,6 +58,117 @@ def _as_text(x: object) -> str:
     return str(x)
 
 
+async def _ensure_built(*agents: Agent[Any, Any]) -> None:
+    pending = [a.abuild() for a in agents if not a._built]
+    if pending:
+        await asyncio.gather(*pending)
+
+
+async def _invoke_stage(stage: Agent[Any, Any], x: BaseModel) -> BaseModel:
+    if stage._built:
+        return (await stage(x)).response
+    return await stage.forward(x)
+
+
+async def _run_loop(loop: Loop[Any], x: BaseModel) -> BaseModel:
+    current = x
+    for _ in range(loop.n_loops):
+        for stage in loop._stages:
+            current = await _invoke_stage(stage, current)
+    return current
+
+
+class _SelfRefineRuntime(BaseModel):
+    request: BaseModel | None = None
+    draft: BaseModel | None = None
+    reflection: Reflection | None = None
+    iter_index: int = 0
+    converged: bool = False
+
+
+class _SelfRefineStep(Agent[_SelfRefineRuntime, _SelfRefineRuntime]):
+    input = _SelfRefineRuntime
+    output = _SelfRefineRuntime
+
+    def __init__(
+        self,
+        *,
+        generator: Agent[Any, Any],
+        refiner: Agent[Any, Any],
+        reflector: Agent[Any, Any],
+        stop_when: Callable[[SelfRefineState], bool],
+        algorithm_path: str,
+    ) -> None:
+        super().__init__(config=None, input=_SelfRefineRuntime, output=_SelfRefineRuntime)
+        self.generator = generator
+        self.refiner = refiner
+        self.reflector = reflector
+        self.stop_when = stop_when
+        self.algorithm_path = algorithm_path
+
+    async def forward(self, x: _SelfRefineRuntime) -> _SelfRefineRuntime:  # type: ignore[override]
+        if x.converged:
+            return x
+
+        request = x.request
+        if request is None:
+            request = self.generator.input.model_construct()
+
+        iter_index = x.iter_index
+        draft = x.draft
+        reflection = x.reflection
+
+        if iter_index == 0:
+            draft = (await self.generator(request)).response
+        else:
+            refine_input = RefineInput(
+                original_request=str(request),
+                candidate_answer=str(draft),
+                critique="; ".join((reflection.deficiencies if reflection is not None else [])),
+            )
+            draft = (await self.refiner(refine_input)).response
+            await emit_algorithm_event(
+                "iteration",
+                algorithm_path=self.algorithm_path,
+                payload={
+                    "iter_index": iter_index,
+                    "phase": "refine",
+                    "text": _as_text(draft),
+                },
+            )
+
+        reflection = (
+            await self.reflector(
+                ReflectionInput(
+                    original_request=str(request),
+                    candidate_answer=str(draft),
+                )
+            )
+        ).response
+        critique_summary = "; ".join(reflection.deficiencies) if reflection.deficiencies else ""
+        await emit_algorithm_event(
+            "iteration",
+            algorithm_path=self.algorithm_path,
+            payload={
+                "iter_index": iter_index,
+                "phase": "reflect",
+                "score": reflection.score,
+                "needs_revision": reflection.needs_revision,
+                "critique_summary": critique_summary,
+                "text": _as_text(draft),
+            },
+        )
+
+        state = SelfRefineState(iter_index=iter_index, draft=draft, reflection=reflection)
+        return _SelfRefineRuntime(
+            request=request,
+            draft=draft,
+            reflection=reflection,
+            iter_index=iter_index + 1,
+            converged=self.stop_when(state),
+        )
+
+
 class SelfRefine(Generic[In, Out]):
     generator: ClassVar[Agent] = Reasoner(input=Task, output=Answer)
     reflector: ClassVar[Agent] = Reflector()
@@ -75,7 +188,6 @@ class SelfRefine(Generic[In, Out]):
         cls = type(self)
         self.generator = cls.generator.clone(context=context)
         self.reflector = cls.reflector.clone(context=context)
-        # on-policy: refiner shares the generator instance
         self.refiner = self.generator if on_policy else cls.refiner.clone(context=context)
 
         self.context = context
@@ -93,75 +205,39 @@ class SelfRefine(Generic[In, Out]):
                 started_at=started,
             )
             try:
-                draft: Out | None = None
-                for iter_index in range(self.max_iter):
-                    # Generate (first iter) or refine (subsequent iters)
-                    if iter_index == 0:
-                        draft = (await self.generator(x)).response
-                    else:
-                        refine_input = RefineInput(
-                            original_request=str(x),
-                            candidate_answer=str(draft),
-                            critique="; ".join(reflection.deficiencies),
-                        )
-                        draft = (await self.refiner(refine_input)).response
-                        await emit_algorithm_event(
-                            "iteration",
-                            algorithm_path=path,
-                            payload={
-                                "iter_index": iter_index,
-                                "phase": "refine",
-                                "text": _as_text(draft),
-                            },
-                        )
+                if _TRACER.get() is None:
+                    await _ensure_built(self.generator, self.reflector, self.refiner)
 
-                    # Reflect
-                    reflection = (
-                        await self.reflector(
-                            ReflectionInput(
-                                original_request=str(x),
-                                candidate_answer=str(draft),
-                            )
-                        )
-                    ).response
-                    critique_summary = "; ".join(reflection.deficiencies) if reflection.deficiencies else ""
-                    await emit_algorithm_event(
-                        "iteration",
-                        algorithm_path=path,
-                        payload={
-                            "iter_index": iter_index,
-                            "phase": "reflect",
-                            "score": reflection.score,
-                            "needs_revision": reflection.needs_revision,
-                            "critique_summary": critique_summary,
-                            "text": _as_text(draft),
-                        },
-                    )
+                step = _SelfRefineStep(
+                    generator=self.generator,
+                    refiner=self.refiner,
+                    reflector=self.reflector,
+                    stop_when=self.stop_when,
+                    algorithm_path=path,
+                )
+                loop = Loop(
+                    step,
+                    input=_SelfRefineRuntime,
+                    output=_SelfRefineRuntime,
+                    n_loops=self.max_iter,
+                )
+                final = await _run_loop(loop, _SelfRefineRuntime(request=x))
 
-                    state = SelfRefineState(
-                        iter_index=iter_index,
-                        draft=draft,
-                        reflection=reflection,
-                    )
-                    if self.stop_when(state):
-                        await emit_algorithm_event(
-                            "algo_end",
-                            algorithm_path=path,
-                            payload={"iterations": iter_index + 1, "converged": True},
-                            started_at=started,
-                            finished_at=time.time(),
-                        )
-                        return draft
+                draft = final.draft
+                if draft is None:
+                    draft = self.generator.output.model_construct()
 
-                assert draft is not None  # max_iter >= 1 guaranteed at construction
                 await emit_algorithm_event(
                     "algo_end",
                     algorithm_path=path,
-                    payload={"iterations": self.max_iter, "converged": False},
+                    payload={
+                        "iterations": final.iter_index,
+                        "converged": final.converged,
+                    },
                     started_at=started,
                     finished_at=time.time(),
                 )
-                return draft
+                return draft  # type: ignore[return-value]
             except Exception as e:
                 await emit_algorithm_event(
                     "algo_error",

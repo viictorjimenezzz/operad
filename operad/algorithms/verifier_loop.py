@@ -13,12 +13,16 @@ only the algorithm's own knobs (``context``, ``threshold``,
 
 from __future__ import annotations
 
+import asyncio
 import time
-from typing import ClassVar, Generic
+from typing import Any, ClassVar, Generic
 
+from pydantic import BaseModel, Field
+
+from ..agents.pipelines import Loop
 from ..agents.reasoning.components import Critic, Reasoner
-from ..agents.reasoning.schemas import Answer, Candidate, Task
-from ..core.agent import Agent, In, Out
+from ..agents.reasoning.schemas import Answer, Candidate, Score, Task
+from ..core.agent import Agent, In, Out, _TRACER
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 
 
@@ -29,6 +33,84 @@ def _as_text(x: object) -> str:
     if isinstance(answer, str):
         return answer
     return str(x)
+
+
+async def _ensure_built(*agents: Agent[Any, Any]) -> None:
+    pending = [a.abuild() for a in agents if not a._built]
+    if pending:
+        await asyncio.gather(*pending)
+
+
+async def _invoke_stage(stage: Agent[Any, Any], x: BaseModel) -> BaseModel:
+    if stage._built:
+        return (await stage(x)).response
+    return await stage.forward(x)
+
+
+async def _run_loop(loop: Loop[Any], x: BaseModel) -> BaseModel:
+    current = x
+    for _ in range(loop.n_loops):
+        for stage in loop._stages:
+            current = await _invoke_stage(stage, current)
+    return current
+
+
+class _VerifierState(BaseModel):
+    request: BaseModel | None = None
+    candidate: BaseModel | None = None
+    score: float | None = None
+    iterations: int = 0
+    converged: bool = False
+
+
+class _VerifyStep(Agent[_VerifierState, _VerifierState]):
+    input = _VerifierState
+    output = _VerifierState
+
+    def __init__(
+        self,
+        *,
+        generator: Agent[Any, Any],
+        critic: Agent[Any, Any],
+        threshold: float,
+        algorithm_path: str,
+    ) -> None:
+        super().__init__(config=None, input=_VerifierState, output=_VerifierState)
+        self.generator = generator
+        self.critic = critic
+        self.threshold = threshold
+        self.algorithm_path = algorithm_path
+
+    async def forward(self, x: _VerifierState) -> _VerifierState:  # type: ignore[override]
+        if x.converged:
+            return x
+
+        request = x.request
+        if request is None:
+            request = self.generator.input.model_construct()
+
+        candidate = (await self.generator(request)).response
+        score = (await self.critic(Candidate(input=request, output=candidate))).response
+        iter_index = x.iterations
+
+        await emit_algorithm_event(
+            "iteration",
+            algorithm_path=self.algorithm_path,
+            payload={
+                "iter_index": iter_index,
+                "phase": "verify",
+                "score": score.score,
+                "text": _as_text(candidate),
+            },
+        )
+
+        return _VerifierState(
+            request=request,
+            candidate=candidate,
+            score=score.score,
+            iterations=x.iterations + 1,
+            converged=score.score >= self.threshold,
+        )
 
 
 class VerifierLoop(Generic[In, Out]):
@@ -64,50 +146,39 @@ class VerifierLoop(Generic[In, Out]):
                 started_at=started,
             )
             try:
-                last: Out | None = None
-                last_score: float | None = None
-                for iter_index in range(self.max_iter):
-                    last = (await self.generator(x)).response
-                    score = (
-                        await self.critic(Candidate(input=x, output=last))
-                    ).response
-                    last_score = score.score
-                    await emit_algorithm_event(
-                        "iteration",
-                        algorithm_path=path,
-                        payload={
-                            "iter_index": iter_index,
-                            "phase": "verify",
-                            "score": score.score,
-                            "text": _as_text(last),
-                        },
-                    )
-                    if score.score >= self.threshold:
-                        await emit_algorithm_event(
-                            "algo_end",
-                            algorithm_path=path,
-                            payload={
-                                "iterations": iter_index + 1,
-                                "score": score.score,
-                                "converged": True,
-                            },
-                            started_at=started,
-                            finished_at=time.time(),
-                        )
-                        return last
-                assert last is not None  # max_iter >= 1 guaranteed at construction
+                if _TRACER.get() is None:
+                    await _ensure_built(self.generator, self.critic)
+
+                step = _VerifyStep(
+                    generator=self.generator,
+                    critic=self.critic,
+                    threshold=self.threshold,
+                    algorithm_path=path,
+                )
+                loop = Loop(
+                    step,
+                    input=_VerifierState,
+                    output=_VerifierState,
+                    n_loops=self.max_iter,
+                )
+                final = await _run_loop(loop, _VerifierState(request=x))
+
+                candidate = final.candidate
+                if candidate is None:
+                    candidate = self.generator.output.model_construct()
+
                 await emit_algorithm_event(
                     "algo_end",
                     algorithm_path=path,
                     payload={
-                        "iterations": self.max_iter,
-                        "score": last_score,
-                        "converged": False,
+                        "iterations": final.iterations,
+                        "score": final.score,
+                        "converged": final.converged,
                     },
                     started_at=started,
                     finished_at=time.time(),
                 )
-                return last
+                return candidate  # type: ignore[return-value]
             except Exception as e:
                 await emit_algorithm_event(
                     "algo_error",

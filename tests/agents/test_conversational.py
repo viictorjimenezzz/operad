@@ -136,11 +136,11 @@ async def test_graph_records_both_branches(cfg) -> None:
     talker = _make_talker(cfg, label="allow")
     await talker.abuild()
     callees = {e.callee for e in talker._graph.edges}
-    # All four children must appear — both allow-branch legs plus refusal.
-    assert "Talker.safeguard" in callees
-    assert "Talker.turn_taker" in callees
-    assert "Talker.persona" in callees
-    assert "Talker.refusal" in callees
+    # Router + both branches must appear in the traced graph.
+    assert "Talker.router.router" in callees
+    assert "Talker.router.branch_allow.stage_0.turn_taker" in callees
+    assert "Talker.router.branch_allow.stage_1" in callees
+    assert "Talker.router.branch_block" in callees
 
 
 async def test_refusal_leaf_does_not_need_config() -> None:

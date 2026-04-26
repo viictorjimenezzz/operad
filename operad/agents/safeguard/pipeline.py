@@ -8,14 +8,22 @@ wire the context-check/refusal fork by hand.
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Callable
 from typing import Any
 
-from ...core.agent import Agent, Out, _TRACER
-from ...utils.errors import BuildError, SideEffectDuringTrace
+from pydantic import BaseModel
+
+from ...core.agent import Agent, _TRACER
+from ...utils.errors import BuildError
+from ..pipelines import Router
 from .components import Context, Talker
-from .schemas import ContextInput, SafeguardCategory, TalkerInput, TextResponse
+from .schemas import (
+    ContextInput,
+    ContextOutput,
+    SafeguardCategory,
+    TalkerInput,
+    TextResponse,
+)
 
 
 class _PassthroughLeaf(Agent[ContextInput, TextResponse]):
@@ -27,6 +35,51 @@ class _PassthroughLeaf(Agent[ContextInput, TextResponse]):
 
     async def forward(self, x: ContextInput) -> TextResponse:  # type: ignore[override]
         return TextResponse(text=x.message)
+
+
+class _BlockedRequest(BaseModel):
+    """Envelope for blocked-branch handling."""
+
+    original: ContextInput | None = None
+    classification: ContextOutput | None = None
+
+
+class _BlockedResponder(Agent[_BlockedRequest, Any]):
+    """Out-of-scope branch: talker response or refusal_factory output."""
+
+    input = _BlockedRequest
+    output = TextResponse
+
+    def __init__(
+        self,
+        *,
+        talker: Talker,
+        refusal_factory: Callable[[ContextInput, SafeguardCategory], Any] | None,
+        output: type,
+    ) -> None:
+        super().__init__(config=None, input=_BlockedRequest, output=output)
+        self.talker = talker
+        self._refusal_factory = refusal_factory
+
+    async def forward(self, x: _BlockedRequest) -> Any:  # type: ignore[override]
+        if _TRACER.get() is not None:
+            await self.talker(TalkerInput.model_construct())
+            return self.output.model_construct()
+
+        original = x.original or ContextInput.model_construct()
+        classified = x.classification or ContextOutput.model_construct()
+
+        if self._refusal_factory is not None:
+            return self._refusal_factory(original, classified.category)
+
+        talker_input = TalkerInput(
+            context=original.context,
+            exit_strategy=original.exit_strategy,
+            recent_chat_history=original.recent_chat_history,
+            safeguard_reason=f"{classified.category}: {classified.reason}",
+            message=original.message,
+        )
+        return (await self.talker(talker_input)).response
 
 
 class SafetyGuard(Agent[ContextInput, Any]):
@@ -68,6 +121,40 @@ class SafetyGuard(Agent[ContextInput, Any]):
         self.inner: Agent[Any, Any] = inner if inner is not None else _PassthroughLeaf()
         self.talker = talker
         self._refusal_factory = refusal_factory
+        self.blocked = _BlockedResponder(
+            talker=self.talker,
+            refusal_factory=self._refusal_factory,
+            output=output,
+        )
+        self.router = Router(
+            router=self.classifier,
+            branches={
+                "in_scope": self.inner,
+                "exit": self.blocked,
+                "separate_domain": self.blocked,
+                "mixed_scope": self.blocked,
+                "dangerous_or_illegal": self.blocked,
+                "sexual_disallowed": self.blocked,
+                "distress_self_harm": self.blocked,
+            },
+            input=input,
+            output=output,
+            key_field="category",
+            branch_input=self._branch_input,
+        )
+
+    def _branch_input(
+        self,
+        x: ContextInput,
+        choice: BaseModel,
+        branch: Agent[Any, Any],
+    ) -> BaseModel:
+        if branch is self.inner:
+            return x
+        return _BlockedRequest(
+            original=x,
+            classification=choice,  # type: ignore[arg-type]
+        )
 
     def build(self, *args: Any, **kwargs: Any) -> "SafetyGuard":
         if self.output is not TextResponse and self._refusal_factory is None:
@@ -94,36 +181,7 @@ class SafetyGuard(Agent[ContextInput, Any]):
         return await super().abuild(*args, **kwargs)
 
     async def forward(self, x: ContextInput) -> Any:  # type: ignore[override]
-        tracer = _TRACER.get()
-        if tracer is not None:
-            warnings.warn(
-                "SafetyGuard is tracing all branches; ensure they are "
-                "side-effect-free.",
-                SideEffectDuringTrace,
-                stacklevel=3,
-            )
-            await self.classifier(x)
-            await self.inner(x)
-            await self.talker(TalkerInput.model_construct())
-            return self.output.model_construct()
-
-        ctx_out = (await self.classifier(x)).response
-
-        if ctx_out.category == "in_scope":
-            return (await self.inner(x)).response
-
-        # refusal branch
-        if self._refusal_factory is not None:
-            return self._refusal_factory(x, ctx_out.category)
-
-        talker_input = TalkerInput(
-            context=x.context,
-            exit_strategy=x.exit_strategy,
-            recent_chat_history=x.recent_chat_history,
-            safeguard_reason=f"{ctx_out.category}: {ctx_out.reason}",
-            message=x.message,
-        )
-        return (await self.talker(talker_input)).response
+        return (await self.router(x)).response
 
 
 __all__ = ["SafetyGuard"]
