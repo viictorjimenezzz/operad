@@ -17,6 +17,7 @@ ENV_LOAD  := if [ -f $(ENV_FILE) ]; then set -a; . ./$(ENV_FILE); set +a; fi
 LANGFUSE_PUBLIC_URL ?= http://localhost:3000
 DASHBOARD_PORT      ?= 7860
 STUDIO_PORT         ?= 7870
+DASHBOARD_HOST      ?= 127.0.0.1
 
 .PHONY: help \
         up down restart rebuild logs ps clean \
@@ -157,18 +158,21 @@ studio: ensure-bundles
 
 demo:
 	@$(ENV_LOAD); \
+	bash scripts/check_dashboard_contract.sh "$(DASHBOARD_HOST)" "$(DASHBOARD_PORT)"; \
 	OPERAD_OTEL=1 \
 	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}/api/public/otel}" \
 	uv run --extra otel python apps/demos/agent_evolution/run.py --offline --dashboard
 
 demo-script:
 	@$(ENV_LOAD); \
+	bash scripts/check_dashboard_contract.sh "$(DASHBOARD_HOST)" "$(DASHBOARD_PORT)"; \
 	OPERAD_OTEL=1 \
 	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}/api/public/otel}" \
 	uv run --extra observers --extra otel python demo.py --dashboard
 
 demo-triage:
 	@$(ENV_LOAD); \
+	bash scripts/check_dashboard_contract.sh "$(DASHBOARD_HOST)" "$(DASHBOARD_PORT)"; \
 	OPERAD_OTEL=1 \
 	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}/api/public/otel}" \
 	uv run --extra otel python apps/demos/triage_reply/run.py --dashboard
@@ -176,6 +180,7 @@ demo-triage:
 EXAMPLE ?= 01_composition_research_analyst.py
 example-observed: ensure-bundles
 	@$(ENV_LOAD); \
+	bash scripts/check_dashboard_contract.sh "$(DASHBOARD_HOST)" "$(DASHBOARD_PORT)"; \
 	OPERAD_OTEL=1 \
 	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}/api/public/otel}" \
 	uv run --extra otel python "examples/$(EXAMPLE)" --dashboard
