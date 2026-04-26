@@ -28,7 +28,7 @@ const InvocationRowSchema = z.object({
 });
 
 const InvocationsPayload = z.object({
-  agent_path: z.string().default(""),
+  agent_path: z.string().nullable().default(null),
   invocations: z.array(InvocationRowSchema).default([]),
 });
 
@@ -75,7 +75,7 @@ export function InvocationsTable({ summary, invocations }: InvocationsTableProps
   const clearComparisonInvocation = useUIStore((s) => s.clearComparisonInvocation);
 
   const run = summaryParsed.success ? summaryParsed.data : null;
-  const agentPath = invParsed.success ? invParsed.data.agent_path : "";
+  const agentPath = (invParsed.success ? invParsed.data.agent_path : null) ?? "";
   const rows = invParsed.success ? invParsed.data.invocations : [];
 
   const [nowSec, setNowSec] = useState(() => Date.now() / 1000);

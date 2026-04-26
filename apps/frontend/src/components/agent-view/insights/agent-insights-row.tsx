@@ -1,9 +1,9 @@
 import { BackendBadges } from "@/components/agent-view/insights/backend-badges";
+import { ChunkReplay } from "@/components/agent-view/insights/chunk-replay";
 import { CostLatencySparklines } from "@/components/agent-view/insights/cost-latency-sparklines";
 import { DriftStrip } from "@/components/agent-view/insights/drift-strip";
 import { ExampleChips } from "@/components/agent-view/insights/example-chips";
 import { FingerprintCard } from "@/components/agent-view/insights/fingerprint-card";
-import { ChunkReplay } from "@/components/agent-view/insights/chunk-replay";
 import { ValueDistribution } from "@/components/agent-view/insights/value-distribution";
 import { Card, CardContent } from "@/components/ui/card";
 import { dashboardApi } from "@/lib/api/dashboard";
@@ -26,29 +26,21 @@ export interface AgentInsightsRowProps {
 export function AgentInsightsRow(props: AgentInsightsRowProps) {
   const rawSummary = props.dataSummary ?? props.summary;
   const rawInvocations = props.dataInvocations ?? props.invocations;
-  const summaryParsed = RunSummary.safeParse(rawSummary);
-  if (!summaryParsed.success) {
-    return (
-      <ContractError
-        title="invalid summary contract"
-        issues={summaryParsed.error.issues.map((i) => i.path.join("."))}
-      />
-    );
-  }
-  const invocationsParsed = RunInvocationsResponse.safeParse(rawInvocations);
-  if (!invocationsParsed.success) {
-    return (
-      <ContractError
-        title="invalid invocations contract"
-        issues={invocationsParsed.error.issues.map((issue) => issue.path.join("."))}
-      />
-    );
-  }
 
-  const summary = summaryParsed.data;
-  const invocations = invocationsParsed.data.invocations;
-  const rootPath = summary.root_agent_path ?? invocationsParsed.data.agent_path ?? null;
-  const runId = props.runId ?? summary.run_id;
+  const summaryParsed =
+    rawSummary === undefined || rawSummary === null ? null : RunSummary.safeParse(rawSummary);
+  const invocationsParsed =
+    rawInvocations === undefined || rawInvocations === null
+      ? null
+      : RunInvocationsResponse.safeParse(rawInvocations);
+
+  const summary = summaryParsed?.success ? summaryParsed.data : null;
+  const invocations = invocationsParsed?.success ? invocationsParsed.data.invocations : [];
+  const invocationsAgentPath = invocationsParsed?.success
+    ? invocationsParsed.data.agent_path
+    : null;
+  const rootPath = summary?.root_agent_path ?? invocationsAgentPath ?? null;
+  const runId = props.runId ?? summary?.run_id ?? null;
 
   const metaQuery = useQuery({
     queryKey: ["run", "agent-meta", runId, rootPath] as const,
@@ -60,6 +52,43 @@ export function AgentInsightsRow(props: AgentInsightsRowProps) {
     retry: false,
   });
   const meta = parseMeta(metaQuery.data);
+
+  if (rawSummary === undefined || rawSummary === null) {
+    return <LoadingState label="loading run summary" />;
+  }
+  if (summaryParsed && !summaryParsed.success) {
+    return (
+      <ContractError
+        title="invalid summary contract"
+        issues={summaryParsed.error.issues.map((i) => i.path.join(".") || "(root)")}
+      />
+    );
+  }
+  if (rawInvocations === undefined || rawInvocations === null) {
+    return <LoadingState label="loading invocations" />;
+  }
+  // Backend may legitimately reply {error, reason} before the root start
+  // event lands (e.g. when the run was just registered); show a waiting
+  // state instead of a contract failure.
+  if (
+    typeof rawInvocations === "object" &&
+    rawInvocations !== null &&
+    !Array.isArray(rawInvocations) &&
+    "error" in (rawInvocations as Record<string, unknown>)
+  ) {
+    return <LoadingState label="waiting for first invocation" />;
+  }
+  if (invocationsParsed && !invocationsParsed.success) {
+    return (
+      <ContractError
+        title="invalid invocations contract"
+        issues={invocationsParsed.error.issues.map((issue) => issue.path.join(".") || "(root)")}
+      />
+    );
+  }
+  if (summary === null) {
+    return <LoadingState label="loading run summary" />;
+  }
 
   const first = invocations[0] ?? null;
   const last = invocations[invocations.length - 1] ?? null;
@@ -144,6 +173,17 @@ function toInputDistributions(
     }
   }
   return [...map.entries()].map(([label, values]) => ({ label, values }));
+}
+
+function LoadingState({ label }: { label: string }) {
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-2 p-3 text-[0.72rem] text-muted">
+        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent" />
+        {label}…
+      </CardContent>
+    </Card>
+  );
 }
 
 function ContractError({ title, issues }: { title: string; issues: string[] }) {

@@ -11,14 +11,15 @@ export interface BackendBadgesProps {
 export function BackendBadges({ invocations, summaryRaw, meta }: BackendBadgesProps) {
   const openDrawer = useUIStore((s) => s.openDrawer);
   const latest = invocations[invocations.length - 1] ?? null;
-  const backend = asString(meta?.config.backend) ?? asString(latest?.backend) ?? "unknown";
-  const model = asString(meta?.config.model) ?? asString(latest?.model) ?? "unknown model";
-  const sampling = meta?.config.sampling ?? {};
-  const io = meta?.config.io ?? {};
-  const runtime = meta?.config.runtime ?? {};
+  const backend = asString(meta?.config?.backend) ?? asString(latest?.backend) ?? "unknown";
+  const model = asString(meta?.config?.model) ?? asString(latest?.model) ?? "unknown model";
+  const sampling = meta?.config?.sampling ?? {};
+  const io = meta?.config?.io ?? {};
+  const runtime = meta?.config?.runtime ?? {};
   const temperature = asNumber(sampling.temperature);
   const topP = asNumber(sampling.top_p);
-  const renderer = asString(runtime.renderer) ?? asString(latest?.renderer) ?? "xml";
+  const renderer =
+    asString(io.renderer) ?? asString(runtime.renderer) ?? asString(latest?.renderer) ?? "xml";
   const runtimeExtra = asRecord(runtime.extra);
   const isLocal =
     backend.toLowerCase().includes("llama") ||

@@ -251,6 +251,9 @@ def _node_json(n: Node) -> dict[str, Any]:
         "input": _qualified_name(n.input_type),
         "output": _qualified_name(n.output_type),
         "kind": n.kind,
+        "class_name": n.class_name,
+        "input_fields": _type_fields(n.input_type),
+        "output_fields": _type_fields(n.output_type),
     }
 
 
@@ -260,6 +263,7 @@ def _edge_json(e: Edge) -> dict[str, Any]:
         "callee": e.callee,
         "input": _qualified_name(e.input_type),
         "output": _qualified_name(e.output_type),
+        "class_name": e.class_name,
     }
 
 
@@ -267,7 +271,11 @@ def to_json(graph: AgentGraph) -> dict[str, Any]:
     """Return a JSON-serializable dict describing the graph.
 
     Type fields use qualified `module.qualname` strings so that
-    `from_json` can rehydrate the same class references.
+    `from_json` can rehydrate the same class references; per-node
+    ``class_name``, ``input_fields`` and ``output_fields`` are also
+    embedded so consumers in a different process (e.g. the dashboard)
+    can produce the rich :func:`to_io_graph` view without round-tripping
+    types through ``importlib``.
     """
     return {
         "root": graph.root,
@@ -404,6 +412,92 @@ def to_io_graph(graph: AgentGraph) -> dict[str, Any]:
     }
 
 
+def to_io_graph_from_json(graph_json: dict[str, Any]) -> dict[str, Any]:
+    """JSON-only equivalent of :func:`to_io_graph`.
+
+    The full :func:`to_io_graph` walks live Pydantic classes to extract
+    field metadata. That requires :func:`from_json` to round-trip the
+    type names back to the originating classes — which fails across
+    process boundaries (the dashboard cannot import ``__main__.Foo``
+    from a separate demo process).
+
+    This function operates on the JSON shape produced by :func:`to_json`
+    and uses the embedded ``class_name`` / ``input_fields`` /
+    ``output_fields`` keys directly. It is the canonical path for any
+    consumer that does not have access to the live type objects.
+    """
+    nodes = [n for n in graph_json.get("nodes") or [] if isinstance(n, dict)]
+    edges = [e for e in graph_json.get("edges") or [] if isinstance(e, dict)]
+    leaf_paths = {n["path"] for n in nodes if n.get("kind") == "leaf" and "path" in n}
+    composite_paths = {n["path"] for n in nodes if n.get("kind") == "composite" and "path" in n}
+    nodes_by_path = {n["path"]: n for n in nodes if "path" in n}
+    root = str(graph_json.get("root") or "")
+
+    def _coerce_fields(raw: Any) -> list[dict[str, Any]]:
+        if not isinstance(raw, list):
+            return []
+        return [f for f in raw if isinstance(f, dict)]
+
+    io_edges: list[dict[str, Any]] = []
+    for e in edges:
+        callee = str(e.get("callee") or "")
+        if callee not in leaf_paths:
+            continue
+        node = nodes_by_path.get(callee, {})
+        io_edges.append(
+            {
+                "agent_path": callee,
+                "class_name": e.get("class_name")
+                or node.get("class_name")
+                or callee.rsplit(".", 1)[-1],
+                "kind": "leaf",
+                "from": str(e.get("input") or ""),
+                "to": str(e.get("output") or ""),
+                "composite_path": _nearest_composite_path(
+                    callee,
+                    composite_paths=composite_paths,
+                    root_path=root,
+                ),
+            }
+        )
+
+    root_node = nodes_by_path.get(root) if root else None
+    if root_node and root_node.get("kind") == "leaf":
+        io_edges.append(
+            {
+                "agent_path": root_node["path"],
+                "class_name": root_node.get("class_name") or root_node["path"],
+                "kind": "leaf",
+                "from": str(root_node.get("input") or ""),
+                "to": str(root_node.get("output") or ""),
+                "composite_path": None,
+            }
+        )
+
+    type_nodes: dict[str, dict[str, Any]] = {}
+    for edge in io_edges:
+        for end_key, side in ((edge["from"], "input"), (edge["to"], "output")):
+            if not end_key or end_key in type_nodes:
+                continue
+            fields_key = f"{side}_fields"
+            chosen_fields: list[dict[str, Any]] = []
+            chosen_name: str | None = None
+            for n in nodes:
+                if n.get(side) == end_key:
+                    if not chosen_fields:
+                        chosen_fields = _coerce_fields(n.get(fields_key))
+                    chosen_name = chosen_name or n.get(f"{side}_name")
+                    if chosen_fields:
+                        break
+            type_nodes[end_key] = {
+                "key": end_key,
+                "name": chosen_name or end_key.rsplit(".", 1)[-1],
+                "fields": chosen_fields,
+            }
+
+    return {"root": root or None, "nodes": list(type_nodes.values()), "edges": io_edges}
+
+
 # --- round-trip -------------------------------------------------------------
 
 
@@ -471,6 +565,7 @@ __all__ = [
     "TypeRegistry",
     "from_json",
     "to_io_graph",
+    "to_io_graph_from_json",
     "to_json",
     "to_mermaid",
     "to_mermaid_edge",

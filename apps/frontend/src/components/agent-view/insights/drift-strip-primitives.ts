@@ -18,8 +18,8 @@ export function buildDriftTicks(invocations: RunInvocation[]): DriftTick[] {
   const base = invocations.map((invocation) => ({
     id: invocation.id,
     startedAt: invocation.started_at,
-    hashPrompt: invocation.hash_prompt,
-    hashInput: invocation.hash_input,
+    hashPrompt: invocation.hash_prompt ?? "",
+    hashInput: invocation.hash_input ?? "",
   }));
   if (base.length <= 500) return base;
   const buckets = 240;

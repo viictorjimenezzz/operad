@@ -194,13 +194,13 @@ export const RunInvocation = z.object({
   completion_tokens: z.number().nullable().optional().default(null),
   cost_usd: z.number().nullable().optional().default(null),
   hash_model: z.string().nullable().optional().default(null),
-  hash_prompt: z.string(),
+  hash_prompt: z.string().nullable().optional().default(null),
   hash_graph: z.string().nullable().optional().default(null),
-  hash_input: z.string(),
+  hash_input: z.string().nullable().optional().default(null),
   hash_output_schema: z.string().nullable().optional().default(null),
   hash_config: z.string().nullable().optional().default(null),
-  hash_content: z.string(),
-  status: z.enum(["ok", "error"]),
+  hash_content: z.string().nullable().optional().default(null),
+  status: z.enum(["ok", "error"]).default("ok"),
   error: z.string().nullable().optional().default(null),
   langfuse_url: z.string().nullable().optional().default(null),
   script: z.string().nullable().optional().default(null),
@@ -213,8 +213,8 @@ export const RunInvocation = z.object({
 export type RunInvocation = z.infer<typeof RunInvocation>;
 
 export const RunInvocationsResponse = z.object({
-  agent_path: z.string(),
-  invocations: z.array(RunInvocation),
+  agent_path: z.string().nullable().default(null),
+  invocations: z.array(RunInvocation).default([]),
 });
 export type RunInvocationsResponse = z.infer<typeof RunInvocationsResponse>;
 
@@ -236,14 +236,15 @@ export const AgentMetaResponse = z.object({
       io: z.record(z.unknown()).default({}),
       runtime: z.record(z.unknown()).default({}),
     })
+    .nullable()
     .default({
       sampling: {},
       resilience: {},
       io: {},
       runtime: {},
     }),
-  input_schema: z.record(z.unknown()).default({}),
-  output_schema: z.record(z.unknown()).default({}),
+  input_schema: z.record(z.unknown()).nullable().default(null),
+  output_schema: z.record(z.unknown()).nullable().default(null),
   forward_in_overridden: z.boolean().default(false),
   forward_out_overridden: z.boolean().default(false),
   forward_in_doc: z.string().nullable().optional().default(null),

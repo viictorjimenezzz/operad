@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from operad import Agent, Parallel, Pipeline
 from operad.agents import Choice, Router, Switch
-from operad.core.graph import to_io_graph
+from operad.core.graph import to_io_graph, to_io_graph_from_json, to_json
 
 from ..conftest import A, B, C, D, FakeLeaf
 
@@ -185,3 +185,88 @@ async def test_composite_path_uses_nearest_non_root_composite(cfg) -> None:
     assert by_path["Pipeline.stage_0.stage_0"]["composite_path"] == "Pipeline.stage_0"
     assert by_path["Pipeline.stage_0.stage_1"]["composite_path"] == "Pipeline.stage_0"
     assert by_path["Pipeline.stage_1"]["composite_path"] is None
+
+
+async def test_to_io_graph_from_json_matches_live_graph(cfg) -> None:
+    """JSON-only inversion (used by the dashboard) matches the live walker."""
+    p = Pipeline(
+        FakeLeaf(config=cfg, input=A, output=B),
+        FakeLeaf(config=cfg, input=B, output=C),
+        input=A,
+        output=C,
+    )
+    await p.abuild()
+
+    live = to_io_graph(p._graph)
+    rehydrated = to_io_graph_from_json(to_json(p._graph))
+
+    assert rehydrated["root"] == live["root"]
+    assert {e["agent_path"] for e in rehydrated["edges"]} == {
+        e["agent_path"] for e in live["edges"]
+    }
+    assert {n["key"] for n in rehydrated["nodes"]} == {n["key"] for n in live["nodes"]}
+
+    rehydrated_fields = {n["key"]: [f["name"] for f in n["fields"]] for n in rehydrated["nodes"]}
+    live_fields = {n["key"]: [f["name"] for f in n["fields"]] for n in live["nodes"]}
+    assert rehydrated_fields == live_fields
+
+    rehydrated_classes = {e["agent_path"]: e["class_name"] for e in rehydrated["edges"]}
+    live_classes = {e["agent_path"]: e["class_name"] for e in live["edges"]}
+    assert rehydrated_classes == live_classes
+
+
+async def test_to_io_graph_from_json_handles_unimportable_types() -> None:
+    """The dashboard receives graph_json from a different process; types
+    referenced as ``__main__.Foo`` cannot be imported. Inversion must still
+    produce edges and field metadata when those are embedded inline."""
+    graph_json = {
+        "root": "Pipeline",
+        "nodes": [
+            {
+                "path": "Pipeline",
+                "kind": "composite",
+                "input": "__main__.Question",
+                "output": "__main__.Answer",
+                "class_name": "Pipeline",
+                "input_fields": [
+                    {"name": "text", "type": "str", "description": "the question", "system": False},
+                ],
+                "output_fields": [
+                    {"name": "answer", "type": "str", "description": "the answer", "system": False},
+                ],
+            },
+            {
+                "path": "Pipeline.stage_0",
+                "kind": "leaf",
+                "input": "__main__.Question",
+                "output": "__main__.Answer",
+                "class_name": "MyLeaf",
+                "input_fields": [
+                    {"name": "text", "type": "str", "description": "the question", "system": False},
+                ],
+                "output_fields": [
+                    {"name": "answer", "type": "str", "description": "the answer", "system": False},
+                ],
+            },
+        ],
+        "edges": [
+            {
+                "caller": "Pipeline",
+                "callee": "Pipeline.stage_0",
+                "input": "__main__.Question",
+                "output": "__main__.Answer",
+                "class_name": "MyLeaf",
+            }
+        ],
+    }
+
+    data = to_io_graph_from_json(graph_json)
+
+    assert data["root"] == "Pipeline"
+    assert [e["class_name"] for e in data["edges"]] == ["MyLeaf"]
+    assert {n["key"] for n in data["nodes"]} == {"__main__.Question", "__main__.Answer"}
+    text_field = next(
+        f for n in data["nodes"] if n["key"] == "__main__.Question" for f in n["fields"]
+    )
+    assert text_field["name"] == "text"
+    assert text_field["description"] == "the question"

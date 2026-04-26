@@ -161,7 +161,7 @@ describe("agent-view contracts", () => {
       forward_out_doc: null,
     });
     expect(parsed.class_name).toBe("Reasoner");
-    expect(parsed.config.backend).toBe("openai");
+    expect(parsed.config?.backend).toBe("openai");
     expect(parsed.forward_in_doc).toBe("input docs");
   });
 
