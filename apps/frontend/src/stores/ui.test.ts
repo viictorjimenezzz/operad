@@ -52,6 +52,14 @@ describe("useUIStore", () => {
     expect(useUIStore.getState().drawer).toBeNull();
   });
 
+  it("supports find-runs drawer kind", () => {
+    useUIStore.getState().openDrawer("find-runs", { hash: "hash_prompt", value: "abcd1234" });
+    expect(useUIStore.getState().drawer).toEqual({
+      kind: "find-runs",
+      payload: { hash: "hash_prompt", value: "abcd1234" },
+    });
+  });
+
   it("persists sidebarCollapsed and drawerWidth", () => {
     useUIStore.getState().setSidebarCollapsed(true);
     useUIStore.getState().setDrawerWidth(512);

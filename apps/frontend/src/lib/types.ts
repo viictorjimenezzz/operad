@@ -183,6 +183,74 @@ export const RunSummary = z.object({
 });
 export type RunSummary = z.infer<typeof RunSummary>;
 
+// --- Agent-view endpoint shapes ---------------------------------------------
+
+export const RunInvocation = z.object({
+  id: z.string(),
+  started_at: z.number(),
+  finished_at: numberOrNull.default(null),
+  latency_ms: z.number().nullable().optional().default(null),
+  prompt_tokens: z.number().nullable().optional().default(null),
+  completion_tokens: z.number().nullable().optional().default(null),
+  cost_usd: z.number().nullable().optional().default(null),
+  hash_model: z.string().nullable().optional().default(null),
+  hash_prompt: z.string(),
+  hash_graph: z.string().nullable().optional().default(null),
+  hash_input: z.string(),
+  hash_output_schema: z.string().nullable().optional().default(null),
+  hash_config: z.string().nullable().optional().default(null),
+  hash_content: z.string(),
+  status: z.enum(["ok", "error"]),
+  error: z.string().nullable().optional().default(null),
+  langfuse_url: z.string().nullable().optional().default(null),
+  script: z.string().nullable().optional().default(null),
+  backend: z.string().nullable().optional().default(null),
+  model: z.string().nullable().optional().default(null),
+  renderer: z.string().nullable().optional().default(null),
+  input: z.unknown().optional(),
+  output: z.unknown().optional(),
+});
+export type RunInvocation = z.infer<typeof RunInvocation>;
+
+export const RunInvocationsResponse = z.object({
+  agent_path: z.string(),
+  invocations: z.array(RunInvocation),
+});
+export type RunInvocationsResponse = z.infer<typeof RunInvocationsResponse>;
+
+export const AgentMetaResponse = z.object({
+  agent_path: z.string(),
+  class_name: z.string(),
+  kind: z.enum(["leaf", "composite"]),
+  hash_content: z.string(),
+  role: z.string().nullable().optional().default(null),
+  task: z.string().nullable().optional().default(null),
+  rules: z.array(z.string()).default([]),
+  examples: z.array(z.object({ input: z.unknown(), output: z.unknown() })).default([]),
+  config: z
+    .object({
+      backend: z.string().nullable().optional().default(null),
+      model: z.string().nullable().optional().default(null),
+      sampling: z.record(z.unknown()).default({}),
+      resilience: z.record(z.unknown()).default({}),
+      io: z.record(z.unknown()).default({}),
+      runtime: z.record(z.unknown()).default({}),
+    })
+    .default({
+      sampling: {},
+      resilience: {},
+      io: {},
+      runtime: {},
+    }),
+  input_schema: z.record(z.unknown()).default({}),
+  output_schema: z.record(z.unknown()).default({}),
+  forward_in_overridden: z.boolean().default(false),
+  forward_out_overridden: z.boolean().default(false),
+  trainable_paths: z.array(z.string()).default([]),
+  langfuse_search_url: z.string().nullable().optional().default(null),
+});
+export type AgentMetaResponse = z.infer<typeof AgentMetaResponse>;
+
 // --- Panel shapes ------------------------------------------------------------
 
 export const FitnessEntry = z.object({
