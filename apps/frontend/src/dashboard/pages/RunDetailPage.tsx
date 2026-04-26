@@ -1,10 +1,10 @@
-import { DashboardRenderer } from "@/components/DashboardRenderer";
+import { DashboardRenderer } from "@/components/runtime/dashboard-renderer";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useRunEvents, useRunSummary } from "@/hooks/use-runs";
 import { pickLayout } from "@/layouts";
 import { truncateMiddle } from "@/lib/utils";
-import { Badge } from "@/shared/ui/badge";
-import { Button } from "@/shared/ui/button";
-import { EmptyState } from "@/shared/ui/empty-state";
 import { useEventBufferStore } from "@/stores";
 import { useRunStore } from "@/stores/run";
 import { useEffect } from "react";

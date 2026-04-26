@@ -1,7 +1,7 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useJob } from "@/hooks/use-studio";
-import { Badge } from "@/shared/ui/badge";
-import { Button } from "@/shared/ui/button";
-import { EmptyState } from "@/shared/ui/empty-state";
 import { JobRowCard } from "@/studio/components/job-row-card";
 import { TrainingLauncher } from "@/studio/components/training-launcher";
 import { Link, useParams } from "react-router-dom";

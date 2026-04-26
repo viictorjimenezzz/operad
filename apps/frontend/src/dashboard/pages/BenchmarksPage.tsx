@@ -1,6 +1,6 @@
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useBenchmarkDelete, useBenchmarks } from "@/hooks/use-runs";
-import { Button } from "@/shared/ui/button";
-import { EmptyState } from "@/shared/ui/empty-state";
 import { Link } from "react-router-dom";
 
 function fmtTs(ts: number): string {
@@ -66,7 +66,8 @@ export function BenchmarksPage() {
             <div className="mb-2 flex flex-wrap gap-2 text-[11px]">
               {row.leaderboard.map((l) => (
                 <span key={`${row.id}:${l.task}`} className="rounded bg-bg-2 px-2 py-1 text-muted">
-                  {l.task}: <span className="font-mono text-text">{l.method}</span> ({l.mean.toFixed(3)})
+                  {l.task}: <span className="font-mono text-text">{l.method}</span> (
+                  {l.mean.toFixed(3)})
                 </span>
               ))}
             </div>

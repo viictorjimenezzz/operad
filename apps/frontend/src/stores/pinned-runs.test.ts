@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
 import { usePinnedRunsStore } from "@/stores/pinned-runs";
+import { beforeEach, describe, expect, it } from "vitest";
 
 beforeEach(() => {
   usePinnedRunsStore.getState().clear();
@@ -64,7 +64,8 @@ describe("usePinnedRunsStore", () => {
     usePinnedRunsStore.getState().pin("run-persist");
     const raw = localStorage.getItem("operad:pinned-runs:v1");
     expect(raw).not.toBeNull();
-    const parsed = JSON.parse(raw!);
+    if (raw === null) throw new Error("expected pinned-runs localStorage payload");
+    const parsed = JSON.parse(raw);
     expect(parsed.state.pinned).toContain("run-persist");
   });
 });

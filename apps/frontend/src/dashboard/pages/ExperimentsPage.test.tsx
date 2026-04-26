@@ -1,5 +1,5 @@
+import { normalizeSeriesForComparison } from "@/components/charts/curve-overlay";
 import type { RunSummary } from "@/lib/types";
-import { normalizeSeriesForComparison } from "@/shared/charts/curve-overlay";
 import { describe, expect, it } from "vitest";
 import {
   buildCurve,
@@ -10,6 +10,8 @@ import {
   resolveComparisonRunIds,
   updateRunsSearch,
 } from "./ExperimentsPage";
+
+type RunDetailsInput = Parameters<typeof buildCurve>[1];
 
 function makeRun(overrides: Partial<RunSummary> = {}): RunSummary {
   return {
@@ -49,10 +51,7 @@ describe("Experiments helpers", () => {
 
   it("URL ids take precedence over pinned ids", () => {
     expect(resolveComparisonRunIds("url-a,url-b", ["pin-1", "pin-2"])).toEqual(["url-a", "url-b"]);
-    expect(resolveComparisonRunIds(null, ["pin-1", "pin-2", "pin-1"])).toEqual([
-      "pin-1",
-      "pin-2",
-    ]);
+    expect(resolveComparisonRunIds(null, ["pin-1", "pin-2", "pin-1"])).toEqual(["pin-1", "pin-2"]);
   });
 
   it("updateRunsSearch sets and clears runs param", () => {
@@ -76,7 +75,7 @@ describe("Experiments helpers", () => {
         { round_index: 0, proposals: [], critiques: [], scores: [0.2, 0.8], timestamp: 1 },
         { round_index: 1, proposals: [], critiques: [], scores: [0.7, 0.7], timestamp: 2 },
       ],
-    } as any);
+    } as RunDetailsInput);
 
     expect(curve.length).toBe(2);
     expect(curve[0]?.x).toBe(0);
@@ -118,7 +117,7 @@ describe("Experiments helpers", () => {
         threshold: null,
         converged: null,
       },
-    } as any);
+    } as RunDetailsInput);
     expect(fromIterations).toBe("iter text");
 
     const fromCandidates = buildPromptText(runWithCandidate, {
@@ -126,7 +125,7 @@ describe("Experiments helpers", () => {
       mutations: null,
       debate: null,
       iterations: { iterations: [], max_iter: null, threshold: null, converged: null },
-    } as any);
+    } as RunDetailsInput);
     expect(fromCandidates).toBe("candidate");
 
     const fromDebate = buildPromptText(makeRun(), {
@@ -145,7 +144,7 @@ describe("Experiments helpers", () => {
           ],
         },
       ],
-    } as any);
+    } as RunDetailsInput);
     expect(fromDebate).toBe("winner");
   });
 

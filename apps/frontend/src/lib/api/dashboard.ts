@@ -1,4 +1,5 @@
 import {
+  ArchivedRunRecord,
   BenchmarkDetailResponse,
   BenchmarkIngestResponse,
   BenchmarkListItem,
@@ -10,7 +11,6 @@ import {
   DebateRoundsResponse,
   DriftEntry,
   EvolutionResponse,
-  ArchivedRunRecord,
   FitnessEntry,
   GraphResponse,
   IterationsResponse,
@@ -169,7 +169,8 @@ export const dashboardApi = {
       method: "POST",
       headers: { accept: "application/x-ndjson" },
     });
-    if (!r.ok) throw new HttpError(r.status, `${r.status} ${r.statusText} ← /archive/_export?format=jsonl`);
+    if (!r.ok)
+      throw new HttpError(r.status, `${r.status} ${r.statusText} ← /archive/_export?format=jsonl`);
     return r.text();
   },
 } as const;

@@ -54,12 +54,17 @@ describe("CassettesPage", () => {
     expect(await screen.findByText("trace.jsonl")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /determinism/i }));
-    await waitFor(() => expect(dashboardApi.cassetteDeterminism).toHaveBeenCalledWith("trace.jsonl"));
+    await waitFor(() =>
+      expect(dashboardApi.cassetteDeterminism).toHaveBeenCalledWith("trace.jsonl"),
+    );
     expect(await screen.findByText(/drift/i)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /^replay$/i }));
     await waitFor(() =>
-      expect(dashboardApi.cassetteReplay).toHaveBeenCalledWith({ path: "trace.jsonl", delayMs: 50 }),
+      expect(dashboardApi.cassetteReplay).toHaveBeenCalledWith({
+        path: "trace.jsonl",
+        delayMs: 50,
+      }),
     );
   });
 });

@@ -1,6 +1,6 @@
+import { Button } from "@/components/ui/button";
 import { useRateRow } from "@/hooks/use-studio";
 import type { JobRow } from "@/lib/types";
-import { Button } from "@/shared/ui/button";
 import * as Slider from "@radix-ui/react-slider";
 import { useState } from "react";
 

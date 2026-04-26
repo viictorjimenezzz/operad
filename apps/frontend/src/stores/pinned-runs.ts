@@ -23,8 +23,7 @@ export const usePinnedRunsStore = create<PinnedRunsState>()(
         set({ pinned: [...pinned, runId] });
         return true;
       },
-      unpin: (runId) =>
-        set((s) => ({ pinned: s.pinned.filter((id) => id !== runId) })),
+      unpin: (runId) => set((s) => ({ pinned: s.pinned.filter((id) => id !== runId) })),
       toggle: (runId) => {
         const { pinned, pin, unpin } = get();
         pinned.includes(runId) ? unpin(runId) : pin(runId);

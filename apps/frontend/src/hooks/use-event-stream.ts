@@ -1,4 +1,4 @@
-import { SSEDispatcher, type StreamStatus } from "@/lib/sse-dispatcher";
+import { SSEDispatcher, type StreamStatus } from "@/components/runtime/sse-dispatcher";
 import { Envelope } from "@/lib/types";
 import { dispatchEnvelope, useStreamStore } from "@/stores";
 import { useQueryClient } from "@tanstack/react-query";

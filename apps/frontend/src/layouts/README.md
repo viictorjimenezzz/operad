@@ -1,12 +1,11 @@
 # Per-algorithm layouts
 
 Each `*.json` here is a `LayoutSpec` that describes the dashboard
-arrangement for one algorithm (or `*` for the default fallback).
+arrangement for one algorithm.
 
 ## Add a new algorithm dashboard
 
-1. **Drop a JSON.** Copy `default.json` to `<algorithm>.json` and
-   adjust:
+1. **Drop a JSON.** Create `<algorithm>.json` and adjust:
    - `algorithm`: the exact `algorithm_path` value the dashboard's
      `RunInfo.algorithm_path` carries (e.g. `Sweep`, `VerifierLoop`).
    - `dataSources`: which backend endpoints to fetch + optional
@@ -14,14 +13,15 @@ arrangement for one algorithm (or `*` for the default fallback).
      in.
    - `spec.elements`: the UI tree, keyed by element id; `spec.root`
      is the entry id. Component types must exist in
-     `src/registry/catalog.ts`.
-2. **Wire it up.** Import the JSON in `index.ts` and add it to
-   `algorithmLayouts`. The Zod parse on module load catches typos.
+     `src/components/catalog.ts`.
+2. **Wire it up.** `index.ts` discovers all JSON files via
+   `import.meta.glob`. The Zod parse on module load catches typos.
 3. **Test it.** Add a Vitest spec in `src/tests/layouts.test.ts`
    loading the JSON through `LayoutSpec.parse(...)` and confirming
    the element graph reaches every node from `root`.
-4. **(If a new component is needed)** Add it to `catalog.ts` *and*
-   register an implementation in `registry.tsx`. The TypeScript
+4. **(If a new component is needed)** Add it to
+   `src/components/catalog.ts` *and* register an implementation in a
+   `src/components/**/registry.tsx` module. The TypeScript
    compiler enforces both — registry registration without catalog
    declaration won't compile.
 

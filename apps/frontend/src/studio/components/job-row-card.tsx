@@ -1,6 +1,6 @@
+import { JsonView } from "@/components/ui/json-view";
 import type { JobRow } from "@/lib/types";
 import { truncateMiddle } from "@/lib/utils";
-import { JsonView } from "@/shared/ui/json-view";
 import { RatingForm } from "@/studio/components/rating-form";
 
 interface JobRowCardProps {
