@@ -1,5 +1,6 @@
 import { CassetteDetailPage } from "@/dashboard/pages/CassetteDetailPage";
 import { CassettesPage } from "@/dashboard/pages/CassettesPage";
+import { ExperimentsPage } from "@/dashboard/pages/ExperimentsPage";
 import { Shell } from "@/dashboard/Shell";
 import { NotFoundPage } from "@/dashboard/pages/NotFoundPage";
 import { RunDetailPage } from "@/dashboard/pages/RunDetailPage";
@@ -15,6 +16,7 @@ export const dashboardRoutes = [
       { path: "runs/:runId", element: <RunDetailPage /> },
       { path: "cassettes", element: <CassettesPage /> },
       { path: "cassettes/*", element: <CassetteDetailPage /> },
+      { path: "experiments", element: <ExperimentsPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

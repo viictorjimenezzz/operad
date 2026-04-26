@@ -5,9 +5,9 @@ afterEach(cleanup);
 import { CheckpointTimeline } from "./checkpoint-timeline";
 
 const mockEntries = [
-  { epoch: 0, train_loss: 0.9, val_loss: 0.95, score: 0.95, is_best: false },
-  { epoch: 1, train_loss: 0.6, val_loss: 0.62, score: 0.62, is_best: true },
-  { epoch: 2, train_loss: 0.7, val_loss: 0.72, score: 0.72, is_best: false },
+  { epoch: 0, train_loss: 0.9, val_loss: 0.95, score: 0.95, lr: 0.1, parameter_snapshot: { role: "r0" }, is_best: false },
+  { epoch: 1, train_loss: 0.6, val_loss: 0.62, score: 0.62, lr: 0.05, parameter_snapshot: { role: "r1" }, is_best: true },
+  { epoch: 2, train_loss: 0.7, val_loss: 0.72, score: 0.72, lr: 0.025, parameter_snapshot: { role: "r2" }, is_best: false },
 ];
 
 describe("CheckpointTimeline", () => {
@@ -44,6 +44,11 @@ describe("CheckpointTimeline", () => {
   it("shows val_loss when present", () => {
     render(<CheckpointTimeline data={mockEntries} />);
     expect(screen.getAllByText("val").length).toBeGreaterThan(0);
+  });
+
+  it("shows restore action as display-only button", () => {
+    render(<CheckpointTimeline data={mockEntries} />);
+    expect(screen.getAllByText("restore")).toHaveLength(3);
   });
 
   it("works when val_loss is null", () => {

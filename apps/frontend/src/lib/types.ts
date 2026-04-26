@@ -189,6 +189,9 @@ export const FitnessEntry = z.object({
   best: z.number(),
   mean: z.number(),
   worst: z.number(),
+  train_loss: z.number().nullable().optional(),
+  val_loss: z.number().nullable().optional(),
+  lr: z.number().nullable().optional(),
   population_scores: z.array(z.number()),
   timestamp: z.number(),
 });
@@ -202,10 +205,22 @@ export const MutationsMatrix = z.object({
 });
 export type MutationsMatrix = z.infer<typeof MutationsMatrix>;
 
+export const DriftChange = z.object({
+  path: z.string(),
+  before_text: z.string(),
+  after_text: z.string(),
+});
+export type DriftChange = z.infer<typeof DriftChange>;
+
 export const DriftEntry = z.object({
   epoch: z.number(),
-  hash_before: z.string(),
-  hash_after: z.string(),
+  before_text: z.string(),
+  after_text: z.string(),
+  selected_path: z.string(),
+  changes: z.array(DriftChange),
+  critique: z.string().default(""),
+  gradient_epoch: z.number().nullable().default(null),
+  gradient_batch: z.number().nullable().default(null),
   changed_params: z.array(z.string()),
   delta_count: z.number(),
   timestamp: z.number(),
@@ -217,6 +232,15 @@ export const CheckpointEntry = z.object({
   train_loss: z.number().nullable(),
   val_loss: z.number().nullable(),
   score: z.number().nullable(),
+  lr: z.number().nullable().optional(),
+  metric_snapshot: z
+    .object({
+      train_loss: z.number().nullable(),
+      val_loss: z.number().nullable(),
+      score: z.number().nullable(),
+    })
+    .optional(),
+  parameter_snapshot: z.record(z.string()).optional(),
   is_best: z.boolean(),
 });
 export type CheckpointEntry = z.infer<typeof CheckpointEntry>;
@@ -225,10 +249,11 @@ export const GradientEntry = z.object({
   epoch: z.number(),
   batch: z.number(),
   message: z.string(),
-  severity: z.string(),
+  severity: z.number(),
   target_paths: z.array(z.string()),
   by_field: z.record(z.string()),
   applied_diff: z.string(),
+  timestamp: z.number().optional(),
 });
 export type GradientEntry = z.infer<typeof GradientEntry>;
 
@@ -293,6 +318,24 @@ export type DebateRound = z.infer<typeof DebateRound>;
 
 export const DebateRoundsResponse = z.array(DebateRound);
 export type DebateRoundsResponse = z.infer<typeof DebateRoundsResponse>;
+
+export const IterationsResponse = z.object({
+  iterations: z
+    .array(
+      z.object({
+        iter_index: z.number(),
+        phase: z.string().nullable().default(null),
+        score: z.number().nullable().default(null),
+        text: z.string().nullable().default(null),
+        metadata: z.record(z.unknown()).default({}),
+      }),
+    )
+    .default([]),
+  max_iter: z.number().nullable().default(null),
+  threshold: z.number().nullable().default(null),
+  converged: z.boolean().nullable().default(null),
+});
+export type IterationsResponse = z.infer<typeof IterationsResponse>;
 
 export const GraphResponse = z.object({ mermaid: z.string() });
 export type GraphResponse = z.infer<typeof GraphResponse>;

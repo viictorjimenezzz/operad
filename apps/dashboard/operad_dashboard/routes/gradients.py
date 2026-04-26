@@ -1,10 +1,4 @@
-"""`/runs/{run_id}/gradients.{json,sse}` — TextualGradient critique log.
-
-# TODO: Trainer does not yet emit `gradient_applied` events. This route
-# returns an empty list until the runtime emits them. When events land,
-# they should carry:
-#   {epoch, batch, message, severity, target_paths, by_field, applied_diff}
-"""
+"""`/runs/{run_id}/gradients.{json,sse}` — TextualGradient critique log."""
 
 from __future__ import annotations
 
@@ -58,10 +52,11 @@ def _to_entry(env: dict[str, Any]) -> dict[str, Any]:
         "epoch": int(payload.get("epoch", 0)),
         "batch": int(payload.get("batch", 0)),
         "message": payload.get("message", ""),
-        "severity": payload.get("severity", "info"),
+        "severity": float(payload.get("severity", 0.0)),
         "target_paths": list(payload.get("target_paths") or []),
         "by_field": dict(payload.get("by_field") or {}),
         "applied_diff": payload.get("applied_diff", ""),
+        "timestamp": env.get("finished_at") or env.get("started_at") or 0.0,
     }
 
 
