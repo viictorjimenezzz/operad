@@ -193,20 +193,13 @@ async def test_react_end_to_end_routes_through_stub_pipeline(cfg) -> None:
 async def test_react_mermaid_renders_sequential_edges(cfg) -> None:
     r = await _stub_react(cfg).abuild()
     text = r.graph_mermaid()
-    assert "ReAct -->|\"Task -> Answer\"| ReAct_pipeline" in text
-    assert "ReAct_pipeline -->|\"Task -> _ReActState\"| ReAct_pipeline_stage_0" in text
-    assert "ReAct_pipeline_stage_0 -->|\"_ReActState -> _ReActState\"| ReAct__loop" in text
-    assert "ReAct__loop -->|\"_ReActState -> _ReActState\"| ReAct__reason_stage" in text
-    assert "ReAct__reason_stage -->|\"Task -> Thought\"| ReAct_reasoner" in text
-    assert "ReAct__reason_stage -->|\"_ReActState -> _ReActState\"| ReAct__action_stage" in text
-    assert "ReAct__action_stage -->|\"Thought -> Action\"| ReAct_actor" in text
-    assert "ReAct__action_stage -->|\"_ReActState -> _ReActState\"| ReAct__observe_stage" in text
-    assert "ReAct__observe_stage -->|\"Action -> Observation\"| ReAct_extractor" in text
-    assert "ReAct__observe_stage -->|\"_ReActState -> _ReActState\"| ReAct__evaluate_stage" in text
-    assert "ReAct__evaluate_stage -->|\"Observation -> Answer\"| ReAct_evaluator" in text
-    assert "ReAct__loop -->|\"_ReActState -> Answer\"| ReAct_pipeline_stage_2" in text
-    assert "ReAct__evaluate_stage -->|\"_ReActState -> _ReActState\"| ReAct__reason_stage" in text
-    assert ".child" not in text
+    assert text.splitlines()[0] == "flowchart LR"
+    assert text.count('["_CannedLeaf"]') == 4
+    assert '-->|"Thought"|' in text
+    assert '-->|"Action"|' in text
+    assert '-->|"Observation"|' in text
+    assert '-->|"Task"|' in text
+    assert "ReAct" not in text
 
 
 async def test_react_subagents_use_component_defaults(cfg) -> None:

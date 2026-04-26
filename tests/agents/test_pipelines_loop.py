@@ -83,4 +83,5 @@ async def test_loop_mermaid_shows_cycle_even_single_pass() -> None:
     )
     await loop.abuild()
     text = loop.graph_mermaid()
-    assert "Loop_stage_0 -->|\"A -> A\"| Loop_stage_0" in text
+    assert '["_Append"]' in text
+    assert '-->|"A"| n0' in text

@@ -412,13 +412,16 @@ async def test_graph_repr_html_contains_mermaid(cfg: Configuration) -> None:
     assert "flowchart" in html
 
 
-async def test_agent_repr_html_delegates_when_built(cfg: Configuration) -> None:
+async def test_agent_repr_html_uses_leaf_mermaid_when_built(cfg: Configuration) -> None:
     leaf1 = FakeLeaf(config=cfg, input=A, output=B)
     leaf2 = FakeLeaf(config=cfg, input=B, output=C)
     p = Sequential(leaf1, leaf2, input=A, output=C)
     await p.abuild()
 
-    assert p._repr_html_() == p._graph._repr_html_()
+    html = p._repr_html_()
+    assert html.startswith('<pre class="mermaid">')
+    assert "FakeLeaf" in html
+    assert "Sequential" not in html
 
 
 def test_agent_repr_html_falls_back_before_build(cfg: Configuration) -> None:

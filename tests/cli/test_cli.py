@@ -35,7 +35,7 @@ def test_trace_prints_mermaid(tmp_path: Path, capsys: pytest.CaptureFixture[str]
     out = capsys.readouterr().out
     assert rc == 0
     assert "flowchart" in out
-    assert "ReAct" in out or "reasoner" in out
+    assert "Reasoner" in out or "reasoner" in out
 
 
 def test_graph_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
