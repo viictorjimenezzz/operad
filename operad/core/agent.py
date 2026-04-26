@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import html as _html
+import inspect
 import sys
 import time
 import uuid
@@ -67,6 +68,26 @@ def _system_to_str(rendered: str | list[dict[str, str]] | None) -> str:
             m.get("content", "") for m in rendered if m.get("role") == "system"
         )
     return rendered
+
+
+def _json_safe(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, BaseModel):
+        try:
+            return value.model_dump(mode="json")
+        except Exception:
+            return repr(value)
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for k, v in value.items():
+            out[str(k)] = _json_safe(v)
+        return out
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return repr(value)
 
 
 # Per-task tracer. When set, `Agent.invoke` short-circuits into the tracer
@@ -1423,10 +1444,29 @@ class Agent(Generic[In, Out]):
         trainable_paths = sorted(
             path for path, p in self.named_parameters(recurse=True) if p.requires_grad
         )
+        parameters = []
+        for path, p in self.named_parameters(recurse=True):
+            grad = p.grad.model_dump(mode="json") if p.grad is not None else None
+            constraint = (
+                p.constraint.model_dump(mode="json")
+                if isinstance(p.constraint, BaseModel)
+                else _json_safe(p.constraint)
+            )
+            parameters.append(
+                {
+                    "path": path,
+                    "type": type(p).__name__,
+                    "value": _json_safe(p.read()),
+                    "requires_grad": bool(p.requires_grad),
+                    "grad": grad,
+                    "constraint": constraint,
+                }
+            )
         return {
             "class_name": type(self).__name__,
             "kind": "composite" if self._children else "leaf",
             "hash_content": self.hash_content,
+            "state_snapshot": self.state().model_dump(mode="json"),
             "role": self.role,
             "task": self.task,
             "rules": list(self.rules),
@@ -1434,7 +1474,10 @@ class Agent(Generic[In, Out]):
             "config": config,
             "forward_in_overridden": type(self).forward_in is not Agent.forward_in,
             "forward_out_overridden": type(self).forward_out is not Agent.forward_out,
+            "forward_in_doc": inspect.getdoc(type(self).forward_in),
+            "forward_out_doc": inspect.getdoc(type(self).forward_out),
             "trainable_paths": trainable_paths,
+            "parameters": parameters,
             "prompt_system": self._compose_system_for_call(x),
             "prompt_user": self.format_user_message(x),
         }

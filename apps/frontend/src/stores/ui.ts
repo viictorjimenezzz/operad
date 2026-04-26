@@ -9,12 +9,17 @@ export type DrawerKind =
   | "values"
   | "find-runs"
   | "experiment"
+  | "diff"
+  | "gradients"
   | null;
 export type DrawerPayload = {
   agentPath?: string;
   attr?: string;
   side?: "in" | "out";
   invocationId?: string;
+  fromInvocationId?: string;
+  toInvocationId?: string;
+  paramPath?: string;
   mode?: string;
   panel?: string;
   filter?: string;
@@ -44,6 +49,8 @@ interface UIState {
   drawerWidth: number;
   selectedInvocationId: string | null;
   selectedInvocationAgentPath: string | null;
+  comparisonInvocationId: string | null;
+  comparisonInvocationAgentPath: string | null;
   setCurrentTab: (tab: string) => void;
   setEventKindFilter: (f: EventKindFilter) => void;
   setEventSearch: (s: string) => void;
@@ -56,6 +63,8 @@ interface UIState {
   setDrawerWidth: (px: number) => void;
   setSelectedInvocation: (invocationId: string, agentPath: string) => void;
   clearSelectedInvocation: () => void;
+  setComparisonInvocation: (invocationId: string, agentPath: string) => void;
+  clearComparisonInvocation: () => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -71,6 +80,8 @@ export const useUIStore = create<UIState>()(
       drawerWidth: DRAWER_DEFAULT_WIDTH,
       selectedInvocationId: null,
       selectedInvocationAgentPath: null,
+      comparisonInvocationId: null,
+      comparisonInvocationAgentPath: null,
       setCurrentTab: (tab) => set({ currentTab: tab }),
       setEventKindFilter: (f) => set({ eventKindFilter: f }),
       setEventSearch: (s) => set({ eventSearch: s }),
@@ -85,6 +96,10 @@ export const useUIStore = create<UIState>()(
         set({ selectedInvocationId: invocationId, selectedInvocationAgentPath: agentPath }),
       clearSelectedInvocation: () =>
         set({ selectedInvocationId: null, selectedInvocationAgentPath: null }),
+      setComparisonInvocation: (invocationId, agentPath) =>
+        set({ comparisonInvocationId: invocationId, comparisonInvocationAgentPath: agentPath }),
+      clearComparisonInvocation: () =>
+        set({ comparisonInvocationId: null, comparisonInvocationAgentPath: null }),
     }),
     {
       name: "operad.ui",

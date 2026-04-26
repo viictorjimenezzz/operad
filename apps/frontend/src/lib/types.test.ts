@@ -1,8 +1,10 @@
 import {
   AgentEventEnvelope,
   AgentEventsResponse,
+  AgentInvocationDiffResponse,
   AgentInvocationsResponse,
   AgentMetaResponse,
+  AgentParametersResponse,
   AgentPromptsResponse,
   AgentValuesResponse,
   AlgoEventEnvelope,
@@ -155,9 +157,40 @@ describe("agent-view contracts", () => {
         backend: "openai",
         model: "gpt-4o-mini",
       },
+      forward_in_doc: "input docs",
+      forward_out_doc: null,
     });
     expect(parsed.class_name).toBe("Reasoner");
     expect(parsed.config.backend).toBe("openai");
+    expect(parsed.forward_in_doc).toBe("input docs");
+  });
+
+  it("parses agent parameters payload", () => {
+    const parsed = AgentParametersResponse.parse({
+      agent_path: "Root.reasoner",
+      parameters: [
+        {
+          path: "role",
+          type: "TextParameter",
+          value: "You are terse.",
+          requires_grad: true,
+          grad: { message: "be stricter", severity: 0.5, target_paths: ["role"], by_field: {} },
+          constraint: { kind: "text", max_length: 300 },
+        },
+      ],
+    });
+    expect(parsed.parameters[0]?.path).toBe("role");
+  });
+
+  it("parses invocation diff payload", () => {
+    const parsed = AgentInvocationDiffResponse.parse({
+      from_invocation: "Root:0",
+      to_invocation: "Root:1",
+      from_hash_content: "aaa",
+      to_hash_content: "bbb",
+      changes: [{ path: "Root", kind: "role", detail: "- old\\n+ new" }],
+    });
+    expect(parsed.changes[0]?.kind).toBe("role");
   });
 
   it("fails when required meta fields are missing", () => {
@@ -299,6 +332,8 @@ describe("agent-view shapes", () => {
         output_schema: {},
         forward_in_overridden: false,
         forward_out_overridden: false,
+        forward_in_doc: null,
+        forward_out_doc: null,
         trainable_paths: [],
         langfuse_search_url: null,
       }).class_name,

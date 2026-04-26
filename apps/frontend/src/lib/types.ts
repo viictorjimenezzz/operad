@@ -246,6 +246,8 @@ export const AgentMetaResponse = z.object({
   output_schema: z.record(z.unknown()).default({}),
   forward_in_overridden: z.boolean().default(false),
   forward_out_overridden: z.boolean().default(false),
+  forward_in_doc: z.string().nullable().optional().default(null),
+  forward_out_doc: z.string().nullable().optional().default(null),
   trainable_paths: z.array(z.string()).default([]),
   langfuse_search_url: z.string().nullable().optional().default(null),
 });
@@ -557,6 +559,46 @@ export const AgentInvocationsResponse = z.object({
   invocations: z.array(AgentInvocation).default([]),
 });
 export type AgentInvocationsResponse = z.infer<typeof AgentInvocationsResponse>;
+
+export const AgentParameterEntry = z.object({
+  path: z.string(),
+  type: z.string(),
+  value: z.unknown(),
+  requires_grad: z.boolean().default(false),
+  grad: z
+    .object({
+      message: z.string().default(""),
+      severity: z.number().default(0),
+      target_paths: z.array(z.string()).default([]),
+      by_field: z.record(z.string()).default({}),
+    })
+    .nullable()
+    .default(null),
+  constraint: z.unknown().nullable().default(null),
+});
+export type AgentParameterEntry = z.infer<typeof AgentParameterEntry>;
+
+export const AgentParametersResponse = z.object({
+  agent_path: z.string(),
+  parameters: z.array(AgentParameterEntry).default([]),
+});
+export type AgentParametersResponse = z.infer<typeof AgentParametersResponse>;
+
+export const AgentDiffChange = z.object({
+  path: z.string(),
+  kind: z.string(),
+  detail: z.string().default(""),
+});
+export type AgentDiffChange = z.infer<typeof AgentDiffChange>;
+
+export const AgentInvocationDiffResponse = z.object({
+  from_invocation: z.string(),
+  to_invocation: z.string(),
+  from_hash_content: z.string().nullable().default(null),
+  to_hash_content: z.string().nullable().default(null),
+  changes: z.array(AgentDiffChange).default([]),
+});
+export type AgentInvocationDiffResponse = z.infer<typeof AgentInvocationDiffResponse>;
 
 export const AgentPromptsResponse = z.object({
   agent_path: z.string(),

@@ -63,6 +63,12 @@ export function AgentEdge({
     enabled: d.selected,
     staleTime: 30_000,
   });
+  const parametersQuery = useQuery({
+    queryKey: ["edge-parameters", d.runId, d.agentPath],
+    queryFn: () => dashboardApi.agentParameters(d.runId, d.agentPath),
+    enabled: d.selected,
+    staleTime: 30_000,
+  });
 
   const stroke = useMemo(() => {
     if (d.dimmed) return "var(--color-border)";
@@ -109,9 +115,14 @@ export function AgentEdge({
                 agentPath={d.agentPath}
                 meta={metaQuery.data ?? null}
                 invocations={invocationsQuery.data ?? null}
+                parameters={parametersQuery.data ?? null}
                 onOpenLangfuse={() => openDrawer("langfuse", { agentPath: d.agentPath })}
                 onOpenEvents={() => openDrawer("events", { agentPath: d.agentPath })}
                 onOpenPrompts={() => openDrawer("prompts", { agentPath: d.agentPath })}
+                onOpenExperiment={() => openDrawer("experiment", { agentPath: d.agentPath })}
+                onOpenGradient={(paramPath) =>
+                  openDrawer("gradients", { agentPath: d.agentPath, paramPath })
+                }
                 onOpenExperiment={() => openDrawer("experiment", { agentPath: d.agentPath })}
                 onClose={d.onClose}
               />

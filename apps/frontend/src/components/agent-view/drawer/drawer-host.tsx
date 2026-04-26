@@ -11,6 +11,8 @@ const TITLE_BY_KIND: Record<Exclude<DrawerKind, null>, string> = {
   values: "Value timeline",
   "find-runs": "Find runs",
   experiment: "Prompt experiment",
+  diff: "Invocation diff",
+  gradients: "Gradients",
 };
 
 function subtitleFromPayload(payload: DrawerPayload): string | null {

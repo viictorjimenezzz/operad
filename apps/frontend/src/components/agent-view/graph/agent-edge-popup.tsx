@@ -1,16 +1,24 @@
 import { ConfigSection } from "@/components/agent-view/graph/config-section";
+import { ParametersPanel } from "@/components/agent-view/graph/parameters-panel";
+import { HookBadge } from "@/components/agent-view/graph/hook-badge";
 import { Button } from "@/components/ui/button";
-import type { AgentInvocationsResponse, AgentMetaResponse } from "@/lib/types";
+import type {
+  AgentInvocationsResponse,
+  AgentMetaResponse,
+  AgentParametersResponse,
+} from "@/lib/types";
 import { formatDurationMs } from "@/lib/utils";
 
 interface AgentEdgePopupProps {
   agentPath: string;
   meta: AgentMetaResponse | null | undefined;
   invocations: AgentInvocationsResponse | null | undefined;
+  parameters: AgentParametersResponse | null | undefined;
   onOpenLangfuse: () => void;
   onOpenEvents: () => void;
   onOpenPrompts: () => void;
   onOpenExperiment: () => void;
+  onOpenGradient: (paramPath: string) => void;
   onClose: () => void;
 }
 
@@ -18,16 +26,24 @@ export function AgentEdgePopup({
   agentPath,
   meta,
   invocations,
+  parameters,
   onOpenLangfuse,
   onOpenEvents,
   onOpenPrompts,
   onOpenExperiment,
+  onOpenGradient,
   onClose,
 }: AgentEdgePopupProps) {
   const rows = invocations?.invocations ?? [];
   const avgLatency = rows.length
     ? rows.reduce((sum, row) => sum + (row.latency_ms ?? 0), 0) / rows.length
     : null;
+  const forwardInDoc =
+    meta?.forward_in_doc ??
+    "Input is transformed before being sent to the model.";
+  const forwardOutDoc =
+    meta?.forward_out_doc ??
+    "Output is transformed after the model responds.";
 
   return (
     <dialog open className="w-[320px] space-y-2 rounded border border-border bg-bg-1 p-2 shadow-xl">
@@ -38,7 +54,24 @@ export function AgentEdgePopup({
         </Button>
       </div>
 
+      <div className="rounded border border-border bg-bg-2 p-2">
+        <div className="mb-1 text-[11px] text-muted">hooks</div>
+        <div className="flex flex-wrap gap-1">
+          <HookBadge
+            label="forward_in"
+            active={meta?.forward_in_overridden ?? false}
+            doc={forwardInDoc}
+          />
+          <HookBadge
+            label="forward_out"
+            active={meta?.forward_out_overridden ?? false}
+            doc={forwardOutDoc}
+          />
+        </div>
+      </div>
+
       <ConfigSection config={(meta?.config ?? null) as Record<string, unknown> | null} />
+      <ParametersPanel agentPath={agentPath} data={parameters} onOpenGradient={onOpenGradient} />
 
       <div className="rounded border border-border bg-bg-2 p-2">
         <div className="mb-1 text-[11px] text-muted">links</div>
