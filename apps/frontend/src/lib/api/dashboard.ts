@@ -1,7 +1,9 @@
 import {
   AgentInvocationsResponse,
   AgentEventsResponse,
+  AgentInvocationDiffResponse,
   AgentMetaResponse,
+  AgentParametersResponse,
   AgentValuesResponse,
   AgentPromptsResponse,
   ArchivedRunRecord,
@@ -18,6 +20,7 @@ import {
   EvolutionResponse,
   FitnessEntry,
   GraphResponse,
+  GradientEntry,
   IterationsResponse,
   Manifest,
   MutationsMatrix,
@@ -116,6 +119,21 @@ export const dashboardApi = {
     ),
   agentMeta: (runId: string, agentPath: string) =>
     getJson(`/runs/${runId}/agent/${encodeURIComponent(agentPath)}/meta`, AgentMetaResponse),
+  agentParameters: (runId: string, agentPath: string) =>
+    getJson(
+      `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/parameters`,
+      AgentParametersResponse,
+    ),
+  agentDiff: (
+    runId: string,
+    agentPath: string,
+    fromInvocationId: string,
+    toInvocationId: string,
+  ) =>
+    getJson(
+      `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/diff?from=${encodeURIComponent(fromInvocationId)}&to=${encodeURIComponent(toInvocationId)}`,
+      AgentInvocationDiffResponse,
+    ),
   agentValues: (runId: string, agentPath: string, attr: string, side: "in" | "out") =>
     getJson(
       `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/values?attr=${encodeURIComponent(attr)}&side=${side}`,
@@ -140,6 +158,7 @@ export const dashboardApi = {
   mutations: (runId: string) => getJson(`/runs/${runId}/mutations.json`, MutationsMatrix),
   drift: (runId: string) => getJson(`/runs/${runId}/drift.json`, z.array(DriftEntry)),
   progress: (runId: string) => getJson(`/runs/${runId}/progress.json`, ProgressSnapshot),
+  gradients: (runId: string) => getJson(`/runs/${runId}/gradients.json`, z.array(GradientEntry)),
   benchmarks: () => getJson("/benchmarks", z.array(BenchmarkListItem)),
   benchmarkDetail: (benchmarkId: string) =>
     getJson(`/benchmarks/${benchmarkId}`, BenchmarkDetailResponse),

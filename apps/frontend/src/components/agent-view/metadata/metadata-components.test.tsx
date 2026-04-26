@@ -52,6 +52,8 @@ describe("InvocationsTable", () => {
       drawerWidth: 420,
       selectedInvocationId: null,
       selectedInvocationAgentPath: null,
+      comparisonInvocationId: null,
+      comparisonInvocationAgentPath: null,
     });
   });
 
@@ -165,12 +167,15 @@ describe("InvocationsTable", () => {
     const secondDiff = diffButtons[1];
     if (!secondDiff) throw new Error("expected second diff button");
     fireEvent.click(secondDiff);
-    expect(openDrawer).toHaveBeenCalledWith("events", {
+    expect(openDrawer).not.toHaveBeenCalledWith("diff", expect.anything());
+
+    const firstDiff = diffButtons[0];
+    if (!firstDiff) throw new Error("expected first diff button");
+    fireEvent.click(firstDiff);
+    expect(openDrawer).toHaveBeenCalledWith("diff", {
       agentPath: "Pipeline.stage_0",
-      mode: "prompt-diff",
-      invocationId: "inv-2",
-      prevInvocationId: "inv-1",
-      hashPrompt: "p2",
+      fromInvocationId: "inv-2",
+      toInvocationId: "inv-1",
     });
   });
 

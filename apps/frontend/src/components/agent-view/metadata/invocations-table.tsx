@@ -67,6 +67,10 @@ export function InvocationsTable({ summary, invocations }: InvocationsTableProps
   const setSelectedInvocation = useUIStore((s) => s.setSelectedInvocation);
   const selectedInvocationId = useUIStore((s) => s.selectedInvocationId);
   const selectedInvocationAgentPath = useUIStore((s) => s.selectedInvocationAgentPath);
+  const comparisonInvocationId = useUIStore((s) => s.comparisonInvocationId);
+  const comparisonInvocationAgentPath = useUIStore((s) => s.comparisonInvocationAgentPath);
+  const setComparisonInvocation = useUIStore((s) => s.setComparisonInvocation);
+  const clearComparisonInvocation = useUIStore((s) => s.clearComparisonInvocation);
 
   const run = summaryParsed.success ? summaryParsed.data : null;
   const agentPath = invParsed.success ? invParsed.data.agent_path : "";
@@ -146,7 +150,6 @@ export function InvocationsTable({ summary, invocations }: InvocationsTableProps
           {rowsToRender.map((virtual) => {
             const row = rowsByIndex[virtual.index];
             if (!row) return null;
-            const prev = virtual.index > 0 ? rowsByIndex[virtual.index - 1] : null;
             const relative = formatRelativeTime(row.started_at ?? null, nowSec);
             return (
               <button
@@ -205,7 +208,13 @@ export function InvocationsTable({ summary, invocations }: InvocationsTableProps
                 <span className="flex items-center gap-1">
                   <button
                     type="button"
-                    className="rounded border border-border bg-bg-2 px-1.5 py-0.5 text-[11px] text-muted hover:text-text"
+                    className={cn(
+                      "rounded border border-border bg-bg-2 px-1.5 py-0.5 text-[11px] text-muted hover:text-text",
+                      comparisonInvocationAgentPath === agentPath &&
+                        comparisonInvocationId === row.id
+                        ? "text-accent"
+                        : "",
+                    )}
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedInvocation(row.id, agentPath);
@@ -223,13 +232,22 @@ export function InvocationsTable({ summary, invocations }: InvocationsTableProps
                     className="rounded border border-border bg-bg-2 px-1.5 py-0.5 text-[11px] text-muted hover:text-text"
                     onClick={(e) => {
                       e.stopPropagation();
-                      openDrawer("events", {
+                      const hasAnchor =
+                        comparisonInvocationAgentPath === agentPath && !!comparisonInvocationId;
+                      if (!hasAnchor || !comparisonInvocationId) {
+                        setComparisonInvocation(row.id, agentPath);
+                        return;
+                      }
+                      if (comparisonInvocationId === row.id) {
+                        clearComparisonInvocation();
+                        return;
+                      }
+                      openDrawer("diff", {
                         agentPath,
-                        mode: "prompt-diff",
-                        invocationId: row.id,
-                        prevInvocationId: prev?.id,
-                        hashPrompt: row.hash_prompt ?? undefined,
+                        fromInvocationId: comparisonInvocationId,
+                        toInvocationId: row.id,
                       });
+                      clearComparisonInvocation();
                     }}
                   >
                     diff
