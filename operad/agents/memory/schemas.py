@@ -209,18 +209,34 @@ class UserOutput(BaseModel):
     )
 
 
+# Deprecated aliases kept for backward compatibility with
+# `operad.agents.memory.shapes`.
+Belief = BeliefItem
+Beliefs = BeliefsOutput
+Conversation = UserInput
+Summary = BeliefsOutput
+Turn = SessionOperation
+UserModel = UserOutput
+
+
 __all__ = [
+    "Belief",
     "BeliefItem",
+    "Beliefs",
     "BeliefOp",
     "BeliefOperation",
     "BeliefsInput",
     "BeliefsOutput",
+    "Conversation",
     "SessionItem",
     "SessionNamespace",
     "SessionOp",
     "SessionOperation",
     "SessionStatus",
+    "Summary",
     "SessionTarget",
+    "Turn",
     "UserInput",
+    "UserModel",
     "UserOutput",
 ]
