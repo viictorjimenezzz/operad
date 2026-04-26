@@ -64,6 +64,9 @@ export function InvocationsTable({ summary, invocations }: InvocationsTableProps
   const summaryParsed = RunSummary.safeParse(summary);
   const invParsed = InvocationsPayload.safeParse(invocations);
   const openDrawer = useUIStore((s) => s.openDrawer);
+  const setSelectedInvocation = useUIStore((s) => s.setSelectedInvocation);
+  const selectedInvocationId = useUIStore((s) => s.selectedInvocationId);
+  const selectedInvocationAgentPath = useUIStore((s) => s.selectedInvocationAgentPath);
 
   const run = summaryParsed.success ? summaryParsed.data : null;
   const agentPath = invParsed.success ? invParsed.data.agent_path : "";
@@ -153,6 +156,9 @@ export function InvocationsTable({ summary, invocations }: InvocationsTableProps
                 className={cn(
                   "grid cursor-pointer grid-cols-[56px_120px_90px_120px_110px_80px_1fr] items-center gap-2 border-b border-border/60 px-3 py-2 text-xs hover:bg-bg-2",
                   pulseIds.has(row.id) ? "animate-pulse" : "",
+                  selectedInvocationId === row.id && selectedInvocationAgentPath === agentPath
+                    ? "ring-1 ring-accent ring-inset"
+                    : "",
                 )}
                 style={{
                   position: "absolute",
@@ -165,6 +171,7 @@ export function InvocationsTable({ summary, invocations }: InvocationsTableProps
                 onMouseEnter={() => setHovered(row)}
                 onFocus={() => setHovered(row)}
                 onClick={() => {
+                  setSelectedInvocation(row.id, agentPath);
                   openDrawer("events", {
                     agentPath,
                     invocationId: row.id,
@@ -174,6 +181,7 @@ export function InvocationsTable({ summary, invocations }: InvocationsTableProps
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
+                    setSelectedInvocation(row.id, agentPath);
                     openDrawer("events", {
                       agentPath,
                       invocationId: row.id,
@@ -200,6 +208,7 @@ export function InvocationsTable({ summary, invocations }: InvocationsTableProps
                     className="rounded border border-border bg-bg-2 px-1.5 py-0.5 text-[11px] text-muted hover:text-text"
                     onClick={(e) => {
                       e.stopPropagation();
+                      setSelectedInvocation(row.id, agentPath);
                       openDrawer("events", {
                         agentPath,
                         invocationId: row.id,

@@ -7,6 +7,11 @@ export type DrawerPayload = {
   agentPath?: string;
   attr?: string;
   side?: "in" | "out";
+  invocationId?: string;
+  mode?: string;
+  panel?: string;
+  filter?: string;
+  sort?: "time" | "frequency" | "length";
   [k: string]: unknown;
 };
 
@@ -30,6 +35,8 @@ interface UIState {
   sidebarCollapsed: boolean;
   drawer: { kind: Exclude<DrawerKind, null>; payload: DrawerPayload } | null;
   drawerWidth: number;
+  selectedInvocationId: string | null;
+  selectedInvocationAgentPath: string | null;
   setCurrentTab: (tab: string) => void;
   setEventKindFilter: (f: EventKindFilter) => void;
   setEventSearch: (s: string) => void;
@@ -40,6 +47,8 @@ interface UIState {
   openDrawer: (kind: Exclude<DrawerKind, null>, payload?: DrawerPayload) => void;
   closeDrawer: () => void;
   setDrawerWidth: (px: number) => void;
+  setSelectedInvocation: (invocationId: string, agentPath: string) => void;
+  clearSelectedInvocation: () => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -53,6 +62,8 @@ export const useUIStore = create<UIState>()(
       sidebarCollapsed: false,
       drawer: null,
       drawerWidth: DRAWER_DEFAULT_WIDTH,
+      selectedInvocationId: null,
+      selectedInvocationAgentPath: null,
       setCurrentTab: (tab) => set({ currentTab: tab }),
       setEventKindFilter: (f) => set({ eventKindFilter: f }),
       setEventSearch: (s) => set({ eventSearch: s }),
@@ -63,6 +74,10 @@ export const useUIStore = create<UIState>()(
       openDrawer: (kind, payload = {}) => set({ drawer: { kind, payload } }),
       closeDrawer: () => set({ drawer: null }),
       setDrawerWidth: (px) => set({ drawerWidth: clampDrawerWidth(px) }),
+      setSelectedInvocation: (invocationId, agentPath) =>
+        set({ selectedInvocationId: invocationId, selectedInvocationAgentPath: agentPath }),
+      clearSelectedInvocation: () =>
+        set({ selectedInvocationId: null, selectedInvocationAgentPath: null }),
     }),
     {
       name: "operad.ui",
