@@ -839,7 +839,7 @@ class Agent(Generic[In, Out]):
     # --- composition --------------------------------------------------------
     def __rshift__(self, other: "Agent[Any, Any]") -> "Agent[Any, Any]":
         """`a >> b` constructs a `Sequential(a, b)`; flattens when chained."""
-        from .pipelines import Sequential
+        from .flow import Sequential
 
         if isinstance(self, Sequential):
             return Sequential(
@@ -2272,7 +2272,7 @@ def _outline_segments(
 
 
 def _leaf_flow(root: "Agent[Any, Any]") -> _LeafFlowSpec:
-    from .pipelines import Loop, Parallel, Router, Sequential
+    from .flow import Loop, Parallel, Router, Sequential
 
     def _child_path(
         parent: "Agent[Any, Any]",

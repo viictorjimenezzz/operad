@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from ....core.agent import Agent
-from ....core.pipelines import Router, Sequential
+from ....core.flow import Router, Sequential
 from ..schemas import SafeguardVerdict, StyledUtterance, Utterance
 from .persona import Persona
 from .refusal import RefusalLeaf

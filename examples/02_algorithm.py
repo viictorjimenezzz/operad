@@ -2,9 +2,9 @@
 
 Run modes:
 
-    uv run python examples/02_talker_reasoner_intake.py --scripted
-    uv run python examples/02_talker_reasoner_intake.py
-    uv run python examples/02_talker_reasoner_intake.py --offline
+    uv run python examples/02_algorithm.py --scripted
+    uv run python examples/02_algorithm.py
+    uv run python examples/02_algorithm.py --offline
 """
 
 from __future__ import annotations
@@ -32,56 +32,9 @@ from utils import (
     print_talker_turn,
 )
 
-_SCRIPT = "02_talker_reasoner_intake"
+_SCRIPT = "02_algorithm"
 DEFAULT_DASHBOARD = "127.0.0.1:7860"
 
-
-RECAP_JUNIOR = ScenarioNode(
-    id="recap_junior",
-    title="Recap (junior)",
-    prompt="Summarise the chosen junior path and offer next steps.",
-    terminal=True,
-)
-RECAP_MID = ScenarioNode(
-    id="recap_mid",
-    title="Recap (mid)",
-    prompt="Summarise the mid-level path and offer next steps.",
-    terminal=True,
-)
-RECAP_SENIOR = ScenarioNode(
-    id="recap_senior",
-    title="Recap (senior)",
-    prompt="Summarise the chosen senior path and offer next steps.",
-    terminal=True,
-)
-
-GOALS_JUNIOR = ScenarioNode(
-    id="goals_junior",
-    title="Goals (junior)",
-    prompt="Explore one or two beginner-friendly skill goals.",
-    instructions="Advance only if the user names at least one concrete goal.",
-    children=[RECAP_JUNIOR],
-)
-GOALS_MID = ScenarioNode(
-    id="goals_mid",
-    title="Goals (mid-level)",
-    prompt="Probe whether the user wants depth (specialist) or breadth (lead).",
-    instructions="Advance once the user picks specialist or lead.",
-    children=[RECAP_MID],
-)
-GOALS_SENIOR = ScenarioNode(
-    id="goals_senior",
-    title="Goals (senior)",
-    prompt=(
-        "Discuss strategic moves: staff-eng, founder, or executive track. "
-        "Probe risk tolerance and time horizon."
-    ),
-    instructions=(
-        "If the user is ambiguous about which track, STAY and ask one "
-        "clarifying question. Advance once the choice is clear."
-    ),
-    children=[RECAP_SENIOR],
-)
 
 BRANCH_SENIORITY = ScenarioNode(
     id="branch_seniority",
@@ -91,23 +44,56 @@ BRANCH_SENIORITY = ScenarioNode(
         "Use available_children to pick goals_junior, goals_mid, or "
         "goals_senior. If seniority is unclear, STAY and ask one question."
     ),
-    children=[GOALS_JUNIOR, GOALS_MID, GOALS_SENIOR],
-)
-COLLECT_ROLE = ScenarioNode(
-    id="collect_role",
-    title="Collect current role",
-    prompt="Ask the user about their current role and years of experience.",
-    instructions="Advance once you have role + rough years of experience.",
-    children=[BRANCH_SENIORITY],
-)
-GREET = ScenarioNode(
-    id="greet",
-    title="Greet and explain",
-    prompt=(
-        "Greet the user warmly and explain that this is a five-step "
-        "intake to suggest a career-development direction."
-    ),
-    children=[COLLECT_ROLE],
+    children=[
+        ScenarioNode(
+            id="goals_junior",
+            title="Goals (junior)",
+            prompt="Explore one or two beginner-friendly skill goals.",
+            instructions="Advance only if the user names at least one concrete goal.",
+            children=[
+                ScenarioNode(
+                    id="recap_junior",
+                    title="Recap (junior)",
+                    prompt="Summarise the chosen junior path and offer next steps.",
+                    terminal=True,
+                )
+            ],
+        ),
+        ScenarioNode(
+            id="goals_mid",
+            title="Goals (mid-level)",
+            prompt="Probe whether the user wants depth (specialist) or breadth (lead).",
+            instructions="Advance once the user picks specialist or lead.",
+            children=[
+                ScenarioNode(
+                    id="recap_mid",
+                    title="Recap (mid)",
+                    prompt="Summarise the mid-level path and offer next steps.",
+                    terminal=True,
+                )
+            ],
+        ),
+        ScenarioNode(
+            id="goals_senior",
+            title="Goals (senior)",
+            prompt=(
+                "Discuss strategic moves: staff-eng, founder, or executive track. "
+                "Probe risk tolerance and time horizon."
+            ),
+            instructions=(
+                "If the user is ambiguous about which track, STAY and ask one "
+                "clarifying question. Advance once the choice is clear."
+            ),
+            children=[
+                ScenarioNode(
+                    id="recap_senior",
+                    title="Recap (senior)",
+                    prompt="Summarise the chosen senior path and offer next steps.",
+                    terminal=True,
+                )
+            ],
+        )
+    ],
 )
 
 PROCESS = ScenarioTree(
@@ -116,7 +102,23 @@ PROCESS = ScenarioTree(
         "Help an ambitious individual contributor pick a development "
         "direction in five quick turns."
     ),
-    root=GREET,
+    root=ScenarioNode(
+        id="greet",
+        title="Greet and explain",
+        prompt=(
+            "Greet the user warmly and explain that this is a five-step "
+            "intake to suggest a career-development direction."
+        ),
+        children=[
+            ScenarioNode(
+                id="collect_role",
+                title="Collect current role",
+                prompt="Ask the user about their current role and years of experience.",
+                instructions="Advance once you have role + rough years of experience.",
+                children=[BRANCH_SENIORITY],
+            )
+        ],
+    )
 )
 
 SCRIPT: list[str] = [

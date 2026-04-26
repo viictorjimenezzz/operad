@@ -21,7 +21,7 @@ from typing import ClassVar, Generic
 
 from pydantic import BaseModel, Field
 
-from ..core.pipelines import Parallel
+from ..core.flow import Parallel
 from ..agents.reasoning.components import Critic, Reasoner
 from ..agents.reasoning.schemas import Answer, Candidate, Score, Task
 from ..core.agent import Agent, In, Out, _TRACER

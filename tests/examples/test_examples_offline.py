@@ -23,9 +23,9 @@ EXAMPLES_DIR = Path(__file__).resolve().parent.parent.parent / "examples"
 
 OFFLINE_SCRIPTS = [
     "01_agent.py",
-    "02_talker_reasoner_intake.py",
-    "03_train_config_temperature.py",
-    "04_evolutionary_best_of_n.py",
+    "02_algorithm.py",
+    "03_training.py",
+    "04_evolutionary.py",
 ]
 
 

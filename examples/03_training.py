@@ -2,8 +2,8 @@
 
 Run modes:
 
-    uv run python examples/03_train_config_temperature.py
-    uv run python examples/03_train_config_temperature.py --offline
+    uv run python examples/03_training.py
+    uv run python examples/03_training.py --offline
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ except ImportError:
     _RICH = False
 
 
-_SCRIPT = "03_train_config_temperature"
+_SCRIPT = "03_training"
 DEFAULT_DASHBOARD = "127.0.0.1:7860"
 _TARGET_LO, _TARGET_HI = 200, 450
 

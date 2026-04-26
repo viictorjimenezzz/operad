@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from operad.core.pipelines import Sequential
+from operad.core.flow import Sequential
 from operad.optim import (
     PromptTraceback,
     Tape,

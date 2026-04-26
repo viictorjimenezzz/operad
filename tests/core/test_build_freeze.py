@@ -8,7 +8,7 @@ import pickle
 import pytest
 
 from operad import Agent, BuildError, Configuration
-from operad.core.pipelines import Sequential
+from operad.core.flow import Sequential
 
 from ..conftest import A, B, C, FakeLeaf
 

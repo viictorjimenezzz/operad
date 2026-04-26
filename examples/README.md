@@ -13,17 +13,17 @@ exit cleanly with an error if the backend is not up.
 | # | Script                                  | What it shows |
 | - | --------------------------------------- | ------------- |
 | 1 | `01_agent.py`    | A single `await agent(x)` over four nested composition layers (Sequential ⊃ Parallel × 3 ⊃ Sequential ⊃ ReAct). 28 typed nodes, 27 edges, all checked at `build()` time. Every leaf is a vanilla `Planner(...)` / `Reasoner(...)` / `ReAct(...)` instance — no subclasses. |
-| 2 | `02_talker_reasoner_intake.py`          | `TalkerReasoner` over a four-stage scenario tree with two run paths: interactive REPL (`input()`) by default, or `--scripted` replay. Exercises stay/advance/branch/finish decisions. |
-| 3 | `03_train_config_temperature.py`        | Training loop with `MutationBeam`: ReAct-in-Parallel mutation proposal branches, typed `set_temperature` proposals, and Beam+judge selection. A reference-free length-band metric (no second LLM call) tracks progress. |
-| 4 | `04_evolutionary_best_of_n.py`          | Evolutionary loop with `MutationBeam` over prompt-rule mutations (`append_rule`, `replace_rule`, `drop_rule`) and Beam+judge top-k survivor selection across generations. Real `Reasoner` agent + reference-free length-band metric. |
+| 2 | `02_algorithm.py`          | `TalkerReasoner` over a four-stage scenario tree with two run paths: interactive REPL (`input()`) by default, or `--scripted` replay. Exercises stay/advance/branch/finish decisions. |
+| 3 | `03_training.py`        | Training loop with `MutationBeam`: ReAct-in-Parallel mutation proposal branches, typed `set_temperature` proposals, and Beam+judge selection. A reference-free length-band metric (no second LLM call) tracks progress. |
+| 4 | `04_evolutionary.py`          | Evolutionary loop with `MutationBeam` over prompt-rule mutations (`append_rule`, `replace_rule`, `drop_rule`) and Beam+judge top-k survivor selection across generations. Real `Reasoner` agent + reference-free length-band metric. |
 
 Run them from the repo root:
 
 ```bash
 uv run python examples/01_agent.py
-uv run python examples/02_talker_reasoner_intake.py
-uv run python examples/03_train_config_temperature.py
-uv run python examples/04_evolutionary_best_of_n.py
+uv run python examples/02_algorithm.py
+uv run python examples/03_training.py
+uv run python examples/04_evolutionary.py
 ```
 
 To stream runs into `operad-dashboard` from a separate process:

@@ -1,4 +1,4 @@
-"""Tests for the interactive path of examples/02_talker_reasoner_intake.py."""
+"""Tests for the interactive path of examples/02_algorithm.py."""
 
 from __future__ import annotations
 
@@ -25,8 +25,8 @@ def _examples_on_path():
 
 
 def _load_example02_module():
-    path = EXAMPLES_DIR / "02_talker_reasoner_intake.py"
-    spec = importlib.util.spec_from_file_location("examples.02_talker_reasoner_intake", path)
+    path = EXAMPLES_DIR / "02_algorithm.py"
+    spec = importlib.util.spec_from_file_location("examples.02_algorithm", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

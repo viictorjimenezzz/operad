@@ -5,9 +5,9 @@ uv run pytest tests/ -q --maxfail=1
 
 for f in \
   examples/01_agent.py \
-  examples/02_talker_reasoner_intake.py \
-  examples/03_train_config_temperature.py \
-  examples/04_evolutionary_best_of_n.py; do
+  examples/02_algorithm.py \
+  examples/03_training.py \
+  examples/04_evolutionary.py; do
     echo "== $f =="
     uv run python "$f" --offline
 done

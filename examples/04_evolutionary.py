@@ -2,8 +2,8 @@
 
 Run modes:
 
-    uv run python examples/04_evolutionary_best_of_n.py
-    uv run python examples/04_evolutionary_best_of_n.py --offline
+    uv run python examples/04_evolutionary.py
+    uv run python examples/04_evolutionary.py --offline
 """
 
 from __future__ import annotations
@@ -52,7 +52,7 @@ except ImportError:
     _RICH = False
 
 
-_SCRIPT = "04_evolutionary_best_of_n"
+_SCRIPT = "04_evolutionary"
 DEFAULT_DASHBOARD = "127.0.0.1:7860"
 _TARGET_LO, _TARGET_HI = 250, 600
 

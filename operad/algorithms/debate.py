@@ -27,7 +27,7 @@ from ..agents.debate.schemas import (
     DebateTurn,
     Proposal,
 )
-from ..core.pipelines import Loop, Parallel, Sequential
+from ..core.flow import Loop, Parallel, Sequential
 from ..agents.reasoning.schemas import Answer
 from ..core.agent import Agent, _TRACER
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event

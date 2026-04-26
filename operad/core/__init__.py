@@ -15,7 +15,7 @@ from .diff import AgentDiff, Change
 from .freeze import freeze_agent, thaw_agent, thaw_pair
 from .graph import from_json, to_io_graph, to_io_graph_from_json, to_json, to_mermaid
 from .output import OperadOutput
-from .pipelines import Loop, Parallel, Router, Sequential
+from .flow import Loop, Parallel, Router, Sequential
 from .state import AgentState
 
 __all__ = [

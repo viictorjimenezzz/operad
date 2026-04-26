@@ -16,9 +16,9 @@ from typing import Any, Literal
 import pytest
 from pydantic import BaseModel
 
-from operad.core.pipelines import Parallel
-from operad.core.pipelines import Router
-from operad.core.pipelines import Sequential
+from operad.core.flow import Parallel
+from operad.core.flow import Router
+from operad.core.flow import Sequential
 from operad.agents.reasoning.components.router import RouteClassifier
 from operad.agents.reasoning.schemas import Choice
 from operad.core.agent import Agent
