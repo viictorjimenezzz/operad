@@ -973,8 +973,8 @@ class Agent(Generic[In, Out]):
     def _repr_html_(self) -> str:
         """Rich HTML rendering for Jupyter / marimo / VS Code notebooks.
 
-        Delegates to `AgentGraph._repr_html_` when the agent has been
-        built; otherwise falls back to an escaped `<pre>` summary. Plain
+        When built, renders the Mermaid source in a `<pre class="mermaid">`
+        block; otherwise falls back to an escaped `<pre>` summary. Plain
         text environments continue to use `__repr__`.
         """
         graph = self.__dict__.get("_graph")
@@ -1027,7 +1027,7 @@ class Agent(Generic[In, Out]):
         return "\n".join(lines)
 
     def graph_outline(self) -> str:
-        """Return a leaf-only text outline of the built graph."""
+        """Return a repository-style tree of leaf agents."""
         graph = self.__dict__.get("_graph")
         if graph is None:
             raise BuildError(
@@ -1036,15 +1036,34 @@ class Agent(Generic[In, Out]):
                 agent=self.name,
             )
         flow = _leaf_flow(self)
-        lines: list[str] = [f"{self.name} leaf graph"]
-        for agent in flow.nodes.values():
-            lines.append(f"- {agent.name}")
-        if flow.edges:
-            lines.append("edges:")
-            for src, dst, payload in flow.edges:
-                src_name = flow.nodes[src].name
-                dst_name = flow.nodes[dst].name
-                lines.append(f"- {src_name} -[{_type_name(payload)}]-> {dst_name}")
+
+        root = _OutlineNode()
+        for path, agent in flow.nodes.items():
+            if path == self.name and agent is self and not self._children:
+                continue
+            segments = _outline_segments(self.name, path)
+            node = root
+            for seg in segments:
+                child = node.branches.get(seg)
+                if child is None:
+                    child = _OutlineNode()
+                    node.branches[seg] = child
+                    node.order.append(("branch", seg))
+                node = child
+            node.order.append(("leaf", agent.name))
+
+        lines: list[str] = [self.name]
+
+        def _render(node: _OutlineNode, prefix: str) -> None:
+            for idx, (kind, label) in enumerate(node.order):
+                is_last = idx == len(node.order) - 1
+                branch = "`- " if is_last else "|- "
+                lines.append(f"{prefix}{branch}{label}")
+                if kind == "branch":
+                    child_prefix = prefix + ("   " if is_last else "|  ")
+                    _render(node.branches[label], child_prefix)
+
+        _render(root, "")
         return "\n".join(lines)
 
     def _apply_default_sampling(self) -> None:
@@ -2179,6 +2198,12 @@ class _LeafFlowSpec:
     exits: list[tuple[str, type[Any] | None]] = field(default_factory=list)
 
 
+@dataclass
+class _OutlineNode:
+    branches: dict[str, "_OutlineNode"] = field(default_factory=dict)
+    order: list[tuple[str, str]] = field(default_factory=list)
+
+
 def _type_name(t: type[Any] | None) -> str:
     if t is None:
         return "?"
@@ -2201,6 +2226,34 @@ def _dedupe_ports(
             continue
         seen.add(path)
         out.append((path, t))
+    return out
+
+
+def _is_stage_segment(segment: str) -> bool:
+    if not segment.startswith("stage_"):
+        return False
+    return segment[6:].isdigit()
+
+
+def _outline_segments(root_name: str, path: str) -> list[str]:
+    parts = path.split(".")
+    if parts and parts[0] == root_name:
+        parts = parts[1:]
+
+    out: list[str] = []
+    for seg in parts:
+        if seg in {"pipeline", "child"}:
+            continue
+        if _is_stage_segment(seg):
+            continue
+        if seg.startswith("branch_"):
+            branch = seg[len("branch_") :].strip("\"'")
+            if branch:
+                out.append(branch)
+            continue
+        if seg.startswith("_"):
+            continue
+        out.append(seg)
     return out
 
 
