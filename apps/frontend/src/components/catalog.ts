@@ -91,6 +91,12 @@ export const catalog = createCatalog({
         mutationsSource: sourceExpr,
       }),
     },
+    AgentMetadataPanel: {
+      props: z.object({
+        sourceSummary: sourceExpr,
+        sourceInvocations: sourceExpr,
+      }),
+    },
     AgentInsightsRow: {
       props: z.object({
         sourceSummary: sourceExpr,
@@ -106,6 +112,17 @@ export const catalog = createCatalog({
         label: z.string().optional(),
         agentPath: z.string().optional(),
         side: z.enum(["in", "out"]).optional(),
+      }),
+    },
+    InteractiveGraph: {
+      props: z.object({
+        sourceIoGraph: sourceExpr,
+        runId: z.string().optional(),
+      }),
+    },
+    SideDrawer: {
+      props: z.object({
+        runId: z.string().optional(),
       }),
     },
 

@@ -10,6 +10,17 @@ export type DrawerPayload = {
   [k: string]: unknown;
 };
 
+const DRAWER_MIN_WIDTH = 320;
+const DRAWER_DEFAULT_WIDTH = 480;
+
+export function clampDrawerWidth(
+  px: number,
+  viewportWidth = typeof window === "undefined" ? 1200 : window.innerWidth,
+): number {
+  const max = Math.max(DRAWER_MIN_WIDTH, Math.floor(viewportWidth * 0.6));
+  return Math.max(DRAWER_MIN_WIDTH, Math.min(max, Math.round(px)));
+}
+
 interface UIState {
   currentTab: string;
   eventKindFilter: EventKindFilter;
@@ -17,7 +28,7 @@ interface UIState {
   autoFollow: boolean;
   eventsFollow: boolean;
   sidebarCollapsed: boolean;
-  drawer: { kind: DrawerKind; payload: DrawerPayload } | null;
+  drawer: { kind: Exclude<DrawerKind, null>; payload: DrawerPayload } | null;
   drawerWidth: number;
   setCurrentTab: (tab: string) => void;
   setEventKindFilter: (f: EventKindFilter) => void;
@@ -41,7 +52,7 @@ export const useUIStore = create<UIState>()(
       eventsFollow: true,
       sidebarCollapsed: false,
       drawer: null,
-      drawerWidth: 420,
+      drawerWidth: DRAWER_DEFAULT_WIDTH,
       setCurrentTab: (tab) => set({ currentTab: tab }),
       setEventKindFilter: (f) => set({ eventKindFilter: f }),
       setEventSearch: (s) => set({ eventSearch: s }),
@@ -51,7 +62,7 @@ export const useUIStore = create<UIState>()(
       setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
       openDrawer: (kind, payload = {}) => set({ drawer: { kind, payload } }),
       closeDrawer: () => set({ drawer: null }),
-      setDrawerWidth: (px) => set({ drawerWidth: Math.max(280, Math.min(720, Math.round(px))) }),
+      setDrawerWidth: (px) => set({ drawerWidth: clampDrawerWidth(px) }),
     }),
     {
       name: "operad.ui",

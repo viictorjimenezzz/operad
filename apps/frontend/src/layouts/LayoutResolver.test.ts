@@ -63,6 +63,12 @@ describe("resolveLayout algorithm", () => {
 });
 
 describe("resolveLayout integration (real layouts/)", () => {
+  it("resolves wildcard layout for null algorithm path", async () => {
+    const { resolveLayout } = await import("./index");
+    const layout = resolveLayout(null);
+    expect(layout.algorithm).toBe("*");
+  });
+
   it("resolves EvoGradient to the evogradient layout", async () => {
     const { resolveLayout } = await import("./index");
     const layout = resolveLayout("EvoGradient");
@@ -84,12 +90,7 @@ describe("resolveLayout integration (real layouts/)", () => {
   it("resolves unknown path to default layout", async () => {
     const { resolveLayout } = await import("./index");
     const layout = resolveLayout("DoesNotExist");
-    expect(layout.algorithm).toBe("__no_layout__");
-  });
-
-  it("resolves null to default layout", async () => {
-    const { resolveLayout } = await import("./index");
-    expect(resolveLayout(null).algorithm).toBe("__no_layout__");
+    expect(layout.algorithm).toBe("*");
   });
 
   it("resolves Sweep to the sweep layout", async () => {
