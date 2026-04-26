@@ -175,6 +175,7 @@ class Node:
     input_type: type
     output_type: type
     kind: NodeKind
+    class_name: str | None = None
 
 
 @dataclass
@@ -185,6 +186,7 @@ class Edge:
     callee: str
     input_type: type
     output_type: type
+    class_name: str | None = None
 
 
 @dataclass
@@ -233,6 +235,7 @@ class Tracer:
                     input_type=root.input,  # type: ignore[arg-type]
                     output_type=root.output,  # type: ignore[arg-type]
                     kind=_node_kind(root),
+                    class_name=type(root).__name__,
                 )
             ],
         )
@@ -283,6 +286,7 @@ class Tracer:
                 input_type=child.input,
                 output_type=child.output,
                 kind=_node_kind(child),
+                class_name=type(child).__name__,
             )
         )
         self.graph.edges.append(
@@ -291,6 +295,7 @@ class Tracer:
                 callee=callee,
                 input_type=child.input,
                 output_type=child.output,
+                class_name=type(child).__name__,
             )
         )
 
