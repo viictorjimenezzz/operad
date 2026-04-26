@@ -24,12 +24,12 @@ from __future__ import annotations
 
 import time
 from inspect import cleandoc
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..agents.reasoning.components import Reasoner
 from ..core.agent import Agent
+from ..core.example import Example
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 
 
@@ -188,65 +188,122 @@ class AssistantMessage(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Default navigator / talker prompts — installed onto vanilla `Reasoner`
-# instances at class-level. No subclassing needed: callers customise via
-# `TalkerReasoner.reasoner.config = ...` (or by subclassing the algorithm).
+# Navigator / Talker prompts and private agent classes.
 # ---------------------------------------------------------------------------
 
 
-_NAV_ROLE = cleandoc("""
-    You are the navigator of a guided conversational process. You see
-    the current scenario node, the available children (if any), the
-    conversation history, and the user's latest message. You decide
-    whether to stay on this node, advance, branch to a specific child,
-    or finish the conversation.
-""")
-_NAV_TASK = cleandoc("""
-    Read every input and produce a typed NavigationDecision:
+class _Navigator(Agent[NavigationInput, NavigationDecision]):
+    input = NavigationInput
+    output = NavigationDecision
+    role = cleandoc("""
+        You are the navigator of a guided conversational process. You see
+        the current scenario node, the available children (if any), the
+        conversation history, and the user's latest message. You decide
+        whether to stay on this node, advance, branch to a specific child,
+        or finish the conversation.
+    """)
+    task = cleandoc("""
+        Read every input and produce a typed NavigationDecision:
 
-    - kind = "stay" when the user needs more clarification at this step.
-    - kind = "advance" when the current node has exactly one child and the
-      user has supplied what was needed to move on.
-    - kind = "branch" when there are multiple children and the user's
-      message clearly maps to one of them — set branch_to to its id.
-    - kind = "finish" when the process is complete or the user opted out.
+        - kind = "stay" when the user needs more clarification at this step.
+        - kind = "advance" when the current node has exactly one child and the
+          user has supplied what was needed to move on.
+        - kind = "branch" when there are multiple children and the user's
+          message clearly maps to one of them — set branch_to to its id.
+        - kind = "finish" when the process is complete or the user opted out.
+    """)
+    rules = (
+        "Use the current_node_instructions to break ties; they are author-supplied.",
+        "If branching, branch_to MUST appear in available_children; otherwise stay.",
+        "Never invent a node id; never guess across rounds.",
+        "Be conservative: prefer stay/clarify when the user's message is ambiguous.",
+        "Write rationale in one sentence — it is read by maintainers, not the user.",
+    )
+    examples = (
+        Example(
+            input=NavigationInput(
+                process_name="Career intake",
+                process_purpose="Identify the right service tier for the candidate.",
+                history="",
+                current_node_id="start",
+                current_node_title="Welcome",
+                current_node_prompt=(
+                    "Greet the candidate and ask whether they are looking "
+                    "for a job or career advice."
+                ),
+                current_node_instructions="",
+                available_children=(
+                    '[{"id": "job_search", "title": "Job search"}, '
+                    '{"id": "career_advice", "title": "Career advice"}]'
+                ),
+                user_message="I'm looking for a new job.",
+            ),
+            output=NavigationDecision(
+                kind="branch",
+                branch_to="job_search",
+                rationale="User explicitly stated they are looking for a new job.",
+                next_message_brief=(
+                    "Acknowledge the job-search goal and ask about the "
+                    "candidate's target role and preferred location."
+                ),
+            ),
+        ),
+    )
 
-    Always populate next_message_brief with a one-or-two-sentence
-    instruction telling the Talker what to write. Do NOT write the
-    user-facing message yourself; that is the Talker's job.
-""")
-_NAV_RULES = (
-    "Use the current_node_instructions to break ties; they are author-supplied.",
-    "If branching, branch_to MUST appear in available_children; otherwise stay.",
-    "Never invent a node id; never guess across rounds.",
-    "Be conservative: prefer stay/clarify when the user's message is ambiguous.",
-    "Write rationale in one sentence — it is read by maintainers, not the user.",
-)
 
+class _Voice(Agent[TalkerInput, AssistantMessage]):
+    input = TalkerInput
+    output = AssistantMessage
+    role = cleandoc("""
+        You are the user-facing voice of a guided conversational process.
+        Another component has already decided which scenario node we are
+        on next; your job is to produce the actual message the user will
+        read. Stay warm, concise, and on-process.
+    """)
+    task = cleandoc("""
+        Write the next assistant message. Combine three signals:
 
-_TALKER_ROLE = cleandoc("""
-    You are the user-facing voice of a guided conversational process.
-    Another component has already decided which scenario node we are
-    on next; your job is to produce the actual message the user will
-    read. Stay warm, concise, and on-process.
-""")
-_TALKER_TASK = cleandoc("""
-    Write the next assistant message. Combine three signals:
+        - the target node's prompt — what the assistant should accomplish;
+        - the reasoner's next_message_brief — exactly what to convey now;
+        - the conversation history — to maintain continuity and avoid repetition.
 
-    - the target node's prompt — what the assistant should accomplish;
-    - the reasoner's next_message_brief — exactly what to convey now;
-    - the conversation history — to maintain continuity and avoid repetition.
-
-    On terminal turns, acknowledge completion and offer one concrete
-    next step outside the process (e.g. an artefact, a recap, a hand-off).
-""")
-_TALKER_RULES = (
-    "Two to five sentences is the default; expand only when explicitly asked.",
-    "Never restate the user's words verbatim; reflect understanding instead.",
-    "Do NOT mention scenario node ids, branches, or routing decisions.",
-    "Keep the same language the user used.",
-    "End every non-terminal turn with one concrete prompt or question.",
-)
+        On terminal turns, acknowledge completion and offer one concrete
+        next step outside the process (e.g. an artefact, a recap, a hand-off).
+    """)
+    rules = (
+        "Two to five sentences is the default; expand only when explicitly asked.",
+        "Never restate the user's words verbatim; reflect understanding instead.",
+        "Do NOT mention scenario node ids, branches, or routing decisions.",
+        "Keep the same language the user used.",
+        "End every non-terminal turn with one concrete prompt or question.",
+    )
+    examples = (
+        Example(
+            input=TalkerInput(
+                process_name="Career intake",
+                history="user: I'm looking for a new job.",
+                target_node_id="job_search",
+                target_node_title="Job search",
+                target_node_prompt=(
+                    "Collect the candidate's target role and preferred location."
+                ),
+                decision_kind="branch",
+                next_message_brief=(
+                    "Acknowledge the job-search goal and ask about the "
+                    "candidate's target role and preferred location."
+                ),
+                user_message="I'm looking for a new job.",
+                is_terminal=False,
+            ),
+            output=AssistantMessage(
+                text=(
+                    "Great, let's get your job search started! What role are "
+                    "you targeting, and do you have a preferred location or are "
+                    "you open to remote opportunities?"
+                ),
+            ),
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -287,10 +344,10 @@ class Transcript(BaseModel):
 
 
 class TalkerReasoner:
-    """Walk a `ScenarioTree` with a Reasoner navigator and a Talker voice.
+    """Walk a `ScenarioTree` with a navigator and a voice agent.
 
-    Single-pass per turn: the Reasoner emits a typed decision, the
-    algorithm applies it, the Talker produces the user-facing reply.
+    Single-pass per turn: the navigator emits a typed decision, the
+    algorithm applies it, the voice agent produces the user-facing reply.
     Transcript is accumulated across turns. Components are class-level
     defaults so callers usually only need to supply ``tree`` and
     algorithm knobs (`max_turns`); swap components via a subclass.
@@ -304,20 +361,8 @@ class TalkerReasoner:
         transcript = await tr.run([...])    # or run a whole script
     """
 
-    reasoner: ClassVar[Agent] = Reasoner(
-        input=NavigationInput,
-        output=NavigationDecision,
-        role=_NAV_ROLE,
-        task=_NAV_TASK,
-        rules=_NAV_RULES,
-    )
-    talker: ClassVar[Agent] = Reasoner(
-        input=TalkerInput,
-        output=AssistantMessage,
-        role=_TALKER_ROLE,
-        task=_TALKER_TASK,
-        rules=_TALKER_RULES,
-    )
+    reasoner: ClassVar[Agent] = _Navigator()
+    talker: ClassVar[Agent] = _Voice()
 
     def __init__(
         self,
