@@ -190,6 +190,23 @@ async def test_react_end_to_end_routes_through_stub_pipeline(cfg) -> None:
     assert out.response.answer == "42"
 
 
+async def test_react_mermaid_renders_sequential_edges(cfg) -> None:
+    r = await _stub_react(cfg).abuild()
+    text = r.graph_mermaid()
+    assert "ReAct -->|\"Task -> Answer\"| ReAct_pipeline" in text
+    assert "ReAct_pipeline -->|\"Task -> _ReActState\"| ReAct_pipeline_stage_0" in text
+    assert "ReAct_pipeline_stage_0 -->|\"_ReActState -> _ReActState\"| ReAct_pipeline_stage_1" in text
+    assert "ReAct_pipeline_stage_1 -->|\"_ReActState -> _ReActState\"| ReAct_pipeline_stage_1_stage_0" in text
+    assert "ReAct_pipeline_stage_1_stage_0 -->|\"Task -> Thought\"| ReAct_pipeline_stage_1_stage_0_child" in text
+    assert "ReAct_pipeline_stage_1_stage_0 -->|\"_ReActState -> _ReActState\"| ReAct_pipeline_stage_1_stage_1" in text
+    assert "ReAct_pipeline_stage_1_stage_1 -->|\"Thought -> Action\"| ReAct_pipeline_stage_1_stage_1_child" in text
+    assert "ReAct_pipeline_stage_1_stage_1 -->|\"_ReActState -> _ReActState\"| ReAct_pipeline_stage_1_stage_2" in text
+    assert "ReAct_pipeline_stage_1_stage_2 -->|\"Action -> Observation\"| ReAct_pipeline_stage_1_stage_2_child" in text
+    assert "ReAct_pipeline_stage_1_stage_2 -->|\"_ReActState -> _ReActState\"| ReAct_pipeline_stage_1_stage_3" in text
+    assert "ReAct_pipeline_stage_1_stage_3 -->|\"Observation -> Answer\"| ReAct_pipeline_stage_1_stage_3_child" in text
+    assert "ReAct_pipeline_stage_1 -->|\"_ReActState -> Answer\"| ReAct_pipeline_stage_2" in text
+
+
 async def test_react_subagents_use_component_defaults(cfg) -> None:
     """Sub-agents pull their role/task/rules from the component classes
     directly — ReAct doesn't override them inline."""

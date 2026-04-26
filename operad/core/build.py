@@ -180,7 +180,12 @@ class Node:
 
 @dataclass
 class Edge:
-    """One recorded invocation: parent -> child, with the agreed types."""
+    """One recorded invocation edge in the symbolic trace.
+
+    ``caller`` points to the immediate producer of the value handed to
+    ``callee`` when known (dataflow edge). If no producer can be
+    inferred, ``caller`` falls back to the current composite/root path.
+    """
 
     caller: str
     callee: str
@@ -240,6 +245,7 @@ class Tracer:
             ],
         )
         self._stack: list[tuple[Agent[Any, Any], str]] = []
+        self._producer_by_objid: dict[int, str] = {}
 
     async def record(self, child: Agent[Any, Any], x: Any) -> Any:
         if not self._stack:
@@ -250,6 +256,7 @@ class Tracer:
 
         attr = _find_attr_name(parent_agent, child) or child.name
         callee = f"{parent_name}.{attr}"
+        caller = self._producer_by_objid.get(id(x), parent_name)
 
         if child.input is None or child.output is None:
             raise BuildError(
@@ -291,7 +298,7 @@ class Tracer:
         )
         self.graph.edges.append(
             Edge(
-                caller=parent_name,
+                caller=caller,
                 callee=callee,
                 input_type=child.input,
                 output_type=child.output,
@@ -347,7 +354,9 @@ class Tracer:
             finally:
                 self._stack.pop()
 
-        return child.output.model_construct()
+        symbolic_out = child.output.model_construct()
+        self._producer_by_objid[id(symbolic_out)] = callee
+        return symbolic_out
 
 
 def _find_attr_name(parent: Agent[Any, Any], child: Agent[Any, Any]) -> str | None:

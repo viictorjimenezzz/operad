@@ -65,7 +65,8 @@ async def test_loop_custom_name_sets_graph_and_runtime_root() -> None:
     assert loop._graph.root == "rewrite_loop"
     assert loop.graph_json()["root"] == "rewrite_loop"
     assert {(e.caller, e.callee) for e in loop._graph.edges} == {
-        ("rewrite_loop", "rewrite_loop.stage_0")
+        ("rewrite_loop", "rewrite_loop.stage_0"),
+        ("rewrite_loop.stage_0", "rewrite_loop.stage_0"),
     }
 
     out = await loop(A(text="go"))

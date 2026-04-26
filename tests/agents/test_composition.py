@@ -129,6 +129,10 @@ async def test_nested_composites_are_captured(cfg) -> None:
     assert "Outer.inner" in callees
     assert "Outer.final" in callees
     assert any(e.callee.endswith(".leaf") for e in g.edges)
+    by_callee = {e.callee: e for e in g.edges}
+    assert by_callee["Outer.inner"].caller == "Outer"
+    assert by_callee["Outer.inner.leaf"].caller == "Outer.inner"
+    assert by_callee["Outer.final"].caller == "Outer.inner"
 
     out = await o(A(text="go"))
     assert isinstance(out.response, C)
