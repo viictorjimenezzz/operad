@@ -1,4 +1,8 @@
 import {
+  BenchmarkDetailResponse,
+  BenchmarkIngestResponse,
+  BenchmarkListItem,
+  BenchmarkOkResponse,
   DriftEntry,
   EvolutionResponse,
   FitnessEntry,
@@ -22,6 +26,30 @@ import { z } from "zod";
 
 async function getJson<T extends z.ZodTypeAny>(url: string, schema: T): Promise<z.infer<T>> {
   const r = await fetch(url, { headers: { accept: "application/json" } });
+  if (!r.ok) throw new HttpError(r.status, `${r.status} ${r.statusText} ← ${url}`);
+  const raw: unknown = await r.json();
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    throw new ParseError(url, parsed.error);
+  }
+  return parsed.data;
+}
+
+async function sendJson<T extends z.ZodTypeAny>(
+  method: "POST" | "DELETE",
+  url: string,
+  schema: T,
+  body?: unknown,
+): Promise<z.infer<T>> {
+  const init: RequestInit = {
+    method,
+    headers: {
+      accept: "application/json",
+      ...(body !== undefined ? { "content-type": "application/json" } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  };
+  const r = await fetch(url, init);
   if (!r.ok) throw new HttpError(r.status, `${r.status} ${r.statusText} ← ${url}`);
   const raw: unknown = await r.json();
   const parsed = schema.safeParse(raw);
@@ -66,6 +94,15 @@ export const dashboardApi = {
   mutations: (runId: string) => getJson(`/runs/${runId}/mutations.json`, MutationsMatrix),
   drift: (runId: string) => getJson(`/runs/${runId}/drift.json`, z.array(DriftEntry)),
   progress: (runId: string) => getJson(`/runs/${runId}/progress.json`, ProgressSnapshot),
+  benchmarks: () => getJson("/benchmarks", z.array(BenchmarkListItem)),
+  benchmarkDetail: (benchmarkId: string) =>
+    getJson(`/benchmarks/${benchmarkId}`, BenchmarkDetailResponse),
+  benchmarkIngest: (report: unknown) =>
+    sendJson("POST", "/benchmarks/_ingest", BenchmarkIngestResponse, report),
+  benchmarkTag: (benchmarkId: string, tag: string) =>
+    sendJson("POST", `/benchmarks/${benchmarkId}/tag`, BenchmarkOkResponse, { tag }),
+  benchmarkDelete: (benchmarkId: string) =>
+    sendJson("DELETE", `/benchmarks/${benchmarkId}`, BenchmarkOkResponse),
   stats: () => getJson("/stats", StatsResponse),
   evolution: () => getJson("/evolution", EvolutionResponse),
   manifest: () => getJson("/api/manifest", Manifest),

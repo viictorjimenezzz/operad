@@ -40,6 +40,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "environment variable."
         ),
     )
+    p.add_argument(
+        "--benchmark-dir",
+        default=os.environ.get("OPERAD_DASHBOARD_BENCHMARK_DIR", "./.benchmarks/"),
+        help=(
+            "Directory scanned once on startup for benchmark report JSON files. "
+            "Defaults to OPERAD_DASHBOARD_BENCHMARK_DIR or ./.benchmarks/."
+        ),
+    )
     return p.parse_args(argv)
 
 
@@ -51,7 +59,10 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run_live(args: argparse.Namespace) -> int:
-    app = create_app(langfuse_url=args.langfuse_url)
+    app = create_app(
+        langfuse_url=args.langfuse_url,
+        benchmark_dir=args.benchmark_dir,
+    )
     print(
         f"Dashboard live at http://{args.host}:{args.port}\n"
         "Run your operad agent in the same Python process, "
@@ -66,7 +77,10 @@ def _run_live(args: argparse.Namespace) -> int:
 def _run_replay(args: argparse.Namespace) -> int:
     observer = WebDashboardObserver()
     app = create_app(
-        observer=observer, auto_register=False, langfuse_url=args.langfuse_url
+        observer=observer,
+        auto_register=False,
+        langfuse_url=args.langfuse_url,
+        benchmark_dir=args.benchmark_dir,
     )
 
     async def _replay_then_idle() -> None:

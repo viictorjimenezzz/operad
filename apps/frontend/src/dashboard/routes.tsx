@@ -1,3 +1,5 @@
+import { BenchmarkDetailPage } from "@/dashboard/pages/BenchmarkDetailPage";
+import { BenchmarksPage } from "@/dashboard/pages/BenchmarksPage";
 import { Shell } from "@/dashboard/Shell";
 import { NotFoundPage } from "@/dashboard/pages/NotFoundPage";
 import { RunDetailPage } from "@/dashboard/pages/RunDetailPage";
@@ -11,6 +13,8 @@ export const dashboardRouter = createBrowserRouter([
     children: [
       { index: true, element: <RunListPage /> },
       { path: "runs/:runId", element: <RunDetailPage /> },
+      { path: "benchmarks", element: <BenchmarksPage /> },
+      { path: "benchmarks/:benchmarkId", element: <BenchmarkDetailPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

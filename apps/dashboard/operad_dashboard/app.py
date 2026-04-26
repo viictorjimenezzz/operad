@@ -20,7 +20,9 @@ from operad.runtime.cost import CostObserver
 from operad.runtime.observers.base import registry as operad_registry
 from operad.runtime.slots import registry as slot_registry
 
+from .benchmark_store import BenchmarkStore
 from .observer import WebDashboardObserver, serialize_event
+from .routes import benchmarks as benchmark_routes
 from .routes import checkpoints as checkpoints_routes
 from .routes import debate as debate_routes
 from .routes import drift as drift_routes
@@ -54,6 +56,7 @@ def create_app(
     cost_observer: CostObserver | None = None,
     auto_register: bool = True,
     langfuse_url: str | None = None,
+    benchmark_dir: str = "./.benchmarks/",
 ) -> FastAPI:
     """Build a FastAPI app wired to a `WebDashboardObserver`.
 
@@ -76,6 +79,21 @@ def create_app(
     app.state.observer = obs
     app.state.cost_observer = cost
     app.state.langfuse_url = (langfuse_url or "").rstrip("/") or None
+    app.state.benchmark_store = BenchmarkStore()
+    app.state.benchmark_dir = benchmark_dir
+
+    @app.on_event("startup")
+    async def _load_benchmarks_from_dir() -> None:
+        bench_dir = Path(str(app.state.benchmark_dir))
+        if not bench_dir.is_dir():
+            return
+        store: BenchmarkStore = app.state.benchmark_store
+        for path in sorted(bench_dir.rglob("*.json")):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                store.ingest(payload)
+            except Exception:
+                continue
 
     # SPA assets first so /assets/X resolves without hitting the catch-all.
     if _WEB_ASSETS.is_dir():
@@ -209,6 +227,7 @@ def create_app(
     app.include_router(checkpoints_routes.router)
     app.include_router(gradients_routes.router)
     app.include_router(sweep_routes.router)
+    app.include_router(benchmark_routes.router)
 
     @app.get("/", response_class=HTMLResponse)
     async def index() -> HTMLResponse:
