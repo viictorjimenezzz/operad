@@ -2,49 +2,104 @@ import { HashChip } from "@/components/agent-view/metadata/hash-chip";
 import { InvocationsTable } from "@/components/agent-view/metadata/invocations-table";
 import { ScriptOriginChip } from "@/components/agent-view/metadata/script-origin-chip";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { AgentInvocationsResponse, RunSummary } from "@/lib/types";
-import { formatDurationMs, truncateMiddle } from "@/lib/utils";
+import { RunSummary } from "@/lib/types";
+import {
+  formatCost,
+  formatDurationMs,
+  formatRelativeTime,
+  formatTokens,
+  truncateMiddle,
+} from "@/lib/utils";
+import { ExternalLink } from "lucide-react";
+import { z } from "zod";
+
+const InvocationRowSchema = z.object({
+  hash_content: z.string().nullable().optional(),
+  langfuse_url: z.string().nullable().optional(),
+});
+const InvocationsPayload = z.object({
+  invocations: z.array(InvocationRowSchema).default([]),
+});
 
 interface AgentMetadataPanelProps {
-  summary: RunSummary | null | undefined;
-  invocations: AgentInvocationsResponse | null | undefined;
-  runId: string | undefined;
+  summary: unknown;
+  invocations: unknown;
 }
 
-export function AgentMetadataPanel({ summary, invocations, runId }: AgentMetadataPanelProps) {
-  const state = summary?.state ?? "running";
-  const live = state === "running";
-  const latest = invocations?.invocations.at(-1);
+export function AgentMetadataPanel({ summary, invocations }: AgentMetadataPanelProps) {
+  const summaryParsed = RunSummary.safeParse(summary);
+  const invParsed = InvocationsPayload.safeParse(invocations);
+
+  if (!summaryParsed.success) {
+    return (
+      <div className="rounded-md border border-border bg-bg-1 p-3 text-xs text-muted">
+        loading agent metadata…
+      </div>
+    );
+  }
+
+  const run = summaryParsed.data;
+  const latest = invParsed.success
+    ? invParsed.data.invocations[invParsed.data.invocations.length - 1]
+    : null;
+  const className = run.algorithm_class ?? run.root_agent_path?.split(".").at(-1) ?? "Agent";
+  const stateVariant = run.state === "running" ? "live" : run.state === "error" ? "error" : "ended";
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <CardTitle className="text-text">agent metadata</CardTitle>
-          <Badge variant={state === "running" ? "live" : state === "error" ? "error" : "ended"}>
-            {state}
-          </Badge>
-          <span className="truncate font-mono text-xs text-text" title={invocations?.agent_path}>
-            {invocations?.agent_path ?? summary?.root_agent_path ?? "agent"}
-          </span>
+    <div className="flex flex-col gap-3">
+      <div className="rounded-md border border-border bg-bg-1 p-3">
+        <div className="flex flex-wrap items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="font-mono text-lg text-text">{className}</div>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <Badge variant="default">{run.is_algorithm ? "algorithm" : "agent"}</Badge>
+              <Badge
+                variant={stateVariant}
+                className={run.state === "running" ? "animate-pulse" : ""}
+              >
+                {run.state}
+              </Badge>
+              <span
+                className="rounded-full border border-border bg-bg-2 px-2 py-0.5 font-mono text-[11px] text-muted"
+                title={run.run_id}
+              >
+                run {truncateMiddle(run.run_id, 18)}
+              </span>
+              <HashChip hash={latest?.hash_content} />
+              <ScriptOriginChip script={run.script} />
+              {latest?.langfuse_url ? (
+                <a
+                  href={latest.langfuse_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded border border-border bg-bg-2 px-2 py-0.5 text-[11px] text-muted hover:text-text"
+                >
+                  Langfuse
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              ) : null}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted">
+            <span>started</span>
+            <span
+              className="font-mono text-text"
+              title={new Date(run.started_at * 1000).toLocaleString()}
+            >
+              {formatRelativeTime(run.started_at)}
+            </span>
+            <span>duration</span>
+            <span className="font-mono text-text">{formatDurationMs(run.duration_ms)}</span>
+            <span>tokens</span>
+            <span className="font-mono text-text">
+              {formatTokens(run.prompt_tokens)} / {formatTokens(run.completion_tokens)}
+            </span>
+            <span>cost</span>
+            <span className="font-mono text-text">{formatCost(run.cost?.cost_usd)}</span>
+          </div>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-muted">run</span>
-          <code className="font-mono text-text">
-            {truncateMiddle(runId ?? summary?.run_id ?? "", 24)}
-          </code>
-          <span className="text-muted">hash content</span>
-          <HashChip value={latest?.hash_content} />
-          <span className="text-muted">script</span>
-          <ScriptOriginChip script={latest?.script} />
-          <span className="text-muted">duration</span>
-          <span className="font-mono text-text">{formatDurationMs(summary?.duration_ms)}</span>
-        </div>
-        <InvocationsTable data={invocations} live={live} />
-      </CardContent>
-    </Card>
+      </div>
+      <InvocationsTable summary={run} invocations={invocations} />
+    </div>
   );
 }

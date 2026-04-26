@@ -4,7 +4,7 @@
  * it is automatically available without touching any other file.
  *
  * Resolution order: exact match on `algorithm_path` → prefix match →
- * empty fallback layout.
+ * wildcard layout (`algorithm: "*"`) fallback.
  */
 import { LayoutSpec } from "@/lib/layout-schema";
 
@@ -13,7 +13,6 @@ const modules = import.meta.glob("../layouts/*.json", {
 }) as Record<string, { default?: unknown } | unknown>;
 
 const algorithmLayouts: Record<string, LayoutSpec> = {};
-let agentLayout: LayoutSpec | null = null;
 const fallbackLayout: LayoutSpec = {
   algorithm: "__no_layout__",
   version: 1,
@@ -35,23 +34,22 @@ const fallbackLayout: LayoutSpec = {
 for (const [, mod] of Object.entries(modules)) {
   const raw = (mod as { default?: unknown }).default ?? mod;
   const parsed = LayoutSpec.parse(raw);
-  if (parsed.algorithm === "*") {
-    agentLayout = parsed;
-  } else {
-    algorithmLayouts[parsed.algorithm] = parsed;
-  }
+  algorithmLayouts[parsed.algorithm] = parsed;
 }
 
 export function resolveLayout(algorithmPath: string | null | undefined): LayoutSpec {
-  if (!algorithmPath) return agentLayout ?? fallbackLayout;
+  const wildcard = algorithmLayouts["*"];
+  if (!algorithmPath) return wildcard ?? fallbackLayout;
   // Exact match
   const exact = algorithmLayouts[algorithmPath];
   if (exact) return exact;
   // Prefix match: "EvoGradient_v2" → "EvoGradient"
-  const prefix = Object.keys(algorithmLayouts).find((k) => algorithmPath.startsWith(k));
+  const prefix = Object.keys(algorithmLayouts).find(
+    (k) => k !== "*" && algorithmPath.startsWith(k),
+  );
   const prefixLayout = prefix !== undefined ? algorithmLayouts[prefix] : undefined;
   if (prefixLayout) return prefixLayout;
-  return fallbackLayout;
+  return wildcard ?? fallbackLayout;
 }
 
 /** @deprecated use resolveLayout */
@@ -60,7 +58,5 @@ export function pickLayout(algorithmPath: string | null | undefined): LayoutSpec
 }
 
 export const layouts: Record<string, LayoutSpec> = {
-  default: fallbackLayout,
-  ...(agentLayout ? { agents: agentLayout } : {}),
   ...algorithmLayouts,
 };

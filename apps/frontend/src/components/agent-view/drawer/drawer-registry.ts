@@ -1,30 +1,25 @@
-import type { DrawerKind, DrawerPayload } from "@/stores";
-import type { ComponentType } from "react";
+import type { DrawerKind, DrawerPayload } from "@/stores/ui";
+import type { JSX } from "react";
 
-export interface DrawerViewProps {
-  runId: string;
+export type DrawerViewKind = Exclude<DrawerKind, null>;
+
+export interface DrawerRenderProps {
   payload: DrawerPayload;
+  runId: string;
 }
 
 export interface DrawerViewRegistration {
-  component: ComponentType<DrawerViewProps>;
-  getTitle?: (payload: DrawerPayload) => string;
+  render: (props: DrawerRenderProps) => JSX.Element;
+  getTitle: (payload: DrawerPayload, runId: string) => string;
+  getSubtitle?: (payload: DrawerPayload, runId: string) => string | null;
 }
 
-const registry = new Map<Exclude<DrawerKind, null>, DrawerViewRegistration>();
+const registry = new Map<DrawerViewKind, DrawerViewRegistration>();
 
-export function registerDrawerView(
-  kind: Exclude<DrawerKind, null>,
-  view: DrawerViewRegistration,
-): void {
+export function registerDrawerView(kind: DrawerViewKind, view: DrawerViewRegistration): void {
   registry.set(kind, view);
 }
 
-export function getDrawerView(kind: DrawerKind): DrawerViewRegistration | null {
-  if (kind == null) return null;
+export function getDrawerView(kind: DrawerViewKind): DrawerViewRegistration | null {
   return registry.get(kind) ?? null;
-}
-
-export function ensureDefaultDrawerViews(): void {
-  if (registry.size > 0) return;
 }

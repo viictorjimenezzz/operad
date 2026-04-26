@@ -17,10 +17,9 @@ function makeLayout(algorithm: string): LayoutSpec {
 function makeResolver(
   reg: Record<string, LayoutSpec>,
   fallback: LayoutSpec,
-  agentLayout?: LayoutSpec,
 ): (algorithmPath: string | null | undefined) => LayoutSpec {
   return (algorithmPath) => {
-    if (!algorithmPath) return agentLayout ?? fallback;
+    if (!algorithmPath) return fallback;
     const exact = reg[algorithmPath];
     if (exact) return exact;
     const prefix = Object.keys(reg).find((k) => algorithmPath.startsWith(k));
@@ -34,8 +33,7 @@ describe("resolveLayout algorithm", () => {
   const evo = makeLayout("EvoGradient");
   const trainer = makeLayout("Trainer");
   const dflt = makeLayout("Default");
-  const agents = makeLayout("*");
-  const resolve = makeResolver({ EvoGradient: evo, Trainer: trainer }, dflt, agents);
+  const resolve = makeResolver({ EvoGradient: evo, Trainer: trainer }, dflt);
 
   it("exact match returns the correct layout", () => {
     expect(resolve("EvoGradient")).toBe(evo);
@@ -51,20 +49,26 @@ describe("resolveLayout algorithm", () => {
     expect(resolve("SomethingNew")).toBe(dflt);
   });
 
-  it("null returns agents layout", () => {
-    expect(resolve(null)).toBe(agents);
+  it("null returns default", () => {
+    expect(resolve(null)).toBe(dflt);
   });
 
-  it("undefined returns agents layout", () => {
-    expect(resolve(undefined)).toBe(agents);
+  it("undefined returns default", () => {
+    expect(resolve(undefined)).toBe(dflt);
   });
 
-  it("empty string returns agents layout", () => {
-    expect(resolve("")).toBe(agents);
+  it("empty string returns default", () => {
+    expect(resolve("")).toBe(dflt);
   });
 });
 
 describe("resolveLayout integration (real layouts/)", () => {
+  it("resolves wildcard layout for null algorithm path", async () => {
+    const { resolveLayout } = await import("./index");
+    const layout = resolveLayout(null);
+    expect(layout.algorithm).toBe("*");
+  });
+
   it("resolves EvoGradient to the evogradient layout", async () => {
     const { resolveLayout } = await import("./index");
     const layout = resolveLayout("EvoGradient");
@@ -86,12 +90,7 @@ describe("resolveLayout integration (real layouts/)", () => {
   it("resolves unknown path to default layout", async () => {
     const { resolveLayout } = await import("./index");
     const layout = resolveLayout("DoesNotExist");
-    expect(layout.algorithm).toBe("__no_layout__");
-  });
-
-  it("resolves null to agents layout", async () => {
-    const { resolveLayout } = await import("./index");
-    expect(resolveLayout(null).algorithm).toBe("*");
+    expect(layout.algorithm).toBe("*");
   });
 
   it("resolves Sweep to the sweep layout", async () => {

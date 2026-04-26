@@ -31,7 +31,7 @@ export function FingerprintCard({ summary, latest }: FingerprintCardProps) {
           <div key={h.key} className="flex items-center justify-between gap-2 text-[11px]">
             <span className="text-muted">{h.key}</span>
             <div className="flex items-center gap-1">
-              <HashChip value={h.value} />
+              <HashChip hash={h.value} />
               <Button
                 size="sm"
                 variant="ghost"

@@ -1,34 +1,47 @@
-import { Button } from "@/components/ui/button";
-import { hashToColor } from "@/lib/hash-color";
 import { cn, truncateMiddle } from "@/lib/utils";
-import { Copy } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface HashChipProps {
-  value: string | null | undefined;
+  hash: string | null | undefined;
   className?: string;
+  asButton?: boolean;
 }
 
-export function HashChip({ value, className }: HashChipProps) {
-  const [copied, setCopied] = useState(false);
-  const text = value ?? "";
+function hashToHue(value: string): number {
+  let acc = 0;
+  for (let i = 0; i < value.length; i++) {
+    acc = (acc * 33 + value.charCodeAt(i)) % 360;
+  }
+  return acc;
+}
 
-  const onCopy = async () => {
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    } catch {
-      setCopied(false);
-    }
+export function hashColor(hash: string): { background: string; border: string } {
+  const hue = hashToHue(hash);
+  return {
+    background: `hsl(${hue} 65% 18%)`,
+    border: `hsl(${hue} 70% 36%)`,
   };
+}
 
-  if (!text) {
+export function HashChip({ hash, className, asButton = true }: HashChipProps) {
+  const [copied, setCopied] = useState(false);
+  const normalized = typeof hash === "string" && hash.length > 0 ? hash : null;
+  const colors = useMemo(
+    () => (normalized ? hashColor(normalized) : { background: "", border: "" }),
+    [normalized],
+  );
+
+  useEffect(() => {
+    if (!copied) return;
+    const t = window.setTimeout(() => setCopied(false), 900);
+    return () => window.clearTimeout(t);
+  }, [copied]);
+
+  if (!normalized) {
     return (
       <span
         className={cn(
-          "rounded border border-border px-1.5 py-0.5 text-[11px] text-muted",
+          "rounded-full border border-border bg-bg-2 px-2 py-0.5 text-[11px] text-muted",
           className,
         )}
       >
@@ -37,25 +50,34 @@ export function HashChip({ value, className }: HashChipProps) {
     );
   }
 
+  if (!asButton) {
+    return (
+      <span
+        title={normalized}
+        className={cn("rounded-full border px-2 py-0.5 font-mono text-[11px] text-text", className)}
+        style={{ backgroundColor: colors.background, borderColor: colors.border }}
+      >
+        {truncateMiddle(normalized, 6)}
+      </span>
+    );
+  }
+
   return (
-    <span
+    <button
+      type="button"
+      title={normalized}
+      aria-label={`copy hash ${normalized}`}
       className={cn(
-        "inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5",
+        "rounded-full border px-2 py-0.5 font-mono text-[11px] text-text transition-colors hover:brightness-110",
         className,
       )}
-      style={{ backgroundColor: hashToColor(text, 0.2) }}
+      style={{ backgroundColor: colors.background, borderColor: colors.border }}
+      onClick={async () => {
+        await navigator.clipboard.writeText(normalized);
+        setCopied(true);
+      }}
     >
-      <code className="font-mono text-[11px] text-text">{truncateMiddle(text, 12)}</code>
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-4 w-4 text-muted hover:text-text"
-        onClick={onCopy}
-        aria-label="copy hash"
-      >
-        <Copy className="h-3 w-3" />
-      </Button>
-      {copied ? <span className="text-[10px] text-ok">copied</span> : null}
-    </span>
+      {copied ? "copied" : truncateMiddle(normalized, 6)}
+    </button>
   );
 }
