@@ -1,6 +1,7 @@
 import { AgentInsightsRow } from "@/components/agent-view/insights/agent-insights-row";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
+import type React from "react";
 import { describe, expect, it, vi } from "vitest";
 
 const agentEventsMock = vi.fn().mockResolvedValue({ run_id: "run-1", events: [] });
@@ -79,10 +80,32 @@ const invocations = {
   ],
 };
 
+function renderWithClient(node: React.ReactNode) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(<QueryClientProvider client={queryClient}>{node}</QueryClientProvider>);
+}
+
 describe("AgentInsightsRow", () => {
   it("renders contract error for malformed invocations", () => {
-    render(<AgentInsightsRow summary={summary} invocations={{ broken: true }} />);
+    renderWithClient(<AgentInsightsRow summary={summary} invocations={"not-an-object"} />);
     expect(screen.getByText(/invalid invocations contract/i)).toBeTruthy();
+  });
+
+  it("shows loading state when invocations are still in flight", () => {
+    renderWithClient(<AgentInsightsRow summary={summary} invocations={undefined} />);
+    expect(screen.getByText(/loading invocations/i)).toBeTruthy();
+  });
+
+  it("shows waiting state when backend reports the run is not ready", () => {
+    renderWithClient(
+      <AgentInsightsRow
+        summary={summary}
+        invocations={{ error: "not_found", reason: "root agent path unknown" }}
+      />,
+    );
+    expect(screen.getByText(/waiting for first invocation/i)).toBeTruthy();
   });
 
   it("renders insights sections for valid payloads", () => {

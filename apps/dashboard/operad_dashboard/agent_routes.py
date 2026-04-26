@@ -19,7 +19,7 @@ from pydantic import BaseModel, ValidationError
 from operad.core.config import Configuration
 from operad.core.example import Example
 from operad.core.diff import diff_states
-from operad.core.graph import TypeRegistry, from_json, to_io_graph
+from operad.core.graph import to_io_graph_from_json
 from operad.core.state import AgentState
 from operad.runtime.observers.base import suppress_notifications
 
@@ -102,52 +102,6 @@ def _resolve_run_context(request: Request, run_id: str) -> _RunContext | None:
     )
 
 
-def _graph_from_json(graph_json: dict[str, Any]) -> dict[str, Any]:
-    registry = TypeRegistry()
-    graph = from_json(graph_json, registry=registry)
-    return to_io_graph(graph)
-
-
-def _fallback_io_graph(graph_json: dict[str, Any]) -> dict[str, Any]:
-    nodes: dict[str, dict[str, Any]] = {}
-    edges: list[dict[str, Any]] = []
-    for node in graph_json.get("nodes") or []:
-        if not isinstance(node, dict) or node.get("kind") != "leaf":
-            continue
-        input_key = str(node.get("input") or "")
-        output_key = str(node.get("output") or "")
-        if input_key and input_key not in nodes:
-            nodes[input_key] = {"key": input_key, "name": input_key.rsplit(".", 1)[-1], "fields": []}
-        if output_key and output_key not in nodes:
-            nodes[output_key] = {"key": output_key, "name": output_key.rsplit(".", 1)[-1], "fields": []}
-        path = str(node.get("path") or "")
-        edges.append(
-            {
-                "agent_path": path,
-                "class_name": path.rsplit(".", 1)[-1],
-                "kind": "leaf",
-                "from": input_key,
-                "to": output_key,
-                "composite_path": _composite_path_from_path(path, graph_json.get("root")),
-            }
-        )
-    return {
-        "root": graph_json.get("root"),
-        "nodes": list(nodes.values()),
-        "edges": edges,
-    }
-
-
-def _composite_path_from_path(path: str, root: Any) -> str | None:
-    if not path or "." not in path:
-        return None
-    parent = path.rsplit(".", 1)[0]
-    root_str = str(root) if isinstance(root, str) else ""
-    if parent == root_str:
-        return None
-    return parent
-
-
 def _io_graph_payload(ctx: _RunContext) -> dict[str, Any]:
     graph_json = ctx.graph_json
     if graph_json is None:
@@ -160,10 +114,41 @@ def _io_graph_payload(ctx: _RunContext) -> dict[str, Any]:
                     break
     if graph_json is None:
         return {"root": None, "nodes": [], "edges": []}
-    try:
-        return _graph_from_json(graph_json)
-    except Exception:
-        return _fallback_io_graph(graph_json)
+    payload = to_io_graph_from_json(graph_json)
+    return _enrich_io_graph_with_events(payload, ctx.events)
+
+
+def _enrich_io_graph_with_events(
+    payload: dict[str, Any],
+    events: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Backfill ``class_name`` on edges using terminal event metadata.
+
+    The graph snapshot is captured at root-build time, before sub-agent
+    classes are necessarily resolvable; the event metadata always reflects
+    the *runtime* class. This makes the rendered graph match what actually
+    ran instead of the path-tail fallback.
+    """
+    runtime_class: dict[str, str] = {}
+    for env in events:
+        if env.get("type") != "agent_event" or env.get("kind") != "end":
+            continue
+        path = env.get("agent_path")
+        if not isinstance(path, str):
+            continue
+        meta = env.get("metadata")
+        if not isinstance(meta, dict):
+            continue
+        cls = meta.get("class_name")
+        if isinstance(cls, str) and cls:
+            runtime_class.setdefault(path, cls)
+    edges = payload.get("edges") or []
+    for edge in edges:
+        rt = runtime_class.get(edge.get("agent_path"))
+        if rt:
+            edge["class_name"] = rt
+    payload["edges"] = edges
+    return payload
 
 
 def _root_agent_path(ctx: _RunContext) -> str | None:
@@ -247,6 +232,13 @@ def _build_invocations(
             start_meta = start.get("metadata")
             if isinstance(start_meta, dict) and isinstance(start_meta.get("script"), str):
                 script = start_meta.get("script")
+        cfg = metadata.get("config") if isinstance(metadata.get("config"), dict) else {}
+        cfg_io = cfg.get("io") if isinstance(cfg, dict) else None
+        renderer = (
+            cfg_io.get("renderer")
+            if isinstance(cfg_io, dict) and isinstance(cfg_io.get("renderer"), str)
+            else None
+        )
         out.append(
             _Invocation(
                 row={
@@ -259,12 +251,25 @@ def _build_invocations(
                     "hash_prompt": output.get("hash_prompt"),
                     "hash_input": output.get("hash_input"),
                     "hash_content": metadata.get("hash_content"),
+                    "hash_model": output.get("hash_model"),
+                    "hash_graph": output.get("hash_graph"),
+                    "hash_output_schema": output.get("hash_output_schema"),
+                    "hash_config": output.get("hash_config"),
                     "status": "ok" if kind == "end" else "error",
                     "error": None if kind == "end" else _error_repr(env),
                     "langfuse_url": (
                         f"{langfuse_url}/trace/{run_id}" if langfuse_url is not None else None
                     ),
                     "script": script,
+                    "backend": (
+                        output.get("backend")
+                        or (cfg.get("backend") if isinstance(cfg, dict) else None)
+                    ),
+                    "model": (
+                        output.get("model")
+                        or (cfg.get("model") if isinstance(cfg, dict) else None)
+                    ),
+                    "renderer": renderer,
                     "input": start.get("input") if isinstance(start, dict) else None,
                     "output": output.get("response"),
                 },
@@ -410,7 +415,7 @@ async def root_invocations(request: Request, run_id: str) -> JSONResponse:
         return _not_found("unknown run_id")
     root_path = _root_agent_path(ctx)
     if root_path is None:
-        return _not_found("root agent path unknown")
+        return JSONResponse({"agent_path": None, "invocations": []})
     langfuse_url = getattr(request.app.state, "langfuse_url", None)
     invocations = _build_invocations(
         run_id=run_id,
@@ -418,9 +423,53 @@ async def root_invocations(request: Request, run_id: str) -> JSONResponse:
         agent_path=root_path,
         langfuse_url=langfuse_url,
     )
-    return JSONResponse(
-        {"agent_path": root_path, "invocations": [inv.row for inv in invocations]}
-    )
+    fallback = _leaf_backend_fallback(ctx.events, root_path)
+    rows: list[dict[str, Any]] = []
+    for inv in invocations:
+        row = inv.row
+        if not row.get("backend") and fallback.get("backend"):
+            row["backend"] = fallback["backend"]
+        if not row.get("model") and fallback.get("model"):
+            row["model"] = fallback["model"]
+        if not row.get("renderer") and fallback.get("renderer"):
+            row["renderer"] = fallback["renderer"]
+        rows.append(row)
+    return JSONResponse({"agent_path": root_path, "invocations": rows})
+
+
+def _leaf_backend_fallback(
+    events: list[dict[str, Any]],
+    root_path: str,
+) -> dict[str, str | None]:
+    """Walk descendant-leaf end events to surface backend/model/renderer.
+
+    Composite roots have ``config: None``; this fallback lets the
+    dashboard badges show the actual model an agent invoked even when
+    the user clicks the composite (which itself has no backend).
+    """
+    backend: str | None = None
+    model: str | None = None
+    renderer: str | None = None
+    for env in events:
+        if env.get("type") != "agent_event" or env.get("kind") != "end":
+            continue
+        path = env.get("agent_path")
+        if not isinstance(path, str) or path == root_path:
+            continue
+        meta = env.get("metadata")
+        if not isinstance(meta, dict):
+            continue
+        cfg = meta.get("config")
+        if not isinstance(cfg, dict):
+            continue
+        backend = backend or (cfg.get("backend") if isinstance(cfg.get("backend"), str) else None)
+        model = model or (cfg.get("model") if isinstance(cfg.get("model"), str) else None)
+        io = cfg.get("io") if isinstance(cfg.get("io"), dict) else None
+        if isinstance(io, dict) and isinstance(io.get("renderer"), str):
+            renderer = renderer or io["renderer"]
+        if backend and model and renderer:
+            break
+    return {"backend": backend, "model": model, "renderer": renderer}
 
 
 @router.get("/runs/{run_id}/agent/{path:path}/meta")
@@ -428,28 +477,54 @@ async def agent_meta(request: Request, run_id: str, path: str) -> JSONResponse:
     ctx = _resolve_run_context(request, run_id)
     if ctx is None:
         return _not_found("unknown run_id")
-    io_graph = _io_graph_payload(ctx)
-    edge = next((e for e in io_graph.get("edges", []) if e.get("agent_path") == path), None)
-    if edge is None:
-        return _not_found("unknown agent_path")
     metadata = _latest_terminal_metadata(ctx.events, path)
     if metadata is None:
         return _not_found("unknown agent_path")
+    io_graph = _io_graph_payload(ctx)
+    edge = next((e for e in io_graph.get("edges", []) if e.get("agent_path") == path), None)
     nodes_by_key = {n.get("key"): n for n in io_graph.get("nodes", []) if isinstance(n, dict)}
+    graph_json = ctx.graph_json or {}
+    graph_nodes = [n for n in graph_json.get("nodes") or [] if isinstance(n, dict)]
+    graph_node = next((n for n in graph_nodes if n.get("path") == path), None)
+    input_schema: dict[str, Any] | None = None
+    output_schema: dict[str, Any] | None = None
+    if edge is not None:
+        input_schema = nodes_by_key.get(edge.get("from"))
+        output_schema = nodes_by_key.get(edge.get("to"))
+    if graph_node is not None:
+        if input_schema is None and graph_node.get("input"):
+            input_schema = nodes_by_key.get(graph_node["input"]) or {
+                "key": graph_node["input"],
+                "name": str(graph_node["input"]).rsplit(".", 1)[-1],
+                "fields": [
+                    f for f in graph_node.get("input_fields") or [] if isinstance(f, dict)
+                ],
+            }
+        if output_schema is None and graph_node.get("output"):
+            output_schema = nodes_by_key.get(graph_node["output"]) or {
+                "key": graph_node["output"],
+                "name": str(graph_node["output"]).rsplit(".", 1)[-1],
+                "fields": [
+                    f for f in graph_node.get("output_fields") or [] if isinstance(f, dict)
+                ],
+            }
+    kind = metadata.get("kind") or (graph_node.get("kind") if graph_node else None)
+    if kind not in {"leaf", "composite"}:
+        kind = "leaf" if edge is not None else "composite"
     langfuse_base = getattr(request.app.state, "langfuse_url", None)
     return JSONResponse(
         {
             "agent_path": path,
             "class_name": metadata.get("class_name"),
-            "kind": metadata.get("kind"),
+            "kind": kind,
             "hash_content": metadata.get("hash_content"),
             "role": metadata.get("role"),
             "task": metadata.get("task"),
             "rules": metadata.get("rules") or [],
             "examples": metadata.get("examples") or [],
             "config": metadata.get("config"),
-            "input_schema": nodes_by_key.get(edge.get("from")),
-            "output_schema": nodes_by_key.get(edge.get("to")),
+            "input_schema": input_schema,
+            "output_schema": output_schema,
             "forward_in_overridden": bool(metadata.get("forward_in_overridden")),
             "forward_out_overridden": bool(metadata.get("forward_out_overridden")),
             "forward_in_doc": metadata.get("forward_in_doc"),

@@ -180,7 +180,19 @@ function GraphCanvas({ ioGraph, runId }: InteractiveGraphProps) {
         }}
       >
         <Background color="var(--color-border)" gap={18} />
-        <MiniMap pannable zoomable />
+        <MiniMap
+          pannable
+          zoomable
+          maskColor="rgba(7, 9, 16, 0.75)"
+          nodeColor={() => "var(--color-bg-2)"}
+          nodeStrokeColor={() => "var(--color-border)"}
+          nodeStrokeWidth={1}
+          style={{
+            background: "var(--color-bg-1)",
+            border: "1px solid var(--color-border)",
+            borderRadius: 6,
+          }}
+        />
         <Controls showInteractive />
       </ReactFlow>
     </div>
