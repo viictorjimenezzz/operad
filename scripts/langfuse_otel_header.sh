@@ -23,7 +23,11 @@ token=$(printf '%s:%s' \
   "$LANGFUSE_INIT_PROJECT_PUBLIC_KEY" \
   "$LANGFUSE_INIT_PROJECT_SECRET_KEY" | base64 | tr -d '\n')
 
-line="OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic ${token}"
+# Single-quote the value: it contains a space, so an unquoted line would
+# parse as `OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic` followed by the
+# token as a stray command, silently truncating the header to "Basic " when
+# `.env` is sourced via `set -a; source .env; set +a`.
+line="OTEL_EXPORTER_OTLP_HEADERS='Authorization=Basic ${token}'"
 
 if [[ "${1:-}" == "--update" && -f .env ]]; then
   tmp=$(mktemp)
