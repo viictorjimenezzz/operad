@@ -4,7 +4,7 @@
  * it is automatically available without touching any other file.
  *
  * Resolution order: exact match on `algorithm_path` → prefix match →
- * empty fallback layout.
+ * wildcard layout (`algorithm: "*"`) fallback.
  */
 import { LayoutSpec } from "@/lib/layout-schema";
 
@@ -38,15 +38,16 @@ for (const [, mod] of Object.entries(modules)) {
 }
 
 export function resolveLayout(algorithmPath: string | null | undefined): LayoutSpec {
-  if (!algorithmPath) return fallbackLayout;
+  const wildcard = algorithmLayouts["*"];
+  if (!algorithmPath) return wildcard ?? fallbackLayout;
   // Exact match
   const exact = algorithmLayouts[algorithmPath];
   if (exact) return exact;
   // Prefix match: "EvoGradient_v2" → "EvoGradient"
-  const prefix = Object.keys(algorithmLayouts).find((k) => algorithmPath.startsWith(k));
+  const prefix = Object.keys(algorithmLayouts).find((k) => k !== "*" && algorithmPath.startsWith(k));
   const prefixLayout = prefix !== undefined ? algorithmLayouts[prefix] : undefined;
   if (prefixLayout) return prefixLayout;
-  return fallbackLayout;
+  return wildcard ?? fallbackLayout;
 }
 
 /** @deprecated use resolveLayout */
@@ -55,6 +56,5 @@ export function pickLayout(algorithmPath: string | null | undefined): LayoutSpec
 }
 
 export const layouts: Record<string, LayoutSpec> = {
-  default: fallbackLayout,
   ...algorithmLayouts,
 };
