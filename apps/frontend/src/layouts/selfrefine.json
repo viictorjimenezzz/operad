@@ -64,7 +64,7 @@
       },
       "refinements": {
         "type": "IterationProgression",
-        "props": { "source": "$queries.iterations", "phaseFilter": "refine" }
+        "props": { "source": "$queries.iterations", "phaseFilter": "refine", "showDiff": true }
       },
 
       "t-reflections": {

@@ -55,7 +55,12 @@ class _AlwaysGoodReflector(Agent[ReflectionInput, Reflection]):
         super().__init__(config=cfg, input=ReflectionInput, output=Reflection)
 
     async def forward(self, x: ReflectionInput) -> Reflection:  # type: ignore[override]
-        return Reflection(needs_revision=False, deficiencies=[], suggested_revision="")
+        return Reflection(
+            score=0.95,
+            needs_revision=False,
+            deficiencies=[],
+            suggested_revision="",
+        )
 
 
 class _AlwaysBadReflector(Agent[ReflectionInput, Reflection]):
@@ -69,6 +74,7 @@ class _AlwaysBadReflector(Agent[ReflectionInput, Reflection]):
 
     async def forward(self, x: ReflectionInput) -> Reflection:  # type: ignore[override]
         return Reflection(
+            score=0.2,
             needs_revision=True,
             deficiencies=["not good enough"],
             suggested_revision="try again",

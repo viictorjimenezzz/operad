@@ -121,6 +121,8 @@ export const Iteration = z.object({
   iter_index: z.number().nullable(),
   phase: stringOrNull,
   score: numberOrNull,
+  text: stringOrNull.default(null),
+  metadata: z.record(z.unknown()).default({}),
   timestamp: numberOrNull,
 });
 export type Iteration = z.infer<typeof Iteration>;
@@ -133,8 +135,10 @@ export const Round = z.object({
 export type Round = z.infer<typeof Round>;
 
 export const Candidate = z.object({
+  iter_index: z.number().nullable().default(null),
   candidate_index: z.number().nullable(),
   score: numberOrNull,
+  text: stringOrNull.default(null),
   timestamp: numberOrNull,
 });
 export type Candidate = z.infer<typeof Candidate>;

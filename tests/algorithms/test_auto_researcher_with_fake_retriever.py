@@ -67,7 +67,7 @@ class _Reflector(Reflector):
         super().__init__(config=cfg, input=ReflectionInput, output=Reflection)
 
     async def forward(self, x: ReflectionInput) -> Reflection:  # type: ignore[override]
-        return Reflection(needs_revision=False, suggested_revision="")
+        return Reflection(score=1.0, needs_revision=False, suggested_revision="")
 
 
 async def test_auto_researcher_runs_with_fake_retriever(cfg) -> None:

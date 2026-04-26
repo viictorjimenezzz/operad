@@ -13,6 +13,14 @@ from . import per_run_sse
 
 
 router = APIRouter(tags=["iterations"])
+_PHASE_ORDER = {
+    None: 99,
+    "generate": 0,
+    "verify": 1,
+    "refine": 2,
+    "reflect": 3,
+    "prune": 4,
+}
 
 
 @router.get("/runs/{run_id}/iterations.json")
@@ -23,10 +31,16 @@ async def iterations_json(run_id: str, request: Request) -> JSONResponse:
 
     all_events = list(obs.registry.iter_events(run_id))
 
-    iterations = sorted(
-        [_to_entry(env) for env in all_events if env.get("kind") == "iteration"],
-        key=lambda e: e["iter_index"],
+    iteration_envs = [env for env in all_events if env.get("kind") == "iteration"]
+    iteration_envs = sorted(
+        iteration_envs,
+        key=lambda env: (
+            int((env.get("payload") or {}).get("iter_index", 0)),
+            _PHASE_ORDER.get((env.get("payload") or {}).get("phase"), 98),
+            float(env.get("started_at") or 0.0),
+        ),
     )
+    iterations = [_to_entry(env) for env in iteration_envs]
 
     max_iter: int | None = None
     threshold: float | None = None

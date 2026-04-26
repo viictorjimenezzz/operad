@@ -59,12 +59,22 @@ export const catalog = createCatalog({
     LrScheduleCurve: { props: z.object({ source: sourceProp, height: z.number().optional() }) },
     CheckpointTimeline: { props: z.object({ source: sourceProp }) },
     DebateRoundView: { props: z.object({ source: sourceProp }) },
-    BeamCandidateChart: { props: z.object({ source: sourceProp, height: z.number().optional() }) },
+    BeamCandidateChart: {
+      props: z.object({
+        source: sourceProp,
+        iterationsSource: sourceProp,
+        height: z.number().optional(),
+      }),
+    },
     ConvergenceCurve: {
       props: z.object({ source: sourceProp, height: z.number().optional() }),
     },
     IterationProgression: {
-      props: z.object({ source: sourceProp, phaseFilter: z.string().optional() }),
+      props: z.object({
+        source: sourceProp,
+        phaseFilter: z.string().optional(),
+        showDiff: z.boolean().optional(),
+      }),
     },
     SweepHeatmap: { props: z.object({ source: sourceProp }) },
     SweepBestCellCard: { props: z.object({ source: sourceProp }) },

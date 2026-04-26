@@ -1,7 +1,7 @@
 import { Candidate } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/shared/ui/empty-state";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -17,6 +17,18 @@ import {
 import { z } from "zod";
 
 const CandidateArray = z.array(Candidate);
+
+const IterationsResponse = z.object({
+  iterations: z
+    .array(
+      z.object({
+        iter_index: z.number(),
+        phase: z.string().nullable(),
+        metadata: z.record(z.unknown()).default({}),
+      }),
+    )
+    .default([]),
+});
 
 const NUM_BINS = 10;
 
@@ -37,14 +49,43 @@ function buildHistogram(scores: number[]): { bin: string; count: number }[] {
   return bins;
 }
 
-export function BeamCandidateChart({ data, height = 220 }: { data: unknown; height?: number }) {
+function asIndexList(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((x): x is number => typeof x === "number");
+}
+
+interface CandidatePoint {
+  index: number;
+  score: number;
+  text: string | null;
+}
+
+export function BeamCandidateChart({
+  data,
+  iterationsData,
+  height = 220,
+}: {
+  data: unknown;
+  iterationsData?: unknown;
+  height?: number;
+}) {
   const parsed = CandidateArray.safeParse(data);
   if (!parsed.success || parsed.data.length === 0) {
     return <EmptyState title="no beam candidates" />;
   }
-  const points = parsed.data
+
+  const points: CandidatePoint[] = parsed.data
     .filter((c) => c.candidate_index != null && c.score != null)
-    .map((c) => ({ index: c.candidate_index as number, score: c.score as number }));
+    .map((c) => ({
+      index: c.candidate_index as number,
+      score: c.score as number,
+      text: c.text,
+    }));
+
+  if (points.length === 0) {
+    return <EmptyState title="no beam candidates" />;
+  }
+
   const sorted = [...points].sort((a, b) => b.score - a.score);
   const topK = new Set(sorted.slice(0, Math.min(3, sorted.length)).map((p) => p.index));
 
@@ -52,9 +93,20 @@ export function BeamCandidateChart({ data, height = 220 }: { data: unknown; heig
   const rest = points.filter((p) => !topK.has(p.index));
   const histogram = buildHistogram(points.map((p) => p.score));
 
+  const pruneSteps = useMemo(() => {
+    const it = IterationsResponse.safeParse(iterationsData);
+    if (!it.success) return [];
+    return it.data.iterations
+      .filter((row) => row.phase === "prune")
+      .map((row) => ({
+        iterIndex: row.iter_index,
+        kept: asIndexList(row.metadata.top_indices),
+        dropped: asIndexList(row.metadata.dropped_indices),
+      }));
+  }, [iterationsData]);
+
   return (
     <div className="flex flex-col gap-3">
-      {/* Scatter */}
       <ResponsiveContainer width="100%" height={height}>
         <ScatterChart margin={{ top: 12, right: 16, bottom: 8, left: 0 }}>
           <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
@@ -83,7 +135,6 @@ export function BeamCandidateChart({ data, height = 220 }: { data: unknown; heig
         </ScatterChart>
       </ResponsiveContainer>
 
-      {/* Score distribution histogram */}
       <ResponsiveContainer width="100%" height={100}>
         <BarChart data={histogram} margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
           <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
@@ -104,13 +155,13 @@ export function BeamCandidateChart({ data, height = 220 }: { data: unknown; heig
         </BarChart>
       </ResponsiveContainer>
 
-      {/* Top-K table with diff viewer */}
       <TopKDiffViewer sorted={sorted} />
+      <PruningView steps={pruneSteps} />
     </div>
   );
 }
 
-function TopKDiffViewer({ sorted }: { sorted: { index: number; score: number }[] }) {
+function TopKDiffViewer({ sorted }: { sorted: CandidatePoint[] }) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
   function toggle(idx: number) {
@@ -124,6 +175,8 @@ function TopKDiffViewer({ sorted }: { sorted: { index: number; score: number }[]
       return next;
     });
   }
+
+  const byIndex = new Map(sorted.map((s) => [s.index, s]));
 
   return (
     <div className="flex flex-col gap-2">
@@ -166,17 +219,51 @@ function TopKDiffViewer({ sorted }: { sorted: { index: number; score: number }[]
 
       {selected.size >= 2 && (
         <div className="flex gap-2 overflow-x-auto">
-          {[...selected].map((idx) => (
-            <div
-              key={idx}
-              className="flex-1 min-w-0 rounded border border-border bg-bg-2 p-2 text-[10px] font-mono text-muted"
-            >
-              <div className="mb-1 text-text font-medium">candidate {idx}</div>
-              <span className="italic">— no text captured for this candidate —</span>
-            </div>
-          ))}
+          {[...selected].map((idx) => {
+            const row = byIndex.get(idx);
+            return (
+              <div
+                key={idx}
+                className="flex-1 min-w-0 rounded border border-border bg-bg-2 p-2 text-[10px] font-mono text-muted"
+              >
+                <div className="mb-1 text-text font-medium">candidate {idx}</div>
+                <p className="whitespace-pre-wrap break-words text-text/80">
+                  {row?.text && row.text.length > 0 ? row.text : "(empty candidate text)"}
+                </p>
+              </div>
+            );
+          })}
         </div>
       )}
+    </div>
+  );
+}
+
+function PruningView({
+  steps,
+}: {
+  steps: Array<{ iterIndex: number; kept: number[]; dropped: number[] }>;
+}) {
+  if (steps.length === 0) {
+    return <div className="text-[11px] text-muted">no pruning steps captured</div>;
+  }
+
+  return (
+    <div className="rounded border border-border/70 bg-bg-2 p-2">
+      <div className="mb-2 text-[11px] font-medium text-text">pruning by iteration</div>
+      <ul className="flex flex-col gap-1 text-[11px]">
+        {steps.map((step) => (
+          <li key={step.iterIndex} className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-muted">#{step.iterIndex}</span>
+            <span className="rounded px-1.5 py-0.5 bg-green-500/15 text-green-400">
+              kept [{step.kept.join(", ")}]
+            </span>
+            <span className="rounded px-1.5 py-0.5 bg-rose-500/15 text-rose-400">
+              dropped [{step.dropped.join(", ")}]
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -52,12 +52,24 @@ function parseResponse(data: unknown): IterationsResponse | null {
   };
 }
 
+function previousText(entries: IterationEntry[], iterIndex: number): string | null {
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
+    if (entry == null) continue;
+    if (entry.iter_index >= iterIndex) continue;
+    if (entry.text) return entry.text;
+  }
+  return null;
+}
+
 export function IterationProgression({
   data,
   phaseFilter,
+  showDiff = false,
 }: {
   data: unknown;
   phaseFilter?: string;
+  showDiff?: boolean;
 }) {
   const resp = parseResponse(data);
   const allEntries = resp?.iterations ?? [];
@@ -84,6 +96,8 @@ export function IterationProgression({
           key={`${entry.iter_index}-${entry.phase}`}
           entry={entry}
           isConverged={entry.iter_index === convergedIdx}
+          previousText={previousText(allEntries, entry.iter_index)}
+          showDiff={showDiff}
         />
       ))}
     </ol>
@@ -93,9 +107,13 @@ export function IterationProgression({
 function IterationStep({
   entry,
   isConverged,
+  previousText,
+  showDiff,
 }: {
   entry: IterationEntry;
   isConverged: boolean;
+  previousText: string | null;
+  showDiff: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const style = phaseStyle(entry.phase);
@@ -159,6 +177,16 @@ function IterationStep({
               <p className="text-text/70 whitespace-pre-wrap break-words font-mono text-[10px]">
                 {entry.text}
               </p>
+            )}
+            {showDiff && entry.text && previousText && (
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <pre className="rounded border border-border bg-bg-2 p-2 text-[10px] text-muted overflow-auto whitespace-pre-wrap break-words">
+                  {previousText}
+                </pre>
+                <pre className="rounded border border-border bg-bg-2 p-2 text-[10px] text-text overflow-auto whitespace-pre-wrap break-words">
+                  {entry.text}
+                </pre>
+              </div>
             )}
           </div>
         )}

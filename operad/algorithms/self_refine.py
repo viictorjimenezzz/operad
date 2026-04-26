@@ -47,6 +47,15 @@ def _default_stop(state: SelfRefineState) -> bool:
     return not state.reflection.needs_revision
 
 
+def _as_text(x: object) -> str:
+    if x is None:
+        return ""
+    answer = getattr(x, "answer", None)
+    if isinstance(answer, str):
+        return answer
+    return str(x)
+
+
 class SelfRefine(Generic[In, Out]):
     generator: ClassVar[Agent] = Reasoner(input=Task, output=Answer)
     reflector: ClassVar[Agent] = Reflector()
@@ -99,7 +108,11 @@ class SelfRefine(Generic[In, Out]):
                         await emit_algorithm_event(
                             "iteration",
                             algorithm_path=path,
-                            payload={"iter_index": iter_index, "phase": "refine"},
+                            payload={
+                                "iter_index": iter_index,
+                                "phase": "refine",
+                                "text": _as_text(draft),
+                            },
                         )
 
                     # Reflect
@@ -118,8 +131,10 @@ class SelfRefine(Generic[In, Out]):
                         payload={
                             "iter_index": iter_index,
                             "phase": "reflect",
+                            "score": reflection.score,
                             "needs_revision": reflection.needs_revision,
                             "critique_summary": critique_summary,
+                            "text": _as_text(draft),
                         },
                     )
 

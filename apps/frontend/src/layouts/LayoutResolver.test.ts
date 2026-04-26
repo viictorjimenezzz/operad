@@ -97,4 +97,18 @@ describe("resolveLayout integration (real layouts/)", () => {
     const layout = resolveLayout("Sweep");
     expect(layout.algorithm).toBe("Sweep");
   });
+
+  it("beam/verifier/selfrefine layouts reference iteration sources/components", async () => {
+    const { resolveLayout } = await import("./index");
+    const beam = resolveLayout("Beam");
+    const verifier = resolveLayout("VerifierLoop");
+    const selfrefine = resolveLayout("SelfRefine");
+
+    expect(beam.dataSources.iterations?.endpoint).toContain("/iterations.json");
+    expect(beam.spec.elements.candidates!.type).toBe("BeamCandidateChart");
+    expect(verifier.spec.elements.curve!.type).toBe("ConvergenceCurve");
+    expect(verifier.spec.elements.progression!.type).toBe("IterationProgression");
+    expect(selfrefine.spec.elements.refinements!.type).toBe("IterationProgression");
+    expect(selfrefine.spec.elements.refinements!.props?.showDiff).toBe(true);
+  });
 });

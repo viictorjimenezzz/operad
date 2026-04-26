@@ -81,6 +81,7 @@ class _Reflector(Reflector):
     async def forward(self, x: ReflectionInput) -> Reflection:  # type: ignore[override]
         self.calls += 1
         return Reflection(
+            score=0.2,
             needs_revision=True,
             suggested_revision=f"rev-{self.calls}",
         )

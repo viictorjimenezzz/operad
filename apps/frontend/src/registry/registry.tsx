@@ -152,19 +152,30 @@ export const registry: ComponentRegistry = {
     return <DebateConsensusTracker data={p.data} height={p.height ?? 220} />;
   },
   BeamCandidateChart: ({ element }) => {
-    const p = element.props as { data?: unknown; height?: number };
-    return <BeamCandidateChart data={p.data} height={p.height ?? 220} />;
+    const p = element.props as {
+      data?: unknown;
+      iterationsData?: unknown;
+      height?: number;
+    };
+    return (
+      <BeamCandidateChart
+        data={p.data}
+        iterationsData={p.iterationsData}
+        height={p.height ?? 220}
+      />
+    );
   },
   ConvergenceCurve: ({ element }) => {
     const p = element.props as { data?: unknown; height?: number };
     return <ConvergenceCurve data={p.data} height={p.height ?? 220} />;
   },
   IterationProgression: ({ element }) => {
-    const p = element.props as { data?: unknown; phaseFilter?: string };
+    const p = element.props as { data?: unknown; phaseFilter?: string; showDiff?: boolean };
     return (
       <IterationProgression
         data={p.data}
         {...(p.phaseFilter !== undefined ? { phaseFilter: p.phaseFilter } : {})}
+        {...(p.showDiff !== undefined ? { showDiff: p.showDiff } : {})}
       />
     );
   },

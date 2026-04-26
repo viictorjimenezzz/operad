@@ -17,9 +17,13 @@ class Reflector(Agent[ReflectionInput, Reflection]):
     output = Reflection
 
     role = "You are a careful self-reviewer."
-    task = "Inspect the prior answer for errors and propose a revision."
+    task = (
+        "Inspect the prior answer for errors, assign a quality score in [0, 1], "
+        "and propose a revision when needed."
+    )
     rules = (
         "Cite specific deficiencies; no vague criticism.",
+        "Always set score in [0, 1], where 1 means fully acceptable and 0 means unusable.",
         "If no deficiency exists, set needs_revision=False and leave suggested_revision empty.",
         "Do not introduce new claims the original answer cannot support.",
     )
@@ -30,6 +34,7 @@ class Reflector(Agent[ReflectionInput, Reflection]):
                 candidate_answer="2+2 is 5.",
             ),
             output=Reflection(
+                score=0.0,
                 needs_revision=True,
                 deficiencies=["Arithmetic error: 2+2 equals 4, not 5."],
                 suggested_revision="2+2 is 4.",
