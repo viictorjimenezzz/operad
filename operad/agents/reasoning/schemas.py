@@ -41,7 +41,10 @@ class Action(BaseModel):
 class Observation(BaseModel):
     """The outcome of the action, synthesized into textual form."""
 
-    result: str = Field(description="What the action produced.")
+    result: str = Field(
+        default="",
+        description="What the action produced. Use an empty string if unknown.",
+    )
     success: bool = Field(
         default=True, description="Whether the action appears to have succeeded."
     )
