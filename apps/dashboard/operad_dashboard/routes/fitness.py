@@ -52,7 +52,7 @@ def _to_entry(env: dict[str, Any]) -> dict[str, Any] | None:
 
     Accepts `generation` events (with `population_scores`) and the
     subset of `iteration` events that carry a `score` key (SelfRefine,
-    VerifierLoop). Returns None for events that carry no scoring signal
+    VerifierAgent). Returns None for events that carry no scoring signal
     (e.g. PromptDrift iterations).
     """
     if env.get("type") != "algo_event":

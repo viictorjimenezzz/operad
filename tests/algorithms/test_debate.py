@@ -7,7 +7,7 @@ import pytest
 from operad import Agent
 from operad.agents.debate.schemas import (
     Critique,
-    DebateContext,
+    DebateTopic,
     DebateRecord,
     DebateTurn,
     Proposal,
@@ -19,15 +19,15 @@ from operad.algorithms import Debate
 pytestmark = pytest.mark.asyncio
 
 
-class _Proposer(Agent[DebateContext, Proposal]):
-    input = DebateContext
+class _Proposer(Agent[DebateTopic, Proposal]):
+    input = DebateTopic
     output = Proposal
 
     def __init__(self, cfg, author: str) -> None:
-        super().__init__(config=cfg, input=DebateContext, output=Proposal)
+        super().__init__(config=cfg, input=DebateTopic, output=Proposal)
         self.author = author
 
-    async def forward(self, x: DebateContext) -> Proposal:  # type: ignore[override]
+    async def forward(self, x: DebateTopic) -> Proposal:  # type: ignore[override]
         topic = getattr(x, "topic", "")
         return Proposal(
             content=f"{self.author}:{topic}",
@@ -83,7 +83,7 @@ async def test_debate_runs_all_proposers(cfg) -> None:
     debate = await _make_debate(
         cfg, proposer_authors=["alice", "bob", "carol"], rounds=0
     )
-    out = await debate.run(DebateContext(topic="q"))
+    out = await debate.run(DebateTopic(topic="q"))
     assert out.answer == "3"  # 3 proposals + 0 critiques
     assert debate.synthesizer.seen is not None
     authors = {p.author for p in debate.synthesizer.seen.proposals}
@@ -94,7 +94,7 @@ async def test_debate_accumulates_critiques_across_rounds(cfg) -> None:
     debate = await _make_debate(
         cfg, proposer_authors=["alice", "bob"], rounds=2
     )
-    out = await debate.run(DebateContext(topic="q"))
+    out = await debate.run(DebateTopic(topic="q"))
     # 2 proposals + (2 proposals * 2 rounds) = 6
     assert out.answer == "6"
     # 2 proposals critiqued per round, across 2 rounds.

@@ -103,7 +103,7 @@ domain is a sibling folder mirroring this layout.
 
 ### `algorithms/` — outer loops
 
-`Beam`, `Debate`, `Sweep`, `VerifierLoop`, `AutoResearcher`. Plain
+`Beam`, `Debate`, `Sweep`, `SelfRefine`, `AutoResearcher`. Plain
 classes whose `run(...)` orchestrates `Agent`s with metric feedback.
 **Not** `Agent` subclasses — their natural API is not `__call__(x)`.
 This is where "agents improving agents" lives at the algorithmic

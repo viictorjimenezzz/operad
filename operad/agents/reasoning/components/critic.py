@@ -1,6 +1,6 @@
 """Candidate-scoring critic leaf (LLM judge).
 
-``Critic`` is the canonical judge for ``BestOfN``, ``VerifierLoop``, and
+``Critic`` is the canonical judge for ``BestOfN``, ``VerifierAgent``, and
 similar algorithms. Its input is ``Candidate[In, Out]`` — the original
 request together with a candidate answer — and its output is ``Score``.
 """

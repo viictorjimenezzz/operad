@@ -13,9 +13,9 @@ from __future__ import annotations
 from . import safeguard  # noqa: F401
 from .debate import (
     Critique,
-    DebateContext,
     DebateCritic,
     DebateRecord,
+    DebateTopic,
     DebateTurn,
     Proposal,
     Proposer,
@@ -174,9 +174,9 @@ __all__ = [
     "Utterance",
     "Critic",
     "Critique",
-    "DebateContext",
     "DebateCritic",
     "DebateRecord",
+    "DebateTopic",
     "DebateTurn",
     "DiffChunk",
     "DiffSummarizer",

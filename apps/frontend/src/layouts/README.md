@@ -7,7 +7,7 @@ arrangement for one algorithm.
 
 1. **Drop a JSON.** Create `<algorithm>.json` and adjust:
    - `algorithm`: the exact `algorithm_path` value the dashboard's
-     `RunInfo.algorithm_path` carries (e.g. `Sweep`, `VerifierLoop`).
+     `RunInfo.algorithm_path` carries (e.g. `Sweep`, `VerifierAgent`).
    - `dataSources`: which backend endpoints to fetch + optional
      `.sse` streams to live-update them. `$context.runId` substitutes
      in.

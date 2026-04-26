@@ -1,17 +1,4 @@
-"""Beam: sample N candidates, keep the top-K ranked by an optional judge.
-
-``Beam`` is an algorithm, not an Agent. It orchestrates a generator
-and a judge (both of which *are* Agents) to close a metric-driven
-loop. Components are **class-level defaults** so callers typically
-supply only the algorithm's own knobs (``context``, ``criteria``,
-``n``, ``top_k``); swap components via a subclass.
-
-Defaults use a generic ``Reasoner[Task, Answer]`` as the generator and
-``Critic`` as the judge. Set ``judge=None`` for "keep generation order"
-behaviour (no ranking). To embed a ``Beam`` inside a composite Agent,
-wrap it in a small leaf that calls ``await beam.run(x)`` from its own
-``forward``.
-"""
+"""Beam: sample N candidates, keep the top-K ranked by an optional judge."""
 
 from __future__ import annotations
 
@@ -21,19 +8,35 @@ from typing import ClassVar, Generic
 
 from pydantic import BaseModel, Field
 
-from ..core.flow import Parallel
 from ..agents.reasoning.components import Critic, Reasoner
 from ..agents.reasoning.schemas import Answer, Candidate, Score, Task
 from ..core.agent import Agent, In, Out, _TRACER
+from ..core.flow import Parallel
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 
 
+# ---------------------------------------------------------------------------
+# Domain schemas.
+# ---------------------------------------------------------------------------
+
+
+class CandidateBatch(BaseModel):
+    """Outputs from a beam fanout, in candidate-index order."""
+
+    candidates: list[BaseModel] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Helpers.
+# ---------------------------------------------------------------------------
+
+
 def _compose_judge_context(context: str, criteria: str | None) -> str:
-    if criteria:
-        if context:
-            return f"{context}\n\nJudging criteria: {criteria}"
-        return f"Judging criteria: {criteria}"
-    return context
+    if criteria is None:
+        return context
+    if context:
+        return f"{context}\n\nJudging criteria: {criteria}"
+    return f"Judging criteria: {criteria}"
 
 
 def _as_text(x: object) -> str:
@@ -51,20 +54,13 @@ async def _ensure_built(*agents: Agent | None) -> None:
         await asyncio.gather(*pending)
 
 
-class _CandidateBatch(BaseModel):
-    candidates: list[BaseModel] = Field(default_factory=list)
+# ---------------------------------------------------------------------------
+# Algorithm.
+# ---------------------------------------------------------------------------
 
 
 class Beam(Generic[In, Out]):
-    """Generate N candidates with ``generator``, return the top ``top_k``
-    by ``judge`` score.
-
-    ``judge`` (when present) is an ``Agent[Candidate[In, Out], Score]``
-    that sees both the original request and a candidate and returns a
-    ``Score``.
-    When ``top_k == 1`` the return value is still a one-element list
-    so callers have a single shape to consume.
-    """
+    """Generate N candidates with ``generator``, return the top ``top_k``."""
 
     generator: ClassVar[Agent] = Reasoner(input=Task, output=Answer)
     judge: ClassVar[Agent | None] = Critic()
@@ -118,86 +114,71 @@ class Beam(Generic[In, Out]):
                 started_at=started,
             )
             try:
+                generators = {
+                    f"candidate_{i}": self.generator.clone()
+                    for i in range(self.n)
+                }
                 if _TRACER.get() is None:
-                    await _ensure_built(self.generator, self.judge)
+                    await _ensure_built(*generators.values(), self.judge)
 
-                generator_fanout = Parallel(
-                    {f"candidate_{i}": self.generator for i in range(self.n)},
+                fanout = Parallel(
+                    generators,
                     input=self.generator.input,  # type: ignore[arg-type]
-                    output=_CandidateBatch,
-                    combine=lambda results: _CandidateBatch(
+                    output=CandidateBatch,
+                    combine=lambda results: CandidateBatch(
                         candidates=[
                             results[f"candidate_{i}"] for i in range(self.n)
                         ]
                     ),
                 )
-                candidate_batch = await generator_fanout.forward(x)
-                candidates: list[Out] = candidate_batch.candidates  # type: ignore[assignment]
+                candidates: list[Out] = (
+                    await fanout.forward(x)
+                ).candidates  # type: ignore[assignment]
+
                 if self.judge is None:
-                    for i in range(self.n):
-                        await emit_algorithm_event(
-                            "candidate",
-                            algorithm_path=path,
-                            payload={
-                                "iter_index": 0,
-                                "candidate_index": i,
-                                "score": None,
-                                "text": _as_text(candidates[i]),
-                            },
+                    scores: list[Score | None] = [None] * self.n
+                    order = list(range(self.n))
+                    phase = "truncate"
+                else:
+                    judge_outputs = await asyncio.gather(
+                        *(
+                            self.judge(Candidate(input=x, output=candidates[i]))
+                            for i in range(self.n)
                         )
-                    top = list(range(self.n))[: self.top_k]
-                    dropped = [i for i in range(self.n) if i not in top]
-                    await emit_algorithm_event(
-                        "iteration",
-                        algorithm_path=path,
-                        payload={
-                            "iter_index": 0,
-                            "phase": "truncate",
-                            "score": None,
-                            "top_indices": top,
-                            "dropped_indices": dropped,
-                        },
                     )
-                    await emit_algorithm_event(
-                        "algo_end",
-                        algorithm_path=path,
-                        payload={
-                            "top_indices": top,
-                            "top_scores": [None for _ in top],
-                        },
-                        started_at=started,
-                        finished_at=time.time(),
+                    scores = [j.response for j in judge_outputs]
+                    order = sorted(
+                        range(self.n),
+                        key=lambda i: -scores[i].score,  # type: ignore[union-attr]
                     )
-                    return [candidates[i] for i in top]
-                assert self.judge is not None
-                judge_outputs = await asyncio.gather(
-                    *(
-                        self.judge(Candidate(input=x, output=candidates[i]))
-                        for i in range(self.n)
-                    )
-                )
-                scores: list[Score] = [j.response for j in judge_outputs]
-                for i, s in enumerate(scores):
+                    phase = "prune"
+
+                for i, candidate in enumerate(candidates):
+                    score = scores[i].score if scores[i] is not None else None
                     await emit_algorithm_event(
                         "candidate",
                         algorithm_path=path,
                         payload={
                             "iter_index": 0,
                             "candidate_index": i,
-                            "score": s.score,
-                            "text": _as_text(candidates[i]),
+                            "score": score,
+                            "text": _as_text(candidate),
                         },
                     )
-                order = sorted(range(self.n), key=lambda i: -scores[i].score)
+
                 top = order[: self.top_k]
                 dropped = [i for i in order if i not in top]
+                top_scores = [
+                    scores[i].score if scores[i] is not None else None
+                    for i in top
+                ]
                 await emit_algorithm_event(
                     "iteration",
                     algorithm_path=path,
                     payload={
                         "iter_index": 0,
-                        "phase": "prune",
-                        "score": max((s.score for s in scores), default=None),
+                        "phase": phase,
+                        "score": max((s.score for s in scores if s is not None), default=None),
                         "top_indices": top,
                         "dropped_indices": dropped,
                     },
@@ -205,15 +186,16 @@ class Beam(Generic[In, Out]):
                 await emit_algorithm_event(
                     "algo_end",
                     algorithm_path=path,
-                    payload={
-                        "top_indices": top,
-                        "top_scores": [scores[i].score for i in top],
-                    },
+                    payload={"top_indices": top, "top_scores": top_scores},
                     started_at=started,
                     finished_at=time.time(),
                 )
-                scored_candidates: list[Out] = [
-                    self._inject_score(candidates[i], scores[i].score)
+
+                if self.judge is None:
+                    return [candidates[i] for i in top]
+
+                scored_candidates = [
+                    self._inject_score(candidates[i], scores[i].score)  # type: ignore[union-attr]
                     for i in range(self.n)
                 ]
                 return [scored_candidates[i] for i in top]

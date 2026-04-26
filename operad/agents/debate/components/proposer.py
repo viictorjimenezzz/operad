@@ -6,11 +6,11 @@ from inspect import cleandoc
 
 from ....core.agent import Example
 from ...reasoning.components.reasoner import Reasoner
-from ..schemas import DebateContext, Proposal
+from ..schemas import DebateTopic, Proposal
 
 
 class Proposer(Reasoner):
-    """Generate a single concrete proposal for a ``DebateContext``.
+    """Generate a single concrete proposal for a ``DebateTopic``.
 
     Used by ``Debate`` as one of N proposers. Each clone sees the same
     topic but is expected (via sampling variance or seeded configs) to
@@ -18,7 +18,7 @@ class Proposer(Reasoner):
     a domain-specific debate.
     """
 
-    input = DebateContext
+    input = DebateTopic
     output = Proposal
 
     role = cleandoc("""
@@ -69,8 +69,8 @@ class Proposer(Reasoner):
         """),
     )
     examples = (
-        Example[DebateContext, Proposal](
-            input=DebateContext(
+        Example[DebateTopic, Proposal](
+            input=DebateTopic(
                 topic="Should a small team adopt a monorepo for its three services?",
                 details="Team is 6 engineers; services share auth code today via a copied module.",
             ),

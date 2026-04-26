@@ -1,11 +1,10 @@
-"""Example 4 - evolutionary: richer MutationBeam search over prompt mutations.
+"""Example 4 - evolutionary: richer EvoGradient search over prompt mutations.
 
 What this script illustrates:
 
 * a `Reasoner` whose `rules` list is the trainable surface,
-* `MutationBeam` proposing typed prompt mutations across three ops -
-  `append_rule`, `replace_rule`, `drop_rule` - with a Critic LLM judge
-  picking survivors,
+* `EvoGradient` applying typed prompt mutations across three ops:
+  `append_rule`, `replace_rule`, and `drop_rule`,
 * live observer output: each generation's candidate proposals (with the
   LLM's rationale, metric and judge scores, and which one was selected)
   plus the surviving agent's `rules` after write-back,
@@ -28,13 +27,13 @@ from pydantic import BaseModel, Field
 
 from operad import evaluate
 from operad.agents import Reasoner
-from operad.agents.reasoning.components import Critic
-from operad.algorithms import MutationBeam
 from operad.core.agent import Agent
 from operad.core.config import Resilience, Sampling
+from operad.optim import EvoGradient
 from operad.runtime import set_limit
 from operad.runtime.events import AlgorithmEvent
 from operad.runtime.observers.base import Event, registry
+from operad.utils.ops import AppendRule, DropRule, ReplaceRule
 
 from _config import local_config, server_reachable
 from utils import (
@@ -43,7 +42,6 @@ from utils import (
     parse_dashboard_target,
     print_agent_card,
     print_dataset_table,
-    print_mutation_generation,
     print_panel,
     print_rule,
     print_rules_diff,
@@ -76,18 +74,20 @@ class _LiveLogger:
     async def on_event(self, event: Event) -> None:
         if not isinstance(event, AlgorithmEvent) or event.kind != "generation":
             return
-        gen_idx = int(event.payload.get("generation_index", -1))
-        candidates = list(event.payload.get("candidates", []))
-        selected = list(event.payload.get("selected_candidate_ids", []))
+        gen_idx = int(event.payload.get("gen_index", -1))
+        scores = [float(s) for s in event.payload.get("population_scores", [])]
+        selected = list(event.payload.get("survivor_indices", []))
         rules_after = list(self._seed.rules)
         rules_preview = "; ".join(rules_after) if rules_after else "(no rules)"
         if len(rules_preview) > 110:
             rules_preview = rules_preview[:107] + "..."
-        print_mutation_generation(
-            generation_index=gen_idx,
-            candidates=candidates,
-            selected_ids=selected,
-            state_after=f"seed.rules ({len(rules_after)}): {rules_preview}",
+        print_panel(
+            f"EvoGradient generation {gen_idx}",
+            (
+                f"population_scores: {scores}\n"
+                f"survivor_indices:  {selected}\n"
+                f"seed.rules ({len(rules_after)}): {rules_preview}"
+            ),
         )
         self.history.append(
             {"gen": gen_idx, "selected": selected, "rules": rules_after}
@@ -173,31 +173,27 @@ async def main(args: argparse.Namespace) -> None:
         ),
     )
 
-    print_rule("Stage 2 - MutationBeam setup")
-    optimizer = MutationBeam(
-        seed,
+    print_rule("Stage 2 - EvoGradient setup")
+    optimizer = EvoGradient(
+        seed.parameters(),
+        mutations=[
+            AppendRule(path="", rule="Use one concrete mechanism in every answer."),
+            ReplaceRule(path="", index=0, rule="Be precise and cite one example."),
+            DropRule(path="", index=0),
+        ],
         metric=metric,
         dataset=dataset,
-        allowed_mutations=["append_rule", "replace_rule", "drop_rule"],
-        branches_per_parent=args.branches,
-        frontier_size=args.frontier,
-        top_k=args.top_k,
-        judge=Critic(config=cfg.model_copy(deep=True)),
-        config=cfg.model_copy(deep=True),
+        population_size=args.branches,
     )
-    await optimizer.abuild()
 
     print_panel(
         "Optimizer",
         (
             f"class:             {type(optimizer).__name__}\n"
             f"generations:       {args.generations}\n"
-            f"branches/parent:   {args.branches}\n"
-            f"frontier_size:     {args.frontier}\n"
-            f"top_k:             {args.top_k}\n"
-            "allowed_mutations: append_rule, replace_rule, drop_rule\n"
-            "judge:             Critic (LLM picks the strongest proposal)\n"
-            "selection:         Beam + judge (best is written back onto seed)"
+            f"population_size:   {args.branches}\n"
+            "mutations:         append_rule, replace_rule, drop_rule\n"
+            "selection:         metric-ranked survivors"
         ),
     )
 
@@ -205,7 +201,9 @@ async def main(args: argparse.Namespace) -> None:
     logger = _LiveLogger(seed)
     registry.register(logger)
     try:
-        await optimizer.run(generations=args.generations)
+        async with optimizer.session():
+            for _ in range(args.generations):
+                await optimizer.step()
     finally:
         registry.unregister(logger)
 
@@ -247,8 +245,6 @@ def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--generations", type=int, default=3)
     p.add_argument("--branches", type=int, default=4)
-    p.add_argument("--frontier", type=int, default=3)
-    p.add_argument("--top-k", dest="top_k", type=int, default=3)
     p.add_argument(
         "--offline",
         action="store_true",

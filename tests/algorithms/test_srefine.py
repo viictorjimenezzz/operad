@@ -7,7 +7,7 @@ import pytest
 from operad import Agent
 from operad.agents.reasoning.schemas import Reflection, ReflectionInput
 from operad.algorithms import SelfRefine
-from operad.algorithms.self_refine import RefineInput
+from operad.algorithms.srefine import RefineInput
 
 from ..conftest import A, B
 
@@ -92,14 +92,14 @@ async def _make_loop(cfg, *, bad_reflector: bool = False, **kwargs) -> SelfRefin
     return loop
 
 
-async def test_self_refine_converges_on_good_reflection(cfg) -> None:
+async def test_srefine_converges_on_good_reflection(cfg) -> None:
     loop = await _make_loop(cfg, bad_reflector=False, max_iter=5)
     out = await loop.run(A(text="q"))
     assert out.value == 10
     assert loop.generator.calls == 1
 
 
-async def test_self_refine_runs_to_max_iter(cfg) -> None:
+async def test_srefine_runs_to_max_iter(cfg) -> None:
     loop = await _make_loop(cfg, bad_reflector=True, max_iter=3)
     out = await loop.run(A(text="q"))
     # generator called once for iter 0; refiner called max_iter-1 times
@@ -108,11 +108,11 @@ async def test_self_refine_runs_to_max_iter(cfg) -> None:
     assert out.value == 200  # last refiner output: 2 * 100
 
 
-async def test_self_refine_on_policy_reuses_generator(cfg) -> None:
+async def test_srefine_on_policy_reuses_generator(cfg) -> None:
     loop = SelfRefine(on_policy=True)
     assert loop.refiner is loop.generator
 
 
-async def test_self_refine_rejects_zero_max_iter() -> None:
+async def test_srefine_rejects_zero_max_iter() -> None:
     with pytest.raises(ValueError, match="max_iter"):
         SelfRefine(max_iter=0)

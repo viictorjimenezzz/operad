@@ -1,9 +1,9 @@
-"""Example 3 - training: evolve `config.sampling.temperature` with MutationBeam.
+"""Example 3 - training: evolve `config.sampling.temperature` with EvoGradient.
 
 What this script illustrates:
 
 * a reference-free metric (length-band) used as the optimisation signal,
-* `MutationBeam` proposing typed mutations on a single allowed op
+* `EvoGradient` applying typed mutations on a single allowed op
   (`set_temperature`) and writing the winner back onto the seed in place,
 * live observer output: per-generation candidate proposals, their LLM
   rationales, metric and judge scores, plus the temperature actually
@@ -27,13 +27,13 @@ from pydantic import BaseModel, Field
 
 from operad import evaluate
 from operad.agents import Reasoner
-from operad.agents.reasoning.components import Critic
-from operad.algorithms import MutationBeam
 from operad.core.agent import Agent
 from operad.core.config import Resilience, Sampling
+from operad.optim import EvoGradient
 from operad.runtime import set_limit
 from operad.runtime.events import AlgorithmEvent
 from operad.runtime.observers.base import Event, registry
+from operad.utils.ops import SetTemperature
 
 from _config import local_config, server_reachable
 from utils import (
@@ -42,7 +42,6 @@ from utils import (
     parse_dashboard_target,
     print_agent_card,
     print_dataset_table,
-    print_mutation_generation,
     print_panel,
     print_rule,
     rich_available,
@@ -74,15 +73,17 @@ class _LiveLogger:
     async def on_event(self, event: Event) -> None:
         if not isinstance(event, AlgorithmEvent) or event.kind != "generation":
             return
-        gen_idx = int(event.payload.get("generation_index", -1))
-        candidates = list(event.payload.get("candidates", []))
-        selected = list(event.payload.get("selected_candidate_ids", []))
+        gen_idx = int(event.payload.get("gen_index", -1))
+        scores = [float(s) for s in event.payload.get("population_scores", [])]
+        selected = list(event.payload.get("survivor_indices", []))
         temp_after = float(self._seed.config.sampling.temperature)
-        print_mutation_generation(
-            generation_index=gen_idx,
-            candidates=candidates,
-            selected_ids=selected,
-            state_after=f"seed temperature after gen {gen_idx}: {temp_after:.2f}",
+        print_panel(
+            f"EvoGradient generation {gen_idx}",
+            (
+                f"population_scores: {scores}\n"
+                f"survivor_indices:  {selected}\n"
+                f"seed temperature:  {temp_after:.2f}"
+            ),
         )
         self.history.append(
             {"gen": gen_idx, "selected": selected, "temperature": temp_after}
@@ -169,30 +170,25 @@ async def main(args: argparse.Namespace) -> None:
         ),
     )
 
-    print_rule("Stage 2 - MutationBeam (typed mutation proposals)")
-    optimizer = MutationBeam(
-        seed,
+    print_rule("Stage 2 - EvoGradient (typed temperature mutations)")
+    optimizer = EvoGradient(
+        seed.parameters(),
+        mutations=[
+            SetTemperature(path="", temperature=t)
+            for t in (0.1, 0.3, 0.6, 0.9, 1.2)
+        ],
         metric=metric,
         dataset=dataset,
-        allowed_mutations=["set_temperature"],
-        branches_per_parent=args.branches,
-        frontier_size=1,
-        top_k=1,
-        judge=Critic(config=cfg.model_copy(deep=True)),
-        config=cfg.model_copy(deep=True),
+        population_size=args.branches,
     )
-    await optimizer.abuild()
     print_panel(
         "Optimizer",
         (
             f"class:             {type(optimizer).__name__}\n"
-            f"allowed_mutations: set_temperature\n"
-            f"branches/parent:   {args.branches}\n"
+            "mutations:         set_temperature over [0.1, 0.3, 0.6, 0.9, 1.2]\n"
             f"generations:       {args.generations}\n"
-            f"frontier_size:     1\n"
-            f"top_k:             1\n"
-            "judge:             Critic (LLM-as-judge picks the strongest proposal)\n"
-            "selection:         Beam + judge (top_k=1)"
+            f"population_size:   {args.branches}\n"
+            "selection:         metric-ranked survivors"
         ),
     )
 
@@ -200,7 +196,9 @@ async def main(args: argparse.Namespace) -> None:
     logger = _LiveLogger(seed)
     registry.register(logger)
     try:
-        await optimizer.run(generations=args.generations)
+        async with optimizer.session():
+            for _ in range(args.generations):
+                await optimizer.step()
     finally:
         registry.unregister(logger)
 
