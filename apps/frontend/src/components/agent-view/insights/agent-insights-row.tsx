@@ -2,6 +2,7 @@ import { BackendBadges } from "@/components/agent-view/insights/backend-badges";
 import { CostLatencySparklines } from "@/components/agent-view/insights/cost-latency-sparklines";
 import { DriftStrip } from "@/components/agent-view/insights/drift-strip";
 import { FingerprintCard } from "@/components/agent-view/insights/fingerprint-card";
+import { ChunkReplay } from "@/components/agent-view/insights/chunk-replay";
 import { ValueDistribution } from "@/components/agent-view/insights/value-distribution";
 import { Card, CardContent } from "@/components/ui/card";
 import { dashboardApi } from "@/lib/api/dashboard";
@@ -104,6 +105,9 @@ export function AgentInsightsRow(props: AgentInsightsRowProps) {
       </div>
       {hiddenCount > 0 ? (
         <p className="m-0 text-[0.68rem] text-muted">+{hiddenCount} more fields</p>
+      ) : null}
+      {runId && rootPath ? (
+        <ChunkReplay runId={runId} agentPath={rootPath} invocations={invocations} />
       ) : null}
       {metaQuery.error ? (
         <p className="m-0 text-[0.68rem] text-warn">

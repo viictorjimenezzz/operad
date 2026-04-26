@@ -246,6 +246,8 @@ export const AgentMetaResponse = z.object({
   output_schema: z.record(z.unknown()).default({}),
   forward_in_overridden: z.boolean().default(false),
   forward_out_overridden: z.boolean().default(false),
+  forward_in_doc: z.string().nullable().optional().default(null),
+  forward_out_doc: z.string().nullable().optional().default(null),
   trainable_paths: z.array(z.string()).default([]),
   langfuse_search_url: z.string().nullable().optional().default(null),
 });
