@@ -82,6 +82,22 @@ export function useAgentValues(
   });
 }
 
+export function useAgentEvents(
+  runId: string | null | undefined,
+  agentPath: string | null | undefined,
+  limit = 500,
+) {
+  return useQuery({
+    queryKey: ["run", "agent-events", runId, agentPath, limit] as const,
+    queryFn: () => {
+      if (!runId) throw new Error("useAgentEvents: runId is required");
+      if (!agentPath) throw new Error("useAgentEvents: agentPath is required");
+      return dashboardApi.agentEvents(runId, agentPath, limit);
+    },
+    enabled: !!runId && !!agentPath,
+  });
+}
+
 export function useGraph(runId: string | null | undefined) {
   return useQuery({
     queryKey: ["run", "graph", runId] as const,
