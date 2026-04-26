@@ -22,6 +22,7 @@ function makeRun(overrides: Partial<RunSummary> = {}): RunSummary {
     algorithm_path: "operad.algorithms.EvoGradient",
     algorithm_kinds: [],
     root_agent_path: null,
+    script: null,
     event_counts: {},
     event_total: 0,
     duration_ms: 1000,

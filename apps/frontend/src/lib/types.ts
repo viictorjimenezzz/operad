@@ -163,6 +163,7 @@ export const RunSummary = z.object({
   algorithm_path: stringOrNull,
   algorithm_kinds: z.array(z.string()).default([]),
   root_agent_path: stringOrNull,
+  script: stringOrNull.default(null),
   event_counts: z.record(z.number()).default({}),
   event_total: z.number(),
   duration_ms: z.number(),

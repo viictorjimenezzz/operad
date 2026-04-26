@@ -102,6 +102,41 @@ def _otel_env_truthy() -> bool:
     return val.lower() in ("1", "true", "yes", "on")
 
 
+def _install_otlp_pipeline() -> None:
+    """Wire a real TracerProvider + OTLP exporter for ``OPERAD_OTEL=1``.
+
+    The OtelObserver only emits spans on whatever ``trace.get_tracer()``
+    returns. Without a TracerProvider that has a span processor +
+    exporter attached, those spans are dropped — which is what happens
+    on a fresh process where nobody has called
+    ``trace.set_tracer_provider`` yet (the API ships a
+    ``ProxyTracerProvider`` that resolves to the SDK's NoOp default).
+    Install one here so spans actually reach the OTLP endpoint
+    configured by the standard ``OTEL_EXPORTER_OTLP_*`` env vars.
+
+    Respects an externally-configured SDK provider (e.g. installed by
+    ``opentelemetry-instrument`` or the user's own bootstrap) — only
+    installs one when the global is still the no-op proxy.
+    """
+    import atexit
+
+    from opentelemetry import trace as _ot_trace
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+        OTLPSpanExporter,
+    )
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+    current = _ot_trace.get_tracer_provider()
+    if isinstance(current, TracerProvider):
+        return
+
+    provider = TracerProvider()
+    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    _ot_trace.set_tracer_provider(provider)
+    atexit.register(provider.shutdown)
+
+
 if _otel_env_truthy():
     try:
         from .runtime.observers import OtelObserver
@@ -113,3 +148,13 @@ if _otel_env_truthy():
             f"({exc}). Install the `[otel]` extra to enable OTLP export.",
             stacklevel=2,
         )
+    else:
+        try:
+            _install_otlp_pipeline()
+        except ImportError as exc:
+            warnings.warn(
+                f"OPERAD_OTEL=1: OtelObserver registered but the OTLP/HTTP "
+                f"exporter is missing ({exc}). Spans will be created but "
+                "dropped. Install the `[otel]` extra to wire export.",
+                stacklevel=2,
+            )
