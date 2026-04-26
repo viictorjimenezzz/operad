@@ -838,7 +838,7 @@ class Agent(Generic[In, Out]):
     # --- composition --------------------------------------------------------
     def __rshift__(self, other: "Agent[Any, Any]") -> "Agent[Any, Any]":
         """`a >> b` constructs a `Sequential(a, b)`; flattens when chained."""
-        from ..agents.pipelines import Sequential
+        from ..agents.core.pipelines import Sequential
 
         if isinstance(self, Sequential):
             return Sequential(
@@ -1003,31 +1003,84 @@ class Agent(Generic[In, Out]):
                 "agent graph is missing; call .abuild() first",
                 agent=self.name,
             )
-        labels = {path: agent.name for path, agent in _labelled_tree(self)}
+        from ..agents.core.pipelines import Loop
+        from .build import AgentGraph, Edge, Node
+        from .graph import to_mermaid as _to_mermaid
 
-        def _type_name(t: type[Any]) -> str:
-            return getattr(t, "__name__", repr(t))
+        canonical_by_id: dict[int, str] = {
+            id(agent): path for path, agent in _labelled_tree(self)
+        }
 
-        def _escape(label: str) -> str:
-            return label.replace('"', "'")
+        def _resolve_path(path: str) -> "Agent[Any, Any] | None":
+            if path == self.name:
+                return self
+            prefix = f"{self.name}."
+            if not path.startswith(prefix):
+                return None
+            current: Agent[Any, Any] = self
+            suffix = path[len(prefix):]
+            if not suffix:
+                return current
+            for attr in suffix.split("."):
+                child = current._children.get(attr)
+                if child is None:
+                    return None
+                current = child
+            return current
 
-        def _node_id(path: str) -> str:
-            return path.replace(".", "_")
+        def _canonical_path(path: str) -> str:
+            node = _resolve_path(path)
+            if node is None:
+                return path
+            return canonical_by_id.get(id(node), path)
 
-        node_ids = {node.path: _node_id(node.path) for node in graph.nodes}
-        lines: list[str] = ["flowchart LR"]
-        for node in graph.nodes:
-            nid = node_ids[node.path]
-            label = labels.get(node.path, node.path.rsplit(".", 1)[-1])
-            lines.append(f'    {nid}["{_escape(label)}"]')
-        for edge in graph.edges:
-            caller_id = node_ids[edge.caller]
-            callee_id = node_ids[edge.callee]
-            edge_label = f"{_type_name(edge.input_type)} -> {_type_name(edge.output_type)}"
-            lines.append(
-                f'    {caller_id} -->|"{_escape(edge_label)}"| {callee_id}'
+        nodes: list[Node] = [
+            Node(
+                path=_canonical_path(node.path),
+                input_type=node.input_type,
+                output_type=node.output_type,
+                kind=node.kind,
+                class_name=node.class_name,
             )
-        return "\n".join(lines)
+            for node in graph.nodes
+        ]
+        edges: list[Edge] = [
+            Edge(
+                caller=_canonical_path(edge.caller),
+                callee=_canonical_path(edge.callee),
+                input_type=edge.input_type,
+                output_type=edge.output_type,
+                class_name=edge.class_name,
+            )
+            for edge in graph.edges
+        ]
+
+        # Always draw loop closure so Loop semantics stay explicit in Mermaid.
+        for _path, agent in _labelled_tree(self):
+            if not isinstance(agent, Loop):
+                continue
+            if not agent._stages:
+                continue
+            first_stage = agent._stages[0]
+            last_stage = agent._stages[-1]
+            if first_stage.input is None or first_stage.output is None:
+                continue
+            first_path = canonical_by_id.get(id(first_stage))
+            last_path = canonical_by_id.get(id(last_stage))
+            if first_path is None or last_path is None:
+                continue
+            edges.append(
+                Edge(
+                    caller=last_path,
+                    callee=first_path,
+                    input_type=first_stage.input,
+                    output_type=first_stage.output,
+                    class_name=type(first_stage).__name__,
+                )
+            )
+
+        normalized = AgentGraph(root=graph.root, nodes=nodes, edges=edges)
+        return _to_mermaid(normalized)
 
     def graph_outline(self) -> str:
         """Return a tree-style text outline of the built graph."""

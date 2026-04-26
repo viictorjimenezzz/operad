@@ -16,8 +16,8 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from operad.agents.pipelines import Parallel
-from operad.agents.pipelines import Sequential
+from operad.agents.core.pipelines import Parallel
+from operad.agents.core.pipelines import Sequential
 from operad.optim import Tape, TapeEntry, TapeObserver, tape
 from operad.runtime.observers import registry as obs_registry
 

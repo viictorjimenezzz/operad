@@ -69,7 +69,7 @@ from .memory import (
     UserInput,
     UserOutput,
 )
-from .pipelines import Loop, Parallel, Router, Sequential
+from .core.pipelines import Loop, Parallel, Router, Sequential
 from .reasoning import (
     Action,
     Actor,

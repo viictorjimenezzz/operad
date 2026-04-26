@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from operad import Configuration
-from operad.agents.pipelines import Sequential
+from operad.agents.core.pipelines import Sequential
 from operad.optim import inference_mode, no_grad
 
 from tests._helpers.fake_leaf import A, B, FakeLeaf

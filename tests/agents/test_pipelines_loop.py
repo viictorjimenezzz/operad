@@ -72,3 +72,15 @@ async def test_loop_custom_name_sets_graph_and_runtime_root() -> None:
     out = await loop(A(text="go"))
     assert out.response.text == "go!!"
     assert out.agent_path == "rewrite_loop"
+
+
+async def test_loop_mermaid_shows_cycle_even_single_pass() -> None:
+    loop = Loop(
+        _Append("!"),
+        input=A,
+        output=A,
+        n_loops=1,
+    )
+    await loop.abuild()
+    text = loop.graph_mermaid()
+    assert "Loop_stage_0 -->|\"A -> A\"| Loop_stage_0" in text
