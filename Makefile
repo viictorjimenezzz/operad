@@ -74,11 +74,12 @@ help:
 
 up:
 	docker compose up -d
-	@echo
-	@echo "Stack starting. Watch progress: make logs SVC=langfuse-web"
-	@echo "Dashboard: http://localhost:$(DASHBOARD_PORT)"
-	@echo "Studio:    http://localhost:$(STUDIO_PORT)"
-	@echo "Langfuse:  $(LANGFUSE_PUBLIC_URL)  (first boot ~2-3 min for migrations)"
+	@$(ENV_LOAD); \
+	echo; \
+	echo "Stack starting. Watch progress: make logs SVC=langfuse-web"; \
+	echo "Dashboard: http://localhost:$(DASHBOARD_PORT)"; \
+	echo "Studio:    http://localhost:$(STUDIO_PORT)"; \
+	echo "Langfuse:  $${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}  (first boot ~2-3 min for migrations)"
 
 down:
 	docker compose down
@@ -157,26 +158,26 @@ studio: ensure-bundles
 demo:
 	@$(ENV_LOAD); \
 	OPERAD_OTEL=1 \
-	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$(LANGFUSE_PUBLIC_URL)/api/public/otel}" \
+	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}/api/public/otel}" \
 	uv run --extra otel python apps/demos/agent_evolution/run.py --offline --dashboard
 
 demo-script:
 	@$(ENV_LOAD); \
 	OPERAD_OTEL=1 \
-	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$(LANGFUSE_PUBLIC_URL)/api/public/otel}" \
+	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}/api/public/otel}" \
 	uv run --extra observers --extra otel python demo.py --dashboard
 
 demo-triage:
 	@$(ENV_LOAD); \
 	OPERAD_OTEL=1 \
-	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$(LANGFUSE_PUBLIC_URL)/api/public/otel}" \
+	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}/api/public/otel}" \
 	uv run --extra otel python apps/demos/triage_reply/run.py --dashboard
 
 EXAMPLE ?= 01_composition_research_analyst.py
 example-observed: ensure-bundles
 	@$(ENV_LOAD); \
 	OPERAD_OTEL=1 \
-	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$(LANGFUSE_PUBLIC_URL)/api/public/otel}" \
+	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}/api/public/otel}" \
 	uv run --extra otel python "examples/$(EXAMPLE)" --dashboard
 
 # ------------------------------------------------------------------
