@@ -192,7 +192,7 @@ class AssistantMessage(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class _Navigator(Agent[NavigationInput, NavigationDecision]):
+class ScenarioNavigator(Agent[NavigationInput, NavigationDecision]):
     input = NavigationInput
     output = NavigationDecision
     role = cleandoc("""
@@ -251,7 +251,7 @@ class _Navigator(Agent[NavigationInput, NavigationDecision]):
     )
 
 
-class _Voice(Agent[TalkerInput, AssistantMessage]):
+class Assistant(Agent[TalkerInput, AssistantMessage]):
     input = TalkerInput
     output = AssistantMessage
     role = cleandoc("""
@@ -361,8 +361,8 @@ class TalkerReasoner:
         transcript = await tr.run([...])    # or run a whole script
     """
 
-    reasoner: ClassVar[Agent] = _Navigator()
-    talker: ClassVar[Agent] = _Voice()
+    reasoner: ClassVar[Agent] = ScenarioNavigator()
+    talker: ClassVar[Agent] = Assistant()
 
     def __init__(
         self,
