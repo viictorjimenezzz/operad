@@ -17,6 +17,7 @@ interface AgentEdgePopupProps {
   onOpenLangfuse: () => void;
   onOpenEvents: () => void;
   onOpenPrompts: () => void;
+  onOpenExperiment: () => void;
   onOpenGradient: (paramPath: string) => void;
   onClose: () => void;
 }
@@ -29,6 +30,7 @@ export function AgentEdgePopup({
   onOpenLangfuse,
   onOpenEvents,
   onOpenPrompts,
+  onOpenExperiment,
   onOpenGradient,
   onClose,
 }: AgentEdgePopupProps) {
@@ -97,6 +99,14 @@ export function AgentEdgePopup({
             onClick={onOpenPrompts}
           >
             prompts
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-1.5 text-[11px]"
+            onClick={onOpenExperiment}
+          >
+            edit and run
           </Button>
         </div>
       </div>

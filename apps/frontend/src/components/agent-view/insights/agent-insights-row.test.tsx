@@ -1,6 +1,6 @@
 import { AgentInsightsRow } from "@/components/agent-view/insights/agent-insights-row";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const agentEventsMock = vi.fn().mockResolvedValue({ run_id: "run-1", events: [] });
@@ -14,7 +14,7 @@ vi.mock("@/lib/api/dashboard", () => ({
       hash_content: "hc",
       config: { sampling: {}, resilience: {}, io: {}, runtime: {} },
       rules: [],
-      examples: [],
+      examples: [{ input: { question: "capital of france" }, output: { value: "Paris" } }],
       input_schema: {},
       output_schema: {},
       trainable_paths: [],
@@ -99,6 +99,9 @@ describe("AgentInsightsRow", () => {
     expect(screen.getByText(/prompt drift/i)).toBeTruthy();
     expect(screen.getByText(/cost \/ latency \/ tokens/i)).toBeTruthy();
     expect(screen.queryByText(/^replay$/i)).toBeNull();
+    return waitFor(() =>
+      expect(screen.getByRole("button", { name: /run example 1/i })).toBeTruthy(),
+    );
   });
 
   it("shows replay panel when chunk events exist", async () => {

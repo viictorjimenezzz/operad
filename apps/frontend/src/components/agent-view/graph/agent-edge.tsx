@@ -119,6 +119,7 @@ export function AgentEdge({
                 onOpenLangfuse={() => openDrawer("langfuse", { agentPath: d.agentPath })}
                 onOpenEvents={() => openDrawer("events", { agentPath: d.agentPath })}
                 onOpenPrompts={() => openDrawer("prompts", { agentPath: d.agentPath })}
+                onOpenExperiment={() => openDrawer("experiment", { agentPath: d.agentPath })}
                 onOpenGradient={(paramPath) =>
                   openDrawer("gradients", { agentPath: d.agentPath, paramPath })
                 }

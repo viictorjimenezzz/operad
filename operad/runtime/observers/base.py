@@ -69,6 +69,8 @@ class ObserverRegistry:
         return dict(self._errors)
 
     async def notify(self, event: Event) -> None:
+        if _MUTE_NOTIFICATIONS.get():
+            return
         for observer in list(self._observers):
             try:
                 await observer.on_event(event)
@@ -105,6 +107,12 @@ _RETRY_META: ContextVar[dict[str, Any] | None] = ContextVar(
     "_RETRY_META", default=None
 )
 
+# Task-local guard used by dashboard experiments so cloned-agent invocations
+# do not leak synthetic events into live observer streams.
+_MUTE_NOTIFICATIONS: ContextVar[bool] = ContextVar(
+    "_MUTE_NOTIFICATIONS", default=False
+)
+
 # Algorithm-scoped run id. Set by _enter_algorithm_run() so nested
 # AgentEvents can carry parent_run_id in metadata.
 _ALGO_RUN_ID: ContextVar[str | None] = ContextVar("_ALGO_RUN_ID", default=None)
@@ -132,6 +140,15 @@ def _enter_algorithm_run(rid: str | None = None) -> Iterator[str]:
     finally:
         _RUN_ID.reset(tok_r)
         _ALGO_RUN_ID.reset(tok_a)
+
+
+@contextmanager
+def suppress_notifications() -> Iterator[None]:
+    tok = _MUTE_NOTIFICATIONS.set(True)
+    try:
+        yield
+    finally:
+        _MUTE_NOTIFICATIONS.reset(tok)
 
 
 async def emit_algorithm_event(

@@ -23,6 +23,8 @@ const InvocationRowSchema = z.object({
   error: z.string().nullable().optional(),
   langfuse_url: z.string().nullable().optional(),
   script: z.string().nullable().optional(),
+  input: z.unknown().optional(),
+  output: z.unknown().optional(),
 });
 
 const InvocationsPayload = z.object({
@@ -251,6 +253,20 @@ export function InvocationsTable({ summary, invocations }: InvocationsTableProps
                     }}
                   >
                     diff
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-border bg-bg-2 px-1.5 py-0.5 text-[11px] text-muted hover:text-text"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openDrawer("experiment", {
+                        agentPath,
+                        input: row.input ?? {},
+                        invocationId: row.id,
+                      });
+                    }}
+                  >
+                    run again
                   </button>
                   {row.langfuse_url ? (
                     <a

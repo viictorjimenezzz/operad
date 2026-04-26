@@ -9,7 +9,7 @@ import time
 from dataclasses import asdict
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Callable
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
@@ -37,6 +37,7 @@ from .routes import progress as progress_routes
 from .routes import sweep as sweep_routes
 from . import agent_routes
 
+ExperimentResolver = Callable[[str, str], Any | None]
 
 _PKG_DIR = Path(__file__).resolve().parent
 _WEB_DIR = _PKG_DIR / "web"
@@ -62,6 +63,8 @@ def create_app(
     langfuse_url: str | None = None,
     data_dir: Path | str | None = None,
     benchmark_dir: str = "./.benchmarks/",
+    allow_experiment: bool = False,
+    experiment_resolver: ExperimentResolver | None = None,
 ) -> FastAPI:
     """Build a FastAPI app wired to a `WebDashboardObserver`.
 
@@ -92,6 +95,10 @@ def create_app(
     app.state.archive_store = archive_store
     app.state.benchmark_store = BenchmarkStore()
     app.state.benchmark_dir = benchmark_dir
+    app.state.allow_experiment = bool(allow_experiment)
+    app.state.experiment_resolver = experiment_resolver
+    experiment_root = Path(data_dir) if data_dir is not None else Path("./.dashboard-data")
+    app.state.experiment_log_path = experiment_root / "experiments.ndjson"
 
     @app.on_event("startup")
     async def _load_benchmarks_from_dir() -> None:
@@ -124,6 +131,7 @@ def create_app(
                 "mode": mode,
                 "version": _dashboard_version(),
                 "langfuseUrl": app.state.langfuse_url,
+                "allowExperiment": app.state.allow_experiment,
             }
         )
 

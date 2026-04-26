@@ -6,9 +6,27 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import BaseModel
 
+from operad import Agent, Configuration
 from operad_dashboard.app import create_app
 from operad_dashboard.observer import WebDashboardObserver
+
+
+class A(BaseModel):
+    text: str
+
+
+class B(BaseModel):
+    value: int = 0
+
+
+class FakeLeaf(Agent[A, B]):
+    input = A
+    output = B
+
+    async def forward(self, x: A) -> B:
+        return B(value=7)
 
 
 _GRAPH_JSON = {
@@ -404,3 +422,108 @@ def test_io_graph_empty_when_graph_missing(app_and_obs) -> None:
         out = client.get("/runs/nograph/io_graph")
         assert out.status_code == 200
         assert out.json() == {"root": None, "nodes": [], "edges": []}
+
+
+def _live_experiment_leaf() -> FakeLeaf:
+    return FakeLeaf(
+        config=Configuration(backend="llamacpp", model="fake", host="127.0.0.1:8080"),
+        task="return canned value",
+    )
+
+
+def test_invoke_experiment_gate_and_resolver_errors(tmp_path: Path) -> None:
+    live = _live_experiment_leaf()
+    app_disabled = create_app(
+        observer=WebDashboardObserver(),
+        auto_register=False,
+        data_dir=tmp_path / "disabled",
+        allow_experiment=False,
+        experiment_resolver=lambda _run, _path: live,
+    )
+    with TestClient(app_disabled) as client:
+        disabled = client.post(
+            "/runs/r1/agent/Pipeline.stage_0/invoke",
+            json={"input": {"text": "hello"}},
+        )
+        assert disabled.status_code == 403
+        assert disabled.json()["error"] == "experiment_disabled"
+
+    app_missing = create_app(
+        observer=WebDashboardObserver(),
+        auto_register=False,
+        data_dir=tmp_path / "missing",
+        allow_experiment=True,
+    )
+    with TestClient(app_missing) as client:
+        missing = client.post(
+            "/runs/r1/agent/Pipeline.stage_0/invoke",
+            json={"input": {"text": "hello"}},
+        )
+        assert missing.status_code == 409
+        assert missing.json()["error"] == "experiment_unavailable"
+
+    app_unavailable = create_app(
+        observer=WebDashboardObserver(),
+        auto_register=False,
+        data_dir=tmp_path / "unavailable",
+        allow_experiment=True,
+        experiment_resolver=lambda _run, _path: None,
+    )
+    with TestClient(app_unavailable) as client:
+        unavailable = client.post(
+            "/runs/r1/agent/Pipeline.stage_0/invoke",
+            json={"input": {"text": "hello"}},
+        )
+        assert unavailable.status_code == 409
+        assert unavailable.json()["error"] == "experiment_unavailable"
+
+
+def test_invoke_experiment_validation_success_and_log(tmp_path: Path) -> None:
+    live = _live_experiment_leaf()
+    obs = WebDashboardObserver()
+    app = create_app(
+        observer=obs,
+        auto_register=False,
+        data_dir=tmp_path,
+        allow_experiment=True,
+        experiment_resolver=lambda _run, path: live if path == "Pipeline.stage_0" else None,
+    )
+
+    with TestClient(app) as client:
+        invalid = client.post(
+            "/runs/r1/agent/Pipeline.stage_0/invoke",
+            json={"input": {"wrong": "shape"}},
+        )
+        assert invalid.status_code == 400
+        assert invalid.json()["error"] == "bad_request"
+        assert "text" in invalid.json()["reason"]
+
+        ok = client.post(
+            "/runs/r1/agent/Pipeline.stage_0/invoke",
+            json={
+                "input": {"text": "hello"},
+                "overrides": {"role": "New role", "task": "New task"},
+                "stream": True,
+            },
+        )
+        assert ok.status_code == 200
+        body = ok.json()
+        assert body["metadata"]["experiment"] is True
+        assert body["metadata"]["agent_path"] == "Pipeline.stage_0"
+        assert body["metadata"]["run_id"] == "r1"
+        assert body["response"]["value"] == 7
+        assert body["hash_prompt"]
+
+        # Override mutated only the clone.
+        assert live.role != "New role"
+        assert live.task != "New task"
+
+        # Suppressed notifications: no experiment run leaked into dashboard registry.
+        assert obs.registry.list() == []
+
+    log_path = app.state.experiment_log_path
+    assert log_path.exists()
+    lines = [line for line in log_path.read_text(encoding="utf-8").splitlines() if line]
+    assert len(lines) >= 2
+    assert '"status": "invalid"' in lines[0]
+    assert any('"status": "ok"' in line for line in lines)

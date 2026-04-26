@@ -146,6 +146,7 @@ describe("InvocationsTable", () => {
               prompt_tokens: 11,
               completion_tokens: 4,
               hash_prompt: "p2",
+              input: { text: "rerun me" },
               status: "error",
               error: "Error: boom",
             },
@@ -176,6 +177,13 @@ describe("InvocationsTable", () => {
       agentPath: "Pipeline.stage_0",
       fromInvocationId: "inv-2",
       toInvocationId: "inv-1",
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "run again" })[1] as Element);
+    expect(openDrawer).toHaveBeenCalledWith("experiment", {
+      agentPath: "Pipeline.stage_0",
+      input: { text: "rerun me" },
+      invocationId: "inv-2",
     });
   });
 

@@ -8,6 +8,7 @@ export type DrawerKind =
   | "prompts"
   | "values"
   | "find-runs"
+  | "experiment"
   | "diff"
   | "gradients"
   | null;
