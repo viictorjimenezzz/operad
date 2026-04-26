@@ -1,5 +1,16 @@
 """Example 4 - evolutionary: richer MutationBeam search over prompt mutations.
 
+What this script illustrates:
+
+* a `Reasoner` whose `rules` list is the trainable surface,
+* `MutationBeam` proposing typed prompt mutations across three ops -
+  `append_rule`, `replace_rule`, `drop_rule` - with a Critic LLM judge
+  picking survivors,
+* live observer output: each generation's candidate proposals (with the
+  LLM's rationale, metric and judge scores, and which one was selected)
+  plus the surviving agent's `rules` after write-back,
+* a final rules diff showing exactly which prompt changes won.
+
 Run modes:
 
     uv run python examples/04_evolutionary.py
@@ -19,6 +30,7 @@ from operad import evaluate
 from operad.agents import Reasoner
 from operad.agents.reasoning.components import Critic
 from operad.algorithms import MutationBeam
+from operad.core.agent import Agent
 from operad.core.config import Resilience, Sampling
 from operad.runtime import set_limit
 from operad.runtime.events import AlgorithmEvent
@@ -28,28 +40,17 @@ from _config import local_config, server_reachable
 from utils import (
     LengthBandMetric,
     attach_dashboard,
-    op_histogram,
     parse_dashboard_target,
+    print_agent_card,
+    print_dataset_table,
+    print_mutation_generation,
     print_panel,
     print_rule,
+    print_rules_diff,
     rich_available,
-    score_stats,
 )
 
-try:
-    from rich.console import Console
-    from rich.progress import (
-        BarColumn,
-        Progress,
-        SpinnerColumn,
-        TextColumn,
-        TimeElapsedColumn,
-    )
-    from rich.table import Table
-
-    _RICH = rich_available()
-except ImportError:
-    _RICH = False
+_RICH = rich_available()
 
 
 _SCRIPT = "04_evolutionary"
@@ -65,65 +66,32 @@ class Answer(BaseModel):
     text: str = Field(default="", description="The answer body.")
 
 
-class _GenerationLogger:
-    def __init__(self) -> None:
-        self.rows: list[dict[str, Any]] = []
+class _LiveLogger:
+    """Print each generation's candidate detail and the surviving rules."""
+
+    def __init__(self, seed: Agent[Any, Any]) -> None:
+        self._seed = seed
+        self.history: list[dict[str, Any]] = []
 
     async def on_event(self, event: Event) -> None:
         if not isinstance(event, AlgorithmEvent) or event.kind != "generation":
             return
-        candidates = event.payload.get("candidates", [])
-        metric_scores = [float(c.get("metric_score", 0.0)) for c in candidates]
-        judge_scores = [
-            float(c["score"])
-            for c in candidates
-            if c.get("score") is not None
-        ]
-        best, mean, spread = score_stats(metric_scores)
-        judge_best = max(judge_scores) if judge_scores else 0.0
-        self.rows.append(
-            {
-                "gen": int(event.payload.get("generation_index", -1)),
-                "best": best,
-                "mean": mean,
-                "spread": spread,
-                "judge_best": judge_best,
-                "ops": [str(c.get("op", "")) for c in candidates],
-                "selected": list(event.payload.get("selected_candidate_ids", [])),
-            }
+        gen_idx = int(event.payload.get("generation_index", -1))
+        candidates = list(event.payload.get("candidates", []))
+        selected = list(event.payload.get("selected_candidate_ids", []))
+        rules_after = list(self._seed.rules)
+        rules_preview = "; ".join(rules_after) if rules_after else "(no rules)"
+        if len(rules_preview) > 110:
+            rules_preview = rules_preview[:107] + "..."
+        print_mutation_generation(
+            generation_index=gen_idx,
+            candidates=candidates,
+            selected_ids=selected,
+            state_after=f"seed.rules ({len(rules_after)}): {rules_preview}",
         )
-
-
-def _print_generations(logger: _GenerationLogger) -> None:
-    if not _RICH:
-        print("gen | best | mean | spread | judge_best | ops | selected")
-        for row in logger.rows:
-            print(
-                f"  {row['gen']:>2} | {row['best']:.3f} | {row['mean']:.3f} | "
-                f"{row['spread']:.3f} | {row['judge_best']:.3f} | "
-                f"{op_histogram(row['ops'])} | {row['selected']}"
-            )
-        return
-
-    table = Table(title="Evolution generations (MutationBeam)", border_style="cyan")
-    table.add_column("gen", justify="right")
-    table.add_column("best", justify="right")
-    table.add_column("mean", justify="right")
-    table.add_column("spread", justify="right")
-    table.add_column("judge_best", justify="right")
-    table.add_column("ops", justify="left")
-    table.add_column("selected", justify="left")
-    for row in logger.rows:
-        table.add_row(
-            str(row["gen"]),
-            f"{row['best']:.3f}",
-            f"{row['mean']:.3f}",
-            f"{row['spread']:.3f}",
-            f"{row['judge_best']:.3f}",
-            op_histogram(row["ops"]),
-            str(row["selected"]),
+        self.history.append(
+            {"gen": gen_idx, "selected": selected, "rules": rules_after}
         )
-    Console(width=140).print(table)
 
 
 async def main(args: argparse.Namespace) -> None:
@@ -167,6 +135,7 @@ async def main(args: argparse.Namespace) -> None:
         rules=("Be helpful.",),
     )
     await seed.abuild()
+    print_agent_card(seed, title="Seed agent")
 
     metric = LengthBandMetric(lo=_TARGET_LO, hi=_TARGET_HI, over_decay=400)
     dataset = [
@@ -174,6 +143,18 @@ async def main(args: argparse.Namespace) -> None:
         (Question(text="What is climate change?"), Answer()),
         (Question(text="Define photosynthesis."), Answer()),
     ]
+    print_dataset_table(dataset, title="Eval dataset")
+    print_panel(
+        "Metric",
+        (
+            f"name:               {metric.name}\n"
+            f"target band:        len(answer.text) in [{_TARGET_LO}, {_TARGET_HI}] chars\n"
+            f"over-length decay:  {metric.over_decay} chars\n"
+            "expected side:      empty (reference-free length scorer)"
+        ),
+    )
+
+    seed_rules_before = list(seed.rules)
 
     seed_report = await evaluate(seed, dataset, [metric])
     seed_score = float(seed_report.summary[metric.name])
@@ -181,12 +162,10 @@ async def main(args: argparse.Namespace) -> None:
     seed_text = (await seed(Question(text="Why are bees important?"))).response.text
 
     print_panel(
-        "Seed",
+        "Seed evaluation",
         (
-            f"agent class:        {type(seed).__name__}\n"
             f"role:               {seed.role!r}\n"
-            f"rules:              {seed.rules}\n"
-            f"metric:             reference-free length-band score\n"
+            f"rules:              {seed_rules_before}\n"
             f"seed score:         {seed_score:.3f}\n"
             f"seed hash:          {seed_hash}\n"
             f"sample answer:      {seed_text[:200]}"
@@ -217,56 +196,40 @@ async def main(args: argparse.Namespace) -> None:
             f"frontier_size:     {args.frontier}\n"
             f"top_k:             {args.top_k}\n"
             "allowed_mutations: append_rule, replace_rule, drop_rule\n"
-            "selection:         Beam + judge"
+            "judge:             Critic (LLM picks the strongest proposal)\n"
+            "selection:         Beam + judge (best is written back onto seed)"
         ),
     )
 
     print_rule(f"Stage 3 - evolve ({args.generations} generations)")
-    logger = _GenerationLogger()
+    logger = _LiveLogger(seed)
     registry.register(logger)
-
-    if _RICH:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[bold cyan]gen {task.fields[gen]}/{task.total}"),
-            BarColumn(),
-            TextColumn("best={task.fields[best]:.3f}"),
-            TimeElapsedColumn(),
-            transient=False,
-        ) as progress:
-            task = progress.add_task("evolving", total=args.generations, gen=0, best=0.0)
-            await optimizer.run(generations=args.generations)
-            for row in logger.rows:
-                progress.update(
-                    task,
-                    advance=1,
-                    gen=row["gen"] + 1,
-                    best=row["best"],
-                )
-    else:
+    try:
         await optimizer.run(generations=args.generations)
-        for row in logger.rows:
-            print(
-                f"  gen {row['gen'] + 1}/{args.generations}  best={row['best']:.3f}"
-            )
-
-    registry.unregister(logger)
-    _print_generations(logger)
+    finally:
+        registry.unregister(logger)
 
     print_rule("Stage 4 - final evaluation")
     final_report = await evaluate(seed, dataset, [metric])
     final_score = float(final_report.summary[metric.name])
     final_hash = seed.hash_content
     final_text = (await seed(Question(text="Why are bees important?"))).response.text
+    delta = final_score - seed_score
+    delta_arrow = "+" if delta >= 0 else ""
+
+    print_rules_diff(seed_rules_before, list(seed.rules), title="Rules: seed -> final")
 
     print_panel(
         "Result",
         (
-            f"seed score:    {seed_score:.3f}  ->  final: {final_score:.3f}\n"
-            f"seed hash:     {seed_hash}\n"
-            f"final hash:    {final_hash}\n"
-            f"hash changed:  {seed_hash != final_hash}\n\n"
-            f"final rules:   {seed.rules}\n"
+            f"score:        {seed_score:.3f}  ->  {final_score:.3f}  "
+            f"({delta_arrow}{delta:.3f})\n"
+            f"answer len:   {len(seed_text)} chars  ->  {len(final_text)} chars\n"
+            f"hash:         {seed_hash}\n"
+            f"              -> {final_hash}\n"
+            f"hash changed: {seed_hash != final_hash} "
+            f"(`role`/`task` are pinned; only `rules` was mutated)\n\n"
+            f"final rules:  {list(seed.rules)}\n"
             f"sample answer at final state:\n  {final_text[:300]}"
             + ("..." if len(final_text) > 300 else "")
         ),

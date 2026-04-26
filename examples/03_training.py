@@ -1,5 +1,15 @@
 """Example 3 - training: evolve `config.sampling.temperature` with MutationBeam.
 
+What this script illustrates:
+
+* a reference-free metric (length-band) used as the optimisation signal,
+* `MutationBeam` proposing typed mutations on a single allowed op
+  (`set_temperature`) and writing the winner back onto the seed in place,
+* live observer output: per-generation candidate proposals, their LLM
+  rationales, metric and judge scores, plus the temperature actually
+  carried into the next generation,
+* `agent.hash_content` shifting once the seed's config has been mutated.
+
 Run modes:
 
     uv run python examples/03_training.py
@@ -19,6 +29,7 @@ from operad import evaluate
 from operad.agents import Reasoner
 from operad.agents.reasoning.components import Critic
 from operad.algorithms import MutationBeam
+from operad.core.agent import Agent
 from operad.core.config import Resilience, Sampling
 from operad.runtime import set_limit
 from operad.runtime.events import AlgorithmEvent
@@ -28,21 +39,16 @@ from _config import local_config, server_reachable
 from utils import (
     LengthBandMetric,
     attach_dashboard,
-    op_histogram,
     parse_dashboard_target,
+    print_agent_card,
+    print_dataset_table,
+    print_mutation_generation,
     print_panel,
     print_rule,
     rich_available,
-    score_stats,
 )
 
-try:
-    from rich.console import Console
-    from rich.table import Table
-
-    _RICH = rich_available()
-except ImportError:
-    _RICH = False
+_RICH = rich_available()
 
 
 _SCRIPT = "03_training"
@@ -58,55 +64,29 @@ class Answer(BaseModel):
     text: str = Field(default="", description="The answer body.")
 
 
-class _GenerationLogger:
-    def __init__(self) -> None:
-        self.rows: list[dict[str, Any]] = []
+class _LiveLogger:
+    """Print each generation's candidate detail as soon as it is emitted."""
+
+    def __init__(self, seed: Agent[Any, Any]) -> None:
+        self._seed = seed
+        self.history: list[dict[str, Any]] = []
 
     async def on_event(self, event: Event) -> None:
         if not isinstance(event, AlgorithmEvent) or event.kind != "generation":
             return
-        candidates = event.payload.get("candidates", [])
-        metric_scores = [float(c.get("metric_score", 0.0)) for c in candidates]
-        best, mean, spread = score_stats(metric_scores)
-        self.rows.append(
-            {
-                "gen": int(event.payload.get("generation_index", -1)),
-                "best": best,
-                "mean": mean,
-                "spread": spread,
-                "ops": [str(c.get("op", "")) for c in candidates],
-                "selected": list(event.payload.get("selected_candidate_ids", [])),
-            }
+        gen_idx = int(event.payload.get("generation_index", -1))
+        candidates = list(event.payload.get("candidates", []))
+        selected = list(event.payload.get("selected_candidate_ids", []))
+        temp_after = float(self._seed.config.sampling.temperature)
+        print_mutation_generation(
+            generation_index=gen_idx,
+            candidates=candidates,
+            selected_ids=selected,
+            state_after=f"seed temperature after gen {gen_idx}: {temp_after:.2f}",
         )
-
-
-def _print_generation_table(logger: _GenerationLogger) -> None:
-    if not _RICH:
-        print("\ngen | best | mean | spread | ops | selected")
-        for row in logger.rows:
-            print(
-                f"  {row['gen']:>2} | {row['best']:.3f} | {row['mean']:.3f} | "
-                f"{row['spread']:.3f} | {op_histogram(row['ops'])} | {row['selected']}"
-            )
-        return
-
-    table = Table(title="MutationBeam generations", border_style="cyan")
-    table.add_column("gen", justify="right")
-    table.add_column("best", justify="right")
-    table.add_column("mean", justify="right")
-    table.add_column("spread", justify="right")
-    table.add_column("ops", justify="left")
-    table.add_column("selected", justify="left")
-    for row in logger.rows:
-        table.add_row(
-            str(row["gen"]),
-            f"{row['best']:.3f}",
-            f"{row['mean']:.3f}",
-            f"{row['spread']:.3f}",
-            op_histogram(row["ops"]),
-            str(row["selected"]),
+        self.history.append(
+            {"gen": gen_idx, "selected": selected, "temperature": temp_after}
         )
-    Console(width=120).print(table)
 
 
 async def main(args: argparse.Namespace) -> None:
@@ -152,12 +132,23 @@ async def main(args: argparse.Namespace) -> None:
         ),
     )
     await seed.abuild()
+    print_agent_card(seed, title="Seed agent")
 
     metric = LengthBandMetric(lo=_TARGET_LO, hi=_TARGET_HI, over_decay=300)
     dataset = [
         (Question(text="Why is the sky blue?"), Answer()),
         (Question(text="What causes ocean tides?"), Answer()),
     ]
+    print_dataset_table(dataset, title="Eval dataset")
+    print_panel(
+        "Metric",
+        (
+            f"name:               {metric.name}\n"
+            f"target band:        len(answer.text) in [{_TARGET_LO}, {_TARGET_HI}] chars\n"
+            f"over-length decay:  {metric.over_decay} chars\n"
+            "expected side:      empty (reference-free length scorer)"
+        ),
+    )
 
     seed_report = await evaluate(seed, dataset, [metric])
     seed_score = float(seed_report.summary[metric.name])
@@ -167,12 +158,10 @@ async def main(args: argparse.Namespace) -> None:
     seed_answer = (await seed(sample_question)).response.text
 
     print_panel(
-        "Seed",
+        "Seed evaluation",
         (
-            f"agent class:        {type(seed).__name__}\n"
-            f"target length band: [{_TARGET_LO}, {_TARGET_HI}] chars\n"
             f"seed temperature:   {seed_temp:.2f}\n"
-            f"seed length:        {len(seed_answer)} chars\n"
+            f"seed length:        {len(seed_answer)} chars (target [{_TARGET_LO}, {_TARGET_HI}])\n"
             f"seed score:         {seed_score:.3f}\n"
             f"seed hash:          {seed_hash}\n"
             f"sample answer:      {seed_answer[:200]}"
@@ -200,19 +189,20 @@ async def main(args: argparse.Namespace) -> None:
             f"allowed_mutations: set_temperature\n"
             f"branches/parent:   {args.branches}\n"
             f"generations:       {args.generations}\n"
+            f"frontier_size:     1\n"
+            f"top_k:             1\n"
+            "judge:             Critic (LLM-as-judge picks the strongest proposal)\n"
             "selection:         Beam + judge (top_k=1)"
         ),
     )
 
-    print_rule("Stage 3 - fit")
-    logger = _GenerationLogger()
+    print_rule("Stage 3 - fit (live per-generation candidate detail)")
+    logger = _LiveLogger(seed)
     registry.register(logger)
     try:
         await optimizer.run(generations=args.generations)
     finally:
         registry.unregister(logger)
-
-    _print_generation_table(logger)
 
     print_rule("Stage 4 - final evaluation")
     final_report = await evaluate(seed, dataset, [metric])
@@ -220,16 +210,21 @@ async def main(args: argparse.Namespace) -> None:
     final_temp = seed.config.sampling.temperature
     final_hash = seed.hash_content
     final_answer = (await seed(sample_question)).response.text
+    delta = final_score - seed_score
+    delta_arrow = "+" if delta >= 0 else ""
 
     print_panel(
         "Result",
         (
-            f"seed temperature:   {seed_temp:.2f}  ->  final: {final_temp:.2f}\n"
-            f"seed length:        {len(seed_answer)} chars  ->  final: {len(final_answer)} chars\n"
-            f"seed score:         {seed_score:.3f}  ->  final: {final_score:.3f}\n"
-            f"seed hash:          {seed_hash}\n"
-            f"final hash:         {final_hash}\n"
-            f"hash changed:       {seed_hash != final_hash}\n\n"
+            f"temperature:   {seed_temp:.2f}  ->  {final_temp:.2f}  "
+            f"(delta {final_temp - seed_temp:+.2f})\n"
+            f"answer length: {len(seed_answer)} chars  ->  {len(final_answer)} chars\n"
+            f"score:         {seed_score:.3f}  ->  {final_score:.3f}  "
+            f"({delta_arrow}{delta:.3f})\n"
+            f"hash:          {seed_hash}\n"
+            f"               -> {final_hash}\n"
+            f"hash changed:  {seed_hash != final_hash} "
+            f"(only `config.sampling.temperature` was mutated)\n\n"
             f"sample answer at final temperature:\n  {final_answer[:_TARGET_HI + 50]}"
             + ("..." if len(final_answer) > _TARGET_HI + 50 else "")
         ),
