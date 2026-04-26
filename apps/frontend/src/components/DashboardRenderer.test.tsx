@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@json-render/react", () => ({
   Renderer: () => null,
+  JSONUIProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 vi.mock("@/stores", () => ({
