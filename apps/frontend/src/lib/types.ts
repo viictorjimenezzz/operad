@@ -228,6 +228,29 @@ export const GradientEntry = z.object({
 });
 export type GradientEntry = z.infer<typeof GradientEntry>;
 
+export const SweepCell = z.object({
+  cell_index: z.number(),
+  parameters: z.record(z.unknown()),
+  score: z.number().nullable(),
+});
+export type SweepCell = z.infer<typeof SweepCell>;
+
+export const SweepAxis = z.object({
+  name: z.string(),
+  values: z.array(z.unknown()),
+});
+export type SweepAxis = z.infer<typeof SweepAxis>;
+
+export const SweepSnapshot = z.object({
+  cells: z.array(SweepCell),
+  axes: z.array(SweepAxis),
+  score_range: z.tuple([z.number(), z.number()]).nullable(),
+  best_cell_index: z.number().nullable(),
+  total_cells: z.number(),
+  finished: z.boolean(),
+});
+export type SweepSnapshot = z.infer<typeof SweepSnapshot>;
+
 export const ProgressSnapshot = z.object({
   epoch: z.number(),
   epochs_total: z.number().nullable(),

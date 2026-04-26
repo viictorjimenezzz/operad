@@ -1,4 +1,7 @@
 import { AgentGraph } from "@/shared/charts/agent-graph";
+import { SweepBestCellCard } from "@/shared/charts/sweep-best-cell-card";
+import { SweepCostTotalizer } from "@/shared/charts/sweep-cost-totalizer";
+import { SweepHeatmap } from "@/shared/charts/sweep-heatmap";
 import { BeamCandidateChart } from "@/shared/charts/beam-candidate-chart";
 import { CheckpointTimeline } from "@/shared/charts/checkpoint-timeline";
 import { ConvergenceCurve } from "@/shared/charts/convergence-curve";
@@ -165,6 +168,15 @@ export const registry: ComponentRegistry = {
   },
   CheckpointTimeline: ({ element }) => (
     <CheckpointTimeline data={(element.props as { data?: unknown }).data} />
+  ),
+  SweepHeatmap: ({ element }) => (
+    <SweepHeatmap data={(element.props as { data?: unknown }).data} />
+  ),
+  SweepBestCellCard: ({ element }) => (
+    <SweepBestCellCard data={(element.props as { data?: unknown }).data} />
+  ),
+  SweepCostTotalizer: ({ element }) => (
+    <SweepCostTotalizer data={(element.props as { data?: unknown }).data} />
   ),
   AgentGraph: ({ element }) => {
     const p = element.props as { data?: unknown; dataMutations?: unknown };

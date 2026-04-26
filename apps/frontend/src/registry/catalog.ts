@@ -66,6 +66,9 @@ export const catalog = createCatalog({
     IterationProgression: {
       props: z.object({ source: sourceProp, phaseFilter: z.string().optional() }),
     },
+    SweepHeatmap: { props: z.object({ source: sourceProp }) },
+    SweepBestCellCard: { props: z.object({ source: sourceProp }) },
+    SweepCostTotalizer: { props: z.object({ source: sourceProp }) },
     AgentGraph: {
       props: z.object({
         source: sourceProp,
