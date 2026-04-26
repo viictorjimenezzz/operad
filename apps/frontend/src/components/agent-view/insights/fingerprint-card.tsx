@@ -1,57 +1,106 @@
-import { HashChip } from "@/components/agent-view/metadata/hash-chip";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { AgentInvocation, RunSummary } from "@/lib/types";
-import { useUIStore } from "@/stores";
+import { hashColor, hashColorDim } from "@/lib/hash-color";
+import { truncateMiddle } from "@/lib/utils";
+import { useUIStore } from "@/stores/ui";
+import { Copy, Search } from "lucide-react";
+import { useMemo, useState } from "react";
 
-interface FingerprintCardProps {
-  summary: RunSummary | null | undefined;
-  latest: AgentInvocation | null;
+export interface FingerprintCardProps {
+  hashes: Record<string, string | null>;
 }
 
-export function FingerprintCard({ summary, latest }: FingerprintCardProps) {
+const HASH_KEYS = [
+  "hash_model",
+  "hash_prompt",
+  "hash_graph",
+  "hash_input",
+  "hash_output_schema",
+  "hash_config",
+  "hash_content",
+] as const;
+
+export function FingerprintCard({ hashes }: FingerprintCardProps) {
   const openDrawer = useUIStore((s) => s.openDrawer);
-  const hashes: Array<{ key: string; value: string | null | undefined }> = [
-    { key: "hash_model", value: null },
-    { key: "hash_prompt", value: latest?.hash_prompt },
-    { key: "hash_graph", value: null },
-    { key: "hash_input", value: latest?.hash_input },
-    { key: "hash_output_schema", value: null },
-    { key: "hash_config", value: null },
-    { key: "hash_content", value: latest?.hash_content },
-  ];
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const titleHash = hashes.hash_content ?? hashes.hash_prompt ?? "fingerprint";
+  const titleStyle = useMemo(
+    () => ({
+      backgroundColor: hashColorDim(titleHash),
+      borderColor: hashColor(titleHash),
+    }),
+    [titleHash],
+  );
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>fingerprint</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          fingerprint
+          <span
+            className="inline-flex rounded border px-1.5 py-0.5 font-mono text-[0.64rem] normal-case"
+            style={titleStyle}
+          >
+            {truncateMiddle(titleHash, 8)}
+          </span>
+        </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-1">
-        {hashes.map((h) => (
-          <div key={h.key} className="flex items-center justify-between gap-2 text-[11px]">
-            <span className="text-muted">{h.key}</span>
-            <div className="flex items-center gap-1">
-              <HashChip hash={h.value} />
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-5 px-1 text-[10px] text-muted"
-                title="find runs (soon)"
-                onClick={() => {
-                  if (!h.value) return;
-                  openDrawer("events", {
-                    hash: h.key,
-                    value: h.value,
-                    soon: true,
-                    runId: summary?.run_id,
-                  });
+      <CardContent className="space-y-2">
+        {HASH_KEYS.map((key) => {
+          const value = hashes[key] ?? null;
+          const style = value
+            ? {
+                backgroundColor: hashColorDim(value),
+                borderColor: hashColor(value),
+              }
+            : undefined;
+          return (
+            <div key={key} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2">
+              <span className="font-mono text-[0.68rem] text-muted">{key}</span>
+              <span
+                className="inline-flex min-w-[72px] rounded border px-1.5 py-0.5 font-mono text-[0.68rem] text-text"
+                style={style}
+                title={value ?? "missing"}
+              >
+                {value ? truncateMiddle(value, 10) : "—"}
+              </span>
+              <button
+                type="button"
+                className="rounded border border-border p-1 text-muted hover:text-text disabled:opacity-40"
+                aria-label={`copy ${key}`}
+                disabled={!value}
+                onClick={async () => {
+                  if (!value) return;
+                  try {
+                    await navigator.clipboard.writeText(value);
+                    setCopiedKey(key);
+                    setTimeout(
+                      () => setCopiedKey((current) => (current === key ? null : current)),
+                      1100,
+                    );
+                  } catch {
+                    setCopiedKey(null);
+                  }
                 }}
               >
-                soon
-              </Button>
+                <Copy size={12} />
+              </button>
+              <button
+                type="button"
+                className="rounded border border-border p-1 text-muted hover:text-text disabled:opacity-40"
+                aria-label={`find runs for ${key}`}
+                title="find runs (soon)"
+                disabled={!value}
+                onClick={() => {
+                  if (!value) return;
+                  openDrawer("find-runs", { hash: key, value });
+                }}
+              >
+                <Search size={12} />
+              </button>
             </div>
-          </div>
-        ))}
+          );
+        })}
+        {copiedKey ? <div className="text-[0.68rem] text-ok">copied {copiedKey}</div> : null}
       </CardContent>
     </Card>
   );

@@ -3,82 +3,154 @@ import { CostLatencySparklines } from "@/components/agent-view/insights/cost-lat
 import { DriftStrip } from "@/components/agent-view/insights/drift-strip";
 import { FingerprintCard } from "@/components/agent-view/insights/fingerprint-card";
 import { ValueDistribution } from "@/components/agent-view/insights/value-distribution";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { dashboardApi } from "@/lib/api/dashboard";
-import type { AgentInvocationsResponse, AgentMetaResponse, RunSummary } from "@/lib/types";
+import {
+  AgentMetaResponse,
+  type RunInvocation,
+  RunInvocationsResponse,
+  RunSummary,
+} from "@/lib/types";
 import { useQuery } from "@tanstack/react-query";
 
-interface AgentInsightsRowProps {
-  summary: RunSummary | null | undefined;
-  invocations: AgentInvocationsResponse | null | undefined;
+export interface AgentInsightsRowProps {
+  summary?: unknown;
+  invocations?: unknown;
+  runId?: string | null;
+  dataSummary?: unknown;
+  dataInvocations?: unknown;
 }
 
-function inferInputValues(
-  invocations: AgentInvocationsResponse | null | undefined,
-): Record<string, unknown[]> {
-  // Backend root invocations endpoint does not include input payloads; keep placeholder buckets for now.
-  const fields: Record<string, unknown[]> = {};
-  for (const row of invocations?.invocations ?? []) {
-    const key = row.status;
-    const list = fields[key] ?? [];
-    list.push(row.latency_ms ?? 0);
-    fields[key] = list;
+export function AgentInsightsRow(props: AgentInsightsRowProps) {
+  const rawSummary = props.dataSummary ?? props.summary;
+  const rawInvocations = props.dataInvocations ?? props.invocations;
+  const summaryParsed = RunSummary.safeParse(rawSummary);
+  if (!summaryParsed.success) {
+    return (
+      <ContractError
+        title="invalid summary contract"
+        issues={summaryParsed.error.issues.map((i) => i.path.join("."))}
+      />
+    );
   }
-  return fields;
-}
+  const invocationsParsed = RunInvocationsResponse.safeParse(rawInvocations);
+  if (!invocationsParsed.success) {
+    return (
+      <ContractError
+        title="invalid invocations contract"
+        issues={invocationsParsed.error.issues.map((issue) => issue.path.join("."))}
+      />
+    );
+  }
 
-export function AgentInsightsRow({ summary, invocations }: AgentInsightsRowProps) {
-  const agentPath = invocations?.agent_path ?? summary?.root_agent_path ?? "";
+  const summary = summaryParsed.data;
+  const invocations = invocationsParsed.data.invocations;
+  const rootPath = summary.root_agent_path ?? invocationsParsed.data.agent_path ?? null;
+  const runId = props.runId ?? summary.run_id;
 
-  const metaQuery = useQuery<AgentMetaResponse>({
-    queryKey: ["agent-meta", summary?.run_id, agentPath],
-    queryFn: async () => {
-      if (!summary?.run_id || !agentPath) throw new Error("missing run or path");
-      return dashboardApi.agentMeta(summary.run_id, agentPath);
+  const metaQuery = useQuery({
+    queryKey: ["run", "agent-meta", runId, rootPath] as const,
+    queryFn: () => {
+      if (!runId || !rootPath) throw new Error("runId and rootPath are required");
+      return dashboardApi.agentMeta(runId, rootPath);
     },
-    enabled: Boolean(summary?.run_id && agentPath),
-    staleTime: 30_000,
+    enabled: !!runId && !!rootPath,
+    retry: false,
   });
+  const meta = parseMeta(metaQuery.data);
 
-  const latest = invocations?.invocations.at(-1) ?? null;
-  const valueMap = inferInputValues(invocations);
+  const first = invocations[0] ?? null;
+  const last = invocations[invocations.length - 1] ?? null;
+  const hashes: Record<string, string | null> = {
+    hash_model: last?.hash_model ?? first?.hash_model ?? null,
+    hash_prompt: last?.hash_prompt ?? first?.hash_prompt ?? null,
+    hash_graph: last?.hash_graph ?? first?.hash_graph ?? null,
+    hash_input: last?.hash_input ?? first?.hash_input ?? null,
+    hash_output_schema: last?.hash_output_schema ?? first?.hash_output_schema ?? null,
+    hash_config: last?.hash_config ?? first?.hash_config ?? null,
+    hash_content: last?.hash_content ?? first?.hash_content ?? null,
+  };
+
+  const allDistributions = toInputDistributions(invocations);
+  const distributions = allDistributions.slice(0, 4);
+  const hiddenCount = Math.max(0, allDistributions.length - distributions.length);
 
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
-        <FingerprintCard summary={summary} latest={latest} />
-        <Card>
-          <CardHeader>
-            <CardTitle>prompt drift</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DriftStrip agentPath={agentPath} invocations={invocations?.invocations ?? []} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>backend + config</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BackendBadges meta={metaQuery.data} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>cost + latency</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CostLatencySparklines invocations={invocations?.invocations ?? []} />
-          </CardContent>
-        </Card>
+    <div className="space-y-3">
+      <div className="grid gap-3 xl:grid-cols-2">
+        <FingerprintCard hashes={hashes} />
+        <DriftStrip invocations={invocations} rootPath={rootPath} summary={summary} />
+        <BackendBadges invocations={invocations} summaryRaw={rawSummary} meta={meta} />
+        <CostLatencySparklines invocations={invocations} />
       </div>
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
-        {Object.entries(valueMap)
-          .slice(0, 4)
-          .map(([name, values]) => (
-            <ValueDistribution key={name} name={name} values={values} />
-          ))}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {distributions.length === 0 ? (
+          <Card className="md:col-span-2 xl:col-span-4">
+            <CardContent className="text-[0.72rem] text-muted">
+              no input-shape data available from invocations
+            </CardContent>
+          </Card>
+        ) : (
+          distributions.map((entry) => (
+            <ValueDistribution
+              key={entry.label}
+              label={entry.label}
+              values={entry.values}
+              agentPath={rootPath}
+              side="in"
+            />
+          ))
+        )}
       </div>
+      {hiddenCount > 0 ? (
+        <p className="m-0 text-[0.68rem] text-muted">+{hiddenCount} more fields</p>
+      ) : null}
+      {metaQuery.error ? (
+        <p className="m-0 text-[0.68rem] text-warn">
+          agent meta unavailable; showing invocation-derived badges
+        </p>
+      ) : null}
     </div>
+  );
+}
+
+function parseMeta(value: unknown): AgentMetaResponse | null {
+  if (!value) return null;
+  const parsed = AgentMetaResponse.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+function toInputDistributions(
+  invocations: RunInvocation[],
+): Array<{ label: string; values: unknown[] }> {
+  const map = new Map<string, unknown[]>();
+  for (const invocation of invocations) {
+    if (
+      !invocation.input ||
+      typeof invocation.input !== "object" ||
+      Array.isArray(invocation.input)
+    )
+      continue;
+    for (const [key, value] of Object.entries(invocation.input as Record<string, unknown>)) {
+      const list = map.get(key) ?? [];
+      list.push(value);
+      map.set(key, list);
+    }
+  }
+  return [...map.entries()].map(([label, values]) => ({ label, values }));
+}
+
+function ContractError({ title, issues }: { title: string; issues: string[] }) {
+  return (
+    <Card>
+      <CardContent className="space-y-1 p-3">
+        <p className="m-0 text-[0.75rem] font-semibold text-err">{title}</p>
+        {issues.slice(0, 5).map((issue) => (
+          <p key={issue} className="m-0 font-mono text-[0.68rem] text-muted">
+            {issue || "(root)"}
+          </p>
+        ))}
+      </CardContent>
+    </Card>
   );
 }

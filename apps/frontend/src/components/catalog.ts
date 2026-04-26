@@ -101,6 +101,17 @@ export const catalog = createCatalog({
       props: z.object({
         sourceSummary: sourceExpr,
         sourceInvocations: sourceExpr,
+        runId: z.string().optional(),
+        summary: z.unknown().optional(),
+        invocations: z.unknown().optional(),
+      }),
+    },
+    ValueDistribution: {
+      props: z.object({
+        source: sourceExpr,
+        label: z.string().optional(),
+        agentPath: z.string().optional(),
+        side: z.enum(["in", "out"]).optional(),
       }),
     },
     InteractiveGraph: {

@@ -1,68 +1,120 @@
-import type { AgentInvocation } from "@/lib/types";
-import { formatDurationMs, formatTokens } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import type { RunInvocation } from "@/lib/types";
+import { formatCost, formatDurationMs, formatTokens } from "@/lib/utils";
+import { useMemo } from "react";
 
-interface CostLatencySparklinesProps {
-  invocations: AgentInvocation[];
+export interface CostLatencySparklinesProps {
+  invocations: RunInvocation[];
 }
 
-function points(values: number[], w = 120, h = 24): string {
-  if (values.length === 0) return "";
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  return values
-    .map((v, i) => {
-      const x = (i / Math.max(1, values.length - 1)) * w;
-      const y = h - ((v - min) / span) * h;
-      return `${x},${y}`;
-    })
-    .join(" ");
+interface SparklineProps {
+  label: string;
+  values: number[];
+  stroke: string;
+  formatter: (value: number) => string;
 }
 
-function Spark({ label, values, stroke }: { label: string; values: number[]; stroke: string }) {
-  if (values.length < 2) {
+export function CostLatencySparklines({ invocations }: CostLatencySparklinesProps) {
+  const series = useMemo(
+    () => ({
+      cost: invocations.map((entry) => entry.cost_usd ?? 0),
+      latency: invocations.map((entry) => entry.latency_ms ?? 0),
+      tokens: invocations.map(
+        (entry) => (entry.prompt_tokens ?? 0) + (entry.completion_tokens ?? 0),
+      ),
+    }),
+    [invocations],
+  );
+
+  if (invocations.length < 2) {
     return (
-      <div className="rounded border border-border bg-bg-2 px-2 py-1 text-[11px] text-muted">
-        {label}: not enough data
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>cost / latency / tokens</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <EmptyState title="not enough data" description="at least two invocations are required" />
+        </CardContent>
+      </Card>
     );
   }
+
+  const totalCost = series.cost.reduce((sum, value) => sum + value, 0);
+  const avgLatency = series.latency.reduce((sum, value) => sum + value, 0) / series.latency.length;
+  const totalTokens = series.tokens.reduce((sum, value) => sum + value, 0);
+
   return (
-    <div className="rounded border border-border bg-bg-2 px-2 py-1">
-      <div className="text-[11px] text-muted">{label}</div>
-      <svg
-        width="120"
-        height="24"
-        viewBox="0 0 120 24"
-        role="img"
-        aria-label={`${label} sparkline`}
-      >
-        <polyline fill="none" stroke={stroke} strokeWidth="1.5" points={points(values)} />
+    <Card>
+      <CardHeader>
+        <CardTitle>cost / latency / tokens</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
+          <Sparkline
+            label="cost"
+            values={series.cost}
+            stroke="hsl(145 66% 46%)"
+            formatter={(value) => formatCost(value)}
+          />
+          <Sparkline
+            label="latency"
+            values={series.latency}
+            stroke="hsl(30 88% 53%)"
+            formatter={(value) => formatDurationMs(value)}
+          />
+          <Sparkline
+            label="tokens"
+            values={series.tokens}
+            stroke="hsl(208 83% 55%)"
+            formatter={(value) => formatTokens(value)}
+          />
+        </div>
+        <p className="m-0 text-[0.68rem] text-muted">
+          total cost: {formatCost(totalCost)} · avg latency: {formatDurationMs(avgLatency)} ·{" "}
+          {formatTokens(totalTokens)} tokens
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Sparkline({ label, values, stroke, formatter }: SparklineProps) {
+  const points = buildPoints(values, 120, 24);
+  return (
+    <div className="rounded border border-border bg-bg-2 px-2 py-1.5">
+      <div className="mb-1 text-[0.65rem] uppercase tracking-[0.1em] text-muted">{label}</div>
+      <svg width="100%" height={24} viewBox="0 0 120 24" className="block">
+        <title>{`${label} sparkline`}</title>
+        <polyline fill="none" stroke={stroke} strokeWidth={1.8} points={points} />
+        {values.map((value, index) => {
+          const x = values.length === 1 ? 0 : (index / (values.length - 1)) * 120;
+          const y = pointY(value, values, 24);
+          return (
+            <circle key={`${label}-${index}`} cx={x} cy={y} r={1.6} fill={stroke}>
+              <title>{`#${index + 1}: ${formatter(value)}`}</title>
+            </circle>
+          );
+        })}
       </svg>
     </div>
   );
 }
 
-export function CostLatencySparklines({ invocations }: CostLatencySparklinesProps) {
-  const latency = invocations.map((v) => v.latency_ms ?? 0);
-  const tokens = invocations.map((v) => (v.prompt_tokens ?? 0) + (v.completion_tokens ?? 0));
-  const cost = invocations.map(
-    (v) => ((v.prompt_tokens ?? 0) + (v.completion_tokens ?? 0)) / 1_000_000,
-  );
+function buildPoints(values: number[], width: number, height: number): string {
+  if (values.length === 0) return "";
+  return values
+    .map((value, index) => {
+      const x = values.length === 1 ? 0 : (index / (values.length - 1)) * width;
+      const y = pointY(value, values, height);
+      return `${x},${y}`;
+    })
+    .join(" ");
+}
 
-  const totalTokens = tokens.reduce((a, b) => a + b, 0);
-  const avgLatency = latency.length ? latency.reduce((a, b) => a + b, 0) / latency.length : 0;
-
-  return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <Spark label="cost" values={cost} stroke="var(--color-ok)" />
-        <Spark label="latency" values={latency} stroke="var(--color-warn)" />
-        <Spark label="tokens" values={tokens} stroke="var(--color-accent)" />
-      </div>
-      <div className="text-[11px] text-muted">
-        total tokens: {formatTokens(totalTokens)} · avg latency: {formatDurationMs(avgLatency)}
-      </div>
-    </div>
-  );
+function pointY(value: number, values: number[], height: number): number {
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(1e-9, max - min);
+  return height - ((value - min) / span) * height;
 }

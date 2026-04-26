@@ -6,7 +6,12 @@ export function hashToHue(value: string): number {
   return Math.abs(hash) % 360;
 }
 
-export function hashToColor(value: string, alpha = 0.25): string {
+export function hashColor(value: string): string {
   const hue = hashToHue(value);
-  return `hsla(${hue}, 72%, 55%, ${alpha})`;
+  return `hsl(${hue} 70% 42%)`;
+}
+
+export function hashColorDim(value: string): string {
+  const hue = hashToHue(value);
+  return `hsl(${hue} 60% 18%)`;
 }

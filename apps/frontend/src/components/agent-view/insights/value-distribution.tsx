@@ -1,82 +1,142 @@
-import { cn } from "@/lib/utils";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { formatNumber } from "@/lib/utils";
+import { useUIStore } from "@/stores/ui";
 
-interface ValueDistributionProps {
-  name: string;
+export interface ValueDistributionProps {
+  label: string;
   values: unknown[];
+  agentPath?: string | null;
+  side?: "in" | "out";
   className?: string;
 }
 
-function isNumeric(values: unknown[]): values is number[] {
-  return values.length > 0 && values.every((v) => typeof v === "number" && Number.isFinite(v));
+interface CategoryRow {
+  label: string;
+  count: number;
 }
 
-function histogram(values: number[], bins = 8): number[] {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  if (min === max) return [values.length];
-  const width = (max - min) / bins;
-  const out = Array.from({ length: bins }, () => 0);
-  for (const v of values) {
-    const idx = Math.min(bins - 1, Math.floor((v - min) / width));
-    out[idx] = (out[idx] ?? 0) + 1;
-  }
-  return out;
-}
-
-export function ValueDistribution({ name, values, className }: ValueDistributionProps) {
-  const usable = values.filter((v) => v != null).slice(-80);
-  if (usable.length === 0) {
+export function ValueDistribution({
+  label,
+  values,
+  agentPath,
+  side = "in",
+  className,
+}: ValueDistributionProps) {
+  const openDrawer = useUIStore((s) => s.openDrawer);
+  if (values.length === 0) {
     return (
-      <div className={cn("rounded border border-border bg-bg-2 px-2 py-1.5", className)}>
-        <div className="text-[11px] text-muted">{name}</div>
-        <div className="text-[11px] text-muted-2">no recent values</div>
-      </div>
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle>{label}</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <EmptyState title="no values yet" />
+        </CardContent>
+      </Card>
     );
   }
 
-  if (isNumeric(usable)) {
-    const bins = histogram(usable);
-    const top = Math.max(...bins);
+  const numeric = values.every((value) => typeof value === "number" && Number.isFinite(value));
+  if (numeric) {
+    const nums = values as number[];
+    const min = Math.min(...nums);
+    const max = Math.max(...nums);
+    const avg = nums.reduce((sum, n) => sum + n, 0) / nums.length;
+    const points = sparkPoints(nums, 180, 38);
     return (
-      <div className={cn("rounded border border-border bg-bg-2 px-2 py-1.5", className)}>
-        <div className="mb-1 text-[11px] text-muted">{name}</div>
-        <div className="flex h-8 items-end gap-0.5">
-          {bins.map((v, i) => (
-            <div
-              key={`${name}:${i}`}
-              className="flex-1 rounded-sm bg-accent-dim"
-              style={{ height: `${(v / Math.max(1, top)) * 100}%` }}
+      <Card className={className}>
+        <CardHeader>
+          <CardTitle>{label}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <svg width="100%" height={38} viewBox="0 0 180 38" className="block">
+            <title>{`${label} numeric distribution`}</title>
+            <polyline
+              fill="none"
+              stroke="var(--color-accent)"
+              strokeWidth={1.8}
+              points={points.map((point) => `${point.x},${point.y}`).join(" ")}
             />
-          ))}
-        </div>
-      </div>
+          </svg>
+          <div className="text-[0.68rem] text-muted">
+            min {formatNumber(min)} · avg {formatNumber(avg)} · max {formatNumber(max)}
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
+  const stringValues = values.map(toCategoryLabel);
   const counts = new Map<string, number>();
-  for (const raw of usable) {
-    const key = typeof raw === "string" ? raw : JSON.stringify(raw);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+  for (const item of stringValues) {
+    counts.set(item, (counts.get(item) ?? 0) + 1);
   }
-  const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const max = top[0]?.[1] ?? 1;
+  const rows: CategoryRow[] = [...counts.entries()]
+    .map(([name, count]) => ({ label: name, count }))
+    .sort((a, b) => b.count - a.count);
+  const highCardinality = rows.length > 12;
+  const topRows = rows.slice(0, 5);
+  const maxCount = Math.max(...topRows.map((row) => row.count), 1);
 
   return (
-    <div className={cn("rounded border border-border bg-bg-2 px-2 py-1.5", className)}>
-      <div className="mb-1 text-[11px] text-muted">{name}</div>
-      <div className="space-y-1">
-        {top.map(([k, v]) => (
-          <div key={`${name}:${k}`} className="flex items-center gap-1">
-            <span className="max-w-[120px] truncate text-[10px] text-text" title={k}>
-              {k}
-            </span>
-            <div className="h-1.5 flex-1 rounded bg-bg-3">
-              <div className="h-full rounded bg-accent" style={{ width: `${(v / max) * 100}%` }} />
+    <Card className={className}>
+      <CardHeader>
+        <CardTitle>{label}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {highCardinality ? (
+          <button
+            type="button"
+            className="text-[0.72rem] text-accent hover:underline"
+            onClick={() => {
+              if (!agentPath) return;
+              openDrawer("values", { agentPath, attr: label, side });
+            }}
+          >
+            see all values ({rows.length} unique)
+          </button>
+        ) : null}
+        {topRows.map((row) => (
+          <div key={row.label} className="space-y-1">
+            <div className="flex items-center justify-between text-[0.68rem] text-muted">
+              <span className="truncate pr-2">{row.label}</span>
+              <span>{row.count}</span>
             </div>
-            <span className="text-[10px] text-muted">{v}</span>
+            <div className="h-1 rounded bg-bg-3">
+              <div
+                className="h-1 rounded bg-accent"
+                style={{ width: `${Math.max(6, (row.count / maxCount) * 100)}%` }}
+              />
+            </div>
           </div>
         ))}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
+}
+
+function sparkPoints(
+  values: number[],
+  width: number,
+  height: number,
+): Array<{ x: number; y: number }> {
+  if (values.length === 1) {
+    return [{ x: 0, y: height / 2 }];
+  }
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(1e-9, max - min);
+  return values.map((value, index) => ({
+    x: (index / (values.length - 1)) * width,
+    y: height - ((value - min) / span) * height,
+  }));
+}
+
+function toCategoryLabel(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value === null) return "null";
+  if (value === undefined) return "undefined";
+  return JSON.stringify(value);
 }

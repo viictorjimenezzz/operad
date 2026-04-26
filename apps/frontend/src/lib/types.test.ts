@@ -12,6 +12,7 @@ import {
   IoGraphResponse,
   MutationsMatrix,
   ProgressSnapshot,
+  RunInvocationsResponse,
   RunSummary,
   SlotOccupancyEnvelope,
   StatsUpdateEnvelope,
@@ -110,6 +111,57 @@ describe("RunSummary", () => {
     });
     expect(summary.algorithm_path).toBe("EvoGradient");
     expect(summary.cost).toBeUndefined();
+  });
+});
+
+describe("agent-view contracts", () => {
+  it("parses run invocations payload", () => {
+    const parsed = RunInvocationsResponse.parse({
+      agent_path: "Root",
+      invocations: [
+        {
+          id: "inv-1",
+          started_at: 100,
+          finished_at: 101,
+          latency_ms: 1000,
+          prompt_tokens: 20,
+          completion_tokens: 10,
+          hash_prompt: "a1b2",
+          hash_input: "c3d4",
+          hash_content: "z9y8",
+          status: "ok",
+        },
+      ],
+    });
+    expect(parsed.invocations[0]?.id).toBe("inv-1");
+  });
+
+  it("fails when invocation id is missing", () => {
+    expect(() =>
+      RunInvocationsResponse.parse({
+        agent_path: "Root",
+        invocations: [{ started_at: 100, hash_prompt: "a1", hash_input: "b2", hash_content: "c3" }],
+      }),
+    ).toThrow();
+  });
+
+  it("parses agent meta payload", () => {
+    const parsed = AgentMetaResponse.parse({
+      agent_path: "Root.reasoner",
+      class_name: "Reasoner",
+      kind: "leaf",
+      hash_content: "ffff",
+      config: {
+        backend: "openai",
+        model: "gpt-4o-mini",
+      },
+    });
+    expect(parsed.class_name).toBe("Reasoner");
+    expect(parsed.config.backend).toBe("openai");
+  });
+
+  it("fails when required meta fields are missing", () => {
+    expect(() => AgentMetaResponse.parse({ agent_path: "Root.reasoner" })).toThrow();
   });
 });
 
@@ -243,8 +295,8 @@ describe("agent-view shapes", () => {
         rules: [],
         examples: [],
         config: {},
-        input_schema: null,
-        output_schema: null,
+        input_schema: {},
+        output_schema: {},
         forward_in_overridden: false,
         forward_out_overridden: false,
         trainable_paths: [],
