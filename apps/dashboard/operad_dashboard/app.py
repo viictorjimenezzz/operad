@@ -24,6 +24,7 @@ from .benchmark_store import BenchmarkStore
 from .observer import WebDashboardObserver, serialize_event
 from .routes import benchmarks as benchmark_routes
 from .routes import checkpoints as checkpoints_routes
+from .routes import cassettes as cassettes_routes
 from .routes import debate as debate_routes
 from .routes import drift as drift_routes
 from .routes import fitness as fitness_routes
@@ -228,6 +229,7 @@ def create_app(
     app.include_router(gradients_routes.router)
     app.include_router(sweep_routes.router)
     app.include_router(benchmark_routes.router)
+    app.include_router(cassettes_routes.router)
 
     @app.get("/", response_class=HTMLResponse)
     async def index() -> HTMLResponse:

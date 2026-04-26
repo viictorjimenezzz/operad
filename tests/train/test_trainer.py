@@ -240,6 +240,15 @@ class _EpochEventCollector:
             self.batch_starts.append(event.payload.get("epoch"))
 
 
+class _AlgoEventCollector:
+    def __init__(self) -> None:
+        self.events: list[AlgorithmEvent] = []
+
+    async def on_event(self, event: object) -> None:
+        if isinstance(event, AlgorithmEvent):
+            self.events.append(event)
+
+
 async def test_fit_propagates_epoch_via_context_var(cfg: Any) -> None:
     leaf = await _built_leaf(cfg)
     loss = StubLoss()
@@ -256,6 +265,55 @@ async def test_fit_propagates_epoch_via_context_var(cfg: Any) -> None:
     assert set(col.batch_starts) == {0, 1}
     # After fit, the ContextVar resets to None.
     assert get_current_epoch() is None
+
+
+async def test_fit_emits_batch_gradient_and_checkpoint_payloads(
+    cfg: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    leaf = await _built_leaf(cfg)
+    loss = StubLoss(severities=[1.0])
+    opt = StubOptimizer(list(leaf.parameters()))
+    trainer = Trainer(leaf, opt, loss)
+    monkeypatch.setattr("operad.train.trainer.backward", _stub_backward_severity_one)
+
+    col = _AlgoEventCollector()
+    obs_registry.register(col)
+    try:
+        await trainer.fit(_loader(_dataset(n=1)), epochs=1)
+    finally:
+        obs_registry.unregister(col)
+
+    batch_events = [
+        e
+        for e in col.events
+        if e.algorithm_path == "Trainer" and e.kind == "batch_end"
+    ]
+    assert batch_events
+    assert isinstance(batch_events[0].payload["train_loss"], float)
+    assert "lr" in batch_events[0].payload
+
+    grad_events = [
+        e
+        for e in col.events
+        if e.algorithm_path == "Trainer" and e.kind == "gradient_applied"
+    ]
+    assert grad_events
+    assert isinstance(grad_events[0].payload["message"], str)
+    assert isinstance(grad_events[0].payload["severity"], float)
+    assert isinstance(grad_events[0].payload["target_paths"], list)
+    assert isinstance(grad_events[0].payload["by_field"], dict)
+    assert "applied_diff" in grad_events[0].payload
+
+    epoch_end = [
+        e
+        for e in col.events
+        if e.algorithm_path == "Trainer"
+        and e.kind == "iteration"
+        and e.payload.get("phase") == "epoch_end"
+    ]
+    assert epoch_end
+    assert "lr" in epoch_end[0].payload
+    assert isinstance(epoch_end[0].payload["parameter_snapshot"], dict)
 
 
 async def test_validation_runs_when_val_ds_supplied(cfg: Any) -> None:

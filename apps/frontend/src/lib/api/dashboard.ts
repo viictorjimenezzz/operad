@@ -3,10 +3,16 @@ import {
   BenchmarkIngestResponse,
   BenchmarkListItem,
   BenchmarkOkResponse,
+  CassetteDeterminismResponse,
+  CassettePreviewResponse,
+  CassetteReplayResponse,
+  CassetteSummary,
+  DebateRoundsResponse,
   DriftEntry,
   EvolutionResponse,
   FitnessEntry,
   GraphResponse,
+  IterationsResponse,
   Manifest,
   MutationsMatrix,
   ProgressSnapshot,
@@ -59,6 +65,14 @@ async function sendJson<T extends z.ZodTypeAny>(
   return parsed.data;
 }
 
+async function postJson<T extends z.ZodTypeAny>(
+  url: string,
+  body: unknown,
+  schema: T,
+): Promise<z.infer<T>> {
+  return sendJson("POST", url, schema, body);
+}
+
 export class HttpError extends Error {
   constructor(
     public status: number,
@@ -91,6 +105,8 @@ export const dashboardApi = {
     getJson(`/runs/${runId}/events?limit=${limit}`, RunEventsResponse),
   graph: (runId: string) => getJson(`/graph/${runId}`, GraphResponse),
   fitness: (runId: string) => getJson(`/runs/${runId}/fitness.json`, z.array(FitnessEntry)),
+  iterations: (runId: string) => getJson(`/runs/${runId}/iterations.json`, IterationsResponse),
+  debate: (runId: string) => getJson(`/runs/${runId}/debate.json`, DebateRoundsResponse),
   mutations: (runId: string) => getJson(`/runs/${runId}/mutations.json`, MutationsMatrix),
   drift: (runId: string) => getJson(`/runs/${runId}/drift.json`, z.array(DriftEntry)),
   progress: (runId: string) => getJson(`/runs/${runId}/progress.json`, ProgressSnapshot),
@@ -105,5 +121,19 @@ export const dashboardApi = {
     sendJson("DELETE", `/benchmarks/${benchmarkId}`, BenchmarkOkResponse),
   stats: () => getJson("/stats", StatsResponse),
   evolution: () => getJson("/evolution", EvolutionResponse),
+  cassettes: () => getJson("/cassettes", z.array(CassetteSummary)),
+  cassetteReplay: (params: { path: string; runIdOverride?: string; delayMs?: number }) =>
+    postJson(
+      `/cassettes/replay?delay_ms=${params.delayMs ?? 50}`,
+      { path: params.path, run_id_override: params.runIdOverride ?? null },
+      CassetteReplayResponse,
+    ),
+  cassetteDeterminism: (path: string) =>
+    postJson("/cassettes/determinism-check", { path }, CassetteDeterminismResponse),
+  cassettePreview: (path: string, limit = 100) =>
+    getJson(
+      `/cassettes/preview?path=${encodeURIComponent(path)}&limit=${limit}`,
+      CassettePreviewResponse,
+    ),
   manifest: () => getJson("/api/manifest", Manifest),
 } as const;
