@@ -6,6 +6,8 @@
  *   $queries.<name>[.path]   — TanStack query result by data-source name
  *   $run.events              — current run's event buffer (Zustand)
  *   $run.summary             — alias for $queries.summary if present
+ *   $expr:<fn>(<arg>)        — call a whitelisted helper, where <arg> is
+ *                              itself a source expression resolved first.
  *
  * Returns `undefined` if the path doesn't resolve (callers render an
  * empty/loading state rather than crashing).
@@ -18,9 +20,68 @@ export interface ResolveContext {
   runEvents: EventEnvelope[];
 }
 
+type Helper = (arg: unknown, ctx: ResolveContext) => unknown;
+
+function asObject(arg: unknown): Record<string, unknown> | null {
+  if (arg && typeof arg === "object" && !Array.isArray(arg)) {
+    return arg as Record<string, unknown>;
+  }
+  return null;
+}
+
+const HELPERS: Record<string, Helper> = {
+  latest: (arg) => {
+    if (Array.isArray(arg)) return arg[arg.length - 1] ?? null;
+    const obj = asObject(arg);
+    if (obj && Array.isArray(obj.invocations)) {
+      const arr = obj.invocations as unknown[];
+      return arr[arr.length - 1] ?? null;
+    }
+    return null;
+  },
+  count: (arg) => {
+    if (Array.isArray(arg)) return arg.length;
+    const obj = asObject(arg);
+    if (obj && Array.isArray(obj.invocations)) return (obj.invocations as unknown[]).length;
+    return 0;
+  },
+  hashes: (arg) => {
+    const rows = Array.isArray(arg) ? arg : (asObject(arg)?.invocations ?? []);
+    const last = (rows as Array<Record<string, unknown>>).at(-1) ?? null;
+    if (!last) return {};
+    return {
+      hash_model: last.hash_model ?? null,
+      hash_prompt: last.hash_prompt ?? null,
+      hash_graph: last.hash_graph ?? null,
+      hash_input: last.hash_input ?? null,
+      hash_output_schema: last.hash_output_schema ?? null,
+      hash_config: last.hash_config ?? null,
+      hash_content: last.hash_content ?? null,
+    };
+  },
+  pluck: (arg) => {
+    if (typeof arg !== "string") return undefined;
+    return arg;
+  },
+};
+
 export function resolveSource(expr: unknown, ctx: ResolveContext): unknown {
   if (typeof expr !== "string") return expr;
   if (!expr.startsWith("$")) return expr;
+
+  // $expr:<fn>(<inner>) — call a whitelisted helper.
+  if (expr.startsWith("$expr:")) {
+    const match = expr.match(/^\$expr:([a-zA-Z][a-zA-Z0-9_]*)\((.*)\)$/);
+    if (!match) return undefined;
+    const fn = match[1];
+    const innerExpr = match[2] ?? "";
+    if (!fn) return undefined;
+    const helper = HELPERS[fn];
+    if (!helper) return undefined;
+    const innerValue = resolveSource(innerExpr, ctx);
+    return helper(innerValue, ctx);
+  }
+
   const [head, ...rest] = expr.split(".");
   if (head === "$context") {
     return rest[0] !== undefined ? ctx.context[rest[0]] : ctx.context;

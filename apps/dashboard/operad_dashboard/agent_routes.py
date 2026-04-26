@@ -841,4 +841,181 @@ async def agent_events(
     return JSONResponse({"run_id": run_id, "events": filtered[-safe_limit:]})
 
 
+@router.get("/runs/by-hash")
+async def runs_by_hash(request: Request, hash_content: str = Query(...)) -> JSONResponse:
+    """Find runs whose root agent shares the given ``hash_content``.
+
+    Used by the dashboard to surface "sister runs" — instances of the
+    same Pipeline class with identical declared state. Walks the live
+    registry and (when present) the archive store.
+    """
+    target = hash_content.strip()
+    if not target:
+        return JSONResponse({"matches": []})
+
+    matches: list[dict[str, Any]] = []
+    obs = request.app.state.observer
+    for info in obs.registry.values():
+        last_hash = _latest_root_hash_content(info)
+        if last_hash and last_hash.startswith(target):
+            matches.append(info.summary())
+
+    store = getattr(request.app.state, "archive_store", None)
+    if store is not None:
+        # Best-effort scan; archive payloads include the same summaries.
+        try:
+            archived = store.list_runs(limit=200)
+        except Exception:
+            archived = []
+        for entry in archived:
+            summary = entry if isinstance(entry, dict) else None
+            if summary is None:
+                continue
+            invocations = summary.get("invocations") or []
+            if not isinstance(invocations, list):
+                continue
+            last = invocations[-1] if invocations else None
+            if not isinstance(last, dict):
+                continue
+            hc = last.get("hash_content")
+            if isinstance(hc, str) and hc.startswith(target):
+                matches.append(summary)
+
+    return JSONResponse({"matches": matches})
+
+
+def _latest_root_hash_content(info: RunInfo) -> str | None:
+    """Walk the run's events back-to-front to find the latest root agent
+    end event, and return the hash_content from its metadata if present."""
+    summary = info.summary()
+    root_path = summary.get("root_agent_path")
+    if not isinstance(root_path, str):
+        return None
+    for env in reversed(list(info.events)):
+        if env.get("type") != "agent_event":
+            continue
+        if env.get("kind") != "end":
+            continue
+        if env.get("agent_path") != root_path:
+            continue
+        meta = env.get("metadata")
+        if not isinstance(meta, dict):
+            continue
+        hc = meta.get("hash_content")
+        if isinstance(hc, str):
+            return hc
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Tab layout hint endpoint — backend can return a tailored JSON layout per
+# tab (overview / graph / invocations) for any run. Frontend ships its own
+# defaults and falls back when this endpoint 404s.
+# ---------------------------------------------------------------------------
+
+
+_DEFAULT_OVERVIEW_LAYOUT: dict[str, Any] = {
+    "algorithm": "agent.overview",
+    "version": 1,
+    "dataSources": {
+        "summary": {"endpoint": "/runs/$context.runId/summary"},
+        "invocations": {"endpoint": "/runs/$context.runId/invocations"},
+    },
+    "spec": {
+        "root": "page",
+        "elements": {
+            "page": {
+                "type": "Stack",
+                "props": {"gap": 16},
+                "children": ["latest", "more", "sections"],
+            },
+            "latest": {
+                "type": "LatestInvocationCard",
+                "props": {
+                    "sourceSummary": "$queries.summary",
+                    "sourceInvocations": "$queries.invocations",
+                    "runId": "$context.runId",
+                },
+            },
+            "more": {
+                "type": "InvocationsList",
+                "props": {
+                    "sourceSummary": "$queries.summary",
+                    "sourceInvocations": "$queries.invocations",
+                    "runId": "$context.runId",
+                    "skipLatest": True,
+                    "density": "compact",
+                },
+            },
+            "sections": {
+                "type": "Stack",
+                "props": {"gap": 8},
+                "children": [
+                    "repro",
+                    "backend",
+                    "config",
+                    "examples",
+                    "drift",
+                    "cost",
+                    "trainable",
+                    "sister",
+                ],
+            },
+            "repro": {
+                "type": "ReproducibilityBlock",
+                "props": {"sourceInvocations": "$queries.invocations"},
+            },
+            "backend": {
+                "type": "BackendBlock",
+                "props": {
+                    "sourceSummary": "$queries.summary",
+                    "sourceInvocations": "$queries.invocations",
+                    "runId": "$context.runId",
+                },
+            },
+            "config": {
+                "type": "ConfigBlock",
+                "props": {"sourceSummary": "$queries.summary", "runId": "$context.runId"},
+            },
+            "examples": {
+                "type": "ExamplesBlock",
+                "props": {"sourceSummary": "$queries.summary", "runId": "$context.runId"},
+            },
+            "drift": {
+                "type": "DriftBlock",
+                "props": {
+                    "sourceInvocations": "$queries.invocations",
+                    "runId": "$context.runId",
+                },
+            },
+            "cost": {
+                "type": "CostLatencyBlock",
+                "props": {"sourceInvocations": "$queries.invocations"},
+            },
+            "trainable": {
+                "type": "TrainableParamsBlock",
+                "props": {"sourceSummary": "$queries.summary", "runId": "$context.runId"},
+            },
+            "sister": {
+                "type": "SisterRunsBlock",
+                "props": {
+                    "sourceInvocations": "$queries.invocations",
+                    "runId": "$context.runId",
+                },
+            },
+        },
+    },
+}
+
+
+@router.get("/runs/{run_id}/layout/{tab}")
+async def run_tab_layout(request: Request, run_id: str, tab: str) -> JSONResponse:
+    ctx = _resolve_run_context(request, run_id)
+    if ctx is None:
+        return _not_found("unknown run_id")
+    if tab == "overview":
+        return JSONResponse(_DEFAULT_OVERVIEW_LAYOUT)
+    return _not_found("no layout for tab")
+
+
 __all__ = ["router"]

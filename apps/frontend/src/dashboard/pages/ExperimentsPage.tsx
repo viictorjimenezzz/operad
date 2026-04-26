@@ -4,7 +4,6 @@ import { MultiPromptDiff } from "@/components/charts/multi-prompt-diff";
 import { OperatorRadar } from "@/components/charts/operator-radar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { usePinnedRunSummaries } from "@/hooks/use-pinned-runs";
 import { useRuns } from "@/hooks/use-runs";
 import { dashboardApi } from "@/lib/api/dashboard";
 import type {
@@ -58,10 +57,8 @@ export function parseRunsParam(raw: string | null): string[] {
   return out;
 }
 
-export function resolveComparisonRunIds(raw: string | null, pinnedRunIds: string[]): string[] {
-  const fromUrl = parseRunsParam(raw);
-  if (fromUrl.length > 0) return fromUrl;
-  return [...new Set(pinnedRunIds.filter((id) => id.trim().length > 0))];
+export function resolveComparisonRunIds(raw: string | null): string[] {
+  return parseRunsParam(raw);
 }
 
 export function updateRunsSearch(current: URLSearchParams, nextRunIds: string[]): URLSearchParams {
@@ -232,9 +229,7 @@ export function ExperimentsPage() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
 
-  const pinned = usePinnedRunSummaries();
-  const pinnedIds = pinned?.map((r) => r.run_id) ?? [];
-  const selectedRunIds = resolveComparisonRunIds(searchParams.get("runs"), pinnedIds);
+  const selectedRunIds = resolveComparisonRunIds(searchParams.get("runs"));
 
   const allRuns = useRuns();
 
@@ -310,7 +305,6 @@ export function ExperimentsPage() {
     text: m.prompt,
   }));
 
-  const loadingPinned = !searchParams.get("runs") && pinned === undefined;
   const loadingSummaries = selectedRunIds.length > 0 && summaryQueries.some((q) => q.isPending);
   const loadingDetails = summaries.length > 0 && detailQueries.some((q) => q.isPending);
 
@@ -333,7 +327,7 @@ export function ExperimentsPage() {
     setRunIds([...selectedRunIds, runId]);
   }
 
-  if (loadingPinned || loadingSummaries || loadingDetails) {
+  if (loadingSummaries || loadingDetails) {
     return <div className="p-4 text-xs text-muted">loading comparison…</div>;
   }
 
@@ -342,7 +336,7 @@ export function ExperimentsPage() {
       <div className="flex h-full items-center justify-center">
         <EmptyState
           title="no runs selected"
-          description="pin runs from the runs list or open /experiments?runs=run_a,run_b"
+          description="cmd-click two or more runs in the sidebar, then click Compare"
           cta={
             <Link
               to="/"

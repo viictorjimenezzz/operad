@@ -1,13 +1,13 @@
 import {
   AgentEventsResponse,
-  AgentInvocationsResponse,
-  AgentInvokeRequest,
-  AgentInvokeResponse,
   AgentInvocationDiffResponse,
+  AgentInvocationsResponse,
+  type AgentInvokeRequest,
+  AgentInvokeResponse,
   AgentMetaResponse,
   AgentParametersResponse,
-  AgentValuesResponse,
   AgentPromptsResponse,
+  AgentValuesResponse,
   ArchivedRunRecord,
   BenchmarkDetailResponse,
   BenchmarkIngestResponse,
@@ -21,8 +21,9 @@ import {
   DriftEntry,
   EvolutionResponse,
   FitnessEntry,
-  GraphResponse,
   GradientEntry,
+  GraphResponse,
+  IoGraphResponse,
   IterationsResponse,
   Manifest,
   MutationsMatrix,
@@ -111,9 +112,17 @@ export const dashboardApi = {
     const qs = params.includeSynthetic ? "?include=synthetic" : "";
     return getJson(`/runs${qs}`, z.array(RunSummary));
   },
+  runsByHash: (hashContent: string) =>
+    getJson(
+      `/runs/by-hash?hash_content=${encodeURIComponent(hashContent)}`,
+      z.object({ matches: z.array(RunSummary) }),
+    ),
+  runLayout: (runId: string, tab: "overview" | "graph" | "invocations") =>
+    getJson(`/runs/${runId}/layout/${tab}`, z.unknown()),
   runChildren: (runId: string) => getJson(`/runs/${runId}/children`, z.array(RunSummary)),
   runSummary: (runId: string) => getJson(`/runs/${runId}/summary`, RunSummary),
   runInvocations: (runId: string) => getJson(`/runs/${runId}/invocations`, RunInvocationsResponse),
+  runIoGraph: (runId: string) => getJson(`/runs/${runId}/io_graph`, IoGraphResponse),
   agentInvocations: (runId: string, agentPath: string) =>
     getJson(
       `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/invocations`,
@@ -126,12 +135,7 @@ export const dashboardApi = {
       `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/parameters`,
       AgentParametersResponse,
     ),
-  agentDiff: (
-    runId: string,
-    agentPath: string,
-    fromInvocationId: string,
-    toInvocationId: string,
-  ) =>
+  agentDiff: (runId: string, agentPath: string, fromInvocationId: string, toInvocationId: string) =>
     getJson(
       `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/diff?from=${encodeURIComponent(fromInvocationId)}&to=${encodeURIComponent(toInvocationId)}`,
       AgentInvocationDiffResponse,
@@ -142,10 +146,7 @@ export const dashboardApi = {
       AgentValuesResponse,
     ),
   agentPrompts: (runId: string, agentPath: string) =>
-    getJson(
-      `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/prompts`,
-      AgentPromptsResponse,
-    ),
+    getJson(`/runs/${runId}/agent/${encodeURIComponent(agentPath)}/prompts`, AgentPromptsResponse),
   agentEvents: (runId: string, agentPath: string, limit = 500) =>
     getJson(
       `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/events?limit=${limit}`,

@@ -1,1 +1,1 @@
-export { agentViewDefinitions, agentViewRegistry } from "@/components/agent-view/registry";
+export { agentViewRegistry } from "@/components/agent-view/registry";

@@ -16,10 +16,13 @@ describe("useUIStore", () => {
       autoFollow: true,
       eventsFollow: true,
       sidebarCollapsed: false,
-      drawer: null,
-      drawerWidth: 480,
       selectedInvocationId: null,
       selectedInvocationAgentPath: null,
+      comparisonInvocationId: null,
+      comparisonInvocationAgentPath: null,
+      graphSelection: null,
+      graphInspectorTab: "overview",
+      graphSplitFraction: 0.5,
     });
   });
 
@@ -31,57 +34,46 @@ describe("useUIStore", () => {
     expect(useUIStore.getState().sidebarCollapsed).toBe(false);
   });
 
-  it("opens/closes drawer, supports atomic swap, and clamps width", () => {
-    useUIStore.getState().openDrawer("events", { agentPath: "root.worker" });
-    expect(useUIStore.getState().drawer).toEqual({
-      kind: "events",
-      payload: { agentPath: "root.worker" },
+  it("tracks graph selection and clamps inspector tab on node selection", () => {
+    useUIStore.getState().setGraphSelection({ kind: "edge", agentPath: "Root.stage_0" });
+    expect(useUIStore.getState().graphSelection).toEqual({
+      kind: "edge",
+      agentPath: "Root.stage_0",
     });
+    expect(useUIStore.getState().graphInspectorTab).toBe("overview");
 
-    useUIStore.getState().openDrawer("prompts", { agentPath: "root.other", attr: "question" });
-    expect(useUIStore.getState().drawer).toEqual({
-      kind: "prompts",
-      payload: { agentPath: "root.other", attr: "question" },
-    });
+    useUIStore.getState().setGraphSelection({ kind: "node", nodeKey: "Question" });
+    expect(useUIStore.getState().graphInspectorTab).toBe("fields");
 
-    useUIStore.getState().setDrawerWidth(120);
-    expect(useUIStore.getState().drawerWidth).toBe(320);
+    useUIStore.getState().setGraphSelection({ kind: "edge", agentPath: "Root.stage_1" });
+    // Switching away from "fields" should reset inspector tab to overview
+    expect(useUIStore.getState().graphInspectorTab).toBe("overview");
 
-    useUIStore.getState().setDrawerWidth(900);
-    expect(useUIStore.getState().drawerWidth).toBe(600);
-
-    useUIStore.getState().closeDrawer();
-    expect(useUIStore.getState().drawer).toBeNull();
+    useUIStore.getState().clearGraphSelection();
+    expect(useUIStore.getState().graphSelection).toBeNull();
   });
 
-  it("supports find-runs drawer kind", () => {
-    useUIStore.getState().openDrawer("find-runs", { hash: "hash_prompt", value: "abcd1234" });
-    expect(useUIStore.getState().drawer).toEqual({
-      kind: "find-runs",
-      payload: { hash: "hash_prompt", value: "abcd1234" },
-    });
+  it("clamps split fraction within bounds", () => {
+    useUIStore.getState().setGraphSplitFraction(0.1);
+    expect(useUIStore.getState().graphSplitFraction).toBe(0.25);
+    useUIStore.getState().setGraphSplitFraction(0.95);
+    expect(useUIStore.getState().graphSplitFraction).toBe(0.75);
+    useUIStore.getState().setGraphSplitFraction(0.42);
+    expect(useUIStore.getState().graphSplitFraction).toBeCloseTo(0.42);
   });
 
-  it("supports experiment drawer kind", () => {
-    useUIStore.getState().openDrawer("experiment", { agentPath: "Root.stage_0", input: { q: "x" } });
-    expect(useUIStore.getState().drawer).toEqual({
-      kind: "experiment",
-      payload: { agentPath: "Root.stage_0", input: { q: "x" } },
-    });
-  });
-
-  it("persists sidebarCollapsed and drawerWidth", () => {
+  it("persists sidebarCollapsed and graphSplitFraction", () => {
     useUIStore.getState().setSidebarCollapsed(true);
-    useUIStore.getState().setDrawerWidth(512);
+    useUIStore.getState().setGraphSplitFraction(0.6);
 
     const raw = localStorage.getItem("operad.ui");
     expect(raw).toBeTruthy();
 
     const parsed = JSON.parse(raw as string) as {
-      state: { sidebarCollapsed: boolean; drawerWidth: number };
+      state: { sidebarCollapsed: boolean; graphSplitFraction: number };
     };
     expect(parsed.state.sidebarCollapsed).toBe(true);
-    expect(parsed.state.drawerWidth).toBe(512);
+    expect(parsed.state.graphSplitFraction).toBeCloseTo(0.6);
   });
 
   it("tracks selected invocation context", () => {

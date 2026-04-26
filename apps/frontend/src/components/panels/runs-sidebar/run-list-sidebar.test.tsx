@@ -59,10 +59,13 @@ describe("RunListSidebar", () => {
       autoFollow: true,
       eventsFollow: true,
       sidebarCollapsed: false,
-      drawer: null,
-      drawerWidth: 420,
       selectedInvocationId: null,
       selectedInvocationAgentPath: null,
+      comparisonInvocationId: null,
+      comparisonInvocationAgentPath: null,
+      graphSelection: null,
+      graphInspectorTab: "overview",
+      graphSplitFraction: 0.5,
     });
   });
 
@@ -74,14 +77,14 @@ describe("RunListSidebar", () => {
   it("toggles collapse via button and cmd+\\ shortcut", () => {
     renderSidebar();
 
-    const collapseButton = screen.getByRole("button", { name: "Collapse runs sidebar" });
+    const collapseButton = screen.getByRole("button", { name: /collapse runs sidebar/i });
     fireEvent.click(collapseButton);
 
-    expect(screen.getByRole("button", { name: "Expand runs sidebar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /expand runs sidebar/i })).toBeTruthy();
 
     fireEvent.keyDown(window, { key: "\\", metaKey: true });
 
-    expect(screen.getByRole("button", { name: "Collapse runs sidebar" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /collapse runs sidebar/i })).toBeTruthy();
   });
 
   it("opens rail popover per group when collapsed", () => {

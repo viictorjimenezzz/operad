@@ -1,11 +1,12 @@
-import { Chip } from "@/components/ui/chip";
-import { EmptyState } from "@/components/ui/empty-state";
-import { SearchInput } from "@/components/ui/search-input";
+import { SidebarFilterPopover } from "@/components/panels/runs-sidebar/sidebar-filter-popover";
+import { SidebarSearchPopover } from "@/components/panels/runs-sidebar/sidebar-search-popover";
+import { Button, EmptyState, IconButton } from "@/components/ui";
 import { useRunsFiltered } from "@/hooks/use-runs";
 import type { RunSummary } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores";
-import { type RunStatusFilter, type RunTimeFilter, useRunsFilterStore } from "@/stores/runs-filter";
-import { Archive, ChevronLeft, ChevronRight } from "lucide-react";
+import { type RunTimeFilter, useRunsFilterStore } from "@/stores/runs-filter";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   useCallback,
@@ -14,7 +15,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { RunGroupSection } from "./run-group-section";
 import { RunRow } from "./run-row";
 
@@ -26,7 +27,7 @@ const TIME_CUTOFFS: Record<RunTimeFilter, number | null> = {
 };
 
 function labelForGroup(group: string): string {
-  return group === "__agents__" ? "agents" : group;
+  return group === "__agents__" ? "Agents" : group;
 }
 
 function groupGlyph(group: string): string {
@@ -40,16 +41,7 @@ export function RunListSidebar() {
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
 
-  const {
-    search,
-    statusFilter,
-    timeFilter,
-    showSynthetic,
-    setSearch,
-    setStatusFilter,
-    setTimeFilter,
-    setShowSynthetic,
-  } = useRunsFilterStore();
+  const { search, statusFilter, timeFilter, showSynthetic, setSearch } = useRunsFilterStore();
 
   const { data: runs, isLoading } = useRunsFiltered(showSynthetic);
 
@@ -132,7 +124,7 @@ export function RunListSidebar() {
     [grouped],
   );
 
-  const handleCheck = useCallback(
+  const handleSelect = useCallback(
     (runId: string, e: ReactMouseEvent) => {
       const isShift = e.shiftKey;
       const isCmd = e.metaKey || e.ctrlKey;
@@ -149,12 +141,6 @@ export function RunListSidebar() {
           else next.add(runId);
           return next;
         });
-      } else {
-        setSelectedIds((prev) => {
-          const next = new Set<string>();
-          if (!prev.has(runId)) next.add(runId);
-          return next;
-        });
       }
       setLastClickedId(runId);
     },
@@ -166,103 +152,61 @@ export function RunListSidebar() {
   return (
     <aside
       className="relative flex h-full flex-col border-r border-border bg-bg-1"
-      style={{
-        transition: "width 200ms ease",
-      }}
+      style={{ transition: "width 200ms ease" }}
     >
-      <div className="border-b border-border px-2 py-2">
-        <div className="mb-1.5 flex items-center justify-between gap-1">
-          {!sidebarCollapsed ? (
-            <h2 className="m-0 text-[0.68rem] uppercase tracking-[0.1em] text-muted">runs</h2>
-          ) : null}
-          <div className="ml-auto flex items-center gap-1">
-            {!sidebarCollapsed ? (
-              <Link
-                to="/archive"
-                className="text-[10px] uppercase tracking-[0.08em] text-muted hover:text-text"
-              >
-                archive
-              </Link>
-            ) : (
-              <Link
-                to="/archive"
-                aria-label="Open archive"
-                className="rounded border border-border bg-bg-2 p-1 text-muted hover:text-text"
-              >
-                <Archive size={12} />
-              </Link>
-            )}
-            <button
-              ref={toggleButtonRef}
-              type="button"
-              onClick={toggleSidebar}
-              aria-label={sidebarCollapsed ? "Expand runs sidebar" : "Collapse runs sidebar"}
-              aria-expanded={!sidebarCollapsed}
-              className="rounded border border-border bg-bg-2 p-1 text-muted hover:text-text"
-              title="Toggle sidebar (cmd+\\)"
-            >
-              {sidebarCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
-            </button>
-          </div>
-        </div>
+      <div className="flex items-center gap-1.5 border-b border-border px-2 py-2">
         {!sidebarCollapsed ? (
-          <SearchInput value={search} onChange={setSearch} placeholder="search id, class, path…" />
-        ) : null}
+          <>
+            <SidebarSearchPopover value={search} onChange={setSearch} />
+            <SidebarFilterPopover />
+            <span className="ml-auto" />
+          </>
+        ) : (
+          <span className="ml-auto" />
+        )}
+        <IconButton
+          ref={toggleButtonRef}
+          aria-label={sidebarCollapsed ? "expand runs sidebar" : "collapse runs sidebar"}
+          aria-expanded={!sidebarCollapsed}
+          onClick={toggleSidebar}
+          title="toggle (cmd+\\)"
+          size="sm"
+        >
+          {sidebarCollapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+        </IconButton>
       </div>
 
       {!sidebarCollapsed ? (
-        <>
-          <div className="border-b border-border px-2 py-1.5">
-            <div className="mb-1 flex flex-wrap gap-1">
-              {(["all", "1h", "24h", "7d"] as RunTimeFilter[]).map((t) => (
-                <Chip key={t} active={timeFilter === t} onClick={() => setTimeFilter(t)}>
-                  {t}
-                </Chip>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {(["all", "running", "ended", "errors"] as RunStatusFilter[]).map((s) => (
-                <Chip key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
-                  {s}
-                </Chip>
-              ))}
-              <Chip active={showSynthetic} onClick={() => setShowSynthetic(!showSynthetic)}>
-                inner
-              </Chip>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-auto">
-            {isLoading && <div className="p-3 text-xs text-muted">loading…</div>}
-            {!isLoading && filtered.length === 0 && (
-              <EmptyState
-                title="no runs yet"
-                description={
-                  <>
-                    run a demo:
-                    <br />
-                    <code className="mt-1 block rounded bg-bg-2 px-1.5 py-1 font-mono text-[10px]">
-                      uv run python apps/demos/agent_evolution/run.py --offline --dashboard
-                    </code>
-                  </>
-                }
-              />
-            )}
-            {grouped.map(([label, gruns]) => (
-              <RunGroupSection
-                key={label}
-                label={label}
-                runs={gruns}
-                selectedIds={selectedIds}
-                onCheck={handleCheck}
-                activeRunId={activeRunId}
-              />
-            ))}
-          </div>
-        </>
+        <div className="flex-1 overflow-auto">
+          {isLoading && <div className="p-3 text-xs text-muted">loading…</div>}
+          {!isLoading && filtered.length === 0 && (
+            <EmptyState
+              title="no runs yet"
+              description={
+                <>
+                  run a demo:
+                  <br />
+                  <code className="mt-1 block rounded bg-bg-2 px-1.5 py-1 font-mono text-[10px]">
+                    uv run python apps/demos/agent_evolution/run.py --offline --dashboard
+                  </code>
+                </>
+              }
+            />
+          )}
+          {grouped.map(([label, gruns]) => (
+            <RunGroupSection
+              key={label}
+              label={label}
+              runs={gruns}
+              selectedIds={selectedIds}
+              onSelect={handleSelect}
+              activeRunId={activeRunId ?? null}
+            />
+          ))}
+        </div>
       ) : (
-        <div className="flex-1 overflow-auto px-1 py-2">
-          <div className="flex flex-col items-center gap-2">
+        <div className="flex-1 overflow-auto px-1.5 py-2">
+          <div className="flex flex-col items-center gap-1.5">
             {grouped.map(([label, gruns]) => {
               const liveCount = gruns.filter((run) => run.state === "running").length;
               const isOpen = openGroup === label;
@@ -270,18 +214,19 @@ export function RunListSidebar() {
                 <button
                   key={label}
                   type="button"
-                  className={`relative flex h-9 w-9 items-center justify-center rounded-md border text-[11px] font-semibold transition-all ${
+                  className={cn(
+                    "relative flex h-9 w-9 items-center justify-center rounded-lg border text-[12px] font-medium transition-colors",
                     isOpen
-                      ? "border-accent bg-accent/15 text-text"
-                      : "border-border bg-bg-2 text-muted hover:text-text"
-                  }`}
+                      ? "border-border-strong bg-bg-3 text-text"
+                      : "border-transparent text-muted hover:bg-bg-3 hover:text-text",
+                  )}
                   onClick={() => setOpenGroup((current) => (current === label ? null : label))}
                   aria-label={`Open ${labelForGroup(label)} runs`}
                   title={`${labelForGroup(label)} (${gruns.length})`}
                 >
                   {groupGlyph(label)}
                   {liveCount > 0 ? (
-                    <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-[--color-ok] shadow-[0_0_6px_var(--color-ok)]" />
+                    <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[--color-ok] shadow-[0_0_6px_var(--color-ok)]" />
                   ) : null}
                 </button>
               );
@@ -293,9 +238,9 @@ export function RunListSidebar() {
       {sidebarCollapsed && groupForPopover ? (
         <div
           ref={railPopoverRef}
-          className="absolute left-[calc(100%+8px)] top-2 z-20 w-[320px] overflow-hidden rounded-md border border-border bg-bg-1 shadow-xl"
+          className="absolute left-[calc(100%+8px)] top-2 z-20 w-[320px] overflow-hidden rounded-xl border border-border-strong bg-bg-1 shadow-[var(--shadow-popover)]"
         >
-          <div className="border-b border-border px-3 py-2 text-[11px] uppercase tracking-[0.1em] text-muted">
+          <div className="border-b border-border px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
             {labelForGroup(groupForPopover[0])}
           </div>
           <div className="max-h-[60vh] overflow-auto">
@@ -305,8 +250,8 @@ export function RunListSidebar() {
                   key={run.run_id}
                   run={run}
                   active={run.run_id === activeRunId}
-                  checked={selectedIds.has(run.run_id)}
-                  onCheck={(e) => handleCheck(run.run_id, e)}
+                  selected={selectedIds.has(run.run_id)}
+                  onSelect={(e) => handleSelect(run.run_id, e)}
                 />
               ))}
             </ul>
@@ -315,17 +260,18 @@ export function RunListSidebar() {
       ) : null}
 
       {selectedIds.size >= 2 && (
-        <div className="flex items-center justify-between border-t border-border bg-bg-2 px-2 py-2">
+        <div className="flex items-center justify-between border-t border-border bg-bg-1 px-2 py-2">
           {!sidebarCollapsed ? (
-            <span className="text-xs text-muted">{selectedIds.size} selected</span>
+            <span className="text-[12px] text-muted">{selectedIds.size} selected</span>
           ) : null}
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="primary"
+            className="ml-auto"
             onClick={() => navigate(`/experiments?runs=${[...selectedIds].join(",")}`)}
-            className="ml-auto rounded border border-accent bg-accent-dim px-2 py-1 text-xs text-text hover:bg-accent/20"
           >
             {sidebarCollapsed ? "cmp" : "Compare"}
-          </button>
+          </Button>
         </div>
       )}
     </aside>
