@@ -1,4 +1,4 @@
-import { EmptyState } from "@/shared/ui/empty-state";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export function RunListPage() {
   return (

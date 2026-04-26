@@ -42,7 +42,11 @@
       },
       "k-tokens": {
         "type": "KPI",
-        "props": { "label": "tokens", "source": "$queries.summary.prompt_tokens", "format": "tokens" }
+        "props": {
+          "label": "tokens",
+          "source": "$queries.summary.prompt_tokens",
+          "format": "tokens"
+        }
       },
       "k-cost": {
         "type": "KPI",

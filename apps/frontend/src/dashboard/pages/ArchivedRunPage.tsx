@@ -1,10 +1,10 @@
-import { DashboardRenderer } from "@/components/DashboardRenderer";
+import { DashboardRenderer } from "@/components/runtime/dashboard-renderer";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useArchivedRun, useRestoreArchivedRun } from "@/hooks/use-runs";
 import { pickLayout } from "@/layouts";
 import { truncateMiddle } from "@/lib/utils";
-import { Badge } from "@/shared/ui/badge";
-import { Button } from "@/shared/ui/button";
-import { EmptyState } from "@/shared/ui/empty-state";
 import { useEventBufferStore } from "@/stores";
 import { useRunStore } from "@/stores/run";
 import { useEffect } from "react";
@@ -31,7 +31,8 @@ export function ArchivedRunPage() {
   }, [archived.data, clear, ingest, runId]);
 
   if (!runId) return <EmptyState title="missing run id" />;
-  if (archived.isLoading) return <div className="p-6 text-xs text-muted">loading archived run…</div>;
+  if (archived.isLoading)
+    return <div className="p-6 text-xs text-muted">loading archived run…</div>;
   if (archived.error || !archived.data) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -63,11 +64,7 @@ export function ArchivedRunPage() {
         <span className="font-mono text-text">{truncateMiddle(runId, 20)}</span>
         <Badge
           variant={
-            summary.state === "running"
-              ? "live"
-              : summary.state === "error"
-                ? "error"
-                : "ended"
+            summary.state === "running" ? "live" : summary.state === "error" ? "error" : "ended"
           }
         >
           {summary.state}

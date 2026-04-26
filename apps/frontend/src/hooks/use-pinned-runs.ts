@@ -1,8 +1,8 @@
-import { useQueries } from "@tanstack/react-query";
 import { dashboardApi } from "@/lib/api/dashboard";
-import { usePinnedRunsStore } from "@/stores/pinned-runs";
-import type { z } from "zod";
 import type { RunSummary } from "@/lib/types";
+import { usePinnedRunsStore } from "@/stores/pinned-runs";
+import { useQueries } from "@tanstack/react-query";
+import type { z } from "zod";
 
 export const usePinnedRuns = () => usePinnedRunsStore();
 
@@ -10,9 +10,7 @@ export function useIsPinned(runId: string): boolean {
   return usePinnedRunsStore((s) => s.pinned.includes(runId));
 }
 
-export function usePinnedRunSummaries():
-  | z.infer<typeof RunSummary>[]
-  | undefined {
+export function usePinnedRunSummaries(): z.infer<typeof RunSummary>[] | undefined {
   const pinned = usePinnedRunsStore((s) => s.pinned);
   const unpin = usePinnedRunsStore((s) => s.unpin);
 
@@ -37,5 +35,10 @@ export function usePinnedRunSummaries():
   }
 
   if (results.some((r) => r.isPending)) return undefined;
-  return results.filter((r) => r.isSuccess).map((r) => r.data!);
+  return results
+    .filter(
+      (r): r is typeof r & { data: z.infer<typeof RunSummary> } =>
+        r.isSuccess && r.data !== undefined,
+    )
+    .map((r) => r.data);
 }

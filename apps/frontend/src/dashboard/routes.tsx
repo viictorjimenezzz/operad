@@ -1,3 +1,4 @@
+import { Shell } from "@/dashboard/Shell";
 import { ArchivePage } from "@/dashboard/pages/ArchivePage";
 import { ArchivedRunPage } from "@/dashboard/pages/ArchivedRunPage";
 import { BenchmarkDetailPage } from "@/dashboard/pages/BenchmarkDetailPage";
@@ -5,7 +6,6 @@ import { BenchmarksPage } from "@/dashboard/pages/BenchmarksPage";
 import { CassetteDetailPage } from "@/dashboard/pages/CassetteDetailPage";
 import { CassettesPage } from "@/dashboard/pages/CassettesPage";
 import { ExperimentsPage } from "@/dashboard/pages/ExperimentsPage";
-import { Shell } from "@/dashboard/Shell";
 import { NotFoundPage } from "@/dashboard/pages/NotFoundPage";
 import { RunDetailPage } from "@/dashboard/pages/RunDetailPage";
 import { RunListPage } from "@/dashboard/pages/RunListPage";

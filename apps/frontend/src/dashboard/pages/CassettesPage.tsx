@@ -1,6 +1,6 @@
+import { CassetteList } from "@/components/panels/cassette-list";
 import { dashboardApi } from "@/lib/api/dashboard";
 import type { CassetteDeterminismResponse } from "@/lib/types";
-import { CassetteList } from "@/shared/panels/cassette-list";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";

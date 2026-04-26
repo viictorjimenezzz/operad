@@ -1,5 +1,5 @@
-import { Button } from "@/shared/ui/button";
-import { EmptyState } from "@/shared/ui/empty-state";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Link } from "react-router-dom";
 
 export function NotFoundPage() {

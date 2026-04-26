@@ -105,6 +105,11 @@ print(agent._graph.to_mermaid())    # flowchart diagram
 print(agent._graph.to_json())       # dict you can serialise
 ```
 
+For dataflow-oriented visualizers, `operad.core.graph.to_io_graph(...)`
+exports the inverted view: type schemas as nodes and leaf agents as typed
+edges (`from`/`to`), with each edge carrying `agent_path`, runtime
+`class_name`, and nearest `composite_path` for UI grouping.
+
 Type mismatches raise `BuildError("input_mismatch", …)` with a Mermaid
 fragment pointing at the failing edge:
 

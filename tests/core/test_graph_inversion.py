@@ -1,139 +1,157 @@
-"""Tests for `operad.core.graph.to_io_graph`."""
+"""Tests for inverted IO graph export (`to_io_graph`)."""
 
 from __future__ import annotations
 
 import json
-from typing import Literal
+from typing import Any, Literal
 
 import pytest
 from pydantic import BaseModel, Field
 
-from operad import Parallel, Pipeline
-from operad.agents.reasoning.switch import Switch
+from operad import Agent, Parallel, Pipeline
+from operad.agents import Choice, Router, Switch
 from operad.core.graph import to_io_graph
 
-from tests.conftest import A, B, C, FakeLeaf
+from ..conftest import A, B, C, D, FakeLeaf
 
 
 pytestmark = pytest.mark.asyncio
 
 
-class _LeafIn(BaseModel):
-    question: str = Field(default="", description="User question.")
-    system_hint: str = Field(
+def _q(t: type) -> str:
+    module = getattr(t, "__module__", "") or ""
+    qualname = getattr(t, "__qualname__", None) or getattr(t, "__name__", "")
+    return f"{module}.{qualname}" if module else qualname
+
+
+class Label(Choice[Literal["in", "out"]]):
+    pass
+
+
+class _StubRouter(Router):
+    def __init__(self) -> None:
+        super().__init__(config=None, input=A, output=Label)
+
+    async def forward(self, x: Any) -> Any:
+        return Label.model_construct(label="in", reasoning="stub")
+
+
+class _Branch(Agent[A, B]):
+    input = A
+    output = B
+
+    def __init__(self, *, tag: str) -> None:
+        super().__init__(config=None, input=A, output=B)
+        self.tag = tag
+
+    async def forward(self, x: A) -> B:  # type: ignore[override]
+        return B.model_construct(value=1 if self.tag == "in" else 2)
+
+
+class RichIn(BaseModel):
+    context: str = Field(
         default="",
-        description="Private instruction.",
+        description="System context.",
         json_schema_extra={"operad": {"system": True}},
     )
-    no_desc: int = 0
+    prompt: str = Field(default="")
+    decision: Literal["accept", "reject"] = Field(
+        default="accept",
+        description="Routing decision.",
+    )
 
 
-class _LeafOut(BaseModel):
-    answer: str = Field(default="", description="Final answer.")
+class RichOut(BaseModel):
+    answer: str = Field(default="ok", description="Output text.")
 
 
-class _Route(BaseModel):
-    label: Literal["in", "out"] = "in"
-
-
-class _ParOut(BaseModel):
-    left: int = 0
-    right: str = ""
-
-
-def _node_by_name(data: dict, name: str) -> dict:
-    for node in data["nodes"]:
-        if node["name"] == name:
-            return node
-    raise AssertionError(f"missing node {name!r}")
-
-
-async def test_to_io_graph_leaf_emits_one_edge_two_nodes(cfg) -> None:
+async def test_leaf_root_emits_one_edge_and_two_type_nodes(cfg) -> None:
     leaf = await FakeLeaf(config=cfg, input=A, output=B).abuild()
     data = to_io_graph(leaf._graph)
+
     assert data["root"] == "FakeLeaf"
     assert len(data["edges"]) == 1
-    assert len(data["nodes"]) == 2
+    assert {n["key"] for n in data["nodes"]} == {_q(A), _q(B)}
+
     edge = data["edges"][0]
     assert edge["agent_path"] == "FakeLeaf"
+    assert edge["class_name"] == "FakeLeaf"
+    assert edge["kind"] == "leaf"
+    assert edge["from"] == _q(A)
+    assert edge["to"] == _q(B)
     assert edge["composite_path"] is None
 
 
-async def test_to_io_graph_pipeline_dedupes_shared_type_nodes(cfg) -> None:
+async def test_pipeline_inversion_has_three_edges_and_deduped_type_nodes(cfg) -> None:
     p = Pipeline(
         FakeLeaf(config=cfg, input=A, output=B),
         FakeLeaf(config=cfg, input=B, output=C),
-        FakeLeaf(config=cfg, input=C, output=B),
+        FakeLeaf(config=cfg, input=C, output=D),
         input=A,
-        output=B,
+        output=D,
     )
     await p.abuild()
+
     data = to_io_graph(p._graph)
     assert len(data["edges"]) == 3
-    assert len(data["nodes"]) == 3
-    assert {e["agent_path"] for e in data["edges"]} == {
-        "Pipeline.stage_0",
-        "Pipeline.stage_1",
-        "Pipeline.stage_2",
-    }
+    assert len(data["nodes"]) == 4
+    assert {n["key"] for n in data["nodes"]} == {_q(A), _q(B), _q(C), _q(D)}
+    assert all(e["composite_path"] is None for e in data["edges"])
 
 
-async def test_to_io_graph_parallel_has_two_leaf_edges(cfg) -> None:
-    parallel = Parallel(
+async def test_parallel_inversion_fans_out_from_shared_input_type(cfg) -> None:
+    p = Parallel(
         {
             "left": FakeLeaf(config=cfg, input=A, output=B),
             "right": FakeLeaf(config=cfg, input=A, output=C),
         },
         input=A,
-        output=_ParOut,
-        combine=lambda xs: _ParOut(
-            left=xs["left"].value,
-            right=xs["right"].label,
-        ),
+        output=D,
+        combine=lambda _: D.model_construct(payload=[]),
     )
-    await parallel.abuild()
-    data = to_io_graph(parallel._graph)
+    await p.abuild()
+
+    data = to_io_graph(p._graph)
     assert len(data["edges"]) == 2
-    assert {e["agent_path"] for e in data["edges"]} == {
-        "Parallel.left",
-        "Parallel.right",
-    }
+    assert {e["from"] for e in data["edges"]} == {_q(A)}
+    assert {e["to"] for e in data["edges"]} == {_q(B), _q(C)}
 
 
-async def test_to_io_graph_switch_includes_router_and_branches(cfg) -> None:
-    switch = Switch(
-        router=FakeLeaf(config=cfg, input=A, output=_Route),
-        branches={
-            "in": FakeLeaf(config=cfg, input=A, output=B),
-            "out": FakeLeaf(config=cfg, input=A, output=B),
-        },
+async def test_switch_inversion_contains_router_and_branch_edges() -> None:
+    s = Switch(
+        router=_StubRouter(),
+        branches={"in": _Branch(tag="in"), "out": _Branch(tag="out")},
         input=A,
         output=B,
     )
-    await switch.abuild()
-    data = to_io_graph(switch._graph)
+    await s.abuild()
+
+    data = to_io_graph(s._graph)
     assert len(data["edges"]) == 3
-    assert {e["agent_path"] for e in data["edges"]} == {
-        "Switch.router",
-        "Switch.branch_in",
-        "Switch.branch_out",
-    }
+    assert {e["from"] for e in data["edges"]} == {_q(A)}
+    class_names = {e["agent_path"]: e["class_name"] for e in data["edges"]}
+    assert class_names["Switch.router"] == "_StubRouter"
+    assert class_names["Switch.branch_in"] == "_Branch"
+    assert class_names["Switch.branch_out"] == "_Branch"
 
 
-async def test_to_io_graph_includes_field_metadata_and_system_flag(cfg) -> None:
-    leaf = await FakeLeaf(config=cfg, input=_LeafIn, output=_LeafOut).abuild()
+async def test_io_graph_field_metadata_includes_system_and_extended_fields(cfg) -> None:
+    leaf = await FakeLeaf(config=cfg, input=RichIn, output=RichOut).abuild()
     data = to_io_graph(leaf._graph)
-    in_node = _node_by_name(data, "_LeafIn")
-    question = next(f for f in in_node["fields"] if f["name"] == "question")
-    system_hint = next(f for f in in_node["fields"] if f["name"] == "system_hint")
-    no_desc = next(f for f in in_node["fields"] if f["name"] == "no_desc")
-    assert question["description"] == "User question."
-    assert question["system"] is False
-    assert system_hint["system"] is True
-    assert no_desc["description"] == ""
+
+    in_node = next(n for n in data["nodes"] if n["key"] == _q(RichIn))
+    fields = {f["name"]: f for f in in_node["fields"]}
+
+    assert fields["context"]["system"] is True
+    assert fields["context"]["description"] == "System context."
+    assert fields["prompt"]["description"] == ""
+    assert fields["decision"]["type"] == "Literal['accept','reject']"
+    assert fields["decision"]["enum_values"] == ["accept", "reject"]
+    assert fields["context"]["required"] is False
+    assert fields["context"]["has_default"] is True
 
 
-async def test_to_io_graph_json_serializable(cfg) -> None:
+async def test_to_io_graph_output_is_json_serializable(cfg) -> None:
     p = Pipeline(
         FakeLeaf(config=cfg, input=A, output=B),
         FakeLeaf(config=cfg, input=B, output=C),
@@ -141,5 +159,29 @@ async def test_to_io_graph_json_serializable(cfg) -> None:
         output=C,
     )
     await p.abuild()
+
     data = to_io_graph(p._graph)
     assert json.loads(json.dumps(data)) == data
+
+
+async def test_composite_path_uses_nearest_non_root_composite(cfg) -> None:
+    inner = Pipeline(
+        FakeLeaf(config=cfg, input=A, output=B),
+        FakeLeaf(config=cfg, input=B, output=C),
+        input=A,
+        output=C,
+    )
+    outer = Pipeline(
+        inner,
+        FakeLeaf(config=cfg, input=C, output=D),
+        input=A,
+        output=D,
+    )
+    await outer.abuild()
+
+    data = to_io_graph(outer._graph)
+    by_path = {e["agent_path"]: e for e in data["edges"]}
+
+    assert by_path["Pipeline.stage_0.stage_0"]["composite_path"] == "Pipeline.stage_0"
+    assert by_path["Pipeline.stage_0.stage_1"]["composite_path"] == "Pipeline.stage_0"
+    assert by_path["Pipeline.stage_1"]["composite_path"] is None

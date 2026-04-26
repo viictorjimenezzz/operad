@@ -1,3 +1,9 @@
+import { CostVsQualityScatter } from "@/components/charts/cost-vs-quality-scatter";
+import { CurveOverlay } from "@/components/charts/curve-overlay";
+import { MultiPromptDiff } from "@/components/charts/multi-prompt-diff";
+import { OperatorRadar } from "@/components/charts/operator-radar";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { usePinnedRunSummaries } from "@/hooks/use-pinned-runs";
 import { useRuns } from "@/hooks/use-runs";
 import { dashboardApi } from "@/lib/api/dashboard";
@@ -16,12 +22,6 @@ import {
   formatTokens,
   truncateMiddle,
 } from "@/lib/utils";
-import { CostVsQualityScatter } from "@/shared/charts/cost-vs-quality-scatter";
-import { CurveOverlay } from "@/shared/charts/curve-overlay";
-import { MultiPromptDiff } from "@/shared/charts/multi-prompt-diff";
-import { OperatorRadar } from "@/shared/charts/operator-radar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import { EmptyState } from "@/shared/ui/empty-state";
 import { useQueries } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -198,6 +198,7 @@ function Sparkline({ points }: { points: Array<{ x: number; y: number }> }) {
 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-label="sparkline">
+      <title>sparkline</title>
       <polyline fill="none" stroke="var(--color-accent)" strokeWidth="1.8" points={path} />
     </svg>
   );
@@ -295,8 +296,7 @@ export function ExperimentsPage() {
     .filter((m) => m.curve.length > 0)
     .map((m) => ({ runId: m.summary.run_id, label: m.label, points: m.curve }));
 
-  const isHeterogeneous =
-    new Set(models.map((m) => m.summary.algorithm_class ?? "agent")).size > 1;
+  const isHeterogeneous = new Set(models.map((m) => m.summary.algorithm_class ?? "agent")).size > 1;
 
   const operatorRuns = models.map((m) => ({
     runId: m.summary.run_id,
@@ -318,7 +318,9 @@ export function ExperimentsPage() {
     .filter((r) => !selectedRunIds.includes(r.run_id))
     .filter((r) => {
       if (!pickerQuery.trim()) return true;
-      const hay = [r.run_id, r.algorithm_class ?? "", r.algorithm_path ?? ""].join(" ").toLowerCase();
+      const hay = [r.run_id, r.algorithm_class ?? "", r.algorithm_path ?? ""]
+        .join(" ")
+        .toLowerCase();
       return hay.includes(pickerQuery.trim().toLowerCase());
     })
     .slice(0, 20);
@@ -342,7 +344,10 @@ export function ExperimentsPage() {
           title="no runs selected"
           description="pin runs from the runs list or open /experiments?runs=run_a,run_b"
           cta={
-            <Link to="/" className="rounded border border-accent bg-accent-dim px-3 py-1.5 text-xs text-text hover:bg-accent/20">
+            <Link
+              to="/"
+              className="rounded border border-accent bg-accent-dim px-3 py-1.5 text-xs text-text hover:bg-accent/20"
+            >
               go to runs
             </Link>
           }
@@ -396,7 +401,9 @@ export function ExperimentsPage() {
                           onClick={() => appendRun(run.run_id)}
                           className="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs hover:bg-bg-2"
                         >
-                          <span className="font-mono text-text">{truncateMiddle(run.run_id, 20)}</span>
+                          <span className="font-mono text-text">
+                            {truncateMiddle(run.run_id, 20)}
+                          </span>
                           <span className="text-muted">{run.algorithm_class ?? "Agent"}</span>
                         </button>
                       </li>
@@ -429,11 +436,21 @@ export function ExperimentsPage() {
             <tbody>
               {models.map((m) => (
                 <tr key={m.summary.run_id} className="border-b border-border/60">
-                  <td className="px-2 py-1 font-mono text-text">{truncateMiddle(m.summary.run_id, 24)}</td>
-                  <td className="px-2 py-1 text-muted">{m.summary.algorithm_class ?? m.summary.algorithm_path ?? "Agent"}</td>
-                  <td className="px-2 py-1 text-right text-muted">{formatRelativeTime(m.summary.started_at)}</td>
-                  <td className="px-2 py-1 text-right tabular-nums">{formatDurationMs(m.summary.duration_ms)}</td>
-                  <td className="px-2 py-1 text-right tabular-nums">{formatTokens(m.summary.prompt_tokens + m.summary.completion_tokens)}</td>
+                  <td className="px-2 py-1 font-mono text-text">
+                    {truncateMiddle(m.summary.run_id, 24)}
+                  </td>
+                  <td className="px-2 py-1 text-muted">
+                    {m.summary.algorithm_class ?? m.summary.algorithm_path ?? "Agent"}
+                  </td>
+                  <td className="px-2 py-1 text-right text-muted">
+                    {formatRelativeTime(m.summary.started_at)}
+                  </td>
+                  <td className="px-2 py-1 text-right tabular-nums">
+                    {formatDurationMs(m.summary.duration_ms)}
+                  </td>
+                  <td className="px-2 py-1 text-right tabular-nums">
+                    {formatTokens(m.summary.prompt_tokens + m.summary.completion_tokens)}
+                  </td>
                   <td className="px-2 py-1 text-right tabular-nums">{formatCost(m.cost)}</td>
                   <td className="px-2 py-1 text-right">
                     <span

@@ -64,8 +64,26 @@ describe("getAlgorithmMetric", () => {
     const run = makeRun({
       algorithm_class: "EvoGradient",
       generations: [
-        { gen_index: 0, best: 0.5, mean: 0.4, scores: [], survivor_indices: [], op_attempt_counts: {}, op_success_counts: {}, timestamp: 0 },
-        { gen_index: 1, best: 1.0, mean: 0.8, scores: [], survivor_indices: [], op_attempt_counts: {}, op_success_counts: {}, timestamp: 1 },
+        {
+          gen_index: 0,
+          best: 0.5,
+          mean: 0.4,
+          scores: [],
+          survivor_indices: [],
+          op_attempt_counts: {},
+          op_success_counts: {},
+          timestamp: 0,
+        },
+        {
+          gen_index: 1,
+          best: 1.0,
+          mean: 0.8,
+          scores: [],
+          survivor_indices: [],
+          op_attempt_counts: {},
+          op_success_counts: {},
+          timestamp: 1,
+        },
       ],
     });
     expect(getAlgorithmMetric(run)).toBe("best=1.000");
@@ -249,8 +267,8 @@ describe("grouping logic", () => {
       makeRun({ run_id: "r3", algorithm_class: "Trainer" }),
     ];
     const groups = groupRuns(runs);
-    expect(groups["EvoGradient"]).toEqual(["r1", "r2"]);
-    expect(groups["Trainer"]).toEqual(["r3"]);
+    expect(groups.EvoGradient).toEqual(["r1", "r2"]);
+    expect(groups.Trainer).toEqual(["r3"]);
   });
 
   it("null algorithm_class runs appear in __agents__ group", () => {
@@ -259,8 +277,8 @@ describe("grouping logic", () => {
       makeRun({ run_id: "algo-1", algorithm_class: "Debate" }),
     ];
     const groups = groupRuns(runs);
-    expect(groups["__agents__"]).toEqual(["agent-1"]);
-    expect(groups["Debate"]).toEqual(["algo-1"]);
+    expect(groups.__agents__).toEqual(["agent-1"]);
+    expect(groups.Debate).toEqual(["algo-1"]);
   });
 
   it("algorithm groups appear before __agents__", () => {

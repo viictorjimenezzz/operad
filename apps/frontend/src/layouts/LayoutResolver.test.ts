@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import type { LayoutSpec } from "@/lib/layout-schema";
+import { describe, expect, it } from "vitest";
 
 /**
  * Test the resolution logic in isolation — we don't load real JSON files
@@ -84,12 +84,12 @@ describe("resolveLayout integration (real layouts/)", () => {
   it("resolves unknown path to default layout", async () => {
     const { resolveLayout } = await import("./index");
     const layout = resolveLayout("DoesNotExist");
-    expect(layout.algorithm).toBe("*");
+    expect(layout.algorithm).toBe("__no_layout__");
   });
 
   it("resolves null to default layout", async () => {
     const { resolveLayout } = await import("./index");
-    expect(resolveLayout(null).algorithm).toBe("*");
+    expect(resolveLayout(null).algorithm).toBe("__no_layout__");
   });
 
   it("resolves Sweep to the sweep layout", async () => {
@@ -105,10 +105,10 @@ describe("resolveLayout integration (real layouts/)", () => {
     const selfrefine = resolveLayout("SelfRefine");
 
     expect(beam.dataSources.iterations?.endpoint).toContain("/iterations.json");
-    expect(beam.spec.elements.candidates!.type).toBe("BeamCandidateChart");
-    expect(verifier.spec.elements.curve!.type).toBe("ConvergenceCurve");
-    expect(verifier.spec.elements.progression!.type).toBe("IterationProgression");
-    expect(selfrefine.spec.elements.refinements!.type).toBe("IterationProgression");
-    expect(selfrefine.spec.elements.refinements!.props?.showDiff).toBe(true);
+    expect(beam.spec.elements.candidates?.type).toBe("BeamCandidateChart");
+    expect(verifier.spec.elements.curve?.type).toBe("ConvergenceCurve");
+    expect(verifier.spec.elements.progression?.type).toBe("IterationProgression");
+    expect(selfrefine.spec.elements.refinements?.type).toBe("IterationProgression");
+    expect(selfrefine.spec.elements.refinements?.props?.showDiff).toBe(true);
   });
 });
