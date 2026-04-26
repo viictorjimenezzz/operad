@@ -1,6 +1,8 @@
 import {
   AgentInvocationsResponse,
+  AgentEventsResponse,
   AgentMetaResponse,
+  AgentPromptsResponse,
   ArchivedRunRecord,
   BenchmarkDetailResponse,
   BenchmarkIngestResponse,
@@ -113,6 +115,16 @@ export const dashboardApi = {
     ),
   agentMeta: (runId: string, agentPath: string) =>
     getJson(`/runs/${runId}/agent/${encodeURIComponent(agentPath)}/meta`, AgentMetaResponse),
+  agentPrompts: (runId: string, agentPath: string) =>
+    getJson(
+      `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/prompts`,
+      AgentPromptsResponse,
+    ),
+  agentEvents: (runId: string, agentPath: string, limit = 500) =>
+    getJson(
+      `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/events?limit=${limit}`,
+      AgentEventsResponse,
+    ),
   runEvents: (runId: string, limit = 500) =>
     getJson(`/runs/${runId}/events?limit=${limit}`, RunEventsResponse),
   graph: (runId: string) => getJson(`/graph/${runId}`, GraphResponse),
