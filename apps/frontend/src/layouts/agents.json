@@ -1,0 +1,46 @@
+{
+  "algorithm": "*",
+  "version": 1,
+  "dataSources": {
+    "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "invocations": { "endpoint": "/runs/$context.runId/invocations" },
+    "io_graph": { "endpoint": "/runs/$context.runId/io_graph" }
+  },
+  "spec": {
+    "root": "page",
+    "elements": {
+      "page": {
+        "type": "Col",
+        "props": { "gap": 12 },
+        "children": ["header", "insights", "graph", "drawer"]
+      },
+      "header": {
+        "type": "AgentMetadataPanel",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceInvocations": "$queries.invocations"
+        }
+      },
+      "insights": {
+        "type": "AgentInsightsRow",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceInvocations": "$queries.invocations"
+        }
+      },
+      "graph": {
+        "type": "InteractiveGraph",
+        "props": {
+          "sourceIoGraph": "$queries.io_graph",
+          "runId": "$context.runId"
+        }
+      },
+      "drawer": {
+        "type": "SideDrawer",
+        "props": {
+          "runId": "$context.runId"
+        }
+      }
+    }
+  }
+}

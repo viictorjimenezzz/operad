@@ -91,6 +91,29 @@ export const catalog = createCatalog({
         mutationsSource: sourceExpr,
       }),
     },
+    AgentMetadataPanel: {
+      props: z.object({
+        sourceSummary: sourceExpr,
+        sourceInvocations: sourceExpr,
+      }),
+    },
+    AgentInsightsRow: {
+      props: z.object({
+        sourceSummary: sourceExpr,
+        sourceInvocations: sourceExpr,
+      }),
+    },
+    InteractiveGraph: {
+      props: z.object({
+        sourceIoGraph: sourceExpr,
+        runId: z.string().optional(),
+      }),
+    },
+    SideDrawer: {
+      props: z.object({
+        runId: z.string().optional(),
+      }),
+    },
 
     // Diagnostics
     EventTimeline: {
