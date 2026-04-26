@@ -21,7 +21,7 @@ STUDIO_PORT         ?= 7870
 .PHONY: help \
         up down restart rebuild logs ps clean \
         env header \
-        dashboard studio demo \
+        dashboard studio demo demo-script demo-triage example-observed \
         test test-otel test-dashboard \
         verify \
         cassettes-refresh cassettes-check \
@@ -50,6 +50,9 @@ help:
 	@printf '    make studio       operad-studio on :$(STUDIO_PORT) (data-dir=./.studio-data)\n\n'
 	@printf '  Demos:\n'
 	@printf '    make demo         agent_evolution offline + dashboard attach + Langfuse OTel\n\n'
+	@printf '    make demo-script  demo.py live run + dashboard attach + Langfuse OTel\n'
+	@printf '    make demo-triage  triage_reply demo + dashboard attach + Langfuse OTel\n'
+	@printf '    make example-observed EXAMPLE=01_composition_research_analyst.py  run one examples/* script with dashboard attach + Langfuse OTel\n\n'
 	@printf '  Frontend (apps/frontend/):\n'
 	@printf '    make build-frontend     Build dashboard + studio bundles, copy into both apps\n'
 	@printf '    make dev-frontend       Vite dev server for dashboard (:5173, proxies to :$(DASHBOARD_PORT))\n'
@@ -142,6 +145,25 @@ demo:
 	OPERAD_OTEL=1 \
 	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$(LANGFUSE_PUBLIC_URL)/api/public/otel}" \
 	uv run --extra otel python apps/demos/agent_evolution/run.py --offline --dashboard
+
+demo-script:
+	@$(ENV_LOAD); \
+	OPERAD_OTEL=1 \
+	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$(LANGFUSE_PUBLIC_URL)/api/public/otel}" \
+	uv run --extra observers --extra otel python demo.py --dashboard
+
+demo-triage:
+	@$(ENV_LOAD); \
+	OPERAD_OTEL=1 \
+	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$(LANGFUSE_PUBLIC_URL)/api/public/otel}" \
+	uv run --extra otel python apps/demos/triage_reply/run.py --dashboard
+
+EXAMPLE ?= 01_composition_research_analyst.py
+example-observed:
+	@$(ENV_LOAD); \
+	OPERAD_OTEL=1 \
+	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$(LANGFUSE_PUBLIC_URL)/api/public/otel}" \
+	uv run --extra otel python "examples/$(EXAMPLE)" --dashboard
 
 # ------------------------------------------------------------------
 # Tests

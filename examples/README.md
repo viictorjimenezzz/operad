@@ -26,6 +26,28 @@ uv run python examples/03_train_config_temperature.py
 uv run python examples/04_evolutionary_best_of_n.py
 ```
 
+To stream runs into `operad-dashboard` from a separate process:
+
+```bash
+# terminal A
+uv run operad-dashboard --port 7860
+
+# terminal B
+uv run python examples/01_composition_research_analyst.py --dashboard
+```
+
+To also export spans to self-hosted Langfuse, set OTel env once and run
+with `OPERAD_OTEL=1`:
+
+```bash
+OPERAD_OTEL=1 \
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:3000/api/public/otel \
+uv run --extra otel python examples/01_composition_research_analyst.py --dashboard
+```
+
+All four scripts (`01`..`04`) accept `--dashboard [HOST:PORT]` and
+`--no-open`.
+
 `scripts/verify.sh` runs each one with `--offline` (the no-op path) so
 CI stays green without a model server. To exercise the live paths,
 start a llama-server pointed at the model in `_config.py` and run them
