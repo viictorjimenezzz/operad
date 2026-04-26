@@ -35,6 +35,7 @@ from .routes import iterations as iterations_routes
 from .routes import mutations as mutations_routes
 from .routes import progress as progress_routes
 from .routes import sweep as sweep_routes
+from . import agent_routes
 
 
 _PKG_DIR = Path(__file__).resolve().parent
@@ -258,6 +259,7 @@ def create_app(
     app.include_router(checkpoints_routes.router)
     app.include_router(gradients_routes.router)
     app.include_router(sweep_routes.router)
+    app.include_router(agent_routes.router)
     app.include_router(archive_routes.router)
     app.include_router(benchmark_routes.router)
     app.include_router(cassettes_routes.router)

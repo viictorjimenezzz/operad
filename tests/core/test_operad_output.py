@@ -115,3 +115,40 @@ async def test_run_id_correlates_with_observer(cfg) -> None:
         assert seen[0] == seen[1] == out.run_id
     finally:
         _obs.registry.clear()
+
+
+@pytest.mark.asyncio
+async def test_end_event_metadata_includes_dashboard_snapshot(cfg) -> None:
+    seen: list[_obs.AgentEvent] = []
+
+    class _Collector:
+        async def on_event(self, event: _obs.AgentEvent) -> None:
+            seen.append(event)
+
+    _obs.registry.register(_Collector())
+    try:
+        leaf = await FakeLeaf(
+            config=cfg,
+            input=A,
+            output=B,
+            canned={"value": 9},
+            task="score",
+        ).abuild()
+        await leaf(A(text="hello"))
+        end = seen[-1]
+        assert end.kind == "end"
+        assert end.metadata["class_name"] == "FakeLeaf"
+        assert end.metadata["kind"] == "leaf"
+        assert end.metadata["role"] == ""
+        assert end.metadata["task"] == "score"
+        assert isinstance(end.metadata["rules"], list)
+        assert isinstance(end.metadata["examples"], list)
+        assert isinstance(end.metadata["config"], dict)
+        assert isinstance(end.metadata["hash_content"], str)
+        assert isinstance(end.metadata["prompt_system"], str)
+        assert isinstance(end.metadata["prompt_user"], str)
+        assert isinstance(end.metadata["trainable_paths"], list)
+        assert end.metadata["forward_in_overridden"] is False
+        assert end.metadata["forward_out_overridden"] is False
+    finally:
+        _obs.registry.clear()

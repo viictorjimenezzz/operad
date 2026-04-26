@@ -43,7 +43,9 @@ class RunInfo:
     last_event_at: float
     state: RunState = "running"
     mermaid: str | None = None
+    graph_json: dict[str, Any] | None = None
     events: Deque[dict[str, Any]] = field(default_factory=deque)
+    events_by_agent_path: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     event_counts: dict[str, int] = field(default_factory=dict)
     algorithm_path: str | None = None
     algorithm_kinds: set[str] = field(default_factory=set)
@@ -86,6 +88,7 @@ class RunInfo:
             "last_event_at": self.last_event_at,
             "state": self.state,
             "has_graph": self.mermaid is not None,
+            "graph_json": self.graph_json,
             "is_algorithm": self.is_algorithm,
             "algorithm_path": self.algorithm_path,
             "algorithm_kinds": sorted(self.algorithm_kinds),
@@ -169,6 +172,7 @@ class RunRegistry:
         info.last_event_at = float(summary.get("last_event_at") or started_at)
         info.state = summary.get("state") or "running"
         info.mermaid = None
+        info.graph_json = summary.get("graph_json") if isinstance(summary.get("graph_json"), dict) else None
         info.algorithm_path = summary.get("algorithm_path")
         info.algorithm_kinds = set(summary.get("algorithm_kinds") or [])
         info.generations = list(summary.get("generations") or [])
@@ -187,8 +191,10 @@ class RunRegistry:
         info.synthetic = bool(summary.get("synthetic"))
         info.event_counts = dict(summary.get("event_counts") or {})
         info.events.clear()
+        info.events_by_agent_path.clear()
         for envelope in events:
             info.events.append(envelope)
+            self._index_event_by_agent_path(info, envelope)
             if info.mermaid is None and envelope.get("type") == "graph_envelope":
                 mermaid = envelope.get("mermaid")
                 if isinstance(mermaid, str):
@@ -252,6 +258,7 @@ class RunRegistry:
                 info.parent_run_id = parent
                 info.synthetic = True
         info.events.append(envelope)
+        self._index_event_by_agent_path(info, envelope)
         env_type = envelope.get("type")
         kind = envelope.get("kind") or "unknown"
         info.event_counts[kind] = info.event_counts.get(kind, 0) + 1
@@ -419,6 +426,7 @@ class RunRegistry:
         if info.mermaid is None:
             graph_data = metadata.get("graph")
             if isinstance(graph_data, dict) and graph_data.get("nodes"):
+                info.graph_json = graph_data
                 info.mermaid = self._render_mermaid(graph_data)
         if kind == "end":
             out = envelope.get("output")
@@ -446,6 +454,7 @@ class RunRegistry:
         if info.mermaid is None and metadata:
             graph_data = metadata.get("graph")
             if isinstance(graph_data, dict) and graph_data.get("nodes"):
+                info.graph_json = graph_data
                 info.mermaid = self._render_mermaid(graph_data)
         if metadata and metadata.get("is_root"):
             if kind == "end":
@@ -466,6 +475,13 @@ class RunRegistry:
             return to_mermaid(graph)
         except Exception:
             return _fallback_mermaid(graph_data)
+
+    def _index_event_by_agent_path(
+        self, info: RunInfo, envelope: dict[str, Any]
+    ) -> None:
+        path = envelope.get("agent_path")
+        if isinstance(path, str) and path:
+            info.events_by_agent_path.setdefault(path, []).append(envelope)
 
     def _evict_if_needed(self) -> None:
         while len(self._runs) > self._capacity:

@@ -28,7 +28,7 @@ def _dump_payload(x: Any) -> Any:
     return repr(x)
 
 
-def serialize_event(event: Event) -> dict[str, Any]:
+def serialize_event(event: Event, *, strip_graph: bool = True) -> dict[str, Any]:
     """Convert an operad Event into a JSON-safe envelope dict for SSE."""
     if isinstance(event, AlgorithmEvent):
         return {
@@ -48,7 +48,7 @@ def serialize_event(event: Event) -> dict[str, Any]:
             "type": type(event.error).__name__,
             "message": str(event.error),
         }
-    metadata = _safe_metadata(event.metadata)
+    metadata = _safe_metadata(event.metadata, strip_graph=strip_graph)
     return {
         "type": "agent_event",
         "run_id": event.run_id,
@@ -63,14 +63,14 @@ def serialize_event(event: Event) -> dict[str, Any]:
     }
 
 
-def _safe_metadata(meta: dict[str, Any]) -> dict[str, Any]:
+def _safe_metadata(meta: dict[str, Any], *, strip_graph: bool) -> dict[str, Any]:
     """Strip the (potentially large) graph dict from streamed metadata.
 
     The graph is cached separately by RunRegistry and served at
     /graph/{run_id}; sending it on every event would saturate the SSE
     channel.
     """
-    if "graph" not in meta:
+    if not strip_graph or "graph" not in meta:
         return meta
     out = dict(meta)
     out["graph"] = "<cached at /graph/{run_id}>"
@@ -112,10 +112,10 @@ class WebDashboardObserver:
         return len(self._subscribers)
 
     async def on_event(self, event: Event) -> None:
-        envelope = serialize_event(event)
+        envelope = serialize_event(event, strip_graph=False)
         self.registry.record_envelope(envelope)
         self._maybe_snapshot_terminal(envelope)
-        await self.broadcast(envelope, record=False)
+        await self.broadcast(serialize_event(event), record=False)
 
     async def broadcast(
         self, envelope: dict[str, Any], *, record: bool = True
