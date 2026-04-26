@@ -319,6 +319,24 @@ export type DebateRound = z.infer<typeof DebateRound>;
 export const DebateRoundsResponse = z.array(DebateRound);
 export type DebateRoundsResponse = z.infer<typeof DebateRoundsResponse>;
 
+export const IterationsResponse = z.object({
+  iterations: z
+    .array(
+      z.object({
+        iter_index: z.number(),
+        phase: z.string().nullable().default(null),
+        score: z.number().nullable().default(null),
+        text: z.string().nullable().default(null),
+        metadata: z.record(z.unknown()).default({}),
+      }),
+    )
+    .default([]),
+  max_iter: z.number().nullable().default(null),
+  threshold: z.number().nullable().default(null),
+  converged: z.boolean().nullable().default(null),
+});
+export type IterationsResponse = z.infer<typeof IterationsResponse>;
+
 export const GraphResponse = z.object({ mermaid: z.string() });
 export type GraphResponse = z.infer<typeof GraphResponse>;
 
