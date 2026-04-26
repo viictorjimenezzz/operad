@@ -187,9 +187,9 @@ def _generic_composite_rule(
 
 
 def _register_builtin_rules() -> None:
-    from operad.agents.core.pipelines import Parallel
-    from operad.agents.core.pipelines import Sequential
-    from operad.agents.core.pipelines import Router
+    from operad.core.pipelines import Parallel
+    from operad.core.pipelines import Sequential
+    from operad.core.pipelines import Router
 
     _RULES[Sequential] = _pipeline_split
     _RULES[Parallel] = _parallel_split

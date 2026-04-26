@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from operad import Configuration
-from operad.agents.core.pipelines import Sequential
+from operad.core.pipelines import Sequential
 from operad.core.config import Sampling
 from operad.optim import (
     CategoricalParameter,

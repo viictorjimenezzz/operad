@@ -25,7 +25,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, Field
 
-from ..agents.core.pipelines import Loop
+from ..core.pipelines import Loop
 from ..agents.reasoning.components import (
     Critic,
     FakeRetriever,

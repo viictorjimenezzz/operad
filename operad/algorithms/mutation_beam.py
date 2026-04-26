@@ -21,7 +21,7 @@ from typing import Any, Literal, Sequence
 
 from pydantic import BaseModel, Field
 
-from ..agents.core.pipelines import Parallel, Sequential
+from ..core.pipelines import Parallel, Sequential
 from ..agents.reasoning.components import Reasoner
 from ..agents.reasoning.react import ReAct
 from ..agents.reasoning.schemas import Answer, Candidate, Score, Task

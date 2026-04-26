@@ -24,7 +24,7 @@ from typing import Any, Callable, ClassVar, Generic
 
 from pydantic import BaseModel, Field
 
-from ..agents.core.pipelines import Loop
+from ..core.pipelines import Loop
 from ..agents.reasoning.components import Reflector
 from ..agents.reasoning.components.reasoner import Reasoner
 from ..agents.reasoning.schemas import Answer, Reflection, ReflectionInput, Task

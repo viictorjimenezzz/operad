@@ -839,7 +839,7 @@ class Agent(Generic[In, Out]):
     # --- composition --------------------------------------------------------
     def __rshift__(self, other: "Agent[Any, Any]") -> "Agent[Any, Any]":
         """`a >> b` constructs a `Sequential(a, b)`; flattens when chained."""
-        from ..agents.core.pipelines import Sequential
+        from .pipelines import Sequential
 
         if isinstance(self, Sequential):
             return Sequential(
@@ -1041,7 +1041,7 @@ class Agent(Generic[In, Out]):
         for path, agent in flow.nodes.items():
             if path == self.name and agent is self and not self._children:
                 continue
-            segments = _outline_segments(self.name, path)
+            segments = _outline_segments(self.name, path, flow.loops)
             node = root
             for seg in segments:
                 child = node.branches.get(seg)
@@ -1057,10 +1057,10 @@ class Agent(Generic[In, Out]):
         def _render(node: _OutlineNode, prefix: str) -> None:
             for idx, (kind, label) in enumerate(node.order):
                 is_last = idx == len(node.order) - 1
-                branch = "`- " if is_last else "|- "
+                branch = "└── " if is_last else "├── "
                 lines.append(f"{prefix}{branch}{label}")
                 if kind == "branch":
-                    child_prefix = prefix + ("   " if is_last else "|  ")
+                    child_prefix = prefix + ("    " if is_last else "│   ")
                     _render(node.branches[label], child_prefix)
 
         _render(root, "")
@@ -2196,6 +2196,7 @@ class _LeafFlowSpec:
     edges: list[tuple[str, str, type[Any] | None]] = field(default_factory=list)
     entries: list[tuple[str, type[Any] | None]] = field(default_factory=list)
     exits: list[tuple[str, type[Any] | None]] = field(default_factory=list)
+    loops: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -2214,6 +2215,7 @@ def _merge_flow(dst: _LeafFlowSpec, src: _LeafFlowSpec) -> None:
     for path, agent in src.nodes.items():
         dst.nodes.setdefault(path, agent)
     dst.edges.extend(src.edges)
+    dst.loops.update(src.loops)
 
 
 def _dedupe_ports(
@@ -2235,13 +2237,25 @@ def _is_stage_segment(segment: str) -> bool:
     return segment[6:].isdigit()
 
 
-def _outline_segments(root_name: str, path: str) -> list[str]:
+def _outline_segments(
+    root_name: str,
+    path: str,
+    loops: dict[str, str],
+) -> list[str]:
     parts = path.split(".")
     if parts and parts[0] == root_name:
         parts = parts[1:]
 
+    current = [root_name]
     out: list[str] = []
+    root_loop = loops.get(root_name)
+    if root_loop is not None:
+        out.append(root_loop)
     for seg in parts:
+        current.append(seg)
+        loop_label = loops.get(".".join(current))
+        if loop_label is not None:
+            out.append(loop_label)
         if seg in {"pipeline", "child"}:
             continue
         if _is_stage_segment(seg):
@@ -2258,7 +2272,7 @@ def _outline_segments(root_name: str, path: str) -> list[str]:
 
 
 def _leaf_flow(root: "Agent[Any, Any]") -> _LeafFlowSpec:
-    from ..agents.core.pipelines import Loop, Parallel, Router, Sequential
+    from .pipelines import Loop, Parallel, Router, Sequential
 
     def _child_path(
         parent: "Agent[Any, Any]",
@@ -2324,6 +2338,10 @@ def _leaf_flow(root: "Agent[Any, Any]") -> _LeafFlowSpec:
                 for src_path, _ in out.exits:
                     for dst_path, in_t in out.entries:
                         out.edges.append((src_path, dst_path, in_t))
+            if agent.n_loops <= 1:
+                out.loops[path] = "loop"
+            else:
+                out.loops[path] = f"loop x{agent.n_loops}"
             return out
 
         if isinstance(agent, Sequential):
