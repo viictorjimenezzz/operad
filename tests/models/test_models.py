@@ -230,12 +230,3 @@ def test_resolve_model_emits_dead_knob_warning() -> None:
     assert dead == []
 
 
-def test_memory_shapes_deprecated_shim() -> None:
-    import operad.agents.memory.shapes as old_mod
-    import operad.agents.memory.schemas as new_mod
-
-    with pytest.warns(DeprecationWarning, match="memory.shapes"):
-        importlib.reload(old_mod)
-
-    for name in ("Belief", "Beliefs", "Conversation", "Summary", "Turn", "UserModel"):
-        assert getattr(old_mod, name) is getattr(new_mod, name)

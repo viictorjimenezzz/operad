@@ -26,7 +26,8 @@ STUDIO_PORT         ?= 7870
         verify \
         cassettes-refresh cassettes-check \
         frontend-install frontend-typecheck frontend-test frontend-build \
-        build-frontend dev-frontend dev-studio-frontend
+        build-frontend dev-frontend dev-studio-frontend \
+        ensure-bundles
 
 # ------------------------------------------------------------------
 # Help (default target)
@@ -119,13 +120,26 @@ header:
 # Host-mode app launchers (no docker)
 # ------------------------------------------------------------------
 
-dashboard:
+DASHBOARD_BUNDLE := apps/dashboard/operad_dashboard/web/index.html
+STUDIO_BUNDLE    := apps/studio/operad_studio/web/index.html
+
+# The dashboard and studio Python packages force-include their `web/`
+# directories at wheel-build time. A fresh clone has no bundle, so the
+# editable install fails. `ensure-bundles` builds them on demand the
+# first time anyone runs the apps locally.
+ensure-bundles:
+	@if [ ! -f $(DASHBOARD_BUNDLE) ] || [ ! -f $(STUDIO_BUNDLE) ]; then \
+		echo "==> ensure-bundles: missing frontend bundle(s); running build-frontend"; \
+		$(MAKE) build-frontend; \
+	fi
+
+dashboard: ensure-bundles
 	@$(ENV_LOAD); \
 	uv run --extra dashboard --extra observers operad-dashboard \
 		--host 127.0.0.1 \
 		--port $(DASHBOARD_PORT)
 
-studio:
+studio: ensure-bundles
 	@$(ENV_LOAD); \
 	mkdir -p .studio-data; \
 	uv run operad-studio \
@@ -159,7 +173,7 @@ demo-triage:
 	uv run --extra otel python apps/demos/triage_reply/run.py --dashboard
 
 EXAMPLE ?= 01_composition_research_analyst.py
-example-observed:
+example-observed: ensure-bundles
 	@$(ENV_LOAD); \
 	OPERAD_OTEL=1 \
 	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$(LANGFUSE_PUBLIC_URL)/api/public/otel}" \
