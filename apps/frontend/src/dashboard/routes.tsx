@@ -1,3 +1,5 @@
+import { BenchmarkDetailPage } from "@/dashboard/pages/BenchmarkDetailPage";
+import { BenchmarksPage } from "@/dashboard/pages/BenchmarksPage";
 import { CassetteDetailPage } from "@/dashboard/pages/CassetteDetailPage";
 import { CassettesPage } from "@/dashboard/pages/CassettesPage";
 import { ExperimentsPage } from "@/dashboard/pages/ExperimentsPage";
@@ -14,6 +16,8 @@ export const dashboardRoutes = [
     children: [
       { index: true, element: <RunListPage /> },
       { path: "runs/:runId", element: <RunDetailPage /> },
+      { path: "benchmarks", element: <BenchmarksPage /> },
+      { path: "benchmarks/:benchmarkId", element: <BenchmarkDetailPage /> },
       { path: "cassettes", element: <CassettesPage /> },
       { path: "cassettes/*", element: <CassetteDetailPage /> },
       { path: "experiments", element: <ExperimentsPage /> },

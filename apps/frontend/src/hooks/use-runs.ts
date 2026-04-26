@@ -1,5 +1,5 @@
 import { dashboardApi } from "@/lib/api/dashboard";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export function useRuns() {
   return useQuery({
@@ -91,6 +91,46 @@ export function useProgress(runId: string | null | undefined) {
       return dashboardApi.progress(runId);
     },
     enabled: !!runId,
+  });
+}
+
+export function useBenchmarks() {
+  return useQuery({
+    queryKey: ["benchmarks"] as const,
+    queryFn: () => dashboardApi.benchmarks(),
+  });
+}
+
+export function useBenchmarkDetail(benchmarkId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["benchmarks", benchmarkId] as const,
+    queryFn: () => {
+      if (!benchmarkId) throw new Error("useBenchmarkDetail: benchmarkId is required");
+      return dashboardApi.benchmarkDetail(benchmarkId);
+    },
+    enabled: !!benchmarkId,
+  });
+}
+
+export function useBenchmarkTag() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ benchmarkId, tag }: { benchmarkId: string; tag: string }) =>
+      dashboardApi.benchmarkTag(benchmarkId, tag),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["benchmarks"] });
+      queryClient.invalidateQueries({ queryKey: ["benchmarks", vars.benchmarkId] });
+    },
+  });
+}
+
+export function useBenchmarkDelete() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (benchmarkId: string) => dashboardApi.benchmarkDelete(benchmarkId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["benchmarks"] });
+    },
   });
 }
 

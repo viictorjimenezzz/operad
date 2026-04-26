@@ -1,4 +1,8 @@
 import {
+  BenchmarkDetailResponse,
+  BenchmarkIngestResponse,
+  BenchmarkListItem,
+  BenchmarkOkResponse,
   CassetteDeterminismResponse,
   CassettePreviewResponse,
   CassetteReplayResponse,
@@ -37,16 +41,21 @@ async function getJson<T extends z.ZodTypeAny>(url: string, schema: T): Promise<
   return parsed.data;
 }
 
-async function postJson<T extends z.ZodTypeAny>(
+async function sendJson<T extends z.ZodTypeAny>(
+  method: "POST" | "DELETE",
   url: string,
-  body: unknown,
   schema: T,
+  body?: unknown,
 ): Promise<z.infer<T>> {
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { accept: "application/json", "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const init: RequestInit = {
+    method,
+    headers: {
+      accept: "application/json",
+      ...(body !== undefined ? { "content-type": "application/json" } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  };
+  const r = await fetch(url, init);
   if (!r.ok) throw new HttpError(r.status, `${r.status} ${r.statusText} ← ${url}`);
   const raw: unknown = await r.json();
   const parsed = schema.safeParse(raw);
@@ -54,6 +63,14 @@ async function postJson<T extends z.ZodTypeAny>(
     throw new ParseError(url, parsed.error);
   }
   return parsed.data;
+}
+
+async function postJson<T extends z.ZodTypeAny>(
+  url: string,
+  body: unknown,
+  schema: T,
+): Promise<z.infer<T>> {
+  return sendJson("POST", url, schema, body);
 }
 
 export class HttpError extends Error {
@@ -93,6 +110,15 @@ export const dashboardApi = {
   mutations: (runId: string) => getJson(`/runs/${runId}/mutations.json`, MutationsMatrix),
   drift: (runId: string) => getJson(`/runs/${runId}/drift.json`, z.array(DriftEntry)),
   progress: (runId: string) => getJson(`/runs/${runId}/progress.json`, ProgressSnapshot),
+  benchmarks: () => getJson("/benchmarks", z.array(BenchmarkListItem)),
+  benchmarkDetail: (benchmarkId: string) =>
+    getJson(`/benchmarks/${benchmarkId}`, BenchmarkDetailResponse),
+  benchmarkIngest: (report: unknown) =>
+    sendJson("POST", "/benchmarks/_ingest", BenchmarkIngestResponse, report),
+  benchmarkTag: (benchmarkId: string, tag: string) =>
+    sendJson("POST", `/benchmarks/${benchmarkId}/tag`, BenchmarkOkResponse, { tag }),
+  benchmarkDelete: (benchmarkId: string) =>
+    sendJson("DELETE", `/benchmarks/${benchmarkId}`, BenchmarkOkResponse),
   stats: () => getJson("/stats", StatsResponse),
   evolution: () => getJson("/evolution", EvolutionResponse),
   cassettes: () => getJson("/cassettes", z.array(CassetteSummary)),

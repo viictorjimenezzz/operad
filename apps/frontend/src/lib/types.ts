@@ -292,6 +292,98 @@ export const ProgressSnapshot = z.object({
 });
 export type ProgressSnapshot = z.infer<typeof ProgressSnapshot>;
 
+// --- Benchmark shapes --------------------------------------------------------
+
+export const BenchmarkTokens = z.object({
+  prompt: z.number(),
+  completion: z.number(),
+});
+export type BenchmarkTokens = z.infer<typeof BenchmarkTokens>;
+
+export const BenchmarkCell = z.object({
+  task: z.string(),
+  method: z.string(),
+  seed: z.number(),
+  metric: z.string(),
+  score: z.number(),
+  tokens: BenchmarkTokens,
+  latency_s: z.number(),
+});
+export type BenchmarkCell = z.infer<typeof BenchmarkCell>;
+
+export const BenchmarkSummaryRow = z.object({
+  task: z.string(),
+  method: z.string(),
+  mean: z.number(),
+  std: z.number(),
+  tokens_mean: z.number(),
+  latency_mean: z.number(),
+  n: z.number(),
+});
+export type BenchmarkSummaryRow = z.infer<typeof BenchmarkSummaryRow>;
+
+export const BenchmarkReport = z.object({
+  cells: z.array(BenchmarkCell),
+  summary: z.array(BenchmarkSummaryRow),
+  headline_findings: z.record(z.string()),
+});
+export type BenchmarkReport = z.infer<typeof BenchmarkReport>;
+
+export const BenchmarkLeaderboardEntry = z.object({
+  task: z.string(),
+  method: z.string(),
+  mean: z.number(),
+});
+export type BenchmarkLeaderboardEntry = z.infer<typeof BenchmarkLeaderboardEntry>;
+
+export const BenchmarkListItem = z.object({
+  id: z.string(),
+  name: z.string(),
+  created_at: z.number(),
+  tag: z.string().nullable(),
+  tagged_at: z.number().nullable(),
+  n_tasks: z.number(),
+  n_methods: z.number(),
+  summary: z.string(),
+  leaderboard: z.array(BenchmarkLeaderboardEntry),
+});
+export type BenchmarkListItem = z.infer<typeof BenchmarkListItem>;
+
+export const BenchmarkBaseline = z.object({
+  id: z.string(),
+  name: z.string(),
+  tag: z.string().nullable(),
+  created_at: z.number(),
+});
+export type BenchmarkBaseline = z.infer<typeof BenchmarkBaseline>;
+
+export const BenchmarkDeltaRow = z.object({
+  task: z.string(),
+  method: z.string(),
+  delta: z.number(),
+});
+export type BenchmarkDeltaRow = z.infer<typeof BenchmarkDeltaRow>;
+
+export const BenchmarkDetailResponse = z.object({
+  id: z.string(),
+  name: z.string(),
+  created_at: z.number(),
+  tag: z.string().nullable(),
+  tagged_at: z.number().nullable(),
+  n_tasks: z.number(),
+  n_methods: z.number(),
+  report: BenchmarkReport,
+  baseline: BenchmarkBaseline.nullable(),
+  delta: z.array(BenchmarkDeltaRow),
+});
+export type BenchmarkDetailResponse = z.infer<typeof BenchmarkDetailResponse>;
+
+export const BenchmarkIngestResponse = z.object({ id: z.string() });
+export type BenchmarkIngestResponse = z.infer<typeof BenchmarkIngestResponse>;
+
+export const BenchmarkOkResponse = z.object({ ok: z.boolean() });
+export type BenchmarkOkResponse = z.infer<typeof BenchmarkOkResponse>;
+
 // --- Debate panel shapes -----------------------------------------------------
 
 export const DebateProposal = z.object({
