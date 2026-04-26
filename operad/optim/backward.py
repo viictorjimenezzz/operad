@@ -20,7 +20,7 @@ and writes a ``TextualGradient`` onto every trainable ``Parameter``'s
 
 Custom composite types register their own split rules via
 ``register_backward_rule(cls, fn)``. Built-in rules cover ``Sequential``,
-``Parallel``, and ``Switch``; every other composite falls back to a
+``Parallel``, and ``Router``; every other composite falls back to a
 uniform fan-out with a one-time ``RuntimeWarning``.
 
 Observability: each refined node-gradient and each per-parameter
@@ -34,7 +34,7 @@ Known limitations (filed as follow-up issues):
   copy to every earlier stage. ``propagate`` today refines a node's
   output-critique; it does not produce an input-gradient, so we cannot
   chain stage-k's output-grad into stage-(k-1)'s output-grad.
-- ``_switch_split`` gives the router a null gradient. A future rule can
+- ``_router_split`` gives the selector a null gradient. A future rule can
   attribute "you routed to the wrong branch" back into the router when
   the branch's output-critique points away from the taken branch.
 - ``Debate`` (an algorithm, not an ``Agent`` subclass) falls through to
@@ -136,14 +136,14 @@ def _parallel_split(
     return {child.agent_path: out_grad.model_copy() for child in children}
 
 
-def _switch_split(
+def _router_split(
     entry: TapeEntry,
     out_grad: TextualGradient,
     children: list[TapeEntry],
 ) -> dict[str, TextualGradient]:
-    """Switch: only the taken branch receives the gradient. The taken
+    """Router: only the taken branch receives the gradient. The taken
     branch is identified by matching each child's ``response`` against
-    the Switch's ``response``. Router and untaken branches get the
+    the Router's ``response``. Selector and untaken branches get the
     null gradient."""
     null = TextualGradient.null_gradient()
     result: dict[str, TextualGradient] = {
@@ -189,11 +189,11 @@ def _generic_composite_rule(
 def _register_builtin_rules() -> None:
     from operad.agents.pipelines import Parallel
     from operad.agents.pipelines import Sequential
-    from operad.agents.reasoning.switch import Switch
+    from operad.agents.pipelines import Router
 
     _RULES[Sequential] = _pipeline_split
     _RULES[Parallel] = _parallel_split
-    _RULES[Switch] = _switch_split
+    _RULES[Router] = _router_split
 
 
 _register_builtin_rules()

@@ -2,7 +2,7 @@
 
 Topology::
 
-    Switch                          (input=Ticket, output=Reply)
+    Router                          (input=Ticket, output=Reply)
     ├── router  : RouterLeaf        (Ticket -> RouteChoice)
     └── branches
         ├── billing : BillingResponder    (Ticket -> Reply)
@@ -11,7 +11,8 @@ Topology::
         │             └── stage_1: TechResponder (Diagnosis -> Reply)
         └── general : GeneralResponder    (Ticket -> Reply)
 
-This exercises three composition primitives — `Switch`, `Router`-style
+This exercises three composition primitives — structural `Router`,
+`RouteClassifier`-style
 leaf, and a nested `Sequential` — in five evolvable leaves. Mutation paths
 from the root therefore look like ``router``,
 ``branch_billing``, ``branch_tech.stage_0``,
@@ -20,8 +21,7 @@ from the root therefore look like ``router``,
 
 from __future__ import annotations
 
-from operad.agents.pipelines import Sequential
-from operad.agents.reasoning.switch import Switch
+from operad.agents.pipelines import Router, Sequential
 
 from leaves import (
     BillingResponder,
@@ -33,7 +33,7 @@ from leaves import (
 from schemas import Reply, Ticket
 
 
-def build_seed() -> Switch:
+def build_seed() -> Router:
     """Construct the unbuilt seed for `run.py` to evolve.
 
     The seed is intentionally weak: the router has no rules (so it
@@ -47,7 +47,7 @@ def build_seed() -> Switch:
         input=Ticket,
         output=Reply,
     )
-    return Switch(
+    return Router(
         router=RouterLeaf(),
         branches={
             "billing": BillingResponder(),

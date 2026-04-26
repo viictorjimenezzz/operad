@@ -160,7 +160,7 @@ def _raise_payload_branch(
         "payload_branch",
         f"composite {composite_cls}.forward read "
         f"{access}{locus} during trace; "
-        "route on a child's typed output (e.g. Switch over a "
+        "route on a child's typed output (e.g. Router over a "
         "Literal choice) instead of the payload value",
         agent=agent_name,
         mermaid=to_mermaid_node(agent_name, io, note=note),

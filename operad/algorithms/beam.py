@@ -18,9 +18,12 @@ import asyncio
 import time
 from typing import ClassVar, Generic
 
+from pydantic import BaseModel, Field
+
+from ..agents.pipelines import Parallel
 from ..agents.reasoning.components import Critic, Reasoner
 from ..agents.reasoning.schemas import Answer, Candidate, Score, Task
-from ..core.agent import Agent, In, Out
+from ..core.agent import Agent, In, Out, _TRACER
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 
 
@@ -39,6 +42,16 @@ def _as_text(x: object) -> str:
     if isinstance(answer, str):
         return answer
     return str(x)
+
+
+async def _ensure_built(*agents: Agent) -> None:
+    pending = [a.abuild() for a in agents if not a._built]
+    if pending:
+        await asyncio.gather(*pending)
+
+
+class _CandidateBatch(BaseModel):
+    candidates: list[BaseModel] = Field(default_factory=list)
 
 
 class Beam(Generic[In, Out]):
@@ -91,13 +104,21 @@ class Beam(Generic[In, Out]):
                 started_at=started,
             )
             try:
-                # forward() is reentrant under stateless=True (the default),
-                # so n concurrent calls on the same generator/judge instance
-                # do not race on shared strands state.
-                gen_outputs = await asyncio.gather(
-                    *(self.generator(x) for _ in range(self.n))
+                if _TRACER.get() is None:
+                    await _ensure_built(self.generator, self.judge)
+
+                generator_fanout = Parallel(
+                    {f"candidate_{i}": self.generator for i in range(self.n)},
+                    input=self.generator.input,  # type: ignore[arg-type]
+                    output=_CandidateBatch,
+                    combine=lambda results: _CandidateBatch(
+                        candidates=[
+                            results[f"candidate_{i}"] for i in range(self.n)
+                        ]
+                    ),
                 )
-                candidates: list[Out] = [g.response for g in gen_outputs]
+                candidate_batch = await generator_fanout.forward(x)
+                candidates: list[Out] = candidate_batch.candidates  # type: ignore[assignment]
                 judge_outputs = await asyncio.gather(
                     *(
                         self.judge(Candidate(input=x, output=candidates[i]))

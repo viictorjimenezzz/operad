@@ -18,7 +18,7 @@ from operad import Parallel
 from ..conftest import A, B, D, FakeLeaf
 from typing import Any, Literal
 from operad import Agent, BuildError
-from operad.agents import Choice, RouteInput, Router, Switch
+from operad.agents import Choice, RouteClassifier, RouteInput, Router
 from tests.conftest import A, B
 from operad import Agent, Parallel, Sequential
 from operad.core.graph import to_json, to_mermaid
@@ -284,7 +284,7 @@ class Label(Choice[Literal["a", "b"]]):
     pass
 
 
-class _StubRouter(Router):
+class _StubRouter(RouteClassifier):
     def __init__(self, *, label: str) -> None:
         super().__init__(config=None, input=A, output=Label)
         self._label = label
@@ -304,8 +304,8 @@ class _Branch(Agent[Any, Any]):
         return B(value=1 if self._tag == "a" else 2)
 
 
-def _build_switch(*, label: str) -> Switch:
-    return Switch(
+def _build_switch(*, label: str) -> Router:
+    return Router(
         router=_StubRouter(label=label),
         branches={"a": _Branch(tag="a"), "b": _Branch(tag="b")},
         input=A,
@@ -316,9 +316,9 @@ def _build_switch(*, label: str) -> Switch:
 async def test_switch_build_traces_router_and_every_branch() -> None:
     s = await _build_switch(label="a").abuild()
     callees = {e.callee for e in s._graph.edges}
-    assert "Switch.router" in callees
-    assert "Switch.branch_a" in callees
-    assert "Switch.branch_b" in callees
+    assert "Router.router" in callees
+    assert "Router.branch_a" in callees
+    assert "Router.branch_b" in callees
 
 
 async def test_switch_runtime_dispatches_to_selected_branch() -> None:
@@ -345,7 +345,7 @@ async def test_switch_raises_router_miss_on_unknown_label() -> None:
 
 async def test_switch_requires_at_least_one_branch() -> None:
     with pytest.raises(ValueError):
-        Switch(
+        Router(
             router=_StubRouter(label="a"),
             branches={},
             input=A,

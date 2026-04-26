@@ -22,7 +22,7 @@ from .reasoner import Reasoner
 from .reformulator import Reformulator
 from .reflector import Reflection, ReflectionInput, Reflector
 from .retriever import Hit, Hits, Query, Retriever
-from .router import Choice, RouteInput, Router
+from .router import Choice, RouteClassifier, RouteInput
 from .summarizer import Summarizer
 from .tool_user import Tool, ToolCall, ToolResult, ToolUser
 
@@ -48,7 +48,7 @@ __all__ = [
     "Reflector",
     "Retriever",
     "RouteInput",
-    "Router",
+    "RouteClassifier",
     "Summarizer",
     "Tool",
     "ToolCall",

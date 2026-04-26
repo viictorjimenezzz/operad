@@ -142,9 +142,11 @@ async def test_pr_reviewer_graph_has_expected_nodes(cfg) -> None:
     paths = {n.path for n in r._graph.nodes}
     assert paths == {
         "PRReviewer",
-        "PRReviewer.optimizer",
-        "PRReviewer.summarizer",
-        "PRReviewer.reviewer",
+        "PRReviewer.pipeline",
+        "PRReviewer.pipeline.stage_0",
+        "PRReviewer.pipeline.stage_1",
+        "PRReviewer.pipeline.stage_1.summary",
+        "PRReviewer.pipeline.stage_1.review",
     }
 
 
@@ -152,24 +154,30 @@ async def test_pr_reviewer_graph_edges_match_stage_types(cfg) -> None:
     r = await _stub_pr_reviewer(cfg).abuild()
     by_callee = {e.callee: e for e in r._graph.edges}
     assert set(by_callee) == {
-        "PRReviewer.optimizer",
-        "PRReviewer.summarizer",
-        "PRReviewer.reviewer",
+        "PRReviewer.pipeline",
+        "PRReviewer.pipeline.stage_0",
+        "PRReviewer.pipeline.stage_1",
+        "PRReviewer.pipeline.stage_1.summary",
+        "PRReviewer.pipeline.stage_1.review",
     }
-    assert by_callee["PRReviewer.optimizer"].input_type is PRDiff
-    assert by_callee["PRReviewer.optimizer"].output_type is PRDiff
-    assert by_callee["PRReviewer.summarizer"].input_type is PRDiff
-    assert by_callee["PRReviewer.summarizer"].output_type is PRSummary
-    assert by_callee["PRReviewer.reviewer"].input_type is PRDiff
-    assert by_callee["PRReviewer.reviewer"].output_type is ReviewReport
+    assert by_callee["PRReviewer.pipeline"].input_type is PRDiff
+    assert by_callee["PRReviewer.pipeline"].output_type is ReviewReport
+    assert by_callee["PRReviewer.pipeline.stage_0"].input_type is PRDiff
+    assert by_callee["PRReviewer.pipeline.stage_0"].output_type is PRDiff
+    assert by_callee["PRReviewer.pipeline.stage_1"].input_type is PRDiff
+    assert by_callee["PRReviewer.pipeline.stage_1"].output_type is ReviewReport
+    assert by_callee["PRReviewer.pipeline.stage_1.summary"].input_type is PRDiff
+    assert by_callee["PRReviewer.pipeline.stage_1.summary"].output_type is PRSummary
+    assert by_callee["PRReviewer.pipeline.stage_1.review"].input_type is PRDiff
+    assert by_callee["PRReviewer.pipeline.stage_1.review"].output_type is ReviewReport
 
 
 async def test_pr_reviewer_mermaid_contains_stage_paths(cfg) -> None:
     r = await _stub_pr_reviewer(cfg).abuild()
     text = to_mermaid(r._graph)
-    assert "PRReviewer_optimizer" in text
-    assert "PRReviewer_summarizer" in text
-    assert "PRReviewer_reviewer" in text
+    assert "PRReviewer_pipeline_stage_0" in text
+    assert "PRReviewer_pipeline_stage_1_summary" in text
+    assert "PRReviewer_pipeline_stage_1_review" in text
 
 
 async def test_pr_reviewer_routes_through_stubs_end_to_end(cfg) -> None:

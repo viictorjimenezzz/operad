@@ -14,7 +14,7 @@ from operad.agents import Action, Actor, Answer, Evaluator, Extractor, Observati
 from operad.agents import Reflection, ReflectionInput, Reflector
 from operad.agents import Hit, Hits, Query, Retriever
 from typing import Any, Literal
-from operad.agents import Choice, RouteInput, Router
+from operad.agents import Choice, RouteClassifier, RouteInput
 
 
 # --- from test_reasoning_components.py ---
@@ -160,19 +160,27 @@ async def test_react_graph_captures_four_typed_edges(cfg) -> None:
     r = await _stub_react(cfg).abuild()
     callees = {e.callee: e for e in r._graph.edges}
     assert set(callees) == {
-        "ReAct.reasoner",
-        "ReAct.actor",
-        "ReAct.extractor",
-        "ReAct.evaluator",
+        "ReAct.pipeline",
+        "ReAct.pipeline.stage_0",
+        "ReAct.pipeline.stage_1",
+        "ReAct.pipeline.stage_1.stage_0",
+        "ReAct.pipeline.stage_1.stage_0.child",
+        "ReAct.pipeline.stage_1.stage_1",
+        "ReAct.pipeline.stage_1.stage_1.child",
+        "ReAct.pipeline.stage_1.stage_2",
+        "ReAct.pipeline.stage_1.stage_2.child",
+        "ReAct.pipeline.stage_1.stage_3",
+        "ReAct.pipeline.stage_1.stage_3.child",
+        "ReAct.pipeline.stage_2",
     }
-    assert callees["ReAct.reasoner"].input_type is Task
-    assert callees["ReAct.reasoner"].output_type is Thought
-    assert callees["ReAct.actor"].input_type is Thought
-    assert callees["ReAct.actor"].output_type is Action
-    assert callees["ReAct.extractor"].input_type is Action
-    assert callees["ReAct.extractor"].output_type is Observation
-    assert callees["ReAct.evaluator"].input_type is Observation
-    assert callees["ReAct.evaluator"].output_type is Answer
+    assert callees["ReAct.pipeline.stage_1.stage_0.child"].input_type is Task
+    assert callees["ReAct.pipeline.stage_1.stage_0.child"].output_type is Thought
+    assert callees["ReAct.pipeline.stage_1.stage_1.child"].input_type is Thought
+    assert callees["ReAct.pipeline.stage_1.stage_1.child"].output_type is Action
+    assert callees["ReAct.pipeline.stage_1.stage_2.child"].input_type is Action
+    assert callees["ReAct.pipeline.stage_1.stage_2.child"].output_type is Observation
+    assert callees["ReAct.pipeline.stage_1.stage_3.child"].input_type is Observation
+    assert callees["ReAct.pipeline.stage_1.stage_3.child"].output_type is Answer
 
 
 async def test_react_end_to_end_routes_through_stub_pipeline(cfg) -> None:
@@ -287,7 +295,7 @@ class Mode(Choice[Literal["search", "compute"]]):
     pass
 
 
-class _StubRouter(Router):
+class _StubRouter(RouteClassifier):
     def __init__(self, *, label: str) -> None:
         super().__init__(config=None, input=RouteInput, output=Mode)
         self._label = label
@@ -304,7 +312,7 @@ async def test_router_emits_typed_choice() -> None:
     assert out.response.reasoning == "stub"
 
 
-async def test_router_default_output_is_choice_str_alias() -> None:
+async def test_route_classifier_default_output_is_choice_str_alias() -> None:
     # The bare class-level default uses Choice[str]. Instances typically
     # narrow via a subclass at construction.
-    assert Router.output is not None
+    assert RouteClassifier.output is not None

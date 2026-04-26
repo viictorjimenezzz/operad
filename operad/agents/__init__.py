@@ -69,7 +69,7 @@ from .memory import (
     UserInput,
     UserOutput,
 )
-from .pipelines import Loop, Parallel, Sequential
+from .pipelines import Loop, Parallel, Router, Sequential
 from .reasoning import (
     Action,
     Actor,
@@ -97,9 +97,8 @@ from .reasoning import (
     ReflectionInput,
     Reflector,
     Retriever,
+    RouteClassifier,
     RouteInput,
-    Router,
-    Switch,
     Summarizer,
     Task,
     Thought,
@@ -220,6 +219,7 @@ __all__ = [
     "Retriever",
     "ReviewComment",
     "ReviewReport",
+    "RouteClassifier",
     "RouteInput",
     "Router",
     "SafeguardCategory",
@@ -230,7 +230,6 @@ __all__ = [
     "SessionOp",
     "SessionOperation",
     "SessionTarget",
-    "Switch",
     "Summarizer",
     "Synthesizer",
     "Task",

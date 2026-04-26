@@ -13,7 +13,12 @@ composite with an explicit ``forward``.
 
 from __future__ import annotations
 
+from typing import Any
+
+from pydantic import BaseModel
+
 from ...core.agent import Agent
+from ..pipelines import Parallel, Sequential
 from ...core.config import Configuration
 from .components import CodeReviewer, ContextOptimizer, DiffSummarizer
 from .components.context_optimizer import ReadFile
@@ -50,12 +55,36 @@ class PRReviewer(Agent[PRDiff, ReviewReport]):
         self.optimizer = ContextOptimizer(read_file=read_file)
         self.summarizer = DiffSummarizer(config=config)
         self.reviewer = CodeReviewer(config=config)
+        self._rebuild_pipeline()
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        super().__setattr__(name, value)
+        if name in {"optimizer", "summarizer", "reviewer"}:
+            keys = {"optimizer", "summarizer", "reviewer"}
+            if keys.issubset(self.__dict__):
+                self._rebuild_pipeline()
+
+    def _rebuild_pipeline(self) -> None:
+        self._fanout = Parallel(
+            {"summary": self.summarizer, "review": self.reviewer},
+            input=PRDiff,
+            output=ReviewReport,
+            combine=self._combine,
+        )
+        self.pipeline = Sequential(
+            self.optimizer,
+            self._fanout,
+            input=PRDiff,
+            output=ReviewReport,
+        )
+
+    def _combine(self, results: dict[str, BaseModel]) -> ReviewReport:
+        summary = results["summary"]
+        report = results["review"]
+        return ReviewReport(
+            comments=list(report.comments),  # type: ignore[attr-defined]
+            summary=summary.headline,  # type: ignore[attr-defined]
+        )
 
     async def forward(self, x: PRDiff) -> ReviewReport:  # type: ignore[override]
-        enriched = (await self.optimizer(x)).response
-        summary = (await self.summarizer(enriched)).response
-        report = (await self.reviewer(enriched)).response
-        return ReviewReport(
-            comments=list(report.comments),
-            summary=summary.headline,
-        )
+        return (await self.pipeline(x)).response

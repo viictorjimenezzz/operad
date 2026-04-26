@@ -2,7 +2,7 @@
 
 Every LLM call is stubbed via `BackpropAgent` / `ParameterGradAgent`
 subclasses with overridden `forward`. The tests cover the full
-backward walk (leaf, Sequential, Parallel, Switch), null-gradient
+backward walk (leaf, Sequential, Parallel, Router), null-gradient
 short-circuit, backward hooks, custom split rules, error surfacing,
 determinism, plus direct unit tests for each built-in split rule.
 """
@@ -17,10 +17,10 @@ import pytest
 from pydantic import BaseModel
 
 from operad.agents.pipelines import Parallel
+from operad.agents.pipelines import Router
 from operad.agents.pipelines import Sequential
-from operad.agents.reasoning.components.router import Router
+from operad.agents.reasoning.components.router import RouteClassifier
 from operad.agents.reasoning.schemas import Choice
-from operad.agents.reasoning.switch import Switch
 from operad.core.agent import Agent
 from operad.optim import (
     BackpropAgent,
@@ -40,7 +40,7 @@ from operad.optim.backward import (
     _generic_composite_rule,
     _parallel_split,
     _pipeline_split,
-    _switch_split,
+    _router_split,
 )
 from operad.optim.tape import TapeEntry
 from operad.runtime.observers import registry as obs_registry
@@ -241,7 +241,7 @@ async def test_parallel_fan_out_same_grad_to_every_branch(cfg) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 4. Switch — only the taken branch receives the grad
+# 4. Router — only the taken branch receives the grad
 # ---------------------------------------------------------------------------
 
 
@@ -249,7 +249,7 @@ class _Label(Choice[Literal["a", "b"]]):
     pass
 
 
-class _StubRouter(Router):
+class _StubRouter(RouteClassifier):
     def __init__(self, *, label: str) -> None:
         super().__init__(config=None, input=A, output=_Label)
         self._label = label
@@ -264,7 +264,7 @@ async def test_switch_taken_branch_only_gets_grad(cfg) -> None:
     for leaf in (branch_a, branch_b):
         leaf.mark_trainable(role=True)
 
-    s = await Switch(
+    s = await Router(
         router=_StubRouter(label="a"),
         branches={"a": branch_a, "b": branch_b},
         input=A,
@@ -657,7 +657,7 @@ async def test_parallel_split_fans_out_uniformly() -> None:
         assert child_grad.severity == 0.4
 
 
-async def test_switch_split_taken_branch_gets_grad_and_untaken_gets_null() -> None:
+async def test_router_split_taken_branch_gets_grad_and_untaken_gets_null() -> None:
     # Build OperadOutput-shaped wrappers so _response_of unwraps them.
     class _Env:
         def __init__(self, r: BaseModel) -> None:
@@ -667,32 +667,32 @@ async def test_switch_split_taken_branch_gets_grad_and_untaken_gets_null() -> No
     branch_a_response = B(value=42)  # matches
     branch_b_response = B(value=99)  # does not match
 
-    switch_entry = _mk_entry("Switch", output=_Env(switch_response))
-    router_entry = _mk_entry("Switch.router", output=_Env(B(value=0)))
-    branch_a_entry = _mk_entry("Switch.branch_a", output=_Env(branch_a_response))
-    branch_b_entry = _mk_entry("Switch.branch_b", output=_Env(branch_b_response))
+    switch_entry = _mk_entry("Router", output=_Env(switch_response))
+    router_entry = _mk_entry("Router.router", output=_Env(B(value=0)))
+    branch_a_entry = _mk_entry("Router.branch_a", output=_Env(branch_a_response))
+    branch_b_entry = _mk_entry("Router.branch_b", output=_Env(branch_b_response))
 
     g = TextualGradient(message="fix", severity=0.8)
-    out = _switch_split(
+    out = _router_split(
         switch_entry, g, [router_entry, branch_a_entry, branch_b_entry]
     )
-    assert out["Switch.branch_a"].message == "fix"
-    assert out["Switch.branch_a"].severity == 0.8
-    assert out["Switch.branch_b"].severity == 0.0
-    assert out["Switch.router"].severity == 0.0
+    assert out["Router.branch_a"].message == "fix"
+    assert out["Router.branch_a"].severity == 0.8
+    assert out["Router.branch_b"].severity == 0.0
+    assert out["Router.router"].severity == 0.0
 
 
-async def test_switch_split_no_match_gives_everyone_null() -> None:
+async def test_router_split_no_match_gives_everyone_null() -> None:
     class _Env:
         def __init__(self, r: BaseModel) -> None:
             self.response = r
 
-    switch_entry = _mk_entry("Switch", output=_Env(B(value=1)))
-    branch_a_entry = _mk_entry("Switch.branch_a", output=_Env(B(value=2)))
+    switch_entry = _mk_entry("Router", output=_Env(B(value=1)))
+    branch_a_entry = _mk_entry("Router.branch_a", output=_Env(B(value=2)))
 
     g = TextualGradient(message="fix", severity=0.8)
-    out = _switch_split(switch_entry, g, [branch_a_entry])
-    assert out["Switch.branch_a"].severity == 0.0
+    out = _router_split(switch_entry, g, [branch_a_entry])
+    assert out["Router.branch_a"].severity == 0.0
 
 
 async def test_generic_composite_rule_warns_once_per_class() -> None:
