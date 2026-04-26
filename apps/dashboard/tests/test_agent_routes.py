@@ -43,6 +43,27 @@ def _component_meta(*, prompt_system: str, prompt_user: str, renderer: str = "xm
         "class_name": "FakeLeaf",
         "kind": "leaf",
         "hash_content": "deadbeefcafefeed",
+        "state_snapshot": {
+            "class_name": "FakeLeaf",
+            "role": "Role",
+            "task": "Task",
+            "style": "",
+            "context": "",
+            "rules": ["r1", "r2"],
+            "examples": [{"input": {"text": "x"}, "output": {"value": 1}}],
+            "config": {
+                "backend": "llamacpp",
+                "host": "127.0.0.1:8080",
+                "model": "test",
+                "sampling": {"temperature": 0.0},
+                "resilience": {},
+                "io": {"renderer": renderer},
+                "runtime": {},
+            },
+            "input_type_name": "tests._helpers.fake_leaf.A",
+            "output_type_name": "tests._helpers.fake_leaf.B",
+            "children": {},
+        },
         "role": "Role",
         "task": "Task",
         "rules": ["r1", "r2"],
@@ -58,12 +79,62 @@ def _component_meta(*, prompt_system: str, prompt_user: str, renderer: str = "xm
         "forward_in_overridden": False,
         "forward_out_overridden": False,
         "trainable_paths": ["role", "task"],
+        "parameters": [
+            {
+                "path": "role",
+                "type": "TextParameter",
+                "value": "Role",
+                "requires_grad": True,
+                "grad": {
+                    "message": "clarify role constraints",
+                    "severity": 0.4,
+                    "target_paths": ["role"],
+                    "by_field": {"role": "clarify role constraints"},
+                },
+                "constraint": {"kind": "text", "max_length": 200, "forbidden": []},
+            },
+            {
+                "path": "task",
+                "type": "TextParameter",
+                "value": "Task",
+                "requires_grad": True,
+                "grad": None,
+                "constraint": None,
+            },
+            {
+                "path": "style",
+                "type": "TextParameter",
+                "value": "",
+                "requires_grad": False,
+                "grad": None,
+                "constraint": None,
+            },
+        ],
         "prompt_system": prompt_system,
         "prompt_user": prompt_user,
     }
 
 
 def _run_envelopes(run_id: str = "run-live") -> list[dict]:
+    meta_first = _component_meta(prompt_system="<role>a</role>", prompt_user="<input>q1</input>")
+    meta_first["hash_content"] = "hash-a"
+    if isinstance(meta_first.get("state_snapshot"), dict):
+        meta_first["state_snapshot"]["role"] = "Role v1"
+    if isinstance(meta_first.get("parameters"), list):
+        meta_first["parameters"][0]["value"] = "Role v1"
+    meta_second = _component_meta(prompt_system="<role>b</role>", prompt_user="<input>q2</input>")
+    meta_second["hash_content"] = "hash-b"
+    if isinstance(meta_second.get("state_snapshot"), dict):
+        meta_second["state_snapshot"]["role"] = "Role v2"
+        meta_second["state_snapshot"]["rules"] = ["r1", "r2", "r3"]
+    if isinstance(meta_second.get("parameters"), list):
+        meta_second["parameters"][0]["value"] = "Role v2"
+        meta_second["parameters"][0]["grad"] = {
+            "message": "tighten role wording",
+            "severity": 0.7,
+            "target_paths": ["role"],
+            "by_field": {"role": "tighten role wording"},
+        }
     return [
         {
             "type": "agent_event",
@@ -104,7 +175,7 @@ def _run_envelopes(run_id: str = "run-live") -> list[dict]:
             },
             "started_at": 10.0,
             "finished_at": 11.0,
-            "metadata": _component_meta(prompt_system="<role>a</role>", prompt_user="<input>q1</input>"),
+            "metadata": meta_first,
             "error": None,
         },
         {
@@ -134,7 +205,7 @@ def _run_envelopes(run_id: str = "run-live") -> list[dict]:
             },
             "started_at": 20.0,
             "finished_at": 21.0,
-            "metadata": _component_meta(prompt_system="<role>b</role>", prompt_user="<input>q2</input>"),
+            "metadata": meta_second,
             "error": None,
         },
         {
@@ -229,6 +300,25 @@ def test_live_io_graph_invocations_meta_prompts_values_events(app_and_obs) -> No
         assert len(events.json()["events"]) == 1
         assert events.json()["events"][0]["kind"] == "end"
 
+        params = client.get("/runs/run-live/agent/Pipeline.stage_0/parameters")
+        assert params.status_code == 200
+        assert params.json()["agent_path"] == "Pipeline.stage_0"
+        rows = params.json()["parameters"]
+        assert len(rows) == 2
+        assert rows[0]["path"] == "role"
+        assert rows[0]["requires_grad"] is True
+
+        diff = client.get(
+            "/runs/run-live/agent/Pipeline.stage_0/diff?from=Pipeline.stage_0:0&to=Pipeline.stage_0:1"
+        )
+        assert diff.status_code == 200
+        body = diff.json()
+        assert body["from_invocation"] == "Pipeline.stage_0:0"
+        assert body["to_invocation"] == "Pipeline.stage_0:1"
+        assert body["from_hash_content"] == "hash-a"
+        assert body["to_hash_content"] == "hash-b"
+        assert len(body["changes"]) > 0
+
 
 def test_archived_run_parity(app_and_obs) -> None:
     app, obs = app_and_obs
@@ -246,6 +336,13 @@ def test_archived_run_parity(app_and_obs) -> None:
         assert client.get("/runs/run-arch/agent/Pipeline.stage_0/prompts").status_code == 200
         assert client.get("/runs/run-arch/agent/Pipeline.stage_0/values?attr=text&side=in").status_code == 200
         assert client.get("/runs/run-arch/agent/Pipeline.stage_0/events").status_code == 200
+        assert client.get("/runs/run-arch/agent/Pipeline.stage_0/parameters").status_code == 200
+        assert (
+            client.get(
+                "/runs/run-arch/agent/Pipeline.stage_0/diff?from=Pipeline.stage_0:0&to=Pipeline.stage_0:1"
+            ).status_code
+            == 200
+        )
 
 
 def test_404_unknown_path_and_attribute(app_and_obs) -> None:
@@ -264,6 +361,12 @@ def test_404_unknown_path_and_attribute(app_and_obs) -> None:
         r3 = client.get("/runs/nope/io_graph")
         assert r3.status_code == 404
         assert r3.json()["error"] == "not_found"
+
+        r4 = client.get(
+            "/runs/run-live/agent/Pipeline.stage_0/diff?from=Pipeline.stage_0:0&to=Pipeline.stage_0:404"
+        )
+        assert r4.status_code == 404
+        assert r4.json()["error"] == "not_found"
 
 
 def test_values_wrong_side_returns_clear_404(app_and_obs) -> None:

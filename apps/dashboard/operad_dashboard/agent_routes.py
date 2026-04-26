@@ -7,10 +7,12 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
+from operad.core.diff import diff_states
 from operad.core.graph import TypeRegistry, from_json, to_io_graph
+from operad.core.state import AgentState
 
 from .runs import RunInfo
 
@@ -262,6 +264,22 @@ def _latest_terminal_metadata(events: list[dict[str, Any]], path: str) -> dict[s
     return None
 
 
+def _invocation_id_map(
+    *,
+    run_id: str,
+    events: list[dict[str, Any]],
+    agent_path: str,
+    langfuse_url: str | None = None,
+) -> dict[str, _Invocation]:
+    invocations = _build_invocations(
+        run_id=run_id,
+        events=events,
+        agent_path=agent_path,
+        langfuse_url=langfuse_url,
+    )
+    return {str(inv.row.get("id") or ""): inv for inv in invocations}
+
+
 def _prompt_cache_get(key: tuple[str, str, float]) -> dict[str, Any] | None:
     hit = _PROMPT_CACHE.get(key)
     if hit is None:
@@ -387,6 +405,80 @@ async def agent_invocations(request: Request, run_id: str, path: str) -> JSONRes
         langfuse_url=langfuse_url,
     )
     return JSONResponse({"agent_path": path, "invocations": [inv.row for inv in invocations]})
+
+
+@router.get("/runs/{run_id}/agent/{path:path}/parameters")
+async def agent_parameters(request: Request, run_id: str, path: str) -> JSONResponse:
+    ctx = _resolve_run_context(request, run_id)
+    if ctx is None:
+        return _not_found("unknown run_id")
+    metadata = _latest_terminal_metadata(ctx.events, path)
+    if metadata is None:
+        return _not_found("unknown agent_path")
+    raw = metadata.get("parameters")
+    if not isinstance(raw, list):
+        return JSONResponse({"agent_path": path, "parameters": []})
+    params = [
+        entry
+        for entry in raw
+        if isinstance(entry, dict) and bool(entry.get("requires_grad"))
+    ]
+    return JSONResponse({"agent_path": path, "parameters": params})
+
+
+@router.get("/runs/{run_id}/agent/{path:path}/diff")
+async def agent_diff(
+    request: Request,
+    run_id: str,
+    path: str,
+    from_: str | None = Query(default=None, alias="from"),
+    to: str | None = None,
+) -> JSONResponse:
+    ctx = _resolve_run_context(request, run_id)
+    if ctx is None:
+        return _not_found("unknown run_id")
+    if not from_ or not to:
+        return _not_found("from/to invocation ids are required")
+    if not _events_for_path(ctx.events, path):
+        return _not_found("unknown agent_path")
+    invocations = _invocation_id_map(
+        run_id=run_id,
+        events=ctx.events,
+        agent_path=path,
+        langfuse_url=None,
+    )
+    left = invocations.get(from_)
+    right = invocations.get(to)
+    if left is None or right is None:
+        return _not_found("unknown invocation id(s)")
+
+    left_meta = left.terminal.get("metadata")
+    right_meta = right.terminal.get("metadata")
+    left_meta = left_meta if isinstance(left_meta, dict) else {}
+    right_meta = right_meta if isinstance(right_meta, dict) else {}
+    left_snapshot = left_meta.get("state_snapshot")
+    right_snapshot = right_meta.get("state_snapshot")
+    if not isinstance(left_snapshot, dict) or not isinstance(right_snapshot, dict):
+        return _not_found("state snapshots unavailable for one or both invocations")
+    try:
+        left_state = AgentState.model_validate(left_snapshot)
+        right_state = AgentState.model_validate(right_snapshot)
+    except Exception:
+        return _not_found("state snapshots unavailable for one or both invocations")
+
+    diff = diff_states(left_state, right_state)
+    return JSONResponse(
+        {
+            "from_invocation": from_,
+            "to_invocation": to,
+            "from_hash_content": left_meta.get("hash_content"),
+            "to_hash_content": right_meta.get("hash_content"),
+            "changes": [
+                {"path": c.path, "kind": c.kind, "detail": c.detail}
+                for c in diff.changes
+            ],
+        }
+    )
 
 
 @router.get("/runs/{run_id}/agent/{path:path}/prompts")
