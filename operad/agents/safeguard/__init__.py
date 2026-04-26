@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 from .components import Context, Talker
+from .legacy import (
+    InputSanitizer,
+    ModerationVerdict,
+    OutputModerator,
+    SanitizerPolicy,
+)
 from .pipeline import SafetyGuard
 from .schemas import (
     ContextInput,
@@ -16,7 +22,11 @@ __all__ = [
     "Context",
     "ContextInput",
     "ContextOutput",
+    "InputSanitizer",
+    "ModerationVerdict",
+    "OutputModerator",
     "SafeguardCategory",
+    "SanitizerPolicy",
     "SafetyGuard",
     "Talker",
     "TalkerInput",
