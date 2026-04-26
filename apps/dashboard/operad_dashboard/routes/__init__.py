@@ -42,7 +42,14 @@ async def per_run_sse(
 
     queue = obs.subscribe()
     try:
-        for env in list(iter_run_events(request, obs, run_id)):
+        try:
+            history = list(iter_run_events(request, obs, run_id))
+        except HTTPException:
+            # SSE generators cannot reliably surface HTTPException once the
+            # stream machinery has started; treat unknown runs as empty
+            # streams to avoid noisy exception-group logs.
+            return
+        for env in history:
             if _matches(env, event_type, kinds, paths):
                 payload = transform(env) if transform else env
                 yield {"event": "message", "data": json.dumps(payload, default=str)}
