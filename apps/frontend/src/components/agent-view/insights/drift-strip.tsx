@@ -1,5 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { hashColor } from "@/lib/hash-color";
+import {
+  buildDriftTicks,
+  driftGeometry,
+  driftTickColor,
+  findDriftTransitions,
+  makeBestOfGroups,
+} from "@/components/agent-view/insights/drift-strip-primitives";
 import type { RunInvocation, RunSummary } from "@/lib/types";
 import { formatRelativeTime, truncateMiddle } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
@@ -10,21 +16,15 @@ export interface DriftStripProps {
   summary: RunSummary;
 }
 
-interface Tick {
-  id: string;
-  startedAt: number;
-  hashPrompt: string;
-  hashInput: string;
-}
-
 export function DriftStrip({ invocations, rootPath, summary }: DriftStripProps) {
   const openDrawer = useUIStore((s) => s.openDrawer);
-  const ticks = downsample(invocations);
-  const transitions = findTransitions(ticks);
+  const ticks = buildDriftTicks(invocations);
+  const transitions = findDriftTransitions(ticks);
   const uniquePromptCount = new Set(ticks.map((tick) => tick.hashPrompt)).size;
   const lastTransition = transitions[transitions.length - 1];
   const now = Date.now() / 1000;
   const groups = makeBestOfGroups(ticks);
+  const geometry = driftGeometry(ticks.length);
 
   return (
     <Card>
@@ -38,14 +38,25 @@ export function DriftStrip({ invocations, rootPath, summary }: DriftStripProps) 
           </div>
         ) : (
           <div className="relative">
-            <svg width="100%" height={16} viewBox={`0 0 ${ticks.length * 3} 16`} className="block">
+            <svg
+              width="100%"
+              height={16}
+              viewBox={`0 0 ${geometry.viewBoxWidth} 16`}
+              className="block"
+            >
               <title>prompt hash transitions</title>
               {ticks.map((tick, index) => {
-                const x = index * 3;
+                const x = index * geometry.barWidth;
                 const groupSize = groups.get(`${tick.hashPrompt}::${tick.hashInput}`) ?? 1;
                 return (
                   <g key={tick.id}>
-                    <rect x={x} y={0} width={3} height={16} fill={hashColor(tick.hashPrompt)}>
+                    <rect
+                      x={x}
+                      y={0}
+                      width={geometry.barWidth}
+                      height={16}
+                      fill={driftTickColor(tick.hashPrompt)}
+                    >
                       <title>
                         {`#${index + 1} · ${new Date(tick.startedAt * 1000).toISOString()} · ${truncateMiddle(tick.hashPrompt, 12)}${groupSize > 1 ? ` · best-of ${groupSize}` : ""}`}
                       </title>
@@ -57,7 +68,7 @@ export function DriftStrip({ invocations, rootPath, summary }: DriftStripProps) 
                 );
               })}
               {transitions.map((transition) => {
-                const markerX = transition.index * 3;
+                const markerX = transition.index * geometry.barWidth;
                 return (
                   <line
                     key={`transition-${transition.after.id}`}
@@ -95,42 +106,10 @@ export function DriftStrip({ invocations, rootPath, summary }: DriftStripProps) 
   );
 }
 
-function findTransitions(ticks: Tick[]): Array<{ index: number; before: Tick; after: Tick }> {
-  const out: Array<{ index: number; before: Tick; after: Tick }> = [];
-  for (let i = 1; i < ticks.length; i += 1) {
-    const prev = ticks[i - 1];
-    const current = ticks[i];
-    if (!prev || !current) continue;
-    if (prev.hashPrompt !== current.hashPrompt)
-      out.push({ index: i, before: prev, after: current });
-  }
-  return out;
-}
-
-function downsample(invocations: RunInvocation[]): Tick[] {
-  const base = invocations.map((invocation) => ({
-    id: invocation.id,
-    startedAt: invocation.started_at,
-    hashPrompt: invocation.hash_prompt,
-    hashInput: invocation.hash_input,
-  }));
-  if (base.length <= 500) return base;
-  const buckets = 240;
-  const bucketSize = Math.ceil(base.length / buckets);
-  const sampled: Tick[] = [];
-  for (let i = 0; i < base.length; i += bucketSize) {
-    const slice = base.slice(i, i + bucketSize);
-    if (!slice.length) continue;
-    sampled.push(slice[Math.floor(slice.length / 2)] as Tick);
-  }
-  return sampled;
-}
-
-function makeBestOfGroups(ticks: Tick[]): Map<string, number> {
-  const map = new Map<string, number>();
-  for (const tick of ticks) {
-    const key = `${tick.hashPrompt}::${tick.hashInput}`;
-    map.set(key, (map.get(key) ?? 0) + 1);
-  }
-  return map;
-}
+export {
+  buildDriftTicks,
+  driftGeometry,
+  driftTickColor,
+  findDriftTransitions,
+  makeBestOfGroups,
+} from "@/components/agent-view/insights/drift-strip-primitives";
