@@ -263,6 +263,33 @@ export const ProgressSnapshot = z.object({
 });
 export type ProgressSnapshot = z.infer<typeof ProgressSnapshot>;
 
+// --- Debate panel shapes -----------------------------------------------------
+
+export const DebateProposal = z.object({
+  content: z.string().default(""),
+  author: z.string().default(""),
+});
+export type DebateProposal = z.infer<typeof DebateProposal>;
+
+export const DebateCritique = z.object({
+  target_author: z.string().default(""),
+  comments: z.string().default(""),
+  score: z.number().default(0),
+});
+export type DebateCritique = z.infer<typeof DebateCritique>;
+
+export const DebateRound = z.object({
+  round_index: z.number().nullable(),
+  proposals: z.array(DebateProposal).default([]),
+  critiques: z.array(DebateCritique).default([]),
+  scores: z.array(z.number()).default([]),
+  timestamp: z.number().nullable(),
+});
+export type DebateRound = z.infer<typeof DebateRound>;
+
+export const DebateRoundsResponse = z.array(DebateRound);
+export type DebateRoundsResponse = z.infer<typeof DebateRoundsResponse>;
+
 export const GraphResponse = z.object({ mermaid: z.string() });
 export type GraphResponse = z.infer<typeof GraphResponse>;
 

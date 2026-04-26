@@ -3,6 +3,10 @@
   "version": 1,
   "dataSources": {
     "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "debate": {
+      "endpoint": "/runs/$context.runId/debate.json",
+      "stream": "/runs/$context.runId/debate.sse"
+    },
     "graph": { "endpoint": "/graph/$context.runId" }
   },
   "spec": {
@@ -12,17 +16,19 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "rounds", "label": "rounds" },
+            { "id": "overview", "label": "overview" },
+            { "id": "transcript", "label": "transcript" },
             { "id": "graph", "label": "graph" },
             { "id": "events", "label": "events" }
           ]
         },
-        "children": ["t-rounds", "t-graph", "t-events"]
+        "children": ["t-overview", "t-transcript", "t-graph", "t-events"]
       },
-      "t-rounds": {
+
+      "t-overview": {
         "type": "Col",
         "props": { "gap": 12 },
-        "children": ["meta-card", "rounds-card"]
+        "children": ["meta-card", "rounds-card", "consensus-card"]
       },
       "meta-card": {
         "type": "Card",
@@ -31,11 +37,46 @@
       },
       "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
       "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
-      "rounds-card": { "type": "Card", "props": { "title": "rounds" }, "children": ["rounds"] },
-      "rounds": { "type": "DebateRoundView", "props": { "source": "$queries.summary.rounds" } },
-      "t-graph": { "type": "Card", "props": { "title": "agent graph" }, "children": ["graph"] },
+      "rounds-card": {
+        "type": "Card",
+        "props": { "title": "round scores" },
+        "children": ["rounds"]
+      },
+      "rounds": {
+        "type": "DebateRoundView",
+        "props": { "source": "$queries.summary.rounds" }
+      },
+      "consensus-card": {
+        "type": "Card",
+        "props": { "title": "consensus over rounds" },
+        "children": ["consensus"]
+      },
+      "consensus": {
+        "type": "DebateConsensusTracker",
+        "props": { "source": "$queries.debate" }
+      },
+
+      "t-transcript": {
+        "type": "Card",
+        "props": { "title": "transcript" },
+        "children": ["transcript"]
+      },
+      "transcript": {
+        "type": "DebateTranscript",
+        "props": { "source": "$queries.debate" }
+      },
+
+      "t-graph": {
+        "type": "Card",
+        "props": { "title": "agent graph" },
+        "children": ["graph"]
+      },
       "graph": { "type": "AgentGraph", "props": { "source": "$queries.graph" } },
-      "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } }
+
+      "t-events": {
+        "type": "EventTimeline",
+        "props": { "source": "$run.events" }
+      }
     }
   }
 }

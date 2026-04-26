@@ -5,8 +5,10 @@ import { SweepHeatmap } from "@/shared/charts/sweep-heatmap";
 import { BeamCandidateChart } from "@/shared/charts/beam-candidate-chart";
 import { CheckpointTimeline } from "@/shared/charts/checkpoint-timeline";
 import { ConvergenceCurve } from "@/shared/charts/convergence-curve";
+import { DebateConsensusTracker } from "@/shared/charts/debate-consensus-tracker";
 import { IterationProgression } from "@/shared/charts/iteration-progression";
 import { DebateRoundView } from "@/shared/charts/debate-round-view";
+import { DebateTranscript } from "@/shared/charts/debate-transcript";
 import { DriftTimeline } from "@/shared/charts/drift-timeline";
 import { FitnessCurve } from "@/shared/charts/fitness-curve";
 import { GradientLog } from "@/shared/charts/gradient-log";
@@ -142,6 +144,13 @@ export const registry: ComponentRegistry = {
   DebateRoundView: ({ element }) => (
     <DebateRoundView data={(element.props as { data?: unknown }).data} />
   ),
+  DebateTranscript: ({ element }) => (
+    <DebateTranscript data={(element.props as { data?: unknown }).data} />
+  ),
+  DebateConsensusTracker: ({ element }) => {
+    const p = element.props as { data?: unknown; height?: number };
+    return <DebateConsensusTracker data={p.data} height={p.height ?? 220} />;
+  },
   BeamCandidateChart: ({ element }) => {
     const p = element.props as { data?: unknown; height?: number };
     return <BeamCandidateChart data={p.data} height={p.height ?? 220} />;
