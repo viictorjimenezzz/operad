@@ -187,7 +187,7 @@ def test_summary_postbuild_includes_graph_hash(cfg) -> None:
 
 
 def test_graph_outline_hides_sequential_stage_names(cfg) -> None:
-    from operad.agents.pipelines import Sequential
+    from operad.agents.core.pipelines import Sequential
 
     a = FakeLeaf(config=cfg, input=A, output=B)
     b = FakeLeaf(config=cfg, input=B, output=C)
@@ -199,14 +199,15 @@ def test_graph_outline_hides_sequential_stage_names(cfg) -> None:
 
 
 def test_graph_mermaid_uses_agent_names_and_io_edges(cfg) -> None:
-    from operad.agents.pipelines import Sequential
+    from operad.agents.core.pipelines import Sequential
 
     a = FakeLeaf(config=cfg, input=A, output=B)
     b = FakeLeaf(config=cfg, input=B, output=C)
     p = Sequential(a, b, input=A, output=C).build()
     text = p.graph_mermaid()
-    assert '["Sequential"]' in text
-    assert '["FakeLeaf"]' in text
+    assert "Sequential<br/>Sequential<br/>A -> C" in text
+    assert "Sequential.stage_0<br/>A -> B" in text
+    assert "Sequential.stage_1<br/>B -> C" in text
     assert "A -> B" in text
     assert "B -> C" in text
     assert '["stage_0"]' not in text
@@ -217,7 +218,7 @@ def test_graph_mermaid_uses_agent_names_and_io_edges(cfg) -> None:
 
 
 def test_rshift_two_stages(cfg) -> None:
-    from operad.agents.pipelines import Sequential
+    from operad.agents.core.pipelines import Sequential
 
     a = FakeLeaf(config=cfg, input=A, output=B)
     b = FakeLeaf(config=cfg, input=B, output=C)
@@ -227,7 +228,7 @@ def test_rshift_two_stages(cfg) -> None:
 
 
 def test_rshift_flattens_three_stages(cfg) -> None:
-    from operad.agents.pipelines import Sequential
+    from operad.agents.core.pipelines import Sequential
 
     class D_(BaseModel):
         d: str = ""

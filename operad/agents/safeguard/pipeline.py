@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from ...core.agent import Agent, _TRACER
 from ...utils.errors import BuildError
-from ..pipelines import Router
+from ..core.pipelines import Router
 from .components import Context, Talker
 from .schemas import (
     ContextInput,

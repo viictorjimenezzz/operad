@@ -29,7 +29,7 @@ from .components import (
     Tool,
     ToolUser,
 )
-from ..pipelines import Router
+from ..core.pipelines import Router
 from .debate import DebateAgent
 from .react import ReAct
 from .schemas import (

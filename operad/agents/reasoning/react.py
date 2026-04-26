@@ -28,7 +28,7 @@ from pydantic import BaseModel
 
 from ...core.agent import Agent, _TRACER
 from ...core.config import Configuration
-from ..pipelines import Loop, Sequential
+from ..core.pipelines import Loop, Sequential
 from .components import Actor, Evaluator, Extractor, Reasoner
 from .schemas import Action, Answer, Observation, Task, Thought
 

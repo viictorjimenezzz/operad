@@ -19,7 +19,7 @@ from typing import Any, ClassVar, Generic
 
 from pydantic import BaseModel, Field
 
-from ..agents.pipelines import Loop
+from ..agents.core.pipelines import Loop
 from ..agents.reasoning.components import Critic, Reasoner
 from ..agents.reasoning.schemas import Answer, Candidate, Score, Task
 from ..core.agent import Agent, In, Out, _TRACER
