@@ -89,15 +89,6 @@ PerspectiveBundle.model_rebuild()
 # Composite assembly.
 # ---------------------------------------------------------------------------
 
-
-def _combine(views: dict[str, BaseModel]) -> PerspectiveBundle:
-    return PerspectiveBundle(
-        biology=views["biology"],  # type: ignore[arg-type]
-        policy=views["policy"],  # type: ignore[arg-type]
-        economic=views["economic"],  # type: ignore[arg-type]
-    )
-
-
 def assemble(*, cfg: Configuration) -> Sequential:
     planner = Planner(
         config=cfg,
@@ -151,51 +142,27 @@ def assemble(*, cfg: Configuration) -> Sequential:
         ),
     )
 
-    context_biology = (
-        "Perspective: biology. Use `biology_question` from the plan. "
-        "Focus on mechanisms and empirical uncertainty."
-    )
-    context_policy = (
-        "Perspective: policy. Use `policy_question` from the plan. "
-        "Focus on regulation, governance, and incentives."
-    )
-    context_economic = (
-        "Perspective: economic. Use `economic_question` from the plan. "
-        "Focus on costs, market dynamics, and tradeoffs."
-    )
-
-    branches = {
-        "biology": Sequential(
-            ResearchFramer(context=context_biology),
-            ReAct(config=cfg, context=context_biology),
-            BranchSynthesizer(context=context_biology),
-            input=ResearchPlan,
-            output=BranchView,
-            name="biology_branch",
-        ),
-        "policy": Sequential(
-            ResearchFramer(context=context_policy),
-            ReAct(config=cfg, context=context_policy),
-            BranchSynthesizer(context=context_policy),
-            input=ResearchPlan,
-            output=BranchView,
-            name="policy_branch",
-        ),
-        "economic": Sequential(
-            ResearchFramer(context=context_economic),
-            ReAct(config=cfg, context=context_economic),
-            BranchSynthesizer(context=context_economic),
-            input=ResearchPlan,
-            output=BranchView,
-            name="economic_branch",
-        ),
+    CONTEXT = {
+        "biology": "Perspective: biology. Use `biology_question` from the plan. Focus on mechanisms and empirical uncertainty.",
+        "policy": "Perspective: policy. Use `policy_question` from the plan. Focus on regulation, governance, and incentives.",
+        "economic": "Perspective: economic. Use `economic_question` from the plan. Focus on costs, market dynamics, and tradeoffs.",
     }
 
     parallel = Parallel(
-        branches,
+        {
+            field : Sequential(
+                ResearchFramer(context=context),
+                ReAct(config=cfg, context=context),
+                BranchSynthesizer(context=context),
+                input=ResearchPlan,
+                output=BranchView,
+                name=f"{field}_branch",
+            )
+            for field, context in CONTEXT.items()
+        },
         input=ResearchPlan,
         output=PerspectiveBundle,
-        combine=_combine,
+        combine=lambda views: PerspectiveBundle(**views, strict=True),
         name="perspective_parallel",
     )
 
@@ -213,7 +180,6 @@ def assemble(*, cfg: Configuration) -> Sequential:
             "Reasoning should integrate biology, policy, and economics.",
         ),
     )
-
     return Sequential(
         planner,
         parallel,
