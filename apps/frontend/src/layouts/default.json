@@ -54,10 +54,9 @@
       "meta-card": {
         "type": "Card",
         "props": { "title": "meta" },
-        "children": ["meta", "langfuse"]
+        "children": ["meta"]
       },
       "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
-      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
       "langfuse-card": {
         "type": "LangfuseSummaryCard",
         "props": { "runId": "$context.runId", "source": "$queries.summary" }

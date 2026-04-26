@@ -1,9 +1,12 @@
+import { useManifest } from "@/hooks/use-runs";
+import { langfuseUrlFor } from "@/lib/langfuse";
 import type { EventEnvelope } from "@/lib/types";
 import { Envelope } from "@/lib/types";
 import { Badge } from "@/shared/ui/badge";
 import { Chip } from "@/shared/ui/chip";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { JsonView } from "@/shared/ui/json-view";
+import { ExternalLink } from "lucide-react";
 import { useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -17,6 +20,8 @@ interface EventTimelineProps {
 type KindFilter = "all" | "agent" | "algo" | "error";
 
 export function EventTimeline({ data }: EventTimelineProps) {
+  const manifest = useManifest();
+  const langfuseUrl = manifest.data?.langfuseUrl ?? null;
   const parsed = EventArray.safeParse(data);
   const events = useMemo(
     () =>
@@ -87,21 +92,38 @@ export function EventTimeline({ data }: EventTimelineProps) {
             const path = isAgent ? env.agent_path : env.algorithm_path;
             const kind = env.kind;
             const isError = (isAgent && kind === "error") || kind === "algo_error";
+            const spanId = spanIdFromMetadata(env.metadata);
+            const eventHref = langfuseUrl && spanId ? langfuseUrlFor(langfuseUrl, env.run_id, spanId) : null;
             return (
               <li key={`${env.run_id}-${idx}-${env.started_at}`}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedIdx(idx)}
-                  className={`flex w-full items-center gap-2 border-b border-border/60 px-2 py-1.5 text-left text-[11px] transition-colors hover:bg-bg-2 ${
+                <div
+                  className={`flex items-center gap-1 border-b border-border/60 px-2 py-1.5 text-left text-[11px] transition-colors hover:bg-bg-2 ${
                     selectedIdx === idx ? "bg-bg-2" : ""
                   }`}
                 >
-                  <span className="font-mono tabular-nums text-muted" style={{ minWidth: 60 }}>
-                    {env.started_at.toFixed(3).slice(-7)}
-                  </span>
-                  <Badge variant={isError ? "error" : isAgent ? "default" : "algo"}>{kind}</Badge>
-                  <span className="truncate font-mono text-text">{path}</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIdx(idx)}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                  >
+                    <span className="font-mono tabular-nums text-muted" style={{ minWidth: 60 }}>
+                      {env.started_at.toFixed(3).slice(-7)}
+                    </span>
+                    <Badge variant={isError ? "error" : isAgent ? "default" : "algo"}>{kind}</Badge>
+                    <span className="truncate font-mono text-text">{path}</span>
+                  </button>
+                  {eventHref && (
+                    <a
+                      href={eventHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Open event in Langfuse"
+                      className="rounded p-1 text-muted hover:text-text"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
+                </div>
               </li>
             );
           })}
@@ -153,6 +175,12 @@ export function EventTimeline({ data }: EventTimelineProps) {
       </div>
     </div>
   );
+}
+
+function spanIdFromMetadata(metadata: Record<string, unknown>): string | null {
+  // TODO: replace fallback probing once backend documents a canonical span-id key.
+  const value = metadata.span_id ?? metadata.spanId ?? metadata.observation_id;
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
