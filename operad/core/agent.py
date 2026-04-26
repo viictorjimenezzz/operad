@@ -308,7 +308,12 @@ class Agent(Generic[In, Out]):
         self.output = out_cls
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if isinstance(value, Agent):
+        # Skip _children registration when the attribute resolves to a
+        # class-level data descriptor (e.g. @property). Such attributes are
+        # views/aliases over an existing structural child, not new children.
+        descriptor = getattr(type(self), name, None)
+        is_property_alias = isinstance(descriptor, property)
+        if isinstance(value, Agent) and not is_property_alias:
             children = self.__dict__.get("_children")
             if children is None:
                 object.__setattr__(self, "_children", {})

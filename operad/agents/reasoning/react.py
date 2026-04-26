@@ -174,6 +174,11 @@ class ReAct(Agent[Task, Answer]):
     Observation -> Answer`` edges. Each sub-agent carries its own
     component-level ``role``/``task`` defaults; override any of them
     post-construction (``react.actor.task = ...``) or by subclassing.
+
+    The single structural child is ``pipeline``. The ``reasoner`` /
+    ``actor`` / ``extractor`` / ``evaluator`` (and the ``_*_stage`` /
+    ``_loop``) attributes are property views into that pipeline — both
+    reads and assignments stay in sync with the structural tree.
     """
 
     input = Task
@@ -191,49 +196,85 @@ class ReAct(Agent[Task, Answer]):
         super().__init__(config=None, input=Task, output=Answer, context=context)
         self.n_loops = n_loops
 
-        self.reasoner: Reasoner[Task, Thought] = Reasoner(
-            config=config, input=Task, output=Thought, context=context
-        )
-        self.actor: Actor[Thought, Action] = Actor(
-            config=config, input=Thought, output=Action, context=context
-        )
-        self.extractor: Extractor[Action, Observation] = Extractor(
-            config=config, input=Action, output=Observation, context=context
-        )
-        self.evaluator: Evaluator[Observation, Answer] = Evaluator(
-            config=config, input=Observation, output=Answer, context=context
-        )
-        self._reason_stage = _ReasonStage(self.reasoner)
-        self._action_stage = _ActionStage(self.actor)
-        self._observe_stage = _ObserveStage(self.extractor)
-        self._evaluate_stage = _EvaluateStage(self.evaluator)
-        self._loop = Loop(
-            self._reason_stage,
-            self._action_stage,
-            self._observe_stage,
-            self._evaluate_stage,
-            input=_ReActState,
-            output=_ReActState,
-            n_loops=n_loops,
-        )
         self.pipeline = Sequential(
             _InitState(),
-            self._loop,
+            Loop(
+                _ReasonStage(
+                    Reasoner(config=config, input=Task, output=Thought, context=context)
+                ),
+                _ActionStage(
+                    Actor(config=config, input=Thought, output=Action, context=context)
+                ),
+                _ObserveStage(
+                    Extractor(
+                        config=config, input=Action, output=Observation, context=context
+                    )
+                ),
+                _EvaluateStage(
+                    Evaluator(
+                        config=config, input=Observation, output=Answer, context=context
+                    )
+                ),
+                input=_ReActState,
+                output=_ReActState,
+                n_loops=n_loops,
+            ),
             _TakeAnswer(),
             input=Task,
             output=Answer,
         )
 
-    def __setattr__(self, name: str, value: Any) -> None:
-        super().__setattr__(name, value)
-        if name == "reasoner" and "_reason_stage" in self.__dict__:
-            self._reason_stage.child = value
-        elif name == "actor" and "_action_stage" in self.__dict__:
-            self._action_stage.child = value
-        elif name == "extractor" and "_observe_stage" in self.__dict__:
-            self._observe_stage.child = value
-        elif name == "evaluator" and "_evaluate_stage" in self.__dict__:
-            self._evaluate_stage.child = value
+    @property
+    def _loop(self) -> Loop[_ReActState]:
+        return self.pipeline._stages[1]  # type: ignore[return-value]
+
+    @property
+    def _reason_stage(self) -> _ReasonStage:
+        return self._loop._stages[0]  # type: ignore[return-value]
+
+    @property
+    def _action_stage(self) -> _ActionStage:
+        return self._loop._stages[1]  # type: ignore[return-value]
+
+    @property
+    def _observe_stage(self) -> _ObserveStage:
+        return self._loop._stages[2]  # type: ignore[return-value]
+
+    @property
+    def _evaluate_stage(self) -> _EvaluateStage:
+        return self._loop._stages[3]  # type: ignore[return-value]
+
+    @property
+    def reasoner(self) -> Agent[Task, Thought]:
+        return self._reason_stage.child  # type: ignore[return-value]
+
+    @reasoner.setter
+    def reasoner(self, value: Agent[Any, Any]) -> None:
+        self._reason_stage.child = value
+
+    @property
+    def actor(self) -> Agent[Thought, Action]:
+        return self._action_stage.child  # type: ignore[return-value]
+
+    @actor.setter
+    def actor(self, value: Agent[Any, Any]) -> None:
+        self._action_stage.child = value
+
+    @property
+    def extractor(self) -> Agent[Action, Observation]:
+        return self._observe_stage.child  # type: ignore[return-value]
+
+    @extractor.setter
+    def extractor(self, value: Agent[Any, Any]) -> None:
+        self._observe_stage.child = value
+
+    @property
+    def evaluator(self) -> Agent[Observation, Answer]:
+        return self._evaluate_stage.child  # type: ignore[return-value]
+
+    @evaluator.setter
+    def evaluator(self, value: Agent[Any, Any]) -> None:
+        self._evaluate_stage.child = value
 
     async def forward(self, x: Task) -> Answer:  # type: ignore[override]
         return (await self.pipeline(x)).response
