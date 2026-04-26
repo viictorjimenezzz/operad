@@ -121,7 +121,7 @@ header:
 
 dashboard:
 	@$(ENV_LOAD); \
-	uv run --extra observers operad-dashboard \
+	uv run --extra dashboard --extra observers operad-dashboard \
 		--host 127.0.0.1 \
 		--port $(DASHBOARD_PORT)
 
