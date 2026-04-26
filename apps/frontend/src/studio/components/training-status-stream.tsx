@@ -1,5 +1,5 @@
-import { SSEDispatcher } from "@/lib/sse-dispatcher";
-import { Badge } from "@/shared/ui/badge";
+import { SSEDispatcher } from "@/components/runtime/sse-dispatcher";
+import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 

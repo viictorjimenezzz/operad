@@ -41,7 +41,15 @@
             { "id": "events", "label": "events" }
           ]
         },
-        "children": ["t-loss", "t-drift", "t-gradients", "t-checkpoints", "t-progress", "t-graph", "t-events"]
+        "children": [
+          "t-loss",
+          "t-drift",
+          "t-gradients",
+          "t-checkpoints",
+          "t-progress",
+          "t-graph",
+          "t-events"
+        ]
       },
 
       "t-loss": { "type": "Card", "props": { "title": "loss curve" }, "children": ["loss", "lr"] },
@@ -61,11 +69,22 @@
       "t-drift": { "type": "Card", "props": { "title": "prompt drift" }, "children": ["drift"] },
       "drift": { "type": "DriftTimeline", "props": { "source": "$queries.drift" } },
 
-      "t-gradients": { "type": "Card", "props": { "title": "gradient log" }, "children": ["gradients"] },
+      "t-gradients": {
+        "type": "Card",
+        "props": { "title": "gradient log" },
+        "children": ["gradients"]
+      },
       "gradients": { "type": "GradientLog", "props": { "source": "$queries.gradients" } },
 
-      "t-checkpoints": { "type": "Card", "props": { "title": "checkpoints" }, "children": ["checkpoints"] },
-      "checkpoints": { "type": "CheckpointTimeline", "props": { "source": "$queries.checkpoints" } },
+      "t-checkpoints": {
+        "type": "Card",
+        "props": { "title": "checkpoints" },
+        "children": ["checkpoints"]
+      },
+      "checkpoints": {
+        "type": "CheckpointTimeline",
+        "props": { "source": "$queries.checkpoints" }
+      },
 
       "t-progress": {
         "type": "Col",

@@ -54,9 +54,7 @@ describe("dashboardApi cassette endpoints", () => {
       vi.fn().mockResolvedValue(
         mockJsonResponse({
           ok: false,
-          diff: [
-            { event_index: 1, field: "payload.x", expected: 1, actual: 2 },
-          ],
+          diff: [{ event_index: 1, field: "payload.x", expected: 1, actual: 2 }],
         }),
       ),
     );

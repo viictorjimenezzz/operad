@@ -1,7 +1,7 @@
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useArchiveRuns } from "@/hooks/use-runs";
 import { formatRelativeTime, truncateMiddle } from "@/lib/utils";
-import { Badge } from "@/shared/ui/badge";
-import { EmptyState } from "@/shared/ui/empty-state";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -62,10 +62,16 @@ export function ArchivePage() {
       <div className="flex-1 overflow-auto">
         {archive.isLoading ? <div className="p-4 text-xs text-muted">loading archive…</div> : null}
         {archive.error ? (
-          <EmptyState title="failed to load archive" description="check dashboard archive backend" />
+          <EmptyState
+            title="failed to load archive"
+            description="check dashboard archive backend"
+          />
         ) : null}
         {!archive.isLoading && !archive.error && (archive.data?.length ?? 0) === 0 ? (
-          <EmptyState title="archive is empty" description="terminal runs appear here after completion" />
+          <EmptyState
+            title="archive is empty"
+            description="terminal runs appear here after completion"
+          />
         ) : null}
         {archive.data && archive.data.length > 0 ? (
           <ul>

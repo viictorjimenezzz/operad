@@ -1,4 +1,4 @@
-import type { StreamStatus } from "@/lib/sse-dispatcher";
+import type { StreamStatus } from "@/components/runtime/sse-dispatcher";
 import { create } from "zustand";
 
 interface StreamState {

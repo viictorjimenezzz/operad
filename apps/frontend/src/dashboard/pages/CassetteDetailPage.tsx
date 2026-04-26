@@ -1,10 +1,10 @@
+import { ReplayControls } from "@/components/panels/replay-controls";
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { JsonView } from "@/components/ui/json-view";
 import { dashboardApi } from "@/lib/api/dashboard";
 import type { CassetteDeterminismResponse } from "@/lib/types";
 import { formatRelativeTime } from "@/lib/utils";
-import { ReplayControls } from "@/shared/panels/replay-controls";
-import { Badge } from "@/shared/ui/badge";
-import { EmptyState } from "@/shared/ui/empty-state";
-import { JsonView } from "@/shared/ui/json-view";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -83,7 +83,9 @@ export function CassetteDetailPage() {
           />
           {item?.metadata && Object.keys(item.metadata).length > 0 && (
             <div className="mt-3">
-              <div className="mb-1 text-[11px] uppercase tracking-[0.08em] text-muted">metadata</div>
+              <div className="mb-1 text-[11px] uppercase tracking-[0.08em] text-muted">
+                metadata
+              </div>
               <JsonView value={item.metadata} collapsed />
             </div>
           )}

@@ -1,0 +1,57 @@
+import { useUIStore } from "@/stores/ui";
+import { beforeEach, describe, expect, it } from "vitest";
+
+describe("useUIStore", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useUIStore.setState({
+      currentTab: "overview",
+      eventKindFilter: "all",
+      eventSearch: "",
+      autoFollow: true,
+      eventsFollow: true,
+      sidebarCollapsed: false,
+      drawer: null,
+      drawerWidth: 420,
+    });
+  });
+
+  it("toggles sidebar state", () => {
+    expect(useUIStore.getState().sidebarCollapsed).toBe(false);
+    useUIStore.getState().toggleSidebar();
+    expect(useUIStore.getState().sidebarCollapsed).toBe(true);
+    useUIStore.getState().setSidebarCollapsed(false);
+    expect(useUIStore.getState().sidebarCollapsed).toBe(false);
+  });
+
+  it("opens/closes drawer and clamps width", () => {
+    useUIStore.getState().openDrawer("events", { agentPath: "root.worker" });
+    expect(useUIStore.getState().drawer).toEqual({
+      kind: "events",
+      payload: { agentPath: "root.worker" },
+    });
+
+    useUIStore.getState().setDrawerWidth(120);
+    expect(useUIStore.getState().drawerWidth).toBe(280);
+
+    useUIStore.getState().setDrawerWidth(900);
+    expect(useUIStore.getState().drawerWidth).toBe(720);
+
+    useUIStore.getState().closeDrawer();
+    expect(useUIStore.getState().drawer).toBeNull();
+  });
+
+  it("persists sidebarCollapsed and drawerWidth", () => {
+    useUIStore.getState().setSidebarCollapsed(true);
+    useUIStore.getState().setDrawerWidth(512);
+
+    const raw = localStorage.getItem("operad.ui");
+    expect(raw).toBeTruthy();
+
+    const parsed = JSON.parse(raw as string) as {
+      state: { sidebarCollapsed: boolean; drawerWidth: number };
+    };
+    expect(parsed.state.sidebarCollapsed).toBe(true);
+    expect(parsed.state.drawerWidth).toBe(512);
+  });
+});

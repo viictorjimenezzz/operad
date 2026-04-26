@@ -1,9 +1,9 @@
+import { BenchmarkMatrix } from "@/components/charts/benchmark-matrix";
+import { MethodLeaderboard } from "@/components/charts/method-leaderboard";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { useBenchmarkDelete, useBenchmarkDetail, useBenchmarkTag } from "@/hooks/use-runs";
 import type { BenchmarkCell } from "@/lib/types";
-import { BenchmarkMatrix } from "@/shared/charts/benchmark-matrix";
-import { MethodLeaderboard } from "@/shared/charts/method-leaderboard";
-import { Button } from "@/shared/ui/button";
-import { EmptyState } from "@/shared/ui/empty-state";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -113,7 +113,9 @@ export function BenchmarkDetailPage() {
       ) : null}
 
       <div className="mb-4 rounded border border-border bg-bg-1 p-3">
-        <div className="mb-2 text-xs uppercase tracking-[0.08em] text-muted">method × task matrix</div>
+        <div className="mb-2 text-xs uppercase tracking-[0.08em] text-muted">
+          method × task matrix
+        </div>
         <BenchmarkMatrix summary={data.report.summary} delta={data.delta} />
       </div>
 
@@ -159,7 +161,9 @@ export function BenchmarkDetailPage() {
       </div>
 
       <div className="rounded border border-border bg-bg-1 p-3">
-        <div className="mb-2 text-xs uppercase tracking-[0.08em] text-muted">per-task leaderboard</div>
+        <div className="mb-2 text-xs uppercase tracking-[0.08em] text-muted">
+          per-task leaderboard
+        </div>
         <MethodLeaderboard summary={data.report.summary} />
       </div>
     </div>

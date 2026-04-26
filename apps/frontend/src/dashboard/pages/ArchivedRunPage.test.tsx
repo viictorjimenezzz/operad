@@ -1,7 +1,7 @@
 import type { RunSummary } from "@/lib/types";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ArchivedRunPage } from "./ArchivedRunPage";
 
@@ -14,7 +14,7 @@ vi.mock("@/hooks/use-runs", () => ({
   useRestoreArchivedRun: () => useRestoreArchivedRunMock(),
 }));
 
-vi.mock("@/components/DashboardRenderer", () => ({
+vi.mock("@/components/runtime/dashboard-renderer", () => ({
   DashboardRenderer: () => <div>renderer</div>,
 }));
 
