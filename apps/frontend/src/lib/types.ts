@@ -356,6 +356,54 @@ export const EvolutionResponse = z.object({
 });
 export type EvolutionResponse = z.infer<typeof EvolutionResponse>;
 
+// --- Cassettes ---------------------------------------------------------------
+
+export const CassetteMetadata = z
+  .object({
+    algorithm: z.string().optional(),
+    run_id: z.string().optional(),
+    recorded_at: z.number().optional(),
+    epoch: z.number().optional(),
+    step_idx: z.number().optional(),
+  })
+  .passthrough();
+export type CassetteMetadata = z.infer<typeof CassetteMetadata>;
+
+export const CassetteSummary = z.object({
+  path: z.string(),
+  type: z.enum(["trace", "inference", "training", "unknown"]),
+  size: z.number(),
+  mtime: z.number(),
+  metadata: CassetteMetadata.default({}),
+});
+export type CassetteSummary = z.infer<typeof CassetteSummary>;
+
+export const CassetteReplayResponse = z.object({
+  run_id: z.string(),
+  emitted: z.number().optional(),
+});
+export type CassetteReplayResponse = z.infer<typeof CassetteReplayResponse>;
+
+export const CassetteDiffEntry = z.object({
+  event_index: z.number(),
+  field: z.string(),
+  expected: z.unknown(),
+  actual: z.unknown(),
+});
+export type CassetteDiffEntry = z.infer<typeof CassetteDiffEntry>;
+
+export const CassetteDeterminismResponse = z.object({
+  ok: z.boolean(),
+  diff: z.array(CassetteDiffEntry),
+});
+export type CassetteDeterminismResponse = z.infer<typeof CassetteDeterminismResponse>;
+
+export const CassettePreviewResponse = z.object({
+  path: z.string(),
+  events: z.array(Envelope),
+});
+export type CassettePreviewResponse = z.infer<typeof CassettePreviewResponse>;
+
 // --- Studio shapes -----------------------------------------------------------
 
 export const JobSummary = z.object({

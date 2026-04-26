@@ -1,4 +1,8 @@
 import {
+  CassetteDeterminismResponse,
+  CassettePreviewResponse,
+  CassetteReplayResponse,
+  CassetteSummary,
   DebateRoundsResponse,
   DriftEntry,
   EvolutionResponse,
@@ -24,6 +28,25 @@ import { z } from "zod";
 
 async function getJson<T extends z.ZodTypeAny>(url: string, schema: T): Promise<z.infer<T>> {
   const r = await fetch(url, { headers: { accept: "application/json" } });
+  if (!r.ok) throw new HttpError(r.status, `${r.status} ${r.statusText} ← ${url}`);
+  const raw: unknown = await r.json();
+  const parsed = schema.safeParse(raw);
+  if (!parsed.success) {
+    throw new ParseError(url, parsed.error);
+  }
+  return parsed.data;
+}
+
+async function postJson<T extends z.ZodTypeAny>(
+  url: string,
+  body: unknown,
+  schema: T,
+): Promise<z.infer<T>> {
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { accept: "application/json", "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
   if (!r.ok) throw new HttpError(r.status, `${r.status} ${r.statusText} ← ${url}`);
   const raw: unknown = await r.json();
   const parsed = schema.safeParse(raw);
@@ -72,5 +95,19 @@ export const dashboardApi = {
   progress: (runId: string) => getJson(`/runs/${runId}/progress.json`, ProgressSnapshot),
   stats: () => getJson("/stats", StatsResponse),
   evolution: () => getJson("/evolution", EvolutionResponse),
+  cassettes: () => getJson("/cassettes", z.array(CassetteSummary)),
+  cassetteReplay: (params: { path: string; runIdOverride?: string; delayMs?: number }) =>
+    postJson(
+      `/cassettes/replay?delay_ms=${params.delayMs ?? 50}`,
+      { path: params.path, run_id_override: params.runIdOverride ?? null },
+      CassetteReplayResponse,
+    ),
+  cassetteDeterminism: (path: string) =>
+    postJson("/cassettes/determinism-check", { path }, CassetteDeterminismResponse),
+  cassettePreview: (path: string, limit = 100) =>
+    getJson(
+      `/cassettes/preview?path=${encodeURIComponent(path)}&limit=${limit}`,
+      CassettePreviewResponse,
+    ),
   manifest: () => getJson("/api/manifest", Manifest),
 } as const;
