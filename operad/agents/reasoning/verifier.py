@@ -1,7 +1,7 @@
 """VerifierAgent: typed Agent wrapper around the VerifierLoop algorithm.
 
 Exposes the generate-until-verified loop as an ``Agent[Task, Answer]``
-so it can be dropped into any ``Pipeline`` like any other leaf.
+so it can be dropped into any ``Sequential`` like any other leaf.
 """
 
 from __future__ import annotations

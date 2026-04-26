@@ -2,7 +2,7 @@
 
 Exposes the multi-proposer / critic-round / synthesizer orchestration
 as an ``Agent[DebateContext, Answer]`` so it can be dropped into any
-``Pipeline`` like any other leaf.
+``Sequential`` like any other leaf.
 """
 
 from __future__ import annotations

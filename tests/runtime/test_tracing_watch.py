@@ -128,7 +128,7 @@ def test_cli_tail_prints_events(capsys) -> None:
     rc = main(["tail", str(FIXTURE), "--speed", "0"])
     assert rc == 0
     out = capsys.readouterr().out
-    assert "Pipeline" in out
+    assert "Sequential" in out
     assert "start" in out and "end" in out
     # One line per event in the fixture.
     lines = [ln for ln in out.splitlines() if ln.strip()]

@@ -1,7 +1,7 @@
 # triage_reply — composition + evolution, in one demo
 
 A small customer-support tree (`Switch` + `Router`-style leaf +
-`Pipeline` + four responders) is evolved over six generations via
+`Sequential` + four responders) is evolved over six generations via
 `Agent.auto_tune`. Every leaf is a deterministic offline component, so
 the whole demo runs without a model server.
 
@@ -10,7 +10,7 @@ Switch                          (Ticket -> Reply)
 ├── router  : RouterLeaf        (Ticket -> RouteChoice)
 └── branches
     ├── billing : BillingResponder
-    ├── tech    : Pipeline
+    ├── tech    : Sequential
     │             ├── TechAnalyzer  (Ticket -> Diagnosis)
     │             └── TechResponder (Diagnosis -> Reply)
     └── general : GeneralResponder

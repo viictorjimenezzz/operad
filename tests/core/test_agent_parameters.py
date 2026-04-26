@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from operad import Configuration
-from operad.agents.pipeline import Pipeline
+from operad.agents.pipelines import Sequential
 from operad.core.config import Sampling
 from operad.optim import (
     CategoricalParameter,
@@ -78,9 +78,9 @@ def test_parameter_subclasses_match_expected_types(cfg: Configuration) -> None:
 
 def test_parameters_recurse_false_excludes_children(cfg: Configuration) -> None:
     a, b = _leaf(cfg), _leaf(cfg)
-    pipe = Pipeline(a, b, input=A, output=B)
+    pipe = Sequential(a, b, input=A, output=B)
     local = list(pipe.named_parameters(recurse=False))
-    # Pipeline has config=None → only role/task/style/rules/examples.
+    # Sequential has config=None → only role/task/style/rules/examples.
     assert {path for path, _ in local} == {
         "role", "task", "style", "rules", "examples",
     }
@@ -88,7 +88,7 @@ def test_parameters_recurse_false_excludes_children(cfg: Configuration) -> None:
 
 def test_named_parameters_recurse_prefixes_child_names(cfg: Configuration) -> None:
     a, b = _leaf(cfg), _leaf(cfg)
-    pipe = Pipeline(a, b, input=A, output=B)
+    pipe = Sequential(a, b, input=A, output=B)
     names = [p for p, _ in pipe.named_parameters(recurse=True)]
     assert "role" in names  # pipeline's own role
     assert "stage_0.role" in names
@@ -99,7 +99,7 @@ def test_named_parameters_recurse_prefixes_child_names(cfg: Configuration) -> No
 
 def test_composite_has_no_sampling_params(cfg: Configuration) -> None:
     a, b = _leaf(cfg), _leaf(cfg)
-    pipe = Pipeline(a, b, input=A, output=B)
+    pipe = Sequential(a, b, input=A, output=B)
     local = {path for path, _ in pipe.named_parameters(recurse=False)}
     for forbidden in (
         "config.sampling.temperature",
@@ -188,7 +188,7 @@ def test_freeze_does_not_affect_other_fields(cfg: Configuration) -> None:
 
 def test_mark_trainable_recurse_broadcasts(cfg: Configuration) -> None:
     a, b = _leaf(cfg), _leaf(cfg)
-    pipe = Pipeline(a, b, input=A, output=B)
+    pipe = Sequential(a, b, input=A, output=B)
     pipe.freeze_parameters(role=True, recurse=True)
     assert dict(a.named_parameters(recurse=False))["role"].requires_grad is False
     assert dict(b.named_parameters(recurse=False))["role"].requires_grad is False
@@ -197,7 +197,7 @@ def test_mark_trainable_recurse_broadcasts(cfg: Configuration) -> None:
 
 def test_mark_trainable_recurse_false_leaves_children_alone(cfg: Configuration) -> None:
     a, b = _leaf(cfg), _leaf(cfg)
-    pipe = Pipeline(a, b, input=A, output=B)
+    pipe = Sequential(a, b, input=A, output=B)
     pipe.freeze_parameters(role=True, recurse=False)
     assert dict(pipe.named_parameters(recurse=False))["role"].requires_grad is False
     assert dict(a.named_parameters(recurse=False))["role"].requires_grad is True
@@ -206,7 +206,7 @@ def test_mark_trainable_recurse_false_leaves_children_alone(cfg: Configuration) 
 
 def test_per_path_child_only(cfg: Configuration) -> None:
     a, b = _leaf(cfg), _leaf(cfg)
-    pipe = Pipeline(a, b, input=A, output=B)
+    pipe = Sequential(a, b, input=A, output=B)
     pipe.freeze_parameters(**{"stage_0.role": True})
     assert dict(a.named_parameters(recurse=False))["role"].requires_grad is False
     assert dict(b.named_parameters(recurse=False))["role"].requires_grad is True
@@ -217,7 +217,7 @@ def test_per_path_combines_with_broadcast(cfg: Configuration) -> None:
     """Per-path selections are additive to broadcast when they target the
     same fields — both write the method's ``value``."""
     a, b = _leaf(cfg), _leaf(cfg)
-    pipe = Pipeline(a, b, input=A, output=B)
+    pipe = Sequential(a, b, input=A, output=B)
     pipe.freeze_parameters(
         role=True, recurse=True, **{"stage_0.task": True}
     )
@@ -241,15 +241,15 @@ def test_per_path_unknown_field_raises(cfg: Configuration) -> None:
 
 def test_sampling_kwarg_without_config_raises_at_root(cfg: Configuration) -> None:
     a, b = _leaf(cfg), _leaf(cfg)
-    pipe = Pipeline(a, b, input=A, output=B)
+    pipe = Sequential(a, b, input=A, output=B)
     with pytest.raises(KeyError):
         pipe.mark_trainable(temperature=True, recurse=False)
 
 
 def test_sampling_broadcast_skips_composite_silently(cfg: Configuration) -> None:
     a, b = _leaf(cfg), _leaf(cfg)
-    pipe = Pipeline(a, b, input=A, output=B)
-    # Pipeline has no config, but broadcast should still reach children.
+    pipe = Sequential(a, b, input=A, output=B)
+    # Sequential has no config, but broadcast should still reach children.
     # We have to call from a leaf-level starting point because the strict
     # root check runs on whoever receives the explicit call.
     a.mark_trainable(temperature=False, recurse=False)
@@ -274,7 +274,7 @@ def test_trainable_parameters_filters(cfg: Configuration) -> None:
 
 def test_trainable_parameters_recurses(cfg: Configuration) -> None:
     a, b = _leaf(cfg), _leaf(cfg)
-    pipe = Pipeline(a, b, input=A, output=B)
+    pipe = Sequential(a, b, input=A, output=B)
     pipe.freeze_parameters(role=True, recurse=True)
     trainable = list(pipe.trainable_parameters())
     role_params = [p for p in trainable if p.kind == "role"]
@@ -291,7 +291,7 @@ def test_clone_resets_overrides(cfg: Configuration) -> None:
 
 def test_clone_composite_resets_overrides(cfg: Configuration) -> None:
     a, b = _leaf(cfg), _leaf(cfg)
-    pipe = Pipeline(a, b, input=A, output=B)
+    pipe = Sequential(a, b, input=A, output=B)
     pipe.freeze_parameters(role=True, recurse=True)
     cloned = pipe.clone()
     assert cloned._requires_grad_overrides == {}
@@ -371,14 +371,14 @@ def test_freeze_config_drops_configuration_parameter(cfg: Configuration) -> None
 
 def test_mark_trainable_config_without_config_raises_at_root(cfg: Configuration) -> None:
     a, b = _leaf(cfg), _leaf(cfg)
-    pipe = Pipeline(a, b, input=A, output=B)
+    pipe = Sequential(a, b, input=A, output=B)
     with pytest.raises(KeyError):
         pipe.mark_trainable(config=True, recurse=False)
 
 
 def test_mark_trainable_config_broadcast_skips_composite_silently(cfg: Configuration) -> None:
     a, b = _leaf(cfg), _leaf(cfg)
-    pipe = Pipeline(a, b, input=A, output=B)
+    pipe = Sequential(a, b, input=A, output=B)
     # Mirrors `test_sampling_broadcast_skips_composite_silently`: the
     # composite root has no config, so the strict path at the root would
     # raise. The lenient broadcast (`_strict=False`) reaches children

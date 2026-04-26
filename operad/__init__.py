@@ -15,7 +15,7 @@ from .core import (
     abuild_agent,
     build_agent,
 )
-from .agents import Parallel, Pipeline
+from .agents import Parallel, Sequential
 from .benchmark import Dataset, evaluate
 from .metrics import Metric
 from .runtime.trace import Trace
@@ -37,7 +37,7 @@ __all__ = [
     "Metric",
     "OperadOutput",
     "Parallel",
-    "Pipeline",
+    "Sequential",
     "Trace",
     "abuild_agent",
     "build_agent",

@@ -93,23 +93,19 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _trace(args: argparse.Namespace) -> int:
-    from .core.graph import to_mermaid
-
     agent = _load_and_instantiate(args.config)
     agent.build()
-    print(to_mermaid(agent._graph))
+    print(agent.graph_mermaid())
     return 0
 
 
 def _graph(args: argparse.Namespace) -> int:
-    from .core.graph import to_json, to_mermaid
-
     agent = _load_and_instantiate(args.config)
     agent.build()
     if args.format == "mermaid":
-        print(to_mermaid(agent._graph))
+        print(agent.graph_mermaid())
     else:
-        print(json.dumps(to_json(agent._graph), indent=2))
+        print(json.dumps(agent.graph_json(), indent=2))
     return 0
 
 

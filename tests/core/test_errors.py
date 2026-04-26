@@ -4,7 +4,7 @@ Build-time error paths (`not_built`, `input_mismatch`, `output_mismatch`,
 `payload_branch`) are covered by `test_agent.py` and `test_build.py`. This
 module pins down what happens after a successful `build()` when a leaf
 raises mid-`forward`: `Parallel` surfaces the failure via `asyncio.gather`,
-and `Pipeline` halts at the failing stage.
+and `Sequential` halts at the failing stage.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from operad import Agent, Parallel, Pipeline
+from operad import Agent, Parallel, Sequential
 
 from ..conftest import A, B, C, D, FakeLeaf
 
@@ -98,7 +98,7 @@ async def test_parallel_failure_does_not_call_combine(cfg) -> None:
 async def test_pipeline_stage_raises_halts_downstream(cfg) -> None:
     tripwire: list[int] = []
 
-    root = Pipeline(
+    root = Sequential(
         FakeLeaf(config=cfg, input=A, output=B),
         _RaisingLeaf(config=cfg, input=B, output=C),
         _CountingLeaf(config=cfg, input=C, output=D, counter=tripwire),

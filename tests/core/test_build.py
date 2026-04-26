@@ -24,7 +24,7 @@ async def test_leaf_build_produces_empty_graph(cfg) -> None:
 
 
 async def test_pipeline_build_captures_edges(cfg) -> None:
-    class Pipeline(Agent):
+    class Sequential(Agent):
         input = A
         output = C
 
@@ -37,15 +37,15 @@ async def test_pipeline_build_captures_edges(cfg) -> None:
             mid = (await self.first(x)).response
             return (await self.second(mid)).response
 
-    p = await Pipeline().abuild()
+    p = await Sequential().abuild()
     g: AgentGraph = p._graph
-    assert g.root == "Pipeline"
+    assert g.root == "Sequential"
     assert len(g.edges) == 2
 
     e1, e2 = g.edges
-    assert e1.caller == "Pipeline" and e1.callee == "Pipeline.first"
+    assert e1.caller == "Sequential" and e1.callee == "Sequential.first"
     assert e1.input_type is A and e1.output_type is B
-    assert e2.caller == "Pipeline" and e2.callee == "Pipeline.second"
+    assert e2.caller == "Sequential" and e2.callee == "Sequential.second"
     assert e2.input_type is B and e2.output_type is C
 
 
@@ -108,7 +108,7 @@ async def test_build_catches_root_output_mismatch(cfg) -> None:
 
 
 async def test_build_is_idempotent_after_mutation(cfg) -> None:
-    class Pipeline(Agent):
+    class Sequential(Agent):
         input = A
         output = C
 
@@ -120,7 +120,7 @@ async def test_build_is_idempotent_after_mutation(cfg) -> None:
         async def forward(self, x: A) -> C:  # type: ignore[override]
             return (await self.second((await self.first(x)).response)).response
 
-    p = await Pipeline().abuild()
+    p = await Sequential().abuild()
     assert p._built is True
 
     p.first.task = "updated"
@@ -131,7 +131,7 @@ async def test_build_is_idempotent_after_mutation(cfg) -> None:
 
 
 async def test_build_marks_all_descendants_built(cfg) -> None:
-    class Pipeline(Agent):
+    class Sequential(Agent):
         input = A
         output = C
 
@@ -143,7 +143,7 @@ async def test_build_marks_all_descendants_built(cfg) -> None:
         async def forward(self, x: A) -> C:  # type: ignore[override]
             return (await self.second((await self.first(x)).response)).response
 
-    p = await Pipeline().abuild()
+    p = await Sequential().abuild()
     assert p._built is True
     assert p.first._built is True
     assert p.second._built is True
@@ -370,7 +370,7 @@ async def test_init_runner_runs_after_successful_trace(cfg, monkeypatch) -> None
 
     monkeypatch.setattr(build_mod, "_init_runner", tracker)
 
-    class Pipeline(Agent):
+    class Sequential(Agent):
         input = A
         output = C
 
@@ -382,8 +382,8 @@ async def test_init_runner_runs_after_successful_trace(cfg, monkeypatch) -> None
         async def forward(self, x: A) -> C:  # type: ignore[override]
             return (await self.second((await self.first(x)).response)).response
 
-    await Pipeline().abuild()
-    assert set(calls) == {"Pipeline", "FakeLeaf"}
+    await Sequential().abuild()
+    assert set(calls) == {"Sequential", "FakeLeaf"}
 
 
 async def test_shared_child_warning(cfg) -> None:
@@ -408,7 +408,7 @@ async def test_shared_child_warning(cfg) -> None:
 async def test_unshared_children_emit_no_warning(cfg) -> None:
     import warnings as _warnings
 
-    class Pipeline(Agent):
+    class Sequential(Agent):
         input = A
         output = C
 
@@ -422,7 +422,7 @@ async def test_unshared_children_emit_no_warning(cfg) -> None:
 
     with _warnings.catch_warnings():
         _warnings.simplefilter("error")
-        await Pipeline().abuild()
+        await Sequential().abuild()
 
 
 async def test_sentinel_is_instance_of_input() -> None:

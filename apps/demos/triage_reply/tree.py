@@ -6,13 +6,13 @@ Topology::
     ├── router  : RouterLeaf        (Ticket -> RouteChoice)
     └── branches
         ├── billing : BillingResponder    (Ticket -> Reply)
-        ├── tech    : Pipeline             (Ticket -> Reply)
+        ├── tech    : Sequential             (Ticket -> Reply)
         │             ├── stage_0: TechAnalyzer  (Ticket -> Diagnosis)
         │             └── stage_1: TechResponder (Diagnosis -> Reply)
         └── general : GeneralResponder    (Ticket -> Reply)
 
 This exercises three composition primitives — `Switch`, `Router`-style
-leaf, and a nested `Pipeline` — in five evolvable leaves. Mutation paths
+leaf, and a nested `Sequential` — in five evolvable leaves. Mutation paths
 from the root therefore look like ``router``,
 ``branch_billing``, ``branch_tech.stage_0``,
 ``branch_tech.stage_1``, ``branch_general``.
@@ -20,7 +20,7 @@ from the root therefore look like ``router``,
 
 from __future__ import annotations
 
-from operad.agents.pipeline import Pipeline
+from operad.agents.pipelines import Sequential
 from operad.agents.reasoning.switch import Switch
 
 from leaves import (
@@ -41,7 +41,7 @@ def build_seed() -> Switch:
     cold role (so replies are short and unwarm). The evolutionary loop
     has plenty of room to climb from here.
     """
-    tech_branch = Pipeline(
+    tech_branch = Sequential(
         TechAnalyzer(),
         TechResponder(),
         input=Ticket,

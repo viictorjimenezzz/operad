@@ -72,7 +72,7 @@ out = await leaf(Q(text="What is 2+2?"))
 print(out.response.answer, out.run_id, out.hash_input)
 ```
 
-`Pipeline(a, b)` and `Parallel({"x": a, "y": b}, ...)` (defined under
+`Sequential(a, b)` and `Parallel({"x": a, "y": b}, ...)` (defined under
 `operad/agents/`) compose leaves into trees. `build()` walks the tree
 once, type-checks every parent-to-child handoff, and returns an
 `AgentGraph` you can export, hash, replay, or feed to `backward()`.
@@ -101,7 +101,7 @@ just orchestrate.
 - [`../utils/`](../utils/README.md) — errors, hashing, ops, cassette.
 - [`../runtime/`](../runtime/README.md) — observers and traces that
   fire on every `Agent.invoke`.
-- [`../agents/`](../agents/README.md) — `Pipeline`, `Parallel`, and
+- [`../agents/`](../agents/README.md) — `Sequential`, `Parallel`, and
   the leaf component library.
 - [`../optim/`](../optim/README.md) — what `Parameter` handles read
   off your agents.

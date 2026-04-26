@@ -19,7 +19,7 @@ and writes a ``TextualGradient`` onto every trainable ``Parameter``'s
    ``.grad`` in place.
 
 Custom composite types register their own split rules via
-``register_backward_rule(cls, fn)``. Built-in rules cover ``Pipeline``,
+``register_backward_rule(cls, fn)``. Built-in rules cover ``Sequential``,
 ``Parallel``, and ``Switch``; every other composite falls back to a
 uniform fan-out with a one-time ``RuntimeWarning``.
 
@@ -105,7 +105,7 @@ def _pipeline_split(
     out_grad: TextualGradient,
     children: list[TapeEntry],
 ) -> dict[str, TextualGradient]:
-    """Pipeline: last stage's output IS the composite's output, so hand
+    """Sequential: last stage's output IS the composite's output, so hand
     it the full gradient. Earlier stages receive a copy of the same
     gradient as a coarse default — ``propagate`` refines output-critiques
     and has no primitive for translating an output-grad into an
@@ -187,11 +187,11 @@ def _generic_composite_rule(
 
 
 def _register_builtin_rules() -> None:
-    from operad.agents.parallel import Parallel
-    from operad.agents.pipeline import Pipeline
+    from operad.agents.pipelines import Parallel
+    from operad.agents.pipelines import Sequential
     from operad.agents.reasoning.switch import Switch
 
-    _RULES[Pipeline] = _pipeline_split
+    _RULES[Sequential] = _pipeline_split
     _RULES[Parallel] = _parallel_split
     _RULES[Switch] = _switch_split
 

@@ -40,13 +40,13 @@ from operad.train import (
 ## Smallest meaningful example
 
 ```python
-from operad import Pipeline
+from operad import Sequential
 from operad.optim import CriticLoss, TextualGradientDescent
 from operad.optim.lr_scheduler import CosineExplorationLR
 from operad.train import Trainer, EarlyStopping, BestCheckpoint
 from operad.data import DataLoader, random_split
 
-agent = Pipeline(Planner(...), Reasoner(...), Critic(...))
+agent = Sequential(Planner(...), Reasoner(...), Critic(...))
 agent.mark_trainable(role=True, task=True, rules=True)
 await agent.abuild()
 

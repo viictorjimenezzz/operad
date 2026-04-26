@@ -14,7 +14,7 @@ from operad.agents.debate.schemas import (
     Proposal,
 )
 from operad.agents.reasoning.schemas import Answer, Candidate, Score, Task
-from operad.agents import Pipeline
+from operad.agents import Sequential
 from operad.runtime.observers import AlgorithmEvent, registry
 from tests.conftest import A, B, FakeLeaf
 
@@ -152,12 +152,12 @@ async def test_verifier_agent_children_registered(cfg) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Pipeline composition
+# Sequential composition
 # ---------------------------------------------------------------------------
 
 
 async def test_debate_agent_in_pipeline(cfg) -> None:
-    """Pipeline(leaf -> DebateAgent -> leaf) builds and runs end-to-end."""
+    """Sequential(leaf -> DebateAgent -> leaf) builds and runs end-to-end."""
     pre = FakeLeaf(config=cfg, input=A, output=DebateContext, canned={"topic": "test", "details": ""})
     debate = DebateAgent(
         proposers=[_Proposer(cfg, "p1")],
@@ -167,7 +167,7 @@ async def test_debate_agent_in_pipeline(cfg) -> None:
     )
     post = FakeLeaf(config=cfg, input=Answer, output=B, canned={"value": 42})
 
-    pipeline = Pipeline(pre, debate, post, input=A, output=B)
+    pipeline = Sequential(pre, debate, post, input=A, output=B)
     await pipeline.abuild()
 
     result = await pipeline(A(text="go"))
@@ -176,7 +176,7 @@ async def test_debate_agent_in_pipeline(cfg) -> None:
 
 
 async def test_verifier_agent_in_pipeline(cfg) -> None:
-    """Pipeline(leaf -> VerifierAgent -> leaf) builds and runs end-to-end."""
+    """Sequential(leaf -> VerifierAgent -> leaf) builds and runs end-to-end."""
     pre = FakeLeaf(config=cfg, input=A, output=Task, canned={"goal": "test"})
     verifier = VerifierAgent(
         generator=_Generator(cfg),
@@ -186,7 +186,7 @@ async def test_verifier_agent_in_pipeline(cfg) -> None:
     )
     post = FakeLeaf(config=cfg, input=Answer, output=B, canned={"value": 7})
 
-    pipeline = Pipeline(pre, verifier, post, input=A, output=B)
+    pipeline = Sequential(pre, verifier, post, input=A, output=B)
     await pipeline.abuild()
 
     result = await pipeline(A(text="start"))

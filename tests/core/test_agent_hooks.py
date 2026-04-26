@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from operad import Configuration
-from operad.agents.pipeline import Pipeline
+from operad.agents.pipelines import Sequential
 from operad.optim import inference_mode, no_grad
 
 from tests._helpers.fake_leaf import A, B, FakeLeaf
@@ -238,7 +238,7 @@ async def test_clone_resets_hook_lists(cfg: Configuration) -> None:
 @pytest.mark.asyncio
 async def test_clone_composite_resets_hook_lists(cfg: Configuration) -> None:
     a, b = _leaf(cfg), _leaf(cfg)
-    pipe = Pipeline(a, b, input=A, output=B)
+    pipe = Sequential(a, b, input=A, output=B)
     pipe.register_forward_hook(lambda ag, x, y: None)
     a.register_forward_hook(lambda ag, x, y: None)
     cloned = pipe.clone()
@@ -252,7 +252,7 @@ async def test_clone_composite_resets_hook_lists(cfg: Configuration) -> None:
 async def test_composite_hooks_fire_separately_from_children(cfg: Configuration) -> None:
     a = FakeLeaf(config=cfg, input=A, output=A)
     b = FakeLeaf(config=cfg, input=A, output=A)
-    pipe = Pipeline(a, b, input=A, output=A)
+    pipe = Sequential(a, b, input=A, output=A)
     fired: list[str] = []
     pipe.register_forward_hook(lambda ag, x, y: fired.append("pipe"))
     a.register_forward_hook(lambda ag, x, y: fired.append("a"))

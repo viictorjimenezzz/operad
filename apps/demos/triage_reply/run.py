@@ -1,6 +1,6 @@
 """`triage_reply` — operad's compositionality + evolution showcase.
 
-A small customer-support tree (Switch + Router + Pipeline + four
+A small customer-support tree (Switch + Router + Sequential + four
 responders) is evolved over N generations via `Agent.auto_tune`. Every
 sub-agent is a deterministic offline leaf, so the whole demo runs
 without a model server. The mutation pool targets specific sub-paths,

@@ -44,20 +44,20 @@ class ReAct(Agent[Task, Answer]):
     input = Task
     output = Answer
 
-    def __init__(self, *, config: Configuration) -> None:
-        super().__init__(config=None, input=Task, output=Answer)
+    def __init__(self, *, config: Configuration, context: str | None = None) -> None:
+        super().__init__(config=None, input=Task, output=Answer, context=context)
 
         self.reasoner: Reasoner[Task, Thought] = Reasoner(
-            config=config, input=Task, output=Thought
+            config=config, input=Task, output=Thought, context=context
         )
         self.actor: Actor[Thought, Action] = Actor(
-            config=config, input=Thought, output=Action
+            config=config, input=Thought, output=Action, context=context
         )
         self.extractor: Extractor[Action, Observation] = Extractor(
-            config=config, input=Action, output=Observation
+            config=config, input=Action, output=Observation, context=context
         )
         self.evaluator: Evaluator[Observation, Answer] = Evaluator(
-            config=config, input=Observation, output=Answer
+            config=config, input=Observation, output=Answer, context=context
         )
 
     async def forward(self, x: Task) -> Answer:  # type: ignore[override]

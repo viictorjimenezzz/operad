@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.panel import Panel
 
-from operad import Pipeline
+from operad import Sequential
 from operad.core.config import Sampling
 from operad.agents import Classifier, Reasoner
 from operad.core.graph import to_mermaid
@@ -57,7 +57,7 @@ class Verdict(BaseModel):
     )
 
 
-def _build_agent() -> Pipeline:
+def _build_agent() -> Sequential:
     cfg = local_config(sampling=Sampling(temperature=0.2, max_tokens=128))
     answerer = Reasoner(
         config=cfg,
@@ -73,7 +73,7 @@ def _build_agent() -> Pipeline:
         role="You are a careful rater.",
         task="Label the answer's confidence as low, medium, or high.",
     )
-    return Pipeline(answerer, grader, input=Question, output=Verdict)
+    return Sequential(answerer, grader, input=Question, output=Verdict)
 
 
 def _parse_dashboard_target(value: str) -> tuple[str, int]:

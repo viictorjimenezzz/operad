@@ -6,7 +6,7 @@ Their outputs are folded into a single ``ReviewReport`` whose
 ``summary`` is the summarizer's one-line headline and whose ``comments``
 are the reviewer's localized notes.
 
-Not a ``Pipeline``: the summarizer and reviewer share an input rather
+Not a ``Sequential``: the summarizer and reviewer share an input rather
 than chaining linearly, so the composition is expressed as a custom
 composite with an explicit ``forward``.
 """

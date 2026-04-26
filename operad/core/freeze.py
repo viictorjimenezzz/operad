@@ -3,7 +3,7 @@
 Freeze captures the three pieces of a compiled agent that are expensive
 to recreate: the declared state (via ``AgentState``), the computation
 graph (via ``to_json``), and each default-forward leaf's rendered system
-message. Custom-forward agents (composites like ``Pipeline``,
+message. Custom-forward agents (composites like ``Sequential``,
 user-defined custom leaves with per-instance state like ``FakeLeaf``)
 also carry a small pickled blob of their routing / instance state, with
 intra-tree ``Agent`` references rewritten to ``_ChildRef`` sentinels so
@@ -45,7 +45,9 @@ _KNOWN_AGENT_ATTRS: frozenset[str] = frozenset(
     {
         "role",
         "task",
+        "style",
         "context",
+        "name",
         "rules",
         "examples",
         "config",
@@ -204,6 +206,7 @@ def _state_from_frozen(state_dict: dict) -> AgentState:
     }
     return AgentState.model_construct(
         class_name=state_dict["class_name"],
+        name=state_dict.get("name", state_dict.get("class_name", "")),
         role=state_dict.get("role", ""),
         task=state_dict.get("task", ""),
         style=state_dict.get("style", ""),
@@ -230,6 +233,7 @@ def _redact_state(state: AgentState) -> AgentState:
     # Use model_construct so the redacted cfg (api_key=None) is not re-validated.
     return AgentState.model_construct(
         class_name=state.class_name,
+        name=state.name,
         role=state.role,
         task=state.task,
         style=state.style,
@@ -344,8 +348,8 @@ def freeze_agent(
     if not agent._built:
         raise BuildError(
             "not_built",
-            f"cannot freeze {type(agent).__name__}: call .build() first",
-            agent=type(agent).__name__,
+            f"cannot freeze {agent.name}: call .build() first",
+            agent=agent.name,
         )
 
     class_map: dict[str, str] = {}
@@ -413,10 +417,18 @@ def _new_agent(cls: type, state: AgentState, io: tuple[type, type]) -> Agent:
     object.__setattr__(obj, "_children", {})
     object.__setattr__(obj, "_built", False)
     object.__setattr__(obj, "_graph", None)
+    object.__setattr__(obj, "_runner", None)
+    object.__setattr__(obj, "_requires_grad_overrides", {})
+    object.__setattr__(obj, "_configuration_constraint", None)
+    object.__setattr__(obj, "_forward_pre_hooks", [])
+    object.__setattr__(obj, "_forward_hooks", [])
+    object.__setattr__(obj, "_backward_hooks", [])
     obj.input = io[0]  # type: ignore[assignment]
     obj.output = io[1]  # type: ignore[assignment]
+    obj.name = state.name or cls.__name__
     obj.role = state.role
     obj.task = state.task
+    obj.style = state.style
     obj.context = state.context
     obj.rules = list(state.rules)
     obj.config = (
@@ -525,7 +537,7 @@ def _thaw_from_data(data: dict[str, Any]) -> Agent:
     io_map = _io_from_graph(graph_json)
 
     root_state = _state_from_frozen(data["state"])
-    root_path = _resolve_class(data["agent_class"]).__name__
+    root_path = root_state.name or _resolve_class(data["agent_class"]).__name__
     root = _reconstruct(root_state, root_path, class_map, io_map)
 
     _restore_extra(root, root_path, routing)

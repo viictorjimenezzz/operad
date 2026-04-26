@@ -61,10 +61,10 @@ class TextualGradient(BaseModel):
 Start with any built agent and flip the fields you want to train:
 
 ```python
-from operad import Pipeline
+from operad import Sequential
 from operad.agents.reasoning import Planner, Reasoner, Critic
 
-agent = Pipeline(Planner(config=cfg), Reasoner(config=cfg), Critic(config=cfg))
+agent = Sequential(Planner(config=cfg), Reasoner(config=cfg), Critic(config=cfg))
 agent.mark_trainable(role=True, task=True, rules=True)   # all children
 await agent.abuild()
 
@@ -125,14 +125,14 @@ Every training run has the same shape:
 
 ```python
 import operad
-from operad import Pipeline
+from operad import Sequential
 from operad.optim import CriticLoss, TextualGradientDescent
 from operad.optim.lr_scheduler import CosineExplorationLR
 from operad.train import Trainer, EarlyStopping, BestCheckpoint
 from operad.data import DataLoader, random_split
 
 # 1. Build the agent and mark what's trainable.
-agent = Pipeline(Planner(...), Reasoner(...), Critic(...))
+agent = Sequential(Planner(...), Reasoner(...), Critic(...))
 agent.mark_trainable(role=True, task=True, rules=True)
 await agent.abuild()
 

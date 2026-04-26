@@ -22,7 +22,7 @@ def _agent_record(run_id: str, kind: str, ts: float) -> dict:
     return {
         "event": "agent",
         "run_id": run_id,
-        "agent_path": "Pipeline",
+        "agent_path": "Sequential",
         "kind": kind,
         "input": None,
         "output": None,

@@ -2,7 +2,7 @@
 
 The `torch.nn`-style tier of operad. Two kinds of things live here:
 
-1. **Structural operators** at the package root: `Pipeline`,
+1. **Structural operators** at the package root: `Sequential`,
    `Parallel`. Domain-agnostic; they just compose other agents.
 2. **Domain components and pre-wired patterns** under one folder per
    domain. Each domain folder has a `components/` subdir for its
@@ -18,11 +18,11 @@ domain's `components/`.
 
 | Class    | What it does                                                                  |
 | -------- | ----------------------------------------------------------------------------- |
-| `Pipeline(a, b, c, …)` | Sequential composition; each stage's `Out` must equal the next's `In`. |
+| `Sequential(a, b, c, …)` | Sequential composition; each stage's `Out` must equal the next's `In`. |
 | `Parallel({"a": x, "b": y}, input=…, output=…, combine=…)` | Fan-out to a dict of children, run concurrently, fold via `combine`. |
 
 `Switch` (under `reasoning/switch.py`) routes at runtime based on a
-router leaf's typed choice. `a >> b` is sugar for `Pipeline(a, b)` and
+router leaf's typed choice. `a >> b` is sugar for `Sequential(a, b)` and
 chains flatten.
 
 ## Domains shipped today
@@ -131,11 +131,11 @@ conversation manager and is single-threaded by contract.
 ## Smallest meaningful composite
 
 ```python
-from operad import Pipeline, Parallel
+from operad import Sequential, Parallel
 from operad.agents.reasoning import Reasoner, Critic
 
 # Sequential
-graded = Pipeline(reasoner, critic)
+graded = Sequential(reasoner, critic)
 
 # Fan-out + combine
 both = Parallel(
@@ -174,7 +174,7 @@ both = Parallel(
 
 ## Related
 
-- [`../core/`](../core/README.md) — `Agent`, `Pipeline`, `Parallel`,
+- [`../core/`](../core/README.md) — `Agent`, `Sequential`, `Parallel`,
   `build`, `AgentGraph`.
 - [`../algorithms/`](../algorithms/README.md) — outer loops that use
   these components as parameters.

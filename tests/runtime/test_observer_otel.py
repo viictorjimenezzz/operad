@@ -21,7 +21,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
 )
 from opentelemetry.trace import StatusCode
 
-from operad import Agent, Pipeline
+from operad import Agent, Sequential
 from operad.runtime.observers import AgentEvent, OtelObserver
 from operad.runtime.observers import registry as obs_registry
 
@@ -60,17 +60,17 @@ def _attrs(span) -> dict[str, Any]:
 async def test_span_per_leaf(cfg, exporter) -> None:
     first = FakeLeaf(config=cfg, input=A, output=B, canned={"value": 1})
     second = FakeLeaf(config=cfg, input=B, output=C, canned={"label": "ok"})
-    pipe = await Pipeline(first, second, input=A, output=C).abuild()
+    pipe = await Sequential(first, second, input=A, output=C).abuild()
 
     obs_registry.register(OtelObserver())
     await pipe(A(text="hi"))
 
     spans = exporter.get_finished_spans()
     names = sorted(s.name for s in spans)
-    # Pipeline root + two stages (stage_0, stage_1).
-    assert "Pipeline" in names
-    assert any(n.startswith("Pipeline.stage_") for n in names)
-    assert sum(1 for n in names if n.startswith("Pipeline.stage_")) == 2
+    # Sequential root + two stages (stage_0, stage_1).
+    assert "Sequential" in names
+    assert any(n.startswith("Sequential.stage_") for n in names)
+    assert sum(1 for n in names if n.startswith("Sequential.stage_")) == 2
 
 
 async def test_span_attributes_on_leaf(cfg, exporter) -> None:
@@ -222,7 +222,7 @@ async def test_root_span_trace_id_matches_run_id(cfg, exporter) -> None:
 async def test_nested_spans_share_trace_id(cfg, exporter) -> None:
     first = FakeLeaf(config=cfg, input=A, output=B, canned={"value": 1})
     second = FakeLeaf(config=cfg, input=B, output=C, canned={"label": "ok"})
-    pipe = await Pipeline(first, second, input=A, output=C).abuild()
+    pipe = await Sequential(first, second, input=A, output=C).abuild()
 
     obs_registry.register(OtelObserver())
     out = await pipe(A(text="hi"))

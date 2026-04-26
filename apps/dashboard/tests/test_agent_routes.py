@@ -30,16 +30,16 @@ class FakeLeaf(Agent[A, B]):
 
 
 _GRAPH_JSON = {
-    "root": "Pipeline",
+    "root": "Sequential",
     "nodes": [
         {
-            "path": "Pipeline",
+            "path": "Sequential",
             "input": "tests._helpers.fake_leaf.A",
             "output": "tests._helpers.fake_leaf.B",
             "kind": "composite",
         },
         {
-            "path": "Pipeline.stage_0",
+            "path": "Sequential.stage_0",
             "input": "tests._helpers.fake_leaf.A",
             "output": "tests._helpers.fake_leaf.B",
             "kind": "leaf",
@@ -47,8 +47,8 @@ _GRAPH_JSON = {
     ],
     "edges": [
         {
-            "caller": "Pipeline",
-            "callee": "Pipeline.stage_0",
+            "caller": "Sequential",
+            "callee": "Sequential.stage_0",
             "input": "tests._helpers.fake_leaf.A",
             "output": "tests._helpers.fake_leaf.B",
         }
@@ -159,7 +159,7 @@ def _run_envelopes(run_id: str = "run-live") -> list[dict]:
         {
             "type": "agent_event",
             "run_id": run_id,
-            "agent_path": "Pipeline",
+            "agent_path": "Sequential",
             "kind": "start",
             "input": {"text": "seed"},
             "output": None,
@@ -171,7 +171,7 @@ def _run_envelopes(run_id: str = "run-live") -> list[dict]:
         {
             "type": "agent_event",
             "run_id": run_id,
-            "agent_path": "Pipeline.stage_0",
+            "agent_path": "Sequential.stage_0",
             "kind": "start",
             "input": {"text": "q1"},
             "output": None,
@@ -183,7 +183,7 @@ def _run_envelopes(run_id: str = "run-live") -> list[dict]:
         {
             "type": "agent_event",
             "run_id": run_id,
-            "agent_path": "Pipeline.stage_0",
+            "agent_path": "Sequential.stage_0",
             "kind": "end",
             "input": {"text": "q1"},
             "output": {
@@ -201,7 +201,7 @@ def _run_envelopes(run_id: str = "run-live") -> list[dict]:
         {
             "type": "agent_event",
             "run_id": run_id,
-            "agent_path": "Pipeline.stage_0",
+            "agent_path": "Sequential.stage_0",
             "kind": "start",
             "input": {"text": "q2"},
             "output": None,
@@ -213,7 +213,7 @@ def _run_envelopes(run_id: str = "run-live") -> list[dict]:
         {
             "type": "agent_event",
             "run_id": run_id,
-            "agent_path": "Pipeline.stage_0",
+            "agent_path": "Sequential.stage_0",
             "kind": "end",
             "input": {"text": "q2"},
             "output": {
@@ -231,7 +231,7 @@ def _run_envelopes(run_id: str = "run-live") -> list[dict]:
         {
             "type": "agent_event",
             "run_id": run_id,
-            "agent_path": "Pipeline",
+            "agent_path": "Sequential",
             "kind": "end",
             "input": {"text": "seed"},
             "output": {
@@ -277,23 +277,23 @@ def test_live_io_graph_invocations_meta_prompts_values_events(app_and_obs) -> No
 
         io_graph = client.get("/runs/run-live/io_graph")
         assert io_graph.status_code == 200
-        assert io_graph.json()["root"] == "Pipeline"
-        assert io_graph.json()["edges"][0]["agent_path"] == "Pipeline.stage_0"
+        assert io_graph.json()["root"] == "Sequential"
+        assert io_graph.json()["edges"][0]["agent_path"] == "Sequential.stage_0"
 
         root_inv = client.get("/runs/run-live/invocations")
         assert root_inv.status_code == 200
-        assert root_inv.json()["agent_path"] == "Pipeline"
+        assert root_inv.json()["agent_path"] == "Sequential"
         assert len(root_inv.json()["invocations"]) == 1
         assert root_inv.json()["invocations"][0]["langfuse_url"] == "http://lf.example/trace/run-live"
 
-        inv = client.get("/runs/run-live/agent/Pipeline.stage_0/invocations")
+        inv = client.get("/runs/run-live/agent/Sequential.stage_0/invocations")
         assert inv.status_code == 200
         rows = inv.json()["invocations"]
         assert len(rows) == 2
         assert rows[0]["hash_prompt"] == "p1"
         assert rows[1]["hash_prompt"] == "p2"
 
-        meta = client.get("/runs/run-live/agent/Pipeline.stage_0/meta")
+        meta = client.get("/runs/run-live/agent/Sequential.stage_0/meta")
         assert meta.status_code == 200
         body = meta.json()
         assert body["class_name"] == "FakeLeaf"
@@ -302,9 +302,9 @@ def test_live_io_graph_invocations_meta_prompts_values_events(app_and_obs) -> No
         assert body["forward_in_doc"] == "input hook docs"
         assert body["forward_out_doc"] == "output hook docs"
         assert body["trainable_paths"] == ["role", "task"]
-        assert body["langfuse_search_url"] == "http://lf.example/traces?search=Pipeline.stage_0"
+        assert body["langfuse_search_url"] == "http://lf.example/traces?search=Sequential.stage_0"
 
-        prompts = client.get("/runs/run-live/agent/Pipeline.stage_0/prompts")
+        prompts = client.get("/runs/run-live/agent/Sequential.stage_0/prompts")
         assert prompts.status_code == 200
         payload = prompts.json()
         assert payload["renderer"] == "xml"
@@ -312,31 +312,31 @@ def test_live_io_graph_invocations_meta_prompts_values_events(app_and_obs) -> No
         assert payload["entries"][0]["replayed"] is True
         assert payload["entries"][0]["system"] == "<role>a</role>"
 
-        values = client.get("/runs/run-live/agent/Pipeline.stage_0/values?attr=text&side=in")
+        values = client.get("/runs/run-live/agent/Sequential.stage_0/values?attr=text&side=in")
         assert values.status_code == 200
         vals = values.json()["values"]
         assert [v["value"] for v in vals] == ["q1", "q2"]
 
-        events = client.get("/runs/run-live/agent/Pipeline.stage_0/events?limit=1")
+        events = client.get("/runs/run-live/agent/Sequential.stage_0/events?limit=1")
         assert events.status_code == 200
         assert len(events.json()["events"]) == 1
         assert events.json()["events"][0]["kind"] == "end"
 
-        params = client.get("/runs/run-live/agent/Pipeline.stage_0/parameters")
+        params = client.get("/runs/run-live/agent/Sequential.stage_0/parameters")
         assert params.status_code == 200
-        assert params.json()["agent_path"] == "Pipeline.stage_0"
+        assert params.json()["agent_path"] == "Sequential.stage_0"
         rows = params.json()["parameters"]
         assert len(rows) == 2
         assert rows[0]["path"] == "role"
         assert rows[0]["requires_grad"] is True
 
         diff = client.get(
-            "/runs/run-live/agent/Pipeline.stage_0/diff?from=Pipeline.stage_0:0&to=Pipeline.stage_0:1"
+            "/runs/run-live/agent/Sequential.stage_0/diff?from=Sequential.stage_0:0&to=Sequential.stage_0:1"
         )
         assert diff.status_code == 200
         body = diff.json()
-        assert body["from_invocation"] == "Pipeline.stage_0:0"
-        assert body["to_invocation"] == "Pipeline.stage_0:1"
+        assert body["from_invocation"] == "Sequential.stage_0:0"
+        assert body["to_invocation"] == "Sequential.stage_0:1"
         assert body["from_hash_content"] == "hash-a"
         assert body["to_hash_content"] == "hash-b"
         assert len(body["changes"]) > 0
@@ -353,15 +353,15 @@ def test_archived_run_parity(app_and_obs) -> None:
 
         assert client.get("/runs/run-arch/io_graph").status_code == 200
         assert client.get("/runs/run-arch/invocations").status_code == 200
-        assert client.get("/runs/run-arch/agent/Pipeline.stage_0/meta").status_code == 200
-        assert client.get("/runs/run-arch/agent/Pipeline.stage_0/invocations").status_code == 200
-        assert client.get("/runs/run-arch/agent/Pipeline.stage_0/prompts").status_code == 200
-        assert client.get("/runs/run-arch/agent/Pipeline.stage_0/values?attr=text&side=in").status_code == 200
-        assert client.get("/runs/run-arch/agent/Pipeline.stage_0/events").status_code == 200
-        assert client.get("/runs/run-arch/agent/Pipeline.stage_0/parameters").status_code == 200
+        assert client.get("/runs/run-arch/agent/Sequential.stage_0/meta").status_code == 200
+        assert client.get("/runs/run-arch/agent/Sequential.stage_0/invocations").status_code == 200
+        assert client.get("/runs/run-arch/agent/Sequential.stage_0/prompts").status_code == 200
+        assert client.get("/runs/run-arch/agent/Sequential.stage_0/values?attr=text&side=in").status_code == 200
+        assert client.get("/runs/run-arch/agent/Sequential.stage_0/events").status_code == 200
+        assert client.get("/runs/run-arch/agent/Sequential.stage_0/parameters").status_code == 200
         assert (
             client.get(
-                "/runs/run-arch/agent/Pipeline.stage_0/diff?from=Pipeline.stage_0:0&to=Pipeline.stage_0:1"
+                "/runs/run-arch/agent/Sequential.stage_0/diff?from=Sequential.stage_0:0&to=Sequential.stage_0:1"
             ).status_code
             == 200
         )
@@ -376,7 +376,7 @@ def test_404_unknown_path_and_attribute(app_and_obs) -> None:
         assert r1.json()["error"] == "not_found"
         assert "reason" in r1.json()
 
-        r2 = client.get("/runs/run-live/agent/Pipeline.stage_0/values?attr=missing&side=in")
+        r2 = client.get("/runs/run-live/agent/Sequential.stage_0/values?attr=missing&side=in")
         assert r2.status_code == 404
         assert r2.json()["error"] == "not_found"
 
@@ -385,7 +385,7 @@ def test_404_unknown_path_and_attribute(app_and_obs) -> None:
         assert r3.json()["error"] == "not_found"
 
         r4 = client.get(
-            "/runs/run-live/agent/Pipeline.stage_0/diff?from=Pipeline.stage_0:0&to=Pipeline.stage_0:404"
+            "/runs/run-live/agent/Sequential.stage_0/diff?from=Sequential.stage_0:0&to=Sequential.stage_0:404"
         )
         assert r4.status_code == 404
         assert r4.json()["error"] == "not_found"
@@ -395,7 +395,7 @@ def test_values_wrong_side_returns_clear_404(app_and_obs) -> None:
     app, _ = app_and_obs
     with TestClient(app) as client:
         _seed_live(client)
-        r = client.get("/runs/run-live/agent/Pipeline.stage_0/values?attr=text&side=out")
+        r = client.get("/runs/run-live/agent/Sequential.stage_0/values?attr=text&side=out")
         assert r.status_code == 404
         assert r.json()["error"] == "not_found"
 
@@ -408,7 +408,7 @@ def test_io_graph_empty_when_graph_missing(app_and_obs) -> None:
             json={
                 "type": "agent_event",
                 "run_id": "nograph",
-                "agent_path": "Pipeline",
+                "agent_path": "Sequential",
                 "kind": "start",
                 "input": {"text": "x"},
                 "output": None,
@@ -442,7 +442,7 @@ def test_invoke_experiment_gate_and_resolver_errors(tmp_path: Path) -> None:
     )
     with TestClient(app_disabled) as client:
         disabled = client.post(
-            "/runs/r1/agent/Pipeline.stage_0/invoke",
+            "/runs/r1/agent/Sequential.stage_0/invoke",
             json={"input": {"text": "hello"}},
         )
         assert disabled.status_code == 403
@@ -456,7 +456,7 @@ def test_invoke_experiment_gate_and_resolver_errors(tmp_path: Path) -> None:
     )
     with TestClient(app_missing) as client:
         missing = client.post(
-            "/runs/r1/agent/Pipeline.stage_0/invoke",
+            "/runs/r1/agent/Sequential.stage_0/invoke",
             json={"input": {"text": "hello"}},
         )
         assert missing.status_code == 409
@@ -471,7 +471,7 @@ def test_invoke_experiment_gate_and_resolver_errors(tmp_path: Path) -> None:
     )
     with TestClient(app_unavailable) as client:
         unavailable = client.post(
-            "/runs/r1/agent/Pipeline.stage_0/invoke",
+            "/runs/r1/agent/Sequential.stage_0/invoke",
             json={"input": {"text": "hello"}},
         )
         assert unavailable.status_code == 409
@@ -486,12 +486,12 @@ def test_invoke_experiment_validation_success_and_log(tmp_path: Path) -> None:
         auto_register=False,
         data_dir=tmp_path,
         allow_experiment=True,
-        experiment_resolver=lambda _run, path: live if path == "Pipeline.stage_0" else None,
+        experiment_resolver=lambda _run, path: live if path == "Sequential.stage_0" else None,
     )
 
     with TestClient(app) as client:
         invalid = client.post(
-            "/runs/r1/agent/Pipeline.stage_0/invoke",
+            "/runs/r1/agent/Sequential.stage_0/invoke",
             json={"input": {"wrong": "shape"}},
         )
         assert invalid.status_code == 400
@@ -499,7 +499,7 @@ def test_invoke_experiment_validation_success_and_log(tmp_path: Path) -> None:
         assert "text" in invalid.json()["reason"]
 
         ok = client.post(
-            "/runs/r1/agent/Pipeline.stage_0/invoke",
+            "/runs/r1/agent/Sequential.stage_0/invoke",
             json={
                 "input": {"text": "hello"},
                 "overrides": {"role": "New role", "task": "New task"},
@@ -509,7 +509,7 @@ def test_invoke_experiment_validation_success_and_log(tmp_path: Path) -> None:
         assert ok.status_code == 200
         body = ok.json()
         assert body["metadata"]["experiment"] is True
-        assert body["metadata"]["agent_path"] == "Pipeline.stage_0"
+        assert body["metadata"]["agent_path"] == "Sequential.stage_0"
         assert body["metadata"]["run_id"] == "r1"
         assert body["response"]["value"] == 7
         assert body["hash_prompt"]
