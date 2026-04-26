@@ -30,6 +30,14 @@ export function MetaListPanel({ data }: { data: unknown }) {
           label: "root agent",
           value: s.root_agent_path ?? <span className="text-muted-2">—</span>,
         },
+        {
+          label: "script",
+          value: s.script ? (
+            <span className="font-mono">{s.script}</span>
+          ) : (
+            <span className="text-muted-2">—</span>
+          ),
+        },
         { label: "duration", value: formatDurationMs(s.duration_ms) },
         ...(s.algorithm_terminal_score != null
           ? [{ label: "score", value: s.algorithm_terminal_score.toFixed(3) }]

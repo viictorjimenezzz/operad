@@ -1242,6 +1242,8 @@ class Agent(Generic[In, Out]):
         if is_root:
             start_meta["graph"] = _graph_json_or_none(self)
             start_meta["is_root"] = True
+            if sys.argv and sys.argv[0]:
+                start_meta["script"] = sys.argv[0]
         return is_root, run_id, started, started_wall, graph_hash, start_meta, retry_meta, (tok_r, tok_p, tok_g, tok_m)
 
     def _exit_run(

@@ -53,6 +53,7 @@ class RunInfo:
     candidates: list[dict[str, Any]] = field(default_factory=list)
     batches: list[dict[str, Any]] = field(default_factory=list)
     root_agent_path: str | None = None
+    script: str | None = None
     total_prompt_tokens: int = 0
     total_completion_tokens: int = 0
     error_message: str | None = None
@@ -89,6 +90,7 @@ class RunInfo:
             "algorithm_path": self.algorithm_path,
             "algorithm_kinds": sorted(self.algorithm_kinds),
             "root_agent_path": self.root_agent_path,
+            "script": self.script,
             "event_counts": dict(self.event_counts),
             "event_total": self.event_total,
             "duration_ms": self.duration_ms,
@@ -175,6 +177,7 @@ class RunRegistry:
         info.candidates = list(summary.get("candidates") or [])
         info.batches = list(summary.get("batches") or [])
         info.root_agent_path = summary.get("root_agent_path")
+        info.script = summary.get("script")
         info.total_prompt_tokens = int(summary.get("prompt_tokens") or 0)
         info.total_completion_tokens = int(summary.get("completion_tokens") or 0)
         info.error_message = summary.get("error")
@@ -402,6 +405,9 @@ class RunRegistry:
         agent_path = envelope.get("agent_path")
         if is_root and agent_path:
             info.root_agent_path = agent_path
+            script = metadata.get("script")
+            if isinstance(script, str) and info.script is None:
+                info.script = script
             if kind == "end":
                 info.state = "ended"
             elif kind == "error":
