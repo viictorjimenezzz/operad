@@ -205,13 +205,9 @@ def test_graph_mermaid_uses_agent_names_and_io_edges(cfg) -> None:
     b = FakeLeaf(config=cfg, input=B, output=C)
     p = Sequential(a, b, input=A, output=C).build()
     text = p.graph_mermaid()
-    assert "Sequential<br/>Sequential<br/>A -> C" in text
-    assert "Sequential.stage_0<br/>A -> B" in text
-    assert "Sequential.stage_1<br/>B -> C" in text
-    assert "A -> B" in text
-    assert "B -> C" in text
-    assert '["stage_0"]' not in text
-    assert '["stage_1"]' not in text
+    assert '["FakeLeaf"]' in text
+    assert "Sequential" not in text
+    assert '-->|"B"|' in text
 
 
 # --- E1: __rshift__ ---------------------------------------------------------

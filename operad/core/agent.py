@@ -22,6 +22,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
 from contextvars import ContextVar
+from dataclasses import dataclass, field
 from typing import Any, ClassVar, Generic, Literal, Self, TextIO, TYPE_CHECKING, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
@@ -977,8 +978,8 @@ class Agent(Generic[In, Out]):
         text environments continue to use `__repr__`.
         """
         graph = self.__dict__.get("_graph")
-        if self._built and graph is not None and hasattr(graph, "_repr_html_"):
-            return graph._repr_html_()  # type: ignore[no-any-return]
+        if self._built and graph is not None:
+            return f'<pre class="mermaid">{_html.escape(self.graph_mermaid())}</pre>'
         return f"<pre>{_html.escape(repr(self))}</pre>"
 
     def graph_json(self) -> dict[str, Any]:
@@ -1003,87 +1004,30 @@ class Agent(Generic[In, Out]):
                 "agent graph is missing; call .abuild() first",
                 agent=self.name,
             )
-        from ..agents.core.pipelines import Loop
-        from .build import AgentGraph, Edge, Node
-        from .graph import to_mermaid as _to_mermaid
+        flow = _leaf_flow(self)
 
-        canonical_by_id: dict[int, str] = {
-            id(agent): path for path, agent in _labelled_tree(self)
-        }
+        def _escape(label: str) -> str:
+            return label.replace('"', "'")
 
-        def _resolve_path(path: str) -> "Agent[Any, Any] | None":
-            if path == self.name:
-                return self
-            prefix = f"{self.name}."
-            if not path.startswith(prefix):
-                return None
-            current: Agent[Any, Any] = self
-            suffix = path[len(prefix):]
-            if not suffix:
-                return current
-            for attr in suffix.split("."):
-                child = current._children.get(attr)
-                if child is None:
-                    return None
-                current = child
-            return current
+        lines: list[str] = ["flowchart LR"]
+        node_ids = {path: f"n{i}" for i, path in enumerate(flow.nodes)}
+        for path, agent in flow.nodes.items():
+            lines.append(f'    {node_ids[path]}["{_escape(agent.name)}"]')
 
-        def _canonical_path(path: str) -> str:
-            node = _resolve_path(path)
-            if node is None:
-                return path
-            return canonical_by_id.get(id(node), path)
-
-        nodes: list[Node] = [
-            Node(
-                path=_canonical_path(node.path),
-                input_type=node.input_type,
-                output_type=node.output_type,
-                kind=node.kind,
-                class_name=node.class_name,
+        seen: set[tuple[str, str, str]] = set()
+        for src, dst, payload in flow.edges:
+            label = _type_name(payload)
+            key = (src, dst, label)
+            if key in seen:
+                continue
+            seen.add(key)
+            lines.append(
+                f'    {node_ids[src]} -->|"{_escape(label)}"| {node_ids[dst]}'
             )
-            for node in graph.nodes
-        ]
-        edges: list[Edge] = [
-            Edge(
-                caller=_canonical_path(edge.caller),
-                callee=_canonical_path(edge.callee),
-                input_type=edge.input_type,
-                output_type=edge.output_type,
-                class_name=edge.class_name,
-            )
-            for edge in graph.edges
-        ]
-
-        # Always draw loop closure so Loop semantics stay explicit in Mermaid.
-        for _path, agent in _labelled_tree(self):
-            if not isinstance(agent, Loop):
-                continue
-            if not agent._stages:
-                continue
-            first_stage = agent._stages[0]
-            last_stage = agent._stages[-1]
-            if first_stage.input is None or first_stage.output is None:
-                continue
-            first_path = canonical_by_id.get(id(first_stage))
-            last_path = canonical_by_id.get(id(last_stage))
-            if first_path is None or last_path is None:
-                continue
-            edges.append(
-                Edge(
-                    caller=last_path,
-                    callee=first_path,
-                    input_type=first_stage.input,
-                    output_type=first_stage.output,
-                    class_name=type(first_stage).__name__,
-                )
-            )
-
-        normalized = AgentGraph(root=graph.root, nodes=nodes, edges=edges)
-        return _to_mermaid(normalized)
+        return "\n".join(lines)
 
     def graph_outline(self) -> str:
-        """Return a tree-style text outline of the built graph."""
+        """Return a leaf-only text outline of the built graph."""
         graph = self.__dict__.get("_graph")
         if graph is None:
             raise BuildError(
@@ -1091,44 +1035,16 @@ class Agent(Generic[In, Out]):
                 "agent graph is missing; call .abuild() first",
                 agent=self.name,
             )
-        def _type_name(t: type[Any] | None) -> str:
-            if t is None:
-                return "?"
-            return getattr(t, "__name__", repr(t))
-
-        def _node_label(agent: "Agent[Any, Any]") -> str:
-            return (
-                f"{agent.name} "
-                f"({type(agent).__name__}: {_type_name(agent.input)} -> {_type_name(agent.output)})"
-            )
-
-        def _hide_attr(parent: "Agent[Any, Any]", attr: str) -> bool:
-            return type(parent).__name__ in {"Sequential", "Loop"} and attr.startswith("stage_")
-
-        lines: list[str] = [_node_label(self)]
-        seen: set[int] = {id(self)}
-
-        def _walk(parent: "Agent[Any, Any]", prefix: str) -> None:
-            children = list(parent._children.items())
-            for idx, (attr, child) in enumerate(children):
-                is_last = idx == len(children) - 1
-                branch = "`- " if is_last else "|- "
-                child_prefix = prefix + ("   " if is_last else "|  ")
-                if id(child) in seen:
-                    label = f"{child.name} (shared)"
-                    if not _hide_attr(parent, attr) and attr != child.name:
-                        label = f"{attr}: {label}"
-                    lines.append(f"{prefix}{branch}{label}")
-                    continue
-
-                seen.add(id(child))
-                label = _node_label(child)
-                if not _hide_attr(parent, attr) and attr != child.name:
-                    label = f"{attr}: {label}"
-                lines.append(f"{prefix}{branch}{label}")
-                _walk(child, child_prefix)
-
-        _walk(self, "")
+        flow = _leaf_flow(self)
+        lines: list[str] = [f"{self.name} leaf graph"]
+        for agent in flow.nodes.values():
+            lines.append(f"- {agent.name}")
+        if flow.edges:
+            lines.append("edges:")
+            for src, dst, payload in flow.edges:
+                src_name = flow.nodes[src].name
+                dst_name = flow.nodes[dst].name
+                lines.append(f"- {src_name} -[{_type_name(payload)}]-> {dst_name}")
         return "\n".join(lines)
 
     def _apply_default_sampling(self) -> None:
@@ -2253,3 +2169,165 @@ def _labelled_tree(
             out.append((child_path, child))
             queue.append((child_path, child))
     return out
+
+
+@dataclass
+class _LeafFlowSpec:
+    nodes: dict[str, "Agent[Any, Any]"] = field(default_factory=dict)
+    edges: list[tuple[str, str, type[Any] | None]] = field(default_factory=list)
+    entries: list[tuple[str, type[Any] | None]] = field(default_factory=list)
+    exits: list[tuple[str, type[Any] | None]] = field(default_factory=list)
+
+
+def _type_name(t: type[Any] | None) -> str:
+    if t is None:
+        return "?"
+    return getattr(t, "__name__", repr(t))
+
+
+def _merge_flow(dst: _LeafFlowSpec, src: _LeafFlowSpec) -> None:
+    for path, agent in src.nodes.items():
+        dst.nodes.setdefault(path, agent)
+    dst.edges.extend(src.edges)
+
+
+def _dedupe_ports(
+    ports: list[tuple[str, type[Any] | None]],
+) -> list[tuple[str, type[Any] | None]]:
+    seen: set[str] = set()
+    out: list[tuple[str, type[Any] | None]] = []
+    for path, t in ports:
+        if path in seen:
+            continue
+        seen.add(path)
+        out.append((path, t))
+    return out
+
+
+def _leaf_flow(root: "Agent[Any, Any]") -> _LeafFlowSpec:
+    from ..agents.core.pipelines import Loop, Parallel, Router, Sequential
+
+    def _child_path(
+        parent: "Agent[Any, Any]",
+        parent_path: str,
+        child: "Agent[Any, Any]",
+        *,
+        fallback: str,
+    ) -> str:
+        attr = _attr_name_hint(parent, child) or fallback
+        return f"{parent_path}.{attr}"
+
+    def _include_leaf(agent: "Agent[Any, Any]", path: str) -> bool:
+        if path == root.name:
+            return True
+        cls_name = type(agent).__name__
+        module = getattr(type(agent), "__module__", "")
+        if module == "operad.agents.reasoning.react" and cls_name.startswith("_"):
+            return False
+        return True
+
+    def _compose_linear(
+        parts: list[tuple[str, "Agent[Any, Any]"]],
+    ) -> _LeafFlowSpec:
+        out = _LeafFlowSpec()
+        prev_exits: list[tuple[str, type[Any] | None]] = []
+        first_entries: list[tuple[str, type[Any] | None]] = []
+        for child_path, child in parts:
+            part = _build(child, child_path)
+            _merge_flow(out, part)
+            if not part.entries and not part.exits:
+                continue
+            if not first_entries:
+                first_entries = list(part.entries)
+            if prev_exits:
+                for src_path, _ in prev_exits:
+                    for dst_path, in_t in part.entries:
+                        out.edges.append((src_path, dst_path, in_t))
+            prev_exits = list(part.exits)
+        out.entries = _dedupe_ports(first_entries)
+        out.exits = _dedupe_ports(prev_exits)
+        return out
+
+    def _build(agent: "Agent[Any, Any]", path: str) -> _LeafFlowSpec:
+        if not agent._children:
+            if not _include_leaf(agent, path):
+                return _LeafFlowSpec()
+            return _LeafFlowSpec(
+                nodes={path: agent},
+                entries=[(path, agent.input)],
+                exits=[(path, agent.output)],
+            )
+
+        if isinstance(agent, Loop):
+            parts: list[tuple[str, Agent[Any, Any]]] = [
+                (
+                    _child_path(agent, path, stage, fallback=f"stage_{i}"),
+                    stage,
+                )
+                for i, stage in enumerate(agent._stages)
+            ]
+            out = _compose_linear(parts)
+            if out.entries and out.exits:
+                for src_path, _ in out.exits:
+                    for dst_path, in_t in out.entries:
+                        out.edges.append((src_path, dst_path, in_t))
+            return out
+
+        if isinstance(agent, Sequential):
+            parts = [
+                (
+                    _child_path(agent, path, stage, fallback=f"stage_{i}"),
+                    stage,
+                )
+                for i, stage in enumerate(agent._stages)
+            ]
+            return _compose_linear(parts)
+
+        if isinstance(agent, Parallel):
+            out = _LeafFlowSpec()
+            entries: list[tuple[str, type[Any] | None]] = []
+            exits: list[tuple[str, type[Any] | None]] = []
+            for key in agent._keys:
+                child = getattr(agent, key)
+                child_path = _child_path(agent, path, child, fallback=key)
+                part = _build(child, child_path)
+                _merge_flow(out, part)
+                entries.extend(part.entries)
+                exits.extend(part.exits)
+            out.entries = _dedupe_ports(entries)
+            out.exits = _dedupe_ports(exits)
+            return out
+
+        if isinstance(agent, Router):
+            out = _LeafFlowSpec()
+            router_path = _child_path(agent, path, agent.router, fallback="router")
+            router_part = _build(agent.router, router_path)
+            _merge_flow(out, router_part)
+            out.entries = list(router_part.entries)
+            exits: list[tuple[str, type[Any] | None]] = []
+            for label, branch in agent._branches.items():
+                fallback = agent._branch_attrs.get(label) or f"branch_{label!r}"
+                branch_path = _child_path(agent, path, branch, fallback=fallback)
+                branch_part = _build(branch, branch_path)
+                _merge_flow(out, branch_part)
+                for src_path, _ in router_part.exits:
+                    for dst_path, in_t in branch_part.entries:
+                        out.edges.append((src_path, dst_path, in_t))
+                exits.extend(branch_part.exits)
+            out.exits = _dedupe_ports(exits or router_part.exits)
+            return out
+
+        pipeline = getattr(agent, "pipeline", None)
+        if isinstance(pipeline, Agent):
+            pipeline_path = _child_path(agent, path, pipeline, fallback="pipeline")
+            return _build(pipeline, pipeline_path)
+
+        if len(agent._children) == 1:
+            attr, child = next(iter(agent._children.items()))
+            return _build(child, f"{path}.{attr}")
+
+        return _compose_linear(
+            [(f"{path}.{attr}", child) for attr, child in agent._children.items()]
+        )
+
+    return _build(root, root.name)
