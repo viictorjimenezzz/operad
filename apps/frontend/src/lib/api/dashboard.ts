@@ -1,4 +1,9 @@
 import {
+  AgentEventsResponse,
+  AgentInvocationsResponse,
+  AgentMetaResponse,
+  AgentPromptsResponse,
+  AgentValuesResponse,
   ArchivedRunRecord,
   BenchmarkDetailResponse,
   BenchmarkIngestResponse,
@@ -13,6 +18,7 @@ import {
   EvolutionResponse,
   FitnessEntry,
   GraphResponse,
+  IoGraphResponse,
   IterationsResponse,
   Manifest,
   MutationsMatrix,
@@ -104,6 +110,28 @@ export const dashboardApi = {
   runSummary: (runId: string) => getJson(`/runs/${runId}/summary`, RunSummary),
   runEvents: (runId: string, limit = 500) =>
     getJson(`/runs/${runId}/events?limit=${limit}`, RunEventsResponse),
+  ioGraph: (runId: string) => getJson(`/runs/${runId}/io_graph`, IoGraphResponse),
+  rootInvocations: (runId: string) =>
+    getJson(`/runs/${runId}/invocations`, AgentInvocationsResponse),
+  agentMeta: (runId: string, agentPath: string) =>
+    getJson(`/runs/${runId}/agent/${encodeURIComponent(agentPath)}/meta`, AgentMetaResponse),
+  agentInvocations: (runId: string, agentPath: string) =>
+    getJson(
+      `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/invocations`,
+      AgentInvocationsResponse,
+    ),
+  agentPrompts: (runId: string, agentPath: string) =>
+    getJson(`/runs/${runId}/agent/${encodeURIComponent(agentPath)}/prompts`, AgentPromptsResponse),
+  agentValues: (runId: string, agentPath: string, params: { attr: string; side: "in" | "out" }) =>
+    getJson(
+      `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/values?attr=${encodeURIComponent(params.attr)}&side=${params.side}`,
+      AgentValuesResponse,
+    ),
+  agentEvents: (runId: string, agentPath: string, limit = 200) =>
+    getJson(
+      `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/events?limit=${limit}`,
+      AgentEventsResponse,
+    ),
   graph: (runId: string) => getJson(`/graph/${runId}`, GraphResponse),
   fitness: (runId: string) => getJson(`/runs/${runId}/fitness.json`, z.array(FitnessEntry)),
   iterations: (runId: string) => getJson(`/runs/${runId}/iterations.json`, IterationsResponse),

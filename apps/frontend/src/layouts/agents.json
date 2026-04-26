@@ -1,0 +1,50 @@
+{
+  "algorithm": "*",
+  "version": 1,
+  "dataSources": {
+    "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "invocations": { "endpoint": "/runs/$context.runId/invocations" },
+    "ioGraph": { "endpoint": "/runs/$context.runId/io_graph" }
+  },
+  "spec": {
+    "root": "page",
+    "elements": {
+      "page": {
+        "type": "Col",
+        "props": { "gap": 12 },
+        "children": ["header", "insights", "graph", "drawer"]
+      },
+      "header": {
+        "type": "AgentMetadataPanel",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceInvocations": "$queries.invocations",
+          "runId": "$context.runId"
+        }
+      },
+      "insights": {
+        "type": "AgentInsightsRow",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceInvocations": "$queries.invocations"
+        }
+      },
+      "graph": {
+        "type": "Card",
+        "props": { "title": "type flow" },
+        "children": ["graph-inner"]
+      },
+      "graph-inner": {
+        "type": "InteractiveGraph",
+        "props": {
+          "sourceIoGraph": "$queries.ioGraph",
+          "runId": "$context.runId"
+        }
+      },
+      "drawer": {
+        "type": "SideDrawer",
+        "props": { "runId": "$context.runId" }
+      }
+    }
+  }
+}

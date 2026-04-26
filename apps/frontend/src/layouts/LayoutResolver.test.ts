@@ -17,9 +17,10 @@ function makeLayout(algorithm: string): LayoutSpec {
 function makeResolver(
   reg: Record<string, LayoutSpec>,
   fallback: LayoutSpec,
+  agentLayout?: LayoutSpec,
 ): (algorithmPath: string | null | undefined) => LayoutSpec {
   return (algorithmPath) => {
-    if (!algorithmPath) return fallback;
+    if (!algorithmPath) return agentLayout ?? fallback;
     const exact = reg[algorithmPath];
     if (exact) return exact;
     const prefix = Object.keys(reg).find((k) => algorithmPath.startsWith(k));
@@ -33,7 +34,8 @@ describe("resolveLayout algorithm", () => {
   const evo = makeLayout("EvoGradient");
   const trainer = makeLayout("Trainer");
   const dflt = makeLayout("Default");
-  const resolve = makeResolver({ EvoGradient: evo, Trainer: trainer }, dflt);
+  const agents = makeLayout("*");
+  const resolve = makeResolver({ EvoGradient: evo, Trainer: trainer }, dflt, agents);
 
   it("exact match returns the correct layout", () => {
     expect(resolve("EvoGradient")).toBe(evo);
@@ -49,16 +51,16 @@ describe("resolveLayout algorithm", () => {
     expect(resolve("SomethingNew")).toBe(dflt);
   });
 
-  it("null returns default", () => {
-    expect(resolve(null)).toBe(dflt);
+  it("null returns agents layout", () => {
+    expect(resolve(null)).toBe(agents);
   });
 
-  it("undefined returns default", () => {
-    expect(resolve(undefined)).toBe(dflt);
+  it("undefined returns agents layout", () => {
+    expect(resolve(undefined)).toBe(agents);
   });
 
-  it("empty string returns default", () => {
-    expect(resolve("")).toBe(dflt);
+  it("empty string returns agents layout", () => {
+    expect(resolve("")).toBe(agents);
   });
 });
 
@@ -87,9 +89,9 @@ describe("resolveLayout integration (real layouts/)", () => {
     expect(layout.algorithm).toBe("__no_layout__");
   });
 
-  it("resolves null to default layout", async () => {
+  it("resolves null to agents layout", async () => {
     const { resolveLayout } = await import("./index");
-    expect(resolveLayout(null).algorithm).toBe("__no_layout__");
+    expect(resolveLayout(null).algorithm).toBe("*");
   });
 
   it("resolves Sweep to the sweep layout", async () => {

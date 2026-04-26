@@ -13,6 +13,7 @@ const modules = import.meta.glob("../layouts/*.json", {
 }) as Record<string, { default?: unknown } | unknown>;
 
 const algorithmLayouts: Record<string, LayoutSpec> = {};
+let agentLayout: LayoutSpec | null = null;
 const fallbackLayout: LayoutSpec = {
   algorithm: "__no_layout__",
   version: 1,
@@ -34,11 +35,15 @@ const fallbackLayout: LayoutSpec = {
 for (const [, mod] of Object.entries(modules)) {
   const raw = (mod as { default?: unknown }).default ?? mod;
   const parsed = LayoutSpec.parse(raw);
-  algorithmLayouts[parsed.algorithm] = parsed;
+  if (parsed.algorithm === "*") {
+    agentLayout = parsed;
+  } else {
+    algorithmLayouts[parsed.algorithm] = parsed;
+  }
 }
 
 export function resolveLayout(algorithmPath: string | null | undefined): LayoutSpec {
-  if (!algorithmPath) return fallbackLayout;
+  if (!algorithmPath) return agentLayout ?? fallbackLayout;
   // Exact match
   const exact = algorithmLayouts[algorithmPath];
   if (exact) return exact;
@@ -56,5 +61,6 @@ export function pickLayout(algorithmPath: string | null | undefined): LayoutSpec
 
 export const layouts: Record<string, LayoutSpec> = {
   default: fallbackLayout,
+  ...(agentLayout ? { agents: agentLayout } : {}),
   ...algorithmLayouts,
 };

@@ -101,6 +101,32 @@ export const catalog = createCatalog({
     },
     IODetail: { props: z.object({ source: sourceExpr }) },
     RawEnvelope: { props: z.object({}) },
+
+    // Agent detail (iter-2)
+    AgentMetadataPanel: {
+      props: z.object({
+        dataSummary: z.unknown().optional(),
+        dataInvocations: z.unknown().optional(),
+        runId: z.string().optional(),
+      }),
+    },
+    AgentInsightsRow: {
+      props: z.object({
+        dataSummary: z.unknown().optional(),
+        dataInvocations: z.unknown().optional(),
+      }),
+    },
+    InteractiveGraph: {
+      props: z.object({
+        dataIoGraph: z.unknown().optional(),
+        runId: z.string(),
+      }),
+    },
+    SideDrawer: {
+      props: z.object({
+        runId: z.string(),
+      }),
+    },
   },
   actions: {},
 });

@@ -1,9 +1,15 @@
 import {
   AgentEventEnvelope,
+  AgentEventsResponse,
+  AgentInvocationsResponse,
+  AgentMetaResponse,
+  AgentPromptsResponse,
+  AgentValuesResponse,
   AlgoEventEnvelope,
   CostUpdateEnvelope,
   Envelope,
   FitnessEntry,
+  IoGraphResponse,
   MutationsMatrix,
   ProgressSnapshot,
   RunSummary,
@@ -179,5 +185,118 @@ describe("panel shapes", () => {
       finished: false,
     });
     expect(p.epochs_total).toBe(5);
+  });
+});
+
+describe("agent-view shapes", () => {
+  it("parses io_graph payload", () => {
+    const parsed = IoGraphResponse.parse({
+      root: "Pipeline",
+      nodes: [{ key: "pkg.Question", name: "Question", fields: [] }],
+      edges: [
+        {
+          agent_path: "Pipeline.stage_0",
+          class_name: "Reasoner",
+          kind: "leaf",
+          from: "pkg.Question",
+          to: "pkg.Answer",
+          composite_path: null,
+        },
+      ],
+    });
+    expect(parsed.root).toBe("Pipeline");
+    expect(parsed.edges[0]?.agent_path).toBe("Pipeline.stage_0");
+  });
+
+  it("parses agent invocations/meta/prompts/values/events payloads", () => {
+    expect(
+      AgentInvocationsResponse.parse({
+        agent_path: "Pipeline",
+        invocations: [
+          {
+            id: "Pipeline:0",
+            started_at: 1,
+            finished_at: 2,
+            latency_ms: 1000,
+            prompt_tokens: 10,
+            completion_tokens: 5,
+            hash_prompt: "abc",
+            hash_input: "def",
+            hash_content: "ghi",
+            status: "ok",
+            error: null,
+            langfuse_url: null,
+            script: null,
+          },
+        ],
+      }).invocations,
+    ).toHaveLength(1);
+
+    expect(
+      AgentMetaResponse.parse({
+        agent_path: "Pipeline.stage_0",
+        class_name: "Reasoner",
+        kind: "leaf",
+        hash_content: "hash",
+        role: "role",
+        task: "task",
+        rules: [],
+        examples: [],
+        config: {},
+        input_schema: null,
+        output_schema: null,
+        forward_in_overridden: false,
+        forward_out_overridden: false,
+        trainable_paths: [],
+        langfuse_search_url: null,
+      }).class_name,
+    ).toBe("Reasoner");
+
+    expect(
+      AgentPromptsResponse.parse({
+        agent_path: "Pipeline.stage_0",
+        renderer: "xml",
+        entries: [
+          {
+            invocation_id: "id",
+            started_at: 1,
+            hash_prompt: "h",
+            system: "s",
+            user: "u",
+            replayed: true,
+          },
+        ],
+      }).entries[0]?.replayed,
+    ).toBe(true);
+
+    expect(
+      AgentValuesResponse.parse({
+        agent_path: "Pipeline.stage_0",
+        attribute: "text",
+        side: "in",
+        type: "str",
+        values: [{ invocation_id: "id", started_at: 1, value: "hello" }],
+      }).values[0]?.value,
+    ).toBe("hello");
+
+    expect(
+      AgentEventsResponse.parse({
+        run_id: "r1",
+        events: [
+          {
+            type: "agent_event",
+            run_id: "r1",
+            agent_path: "Pipeline",
+            kind: "start",
+            input: null,
+            output: null,
+            started_at: 1,
+            finished_at: null,
+            metadata: {},
+            error: null,
+          },
+        ],
+      }).events,
+    ).toHaveLength(1);
   });
 });
