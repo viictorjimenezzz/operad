@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+const agentEventsMock = vi.fn().mockResolvedValue({ run_id: "run-1", events: [] });
+
 vi.mock("@/lib/api/dashboard", () => ({
   dashboardApi: {
     agentMeta: vi.fn().mockResolvedValue({
@@ -18,7 +20,10 @@ vi.mock("@/lib/api/dashboard", () => ({
       trainable_paths: [],
       forward_in_overridden: false,
       forward_out_overridden: false,
+      forward_in_doc: null,
+      forward_out_doc: null,
     }),
+    agentEvents: (...args: unknown[]) => agentEventsMock(...args),
   },
 }));
 
@@ -81,6 +86,7 @@ describe("AgentInsightsRow", () => {
   });
 
   it("renders insights sections for valid payloads", () => {
+    agentEventsMock.mockResolvedValue({ run_id: "run-1", events: [] });
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -92,5 +98,35 @@ describe("AgentInsightsRow", () => {
     expect(screen.getByText(/fingerprint/i)).toBeTruthy();
     expect(screen.getByText(/prompt drift/i)).toBeTruthy();
     expect(screen.getByText(/cost \/ latency \/ tokens/i)).toBeTruthy();
+    expect(screen.queryByText(/^replay$/i)).toBeNull();
+  });
+
+  it("shows replay panel when chunk events exist", async () => {
+    agentEventsMock.mockResolvedValue({
+      run_id: "run-1",
+      events: [
+        {
+          type: "agent_event",
+          run_id: "run-1",
+          agent_path: "Root",
+          kind: "chunk",
+          input: null,
+          output: null,
+          started_at: 100.1,
+          finished_at: null,
+          metadata: { chunk_index: 0, text: "stream" },
+          error: null,
+        },
+      ],
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AgentInsightsRow summary={summary} invocations={invocations} runId="run-1" />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText(/^replay$/i)).toBeTruthy();
   });
 });

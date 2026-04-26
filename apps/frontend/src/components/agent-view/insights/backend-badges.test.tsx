@@ -48,6 +48,8 @@ const meta: AgentMetaResponse = {
   output_schema: {},
   forward_in_overridden: false,
   forward_out_overridden: false,
+  forward_in_doc: null,
+  forward_out_doc: null,
   trainable_paths: [],
   langfuse_search_url: null,
 };
