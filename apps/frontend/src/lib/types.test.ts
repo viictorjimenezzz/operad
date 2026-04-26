@@ -157,9 +157,12 @@ describe("agent-view contracts", () => {
         backend: "openai",
         model: "gpt-4o-mini",
       },
+      forward_in_doc: "input docs",
+      forward_out_doc: null,
     });
     expect(parsed.class_name).toBe("Reasoner");
     expect(parsed.config.backend).toBe("openai");
+    expect(parsed.forward_in_doc).toBe("input docs");
   });
 
   it("parses agent parameters payload", () => {
@@ -329,6 +332,8 @@ describe("agent-view shapes", () => {
         output_schema: {},
         forward_in_overridden: false,
         forward_out_overridden: false,
+        forward_in_doc: null,
+        forward_out_doc: null,
         trainable_paths: [],
         langfuse_search_url: null,
       }).class_name,

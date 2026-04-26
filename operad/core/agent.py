@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import html as _html
+import inspect
 import sys
 import time
 import uuid
@@ -1473,6 +1474,8 @@ class Agent(Generic[In, Out]):
             "config": config,
             "forward_in_overridden": type(self).forward_in is not Agent.forward_in,
             "forward_out_overridden": type(self).forward_out is not Agent.forward_out,
+            "forward_in_doc": inspect.getdoc(type(self).forward_in),
+            "forward_out_doc": inspect.getdoc(type(self).forward_out),
             "trainable_paths": trainable_paths,
             "parameters": parameters,
             "prompt_system": self._compose_system_for_call(x),

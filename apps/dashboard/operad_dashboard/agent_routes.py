@@ -382,6 +382,8 @@ async def agent_meta(request: Request, run_id: str, path: str) -> JSONResponse:
             "output_schema": nodes_by_key.get(edge.get("to")),
             "forward_in_overridden": bool(metadata.get("forward_in_overridden")),
             "forward_out_overridden": bool(metadata.get("forward_out_overridden")),
+            "forward_in_doc": metadata.get("forward_in_doc"),
+            "forward_out_doc": metadata.get("forward_out_doc"),
             "trainable_paths": metadata.get("trainable_paths") or [],
             "langfuse_search_url": (
                 f"{langfuse_base}/traces?search={quote(path)}" if langfuse_base else None

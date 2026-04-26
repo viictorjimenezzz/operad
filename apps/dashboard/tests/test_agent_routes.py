@@ -78,6 +78,8 @@ def _component_meta(*, prompt_system: str, prompt_user: str, renderer: str = "xm
         },
         "forward_in_overridden": False,
         "forward_out_overridden": False,
+        "forward_in_doc": "input hook docs",
+        "forward_out_doc": "output hook docs",
         "trainable_paths": ["role", "task"],
         "parameters": [
             {
@@ -279,6 +281,8 @@ def test_live_io_graph_invocations_meta_prompts_values_events(app_and_obs) -> No
         assert body["class_name"] == "FakeLeaf"
         assert body["kind"] == "leaf"
         assert body["forward_in_overridden"] is False
+        assert body["forward_in_doc"] == "input hook docs"
+        assert body["forward_out_doc"] == "output hook docs"
         assert body["trainable_paths"] == ["role", "task"]
         assert body["langfuse_search_url"] == "http://lf.example/traces?search=Pipeline.stage_0"
 
