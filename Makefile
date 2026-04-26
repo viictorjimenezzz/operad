@@ -22,6 +22,7 @@ DASHBOARD_HOST      ?= 127.0.0.1
 .PHONY: help \
         up down restart rebuild logs ps clean \
         env header \
+        ensure-docker-dashboard \
         dashboard studio demo demo-script demo-triage example-observed \
         test test-otel test-dashboard \
         verify \
@@ -152,35 +153,38 @@ studio: ensure-bundles
 
 # ------------------------------------------------------------------
 # Demo: end-to-end with dashboard attach + Langfuse OTel export.
-# Assumes the stack is up (or at least Langfuse on $(LANGFUSE_PUBLIC_URL)).
+# docker-first: always rebuild/start dashboard service before running.
 # OPERAD_OTEL=1 makes operad.tracing auto-register OtelObserver at import.
 # ------------------------------------------------------------------
 
-demo:
+ensure-docker-dashboard:
+	docker compose up -d --build operad-dashboard
+
+demo: ensure-docker-dashboard
 	@$(ENV_LOAD); \
-	bash scripts/check_dashboard_contract.sh "$(DASHBOARD_HOST)" "$(DASHBOARD_PORT)"; \
+	bash scripts/check_dashboard_contract.sh "$(DASHBOARD_HOST)" "$(DASHBOARD_PORT)" && \
 	OPERAD_OTEL=1 \
 	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}/api/public/otel}" \
 	uv run --extra otel python apps/demos/agent_evolution/run.py --offline --dashboard
 
-demo-script:
+demo-script: ensure-docker-dashboard
 	@$(ENV_LOAD); \
-	bash scripts/check_dashboard_contract.sh "$(DASHBOARD_HOST)" "$(DASHBOARD_PORT)"; \
+	bash scripts/check_dashboard_contract.sh "$(DASHBOARD_HOST)" "$(DASHBOARD_PORT)" && \
 	OPERAD_OTEL=1 \
 	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}/api/public/otel}" \
 	uv run --extra observers --extra otel python demo.py --dashboard
 
-demo-triage:
+demo-triage: ensure-docker-dashboard
 	@$(ENV_LOAD); \
-	bash scripts/check_dashboard_contract.sh "$(DASHBOARD_HOST)" "$(DASHBOARD_PORT)"; \
+	bash scripts/check_dashboard_contract.sh "$(DASHBOARD_HOST)" "$(DASHBOARD_PORT)" && \
 	OPERAD_OTEL=1 \
 	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}/api/public/otel}" \
 	uv run --extra otel python apps/demos/triage_reply/run.py --dashboard
 
 EXAMPLE ?= 01_composition_research_analyst.py
-example-observed: ensure-bundles
+example-observed: ensure-bundles ensure-docker-dashboard
 	@$(ENV_LOAD); \
-	bash scripts/check_dashboard_contract.sh "$(DASHBOARD_HOST)" "$(DASHBOARD_PORT)"; \
+	bash scripts/check_dashboard_contract.sh "$(DASHBOARD_HOST)" "$(DASHBOARD_PORT)" && \
 	OPERAD_OTEL=1 \
 	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}/api/public/otel}" \
 	uv run --extra otel python "examples/$(EXAMPLE)" --dashboard
