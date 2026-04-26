@@ -16,7 +16,13 @@ interface CategoryRow {
   count: number;
 }
 
-export function ValueDistribution({ label, values, agentPath, side = "in", className }: ValueDistributionProps) {
+export function ValueDistribution({
+  label,
+  values,
+  agentPath,
+  side = "in",
+  className,
+}: ValueDistributionProps) {
   const openDrawer = useUIStore((s) => s.openDrawer);
   if (values.length === 0) {
     return (
@@ -45,6 +51,7 @@ export function ValueDistribution({ label, values, agentPath, side = "in", class
         </CardHeader>
         <CardContent className="space-y-2">
           <svg width="100%" height={38} viewBox="0 0 180 38" className="block">
+            <title>{`${label} numeric distribution`}</title>
             <polyline
               fill="none"
               stroke="var(--color-accent)"
@@ -109,7 +116,11 @@ export function ValueDistribution({ label, values, agentPath, side = "in", class
   );
 }
 
-function sparkPoints(values: number[], width: number, height: number): Array<{ x: number; y: number }> {
+function sparkPoints(
+  values: number[],
+  width: number,
+  height: number,
+): Array<{ x: number; y: number }> {
   if (values.length === 1) {
     return [{ x: 0, y: height / 2 }];
   }

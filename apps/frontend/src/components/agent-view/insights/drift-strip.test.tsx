@@ -68,7 +68,11 @@ describe("DriftStrip", () => {
       <DriftStrip
         rootPath="Root"
         summary={summary}
-        invocations={[makeInvocation("i1", "h1"), makeInvocation("i2", "h2"), makeInvocation("i3", "h2")]}
+        invocations={[
+          makeInvocation("i1", "h1"),
+          makeInvocation("i2", "h2"),
+          makeInvocation("i3", "h2"),
+        ]}
       />,
     );
     expect(screen.getByText(/3 invocations/i)).toBeTruthy();
@@ -80,7 +84,11 @@ describe("DriftStrip", () => {
       <DriftStrip
         rootPath="Root"
         summary={summary}
-        invocations={[makeInvocation("i1", "h1"), makeInvocation("i2", "h2"), makeInvocation("i3", "h2")]}
+        invocations={[
+          makeInvocation("i1", "h1"),
+          makeInvocation("i2", "h2"),
+          makeInvocation("i3", "h2"),
+        ]}
       />,
     );
     const marker = container.querySelector("line");

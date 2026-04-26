@@ -54,7 +54,9 @@ const meta: AgentMetaResponse = {
 
 describe("BackendBadges", () => {
   it("renders backend/model/sampling badges", () => {
-    render(<BackendBadges invocations={[invocation]} summaryRaw={{ synthetic: true }} meta={meta} />);
+    render(
+      <BackendBadges invocations={[invocation]} summaryRaw={{ synthetic: true }} meta={meta} />,
+    );
     expect(screen.getByText("openai")).toBeTruthy();
     expect(screen.getByText("gpt-4o-mini")).toBeTruthy();
     expect(screen.getByText("T 0.7")).toBeTruthy();

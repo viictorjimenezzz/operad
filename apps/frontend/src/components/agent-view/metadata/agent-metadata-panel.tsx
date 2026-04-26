@@ -3,7 +3,13 @@ import { InvocationsTable } from "@/components/agent-view/metadata/invocations-t
 import { ScriptOriginChip } from "@/components/agent-view/metadata/script-origin-chip";
 import { Badge } from "@/components/ui/badge";
 import { RunSummary } from "@/lib/types";
-import { formatCost, formatDurationMs, formatRelativeTime, formatTokens, truncateMiddle } from "@/lib/utils";
+import {
+  formatCost,
+  formatDurationMs,
+  formatRelativeTime,
+  formatTokens,
+  truncateMiddle,
+} from "@/lib/utils";
 import { ExternalLink } from "lucide-react";
 import { z } from "zod";
 
@@ -33,7 +39,9 @@ export function AgentMetadataPanel({ summary, invocations }: AgentMetadataPanelP
   }
 
   const run = summaryParsed.data;
-  const latest = invParsed.success ? invParsed.data.invocations[invParsed.data.invocations.length - 1] : null;
+  const latest = invParsed.success
+    ? invParsed.data.invocations[invParsed.data.invocations.length - 1]
+    : null;
   const className = run.algorithm_class ?? run.root_agent_path?.split(".").at(-1) ?? "Agent";
   const stateVariant = run.state === "running" ? "live" : run.state === "error" ? "error" : "ended";
 
@@ -45,10 +53,16 @@ export function AgentMetadataPanel({ summary, invocations }: AgentMetadataPanelP
             <div className="font-mono text-lg text-text">{className}</div>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <Badge variant="default">{run.is_algorithm ? "algorithm" : "agent"}</Badge>
-              <Badge variant={stateVariant} className={run.state === "running" ? "animate-pulse" : ""}>
+              <Badge
+                variant={stateVariant}
+                className={run.state === "running" ? "animate-pulse" : ""}
+              >
                 {run.state}
               </Badge>
-              <span className="rounded-full border border-border bg-bg-2 px-2 py-0.5 font-mono text-[11px] text-muted" title={run.run_id}>
+              <span
+                className="rounded-full border border-border bg-bg-2 px-2 py-0.5 font-mono text-[11px] text-muted"
+                title={run.run_id}
+              >
                 run {truncateMiddle(run.run_id, 18)}
               </span>
               <HashChip hash={latest?.hash_content} />
@@ -68,7 +82,10 @@ export function AgentMetadataPanel({ summary, invocations }: AgentMetadataPanelP
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted">
             <span>started</span>
-            <span className="font-mono text-text" title={new Date(run.started_at * 1000).toLocaleString()}>
+            <span
+              className="font-mono text-text"
+              title={new Date(run.started_at * 1000).toLocaleString()}
+            >
               {formatRelativeTime(run.started_at)}
             </span>
             <span>duration</span>

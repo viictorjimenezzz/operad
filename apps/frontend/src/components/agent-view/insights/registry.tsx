@@ -23,7 +23,12 @@ export const insightsComponents: ComponentRegistry = {
     );
   },
   ValueDistribution: ({ element }) => {
-    const props = element.props as { label?: string; data?: unknown[]; agentPath?: string; side?: "in" | "out" };
+    const props = element.props as {
+      label?: string;
+      data?: unknown[];
+      agentPath?: string;
+      side?: "in" | "out";
+    };
     return (
       <ValueDistribution
         label={props.label ?? "values"}

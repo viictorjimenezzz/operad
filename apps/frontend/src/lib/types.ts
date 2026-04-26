@@ -501,6 +501,102 @@ export type IterationsResponse = z.infer<typeof IterationsResponse>;
 export const GraphResponse = z.object({ mermaid: z.string() });
 export type GraphResponse = z.infer<typeof GraphResponse>;
 
+const IoField = z.object({
+  name: z.string(),
+  type: z.string().default("unknown"),
+  description: z.string().default(""),
+  system: z.boolean().default(false),
+});
+export type IoField = z.infer<typeof IoField>;
+
+export const IoTypeNode = z.object({
+  key: z.string(),
+  name: z.string(),
+  fields: z.array(IoField).default([]),
+});
+export type IoTypeNode = z.infer<typeof IoTypeNode>;
+
+export const IoAgentEdge = z.object({
+  agent_path: z.string(),
+  class_name: z.string().default("Agent"),
+  kind: z.string().default("leaf"),
+  from: z.string(),
+  to: z.string(),
+  composite_path: z.string().nullable().optional().default(null),
+});
+export type IoAgentEdge = z.infer<typeof IoAgentEdge>;
+
+export const IoGraphResponse = z.object({
+  root: z.string().nullable().default(null),
+  nodes: z.array(IoTypeNode).default([]),
+  edges: z.array(IoAgentEdge).default([]),
+});
+export type IoGraphResponse = z.infer<typeof IoGraphResponse>;
+
+export const AgentInvocation = z.object({
+  id: z.string(),
+  started_at: z.number(),
+  finished_at: z.number().nullable().default(null),
+  latency_ms: z.number().nullable().default(null),
+  prompt_tokens: z.number().default(0),
+  completion_tokens: z.number().default(0),
+  hash_prompt: z.string().nullable().default(null),
+  hash_input: z.string().nullable().default(null),
+  hash_content: z.string().nullable().default(null),
+  status: z.enum(["ok", "error"]),
+  error: z.string().nullable().default(null),
+  langfuse_url: z.string().nullable().default(null),
+  script: z.string().nullable().default(null),
+});
+export type AgentInvocation = z.infer<typeof AgentInvocation>;
+
+export const AgentInvocationsResponse = z.object({
+  agent_path: z.string(),
+  invocations: z.array(AgentInvocation).default([]),
+});
+export type AgentInvocationsResponse = z.infer<typeof AgentInvocationsResponse>;
+
+export const AgentPromptsResponse = z.object({
+  agent_path: z.string(),
+  renderer: z.string().default("xml"),
+  entries: z
+    .array(
+      z.object({
+        invocation_id: z.string(),
+        started_at: z.number(),
+        hash_prompt: z.string().nullable().default(null),
+        system: z.string().nullable().default(null),
+        user: z.string().nullable().default(null),
+        replayed: z.boolean().default(false),
+      }),
+    )
+    .default([]),
+});
+export type AgentPromptsResponse = z.infer<typeof AgentPromptsResponse>;
+
+export const AgentValuesResponse = z.object({
+  agent_path: z.string(),
+  attribute: z.string(),
+  side: z.enum(["in", "out"]),
+  type: z.string(),
+  values: z
+    .array(
+      z.object({
+        invocation_id: z.string(),
+        started_at: z.number(),
+        value: z.unknown(),
+      }),
+    )
+    .default([]),
+});
+export type AgentValuesResponse = z.infer<typeof AgentValuesResponse>;
+
+export const AgentEventsResponse = z.object({
+  run_id: z.string(),
+  events: z.array(Envelope),
+});
+export type AgentEventsResponse = z.infer<typeof AgentEventsResponse>;
+
 export const RunEventsResponse = z.object({
   run_id: z.string(),
   events: z.array(Envelope),

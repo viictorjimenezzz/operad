@@ -16,10 +16,13 @@ function subtitleFromPayload(payload: DrawerPayload): string | null {
   return typeof payload.agentPath === "string" ? payload.agentPath : null;
 }
 
-export function getDrawerHeader(drawer: {
-  kind: Exclude<DrawerKind, null>;
-  payload: DrawerPayload;
-}, runId: string): { title: string; subtitle: string | null } {
+export function getDrawerHeader(
+  drawer: {
+    kind: Exclude<DrawerKind, null>;
+    payload: DrawerPayload;
+  },
+  runId: string,
+): { title: string; subtitle: string | null } {
   const view = getDrawerView(drawer.kind);
   if (!view) {
     return {

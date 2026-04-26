@@ -106,6 +106,7 @@ export function SideDrawer() {
         role="separator"
         aria-label="Resize drawer"
         aria-orientation="vertical"
+        tabIndex={0}
         className="absolute left-0 top-0 h-full w-1 -translate-x-1 cursor-col-resize"
         onMouseDown={onResizeStart}
       />

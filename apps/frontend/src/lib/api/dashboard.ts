@@ -1,4 +1,5 @@
 import {
+  AgentInvocationsResponse,
   AgentMetaResponse,
   ArchivedRunRecord,
   BenchmarkDetailResponse,
@@ -18,8 +19,8 @@ import {
   Manifest,
   MutationsMatrix,
   ProgressSnapshot,
-  RunInvocationsResponse,
   RunEventsResponse,
+  RunInvocationsResponse,
   RunSummary,
   StatsResponse,
 } from "@/lib/types";
@@ -104,8 +105,12 @@ export const dashboardApi = {
   },
   runChildren: (runId: string) => getJson(`/runs/${runId}/children`, z.array(RunSummary)),
   runSummary: (runId: string) => getJson(`/runs/${runId}/summary`, RunSummary),
-  runInvocations: (runId: string) =>
-    getJson(`/runs/${runId}/invocations`, RunInvocationsResponse),
+  runInvocations: (runId: string) => getJson(`/runs/${runId}/invocations`, RunInvocationsResponse),
+  agentInvocations: (runId: string, agentPath: string) =>
+    getJson(
+      `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/invocations`,
+      AgentInvocationsResponse,
+    ),
   agentMeta: (runId: string, agentPath: string) =>
     getJson(`/runs/${runId}/agent/${encodeURIComponent(agentPath)}/meta`, AgentMetaResponse),
   runEvents: (runId: string, limit = 500) =>

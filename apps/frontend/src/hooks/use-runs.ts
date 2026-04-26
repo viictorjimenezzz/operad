@@ -49,7 +49,10 @@ export function useRunInvocations(runId: string | null | undefined) {
   });
 }
 
-export function useAgentMeta(runId: string | null | undefined, agentPath: string | null | undefined) {
+export function useAgentMeta(
+  runId: string | null | undefined,
+  agentPath: string | null | undefined,
+) {
   return useQuery({
     queryKey: ["run", "agent-meta", runId, agentPath] as const,
     queryFn: () => {

@@ -5,7 +5,12 @@ import { FingerprintCard } from "@/components/agent-view/insights/fingerprint-ca
 import { ValueDistribution } from "@/components/agent-view/insights/value-distribution";
 import { Card, CardContent } from "@/components/ui/card";
 import { dashboardApi } from "@/lib/api/dashboard";
-import { AgentMetaResponse, RunInvocationsResponse, RunSummary, type RunInvocation } from "@/lib/types";
+import {
+  AgentMetaResponse,
+  type RunInvocation,
+  RunInvocationsResponse,
+  RunSummary,
+} from "@/lib/types";
 import { useQuery } from "@tanstack/react-query";
 
 export interface AgentInsightsRowProps {
@@ -21,7 +26,12 @@ export function AgentInsightsRow(props: AgentInsightsRowProps) {
   const rawInvocations = props.dataInvocations ?? props.invocations;
   const summaryParsed = RunSummary.safeParse(rawSummary);
   if (!summaryParsed.success) {
-    return <ContractError title="invalid summary contract" issues={summaryParsed.error.issues.map((i) => i.path.join("."))} />;
+    return (
+      <ContractError
+        title="invalid summary contract"
+        issues={summaryParsed.error.issues.map((i) => i.path.join("."))}
+      />
+    );
   }
   const invocationsParsed = RunInvocationsResponse.safeParse(rawInvocations);
   if (!invocationsParsed.success) {
@@ -92,9 +102,13 @@ export function AgentInsightsRow(props: AgentInsightsRowProps) {
           ))
         )}
       </div>
-      {hiddenCount > 0 ? <p className="m-0 text-[0.68rem] text-muted">+{hiddenCount} more fields</p> : null}
+      {hiddenCount > 0 ? (
+        <p className="m-0 text-[0.68rem] text-muted">+{hiddenCount} more fields</p>
+      ) : null}
       {metaQuery.error ? (
-        <p className="m-0 text-[0.68rem] text-warn">agent meta unavailable; showing invocation-derived badges</p>
+        <p className="m-0 text-[0.68rem] text-warn">
+          agent meta unavailable; showing invocation-derived badges
+        </p>
       ) : null}
     </div>
   );
@@ -106,10 +120,17 @@ function parseMeta(value: unknown): AgentMetaResponse | null {
   return parsed.success ? parsed.data : null;
 }
 
-function toInputDistributions(invocations: RunInvocation[]): Array<{ label: string; values: unknown[] }> {
+function toInputDistributions(
+  invocations: RunInvocation[],
+): Array<{ label: string; values: unknown[] }> {
   const map = new Map<string, unknown[]>();
   for (const invocation of invocations) {
-    if (!invocation.input || typeof invocation.input !== "object" || Array.isArray(invocation.input)) continue;
+    if (
+      !invocation.input ||
+      typeof invocation.input !== "object" ||
+      Array.isArray(invocation.input)
+    )
+      continue;
     for (const [key, value] of Object.entries(invocation.input as Record<string, unknown>)) {
       const list = map.get(key) ?? [];
       list.push(value);

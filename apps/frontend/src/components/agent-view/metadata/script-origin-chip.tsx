@@ -14,7 +14,12 @@ function basename(value: string): string {
 export function ScriptOriginChip({ script, className }: ScriptOriginChipProps) {
   if (!script) {
     return (
-      <span className={cn("rounded-full border border-border bg-bg-2 px-2 py-0.5 text-[11px] text-muted", className)}>
+      <span
+        className={cn(
+          "rounded-full border border-border bg-bg-2 px-2 py-0.5 text-[11px] text-muted",
+          className,
+        )}
+      >
         script: —
       </span>
     );

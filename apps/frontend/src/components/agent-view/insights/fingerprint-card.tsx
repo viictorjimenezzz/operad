@@ -73,7 +73,10 @@ export function FingerprintCard({ hashes }: FingerprintCardProps) {
                   try {
                     await navigator.clipboard.writeText(value);
                     setCopiedKey(key);
-                    setTimeout(() => setCopiedKey((current) => (current === key ? null : current)), 1100);
+                    setTimeout(
+                      () => setCopiedKey((current) => (current === key ? null : current)),
+                      1100,
+                    );
                   } catch {
                     setCopiedKey(null);
                   }

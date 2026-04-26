@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { formatCost, formatDurationMs, formatTokens } from "@/lib/utils";
 import type { RunInvocation } from "@/lib/types";
+import { formatCost, formatDurationMs, formatTokens } from "@/lib/utils";
 import { useMemo } from "react";
 
 export interface CostLatencySparklinesProps {
@@ -20,7 +20,9 @@ export function CostLatencySparklines({ invocations }: CostLatencySparklinesProp
     () => ({
       cost: invocations.map((entry) => entry.cost_usd ?? 0),
       latency: invocations.map((entry) => entry.latency_ms ?? 0),
-      tokens: invocations.map((entry) => (entry.prompt_tokens ?? 0) + (entry.completion_tokens ?? 0)),
+      tokens: invocations.map(
+        (entry) => (entry.prompt_tokens ?? 0) + (entry.completion_tokens ?? 0),
+      ),
     }),
     [invocations],
   );
@@ -83,6 +85,7 @@ function Sparkline({ label, values, stroke, formatter }: SparklineProps) {
     <div className="rounded border border-border bg-bg-2 px-2 py-1.5">
       <div className="mb-1 text-[0.65rem] uppercase tracking-[0.1em] text-muted">{label}</div>
       <svg width="100%" height={24} viewBox="0 0 120 24" className="block">
+        <title>{`${label} sparkline`}</title>
         <polyline fill="none" stroke={stroke} strokeWidth={1.8} points={points} />
         {values.map((value, index) => {
           const x = values.length === 1 ? 0 : (index / (values.length - 1)) * 120;

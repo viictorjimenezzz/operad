@@ -44,7 +44,9 @@ export function resolveLayout(algorithmPath: string | null | undefined): LayoutS
   const exact = algorithmLayouts[algorithmPath];
   if (exact) return exact;
   // Prefix match: "EvoGradient_v2" → "EvoGradient"
-  const prefix = Object.keys(algorithmLayouts).find((k) => k !== "*" && algorithmPath.startsWith(k));
+  const prefix = Object.keys(algorithmLayouts).find(
+    (k) => k !== "*" && algorithmPath.startsWith(k),
+  );
   const prefixLayout = prefix !== undefined ? algorithmLayouts[prefix] : undefined;
   if (prefixLayout) return prefixLayout;
   return wildcard ?? fallbackLayout;

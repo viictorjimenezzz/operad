@@ -3,7 +3,12 @@ import type { RunInvocation } from "@/lib/types";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-function makeInvocation(id: string, latencyMs: number, costUsd: number, tokens: number): RunInvocation {
+function makeInvocation(
+  id: string,
+  latencyMs: number,
+  costUsd: number,
+  tokens: number,
+): RunInvocation {
   return {
     id,
     started_at: 100,

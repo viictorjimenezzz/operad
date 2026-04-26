@@ -1,6 +1,6 @@
+import { HashChip } from "@/components/agent-view/metadata/hash-chip";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { HashChip } from "@/components/agent-view/metadata/hash-chip";
 import { RunSummary } from "@/lib/types";
 import { cn, formatDurationMs, formatRelativeTime, formatTokens } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
@@ -146,10 +146,9 @@ export function InvocationsTable({ summary, invocations }: InvocationsTableProps
             const prev = virtual.index > 0 ? rowsByIndex[virtual.index - 1] : null;
             const relative = formatRelativeTime(row.started_at ?? null, nowSec);
             return (
-              <div
+              <button
+                type="button"
                 key={row.id}
-                role="button"
-                tabIndex={0}
                 data-testid={`invocation-row-${virtual.index}`}
                 className={cn(
                   "grid cursor-pointer grid-cols-[56px_120px_90px_120px_110px_80px_1fr] items-center gap-2 border-b border-border/60 px-3 py-2 text-xs hover:bg-bg-2",
@@ -193,7 +192,7 @@ export function InvocationsTable({ summary, invocations }: InvocationsTableProps
                 <span className="font-mono text-muted">
                   {formatTokens(row.prompt_tokens)} / {formatTokens(row.completion_tokens)}
                 </span>
-                <HashChip hash={row.hash_prompt} />
+                <HashChip hash={row.hash_prompt} asButton={false} />
                 {renderStatus(row)}
                 <span className="flex items-center gap-1">
                   <button
@@ -239,7 +238,7 @@ export function InvocationsTable({ summary, invocations }: InvocationsTableProps
                     </a>
                   ) : null}
                 </span>
-              </div>
+              </button>
             );
           })}
         </div>

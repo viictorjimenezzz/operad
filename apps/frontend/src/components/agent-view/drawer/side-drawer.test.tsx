@@ -122,6 +122,6 @@ describe("SideDrawer", () => {
 
     expect(useUIStore.getState().drawerWidth).toBe(380);
     const raw = localStorage.getItem("operad.ui");
-    expect(raw).toContain("\"drawerWidth\":380");
+    expect(raw).toContain('"drawerWidth":380');
   });
 });

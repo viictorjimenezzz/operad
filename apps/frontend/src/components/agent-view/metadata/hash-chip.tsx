@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 interface HashChipProps {
   hash: string | null | undefined;
   className?: string;
+  asButton?: boolean;
 }
 
 function hashToHue(value: string): number {
@@ -22,7 +23,7 @@ export function hashColor(hash: string): { background: string; border: string } 
   };
 }
 
-export function HashChip({ hash, className }: HashChipProps) {
+export function HashChip({ hash, className, asButton = true }: HashChipProps) {
   const [copied, setCopied] = useState(false);
   const normalized = typeof hash === "string" && hash.length > 0 ? hash : null;
   const colors = useMemo(
@@ -38,8 +39,25 @@ export function HashChip({ hash, className }: HashChipProps) {
 
   if (!normalized) {
     return (
-      <span className={cn("rounded-full border border-border bg-bg-2 px-2 py-0.5 text-[11px] text-muted", className)}>
+      <span
+        className={cn(
+          "rounded-full border border-border bg-bg-2 px-2 py-0.5 text-[11px] text-muted",
+          className,
+        )}
+      >
         —
+      </span>
+    );
+  }
+
+  if (!asButton) {
+    return (
+      <span
+        title={normalized}
+        className={cn("rounded-full border px-2 py-0.5 font-mono text-[11px] text-text", className)}
+        style={{ backgroundColor: colors.background, borderColor: colors.border }}
+      >
+        {truncateMiddle(normalized, 6)}
       </span>
     );
   }

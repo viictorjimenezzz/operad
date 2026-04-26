@@ -35,7 +35,9 @@ export const metadataComponents: ComponentRegistry = {
     const p = element.props as { dataSummary?: unknown; dataInvocations?: unknown };
     return <InvocationsTable summary={p.dataSummary} invocations={p.dataInvocations} />;
   },
-  HashChip: ({ element }) => <HashChip hash={(element.props as { dataHash?: string | null }).dataHash} />,
+  HashChip: ({ element }) => (
+    <HashChip hash={(element.props as { dataHash?: string | null }).dataHash} />
+  ),
   ScriptOriginChip: ({ element }) => (
     <ScriptOriginChip script={(element.props as { dataScript?: string | null }).dataScript} />
   ),

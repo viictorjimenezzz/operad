@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { hashColor } from "@/lib/hash-color";
-import { formatRelativeTime, truncateMiddle } from "@/lib/utils";
 import type { RunInvocation, RunSummary } from "@/lib/types";
+import { formatRelativeTime, truncateMiddle } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
 
 export interface DriftStripProps {
@@ -39,6 +39,7 @@ export function DriftStrip({ invocations, rootPath, summary }: DriftStripProps) 
         ) : (
           <div className="relative">
             <svg width="100%" height={16} viewBox={`0 0 ${ticks.length * 3} 16`} className="block">
+              <title>prompt hash transitions</title>
               {ticks.map((tick, index) => {
                 const x = index * 3;
                 const groupSize = groups.get(`${tick.hashPrompt}::${tick.hashInput}`) ?? 1;
@@ -71,6 +72,12 @@ export function DriftStrip({ invocations, rootPath, summary }: DriftStripProps) 
                       if (!rootPath) return;
                       openDrawer("prompts", { agentPath: rootPath, focus: transition.after.id });
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter" && e.key !== " ") return;
+                      e.preventDefault();
+                      if (!rootPath) return;
+                      openDrawer("prompts", { agentPath: rootPath, focus: transition.after.id });
+                    }}
                   >
                     <title>{`open prompt diff at ${transition.after.id}`}</title>
                   </line>
@@ -94,7 +101,8 @@ function findTransitions(ticks: Tick[]): Array<{ index: number; before: Tick; af
     const prev = ticks[i - 1];
     const current = ticks[i];
     if (!prev || !current) continue;
-    if (prev.hashPrompt !== current.hashPrompt) out.push({ index: i, before: prev, after: current });
+    if (prev.hashPrompt !== current.hashPrompt)
+      out.push({ index: i, before: prev, after: current });
   }
   return out;
 }
