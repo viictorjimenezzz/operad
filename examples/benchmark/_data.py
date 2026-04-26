@@ -1,29 +1,14 @@
-"""Shared utilities: synthetic datasets, offline forward stubs, token tracking."""
+"""Synthetic datasets and schemas for the benchmark example."""
 
 from __future__ import annotations
 
 import hashlib
 import random
-import time
-from typing import Any
 
 from pydantic import BaseModel, Field
 
-from operad import Agent, Configuration
 from operad.benchmark import Dataset
 from operad.benchmark.entry import Entry
-from operad.core.config import Sampling
-
-# ---------------------------------------------------------------------------
-# Offline configuration (never contacts a real model)
-# ---------------------------------------------------------------------------
-
-OFFLINE_CFG = Configuration(
-    backend="llamacpp",
-    host="127.0.0.1:0",
-    model="offline-stub",
-    sampling=Sampling(temperature=0.0, max_tokens=2048),
-)
 
 
 # ---------------------------------------------------------------------------
@@ -605,114 +590,5 @@ def make_tool_use_dataset(n: int = 50, seed: int = 42) -> Dataset[ToolIn, ToolOu
     return Dataset(entries, name="tool_use", version="1.0")
 
 
-# ---------------------------------------------------------------------------
-# Offline forward: deterministic canned outputs, no LLM
-# ---------------------------------------------------------------------------
-
 def _stable_hash(s: str) -> int:
     return int(hashlib.md5(s.encode()).hexdigest(), 16)
-
-
-class OfflineIntentLeaf(Agent[IntentIn, IntentOut]):
-    """Returns a deterministic intent label based on keyword matching."""
-
-    input = IntentIn
-    output = IntentOut
-
-    async def forward(self, x: IntentIn) -> IntentOut:
-        text = x.text.lower()
-        for intent in _INTENTS:
-            keyword = intent.replace("_", " ").split()[0]
-            if keyword in text:
-                return IntentOut(intent=intent)
-        idx = _stable_hash(x.text) % len(_INTENTS)
-        return IntentOut(intent=_INTENTS[idx])
-
-
-class OfflineSummaryLeaf(Agent[DocIn, SummaryOut]):
-    """Returns first sentence of doc as a fake summary."""
-
-    input = DocIn
-    output = SummaryOut
-
-    async def forward(self, x: DocIn) -> SummaryOut:
-        sentences = x.text.split(".")
-        summary = sentences[0].strip() + "." if sentences else x.text[:80]
-        return SummaryOut(summary=summary[:120])
-
-
-class OfflineToolLeaf(Agent[ToolIn, ToolOut]):
-    """Returns tool name based on keyword matching."""
-
-    input = ToolIn
-    output = ToolOut
-
-    async def forward(self, x: ToolIn) -> ToolOut:
-        instr = x.instruction.lower()
-        if any(w in instr for w in ["weather", "temperature", "rain", "sunny", "forecast"]):
-            return ToolOut(tool_name="get_weather", tool_args='{"city": "Unknown"}')
-        if any(w in instr for w in ["remind", "reminder", "alarm", "schedule"]):
-            return ToolOut(tool_name="set_reminder", tool_args='{"message": "Reminder", "time": "TBD"}')
-        if any(w in instr for w in ["search", "find", "look up", "latest"]):
-            return ToolOut(tool_name="search_web", tool_args='{"query": "query"}')
-        if any(w in instr for w in ["email", "send", "mail", "forward"]):
-            return ToolOut(tool_name="send_email", tool_args='{"to": "user@example.com", "subject": "Message"}')
-        if any(w in instr for w in ["calculate", "what is", "multiply", "divide", "convert", "area", "power", "sqrt", "interest", "factorial", "percent"]):
-            return ToolOut(tool_name="calculate", tool_args='{"expression": "0"}')
-        idx = _stable_hash(x.instruction) % len(_TOOLS)
-        return ToolOut(tool_name=_TOOLS[idx], tool_args="{}")
-
-
-# ---------------------------------------------------------------------------
-# Token tracking via forward hooks
-# ---------------------------------------------------------------------------
-
-class TokenCounter:
-    """Accumulates token usage by attaching a forward hook to an agent.
-
-    Usage:
-        counter = TokenCounter()
-        handle = counter.attach(agent)
-        await evaluate(agent, dataset, metrics)
-        handle.remove()
-        print(counter.totals())
-    """
-
-    def __init__(self) -> None:
-        self._prompt = 0
-        self._completion = 0
-
-    def attach(self, agent: Agent) -> Any:
-        def _hook(a: Agent, x: Any, y: Any) -> None:
-            usage = getattr(y, "usage", None) or getattr(y, "_usage", None)
-            if usage is None:
-                return
-            self._prompt += int(getattr(usage, "prompt_tokens", 0) or 0)
-            self._completion += int(getattr(usage, "completion_tokens", 0) or 0)
-
-        return agent.register_forward_hook(_hook)
-
-    def totals(self) -> dict[str, int]:
-        return {"prompt": self._prompt, "completion": self._completion}
-
-    def reset(self) -> None:
-        self._prompt = 0
-        self._completion = 0
-
-
-# ---------------------------------------------------------------------------
-# Latency helper
-# ---------------------------------------------------------------------------
-
-class LatencyTimer:
-    """Context manager that records elapsed time."""
-
-    def __init__(self) -> None:
-        self.elapsed: float = 0.0
-
-    def __enter__(self) -> "LatencyTimer":
-        self._start = time.perf_counter()
-        return self
-
-    def __exit__(self, *_: Any) -> None:
-        self.elapsed = time.perf_counter() - self._start

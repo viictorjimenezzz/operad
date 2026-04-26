@@ -168,8 +168,10 @@ Optimizer → Trainer`. Optimizers in the fleet:
 EvoGradient, OPRO, APE, and Sweep against frozen baselines across three
 tasks (intent classification, summarization, tool-call selection).
 Each method is evaluated over three seeds; results include metric mean ±
-stddev, token cost, and latency. Run `uv run python examples/benchmark/run.py`
-to reproduce or fill in the results table in
+stddev, token cost, and latency. Run
+`uv run python -m examples.benchmark.run --offline --max-examples 5 --seeds 0`
+for a provider-free smoke, or `uv run python -m examples.benchmark.run --out report.json`
+for a live run. Details live in
 [`examples/benchmark/README.md`](examples/benchmark/README.md).
 
 ## CLI & YAML

@@ -8,6 +8,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from operad.benchmark import (
+    BenchmarkCell,
+    BenchmarkReport,
+    BenchmarkSummaryRow,
+    BenchmarkTokens,
+)
 from operad_dashboard.app import create_app
 
 
@@ -24,51 +30,52 @@ def _report(
     mean_a: float = 0.80,
     mean_b: float = 0.70,
 ) -> dict:
-    return {
-        "cells": [
-            {
-                "task": "classification",
-                "method": "tgd",
-                "seed": 0,
-                "metric": "accuracy",
-                "score": score_a,
-                "tokens": {"prompt": 100, "completion": 30},
-                "latency_s": 1.2,
-            },
-            {
-                "task": "classification",
-                "method": "momentum",
-                "seed": 0,
-                "metric": "accuracy",
-                "score": score_b,
-                "tokens": {"prompt": 120, "completion": 40},
-                "latency_s": 1.4,
-            },
+    return BenchmarkReport(
+        cells=[
+            BenchmarkCell(
+                task="classification",
+                method="tgd",
+                seed=0,
+                metric="accuracy",
+                score=score_a,
+                tokens=BenchmarkTokens(prompt=100, completion=30),
+                latency_s=1.2,
+            ),
+            BenchmarkCell(
+                task="classification",
+                method="momentum",
+                seed=0,
+                metric="accuracy",
+                score=score_b,
+                tokens=BenchmarkTokens(prompt=120, completion=40),
+                latency_s=1.4,
+            ),
         ],
-        "summary": [
-            {
-                "task": "classification",
-                "method": "tgd",
-                "mean": mean_a,
-                "std": 0.01,
-                "tokens_mean": 130,
-                "latency_mean": 1.2,
-                "n": 1,
-            },
-            {
-                "task": "classification",
-                "method": "momentum",
-                "mean": mean_b,
-                "std": 0.02,
-                "tokens_mean": 160,
-                "latency_mean": 1.4,
-                "n": 1,
-            },
+        summary=[
+            BenchmarkSummaryRow(
+                task="classification",
+                method="tgd",
+                mean=mean_a,
+                std=0.01,
+                tokens_mean=130,
+                latency_mean=1.2,
+                n=1,
+            ),
+            BenchmarkSummaryRow(
+                task="classification",
+                method="momentum",
+                mean=mean_b,
+                std=0.02,
+                tokens_mean=160,
+                latency_mean=1.4,
+                n=1,
+            ),
         ],
-        "headline_findings": {
+        headline_findings={
             "classification": "Best method: tgd (mean=0.800).",
         },
-    }
+        metadata={"name": "suite-dashboard-test"},
+    ).model_dump(mode="json")
 
 
 def test_benchmark_ingest_list_detail_delete(app_and_store) -> None:
@@ -83,6 +90,7 @@ def test_benchmark_ingest_list_detail_delete(app_and_store) -> None:
         rows = r_list.json()
         assert len(rows) == 1
         assert rows[0]["id"] == bench_id
+        assert rows[0]["name"] == "suite-dashboard-test"
         assert rows[0]["n_tasks"] == 1
         assert rows[0]["n_methods"] == 2
 
@@ -90,6 +98,8 @@ def test_benchmark_ingest_list_detail_delete(app_and_store) -> None:
         assert r_detail.status_code == 200
         detail = r_detail.json()
         assert detail["id"] == bench_id
+        assert detail["name"] == "suite-dashboard-test"
+        assert detail["report"]["metadata"]["name"] == "suite-dashboard-test"
         assert detail["report"]["summary"][0]["task"] == "classification"
         assert detail["baseline"] is None
         assert detail["delta"] == []

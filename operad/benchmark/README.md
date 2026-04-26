@@ -19,6 +19,7 @@ entry point.
 | `evaluate.py`     | `evaluate(agent, dataset, metrics) -> EvalReport`. The canonical entry point.     |
 | `aggregated.py`   | `AggregatedMetric(metric, reducer)` — reduce per-row scores to one number.        |
 | `experiment.py`   | `Experiment` — bundle of (configurations × agent × dataset) for sweeps.           |
+| `suite.py`        | `BenchmarkSuite` — run tasks × methods × seeds and emit dashboard-compatible reports. |
 | `sensitivity.py`  | `sensitivity(agent, ds, perturbations, metric) -> SensitivityReport`.             |
 | `regression.py`   | `regression_check(prev, curr, threshold) -> RegressionReport`.                    |
 
@@ -30,6 +31,8 @@ from operad.benchmark import (
     evaluate, EvalReport,
     AggregatedMetric, Reducer,
     Experiment,
+    BenchmarkSuite, BenchmarkTask, BenchmarkMethod,
+    BenchmarkRunConfig, BenchmarkReport,
     sensitivity, SensitivityCell, SensitivityReport,
     regression_check, RegressionReport,
 )
@@ -53,6 +56,21 @@ report = await evaluate(agent, ds, [ExactMatch()])
 print(report.summary)        # {"exact_match": 1.0}
 print(report.hash_dataset)   # stable content hash
 ```
+
+## Benchmark suites
+
+Use `BenchmarkSuite` when you need the repeated benchmark shape used by
+the example and dashboard: selected tasks × methods × seeds, train/test
+splits via `random_split`, and a JSON report with `cells`, `summary`,
+`headline_findings`, and optional `metadata`.
+
+```python
+suite = BenchmarkSuite([my_task])
+report = await suite.run(BenchmarkRunConfig(offline=True, seeds=[0]))
+```
+
+The default method fleet uses `evaluate`, dataset-level sweep via
+`clone`/`set_path`, and `Agent.auto_tune(kind=...)`.
 
 ## Sensitivity and regression
 

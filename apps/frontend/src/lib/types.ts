@@ -398,6 +398,7 @@ export const BenchmarkReport = z.object({
   cells: z.array(BenchmarkCell),
   summary: z.array(BenchmarkSummaryRow),
   headline_findings: z.record(z.string()),
+  metadata: z.record(z.unknown()).default({}),
 });
 export type BenchmarkReport = z.infer<typeof BenchmarkReport>;
 

@@ -9,17 +9,17 @@ from __future__ import annotations
 from typing import Any
 
 from operad import Agent
+from operad.benchmark import BenchmarkTask
 from operad.metrics import Rouge1
 from operad.optim.loss import LossFromMetric
 
 from ._config import default_config
-from ._shared import (
-    OFFLINE_CFG,
+from ._data import (
     DocIn,
-    OfflineSummaryLeaf,
     SummaryOut,
     make_summarization_dataset,
 )
+from ._offline import OFFLINE_CFG, OfflineSummaryLeaf
 
 DATASET = make_summarization_dataset(n=50, seed=42)
 
@@ -79,3 +79,15 @@ def make_sweep_grid() -> dict[str, list[Any]]:
             ),
         ],
     }
+
+
+TASK = BenchmarkTask(
+    key="sum",
+    name="summarization",
+    dataset=DATASET,
+    metrics=METRICS,
+    make_seed_agent=make_seed_agent,
+    make_hand_edit_agent=make_hand_edit_agent,
+    make_sweep_grid=make_sweep_grid,
+    loss=LOSS_FN,
+)
