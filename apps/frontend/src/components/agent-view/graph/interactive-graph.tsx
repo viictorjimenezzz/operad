@@ -9,6 +9,7 @@ import { applyDagreLayout } from "@/components/agent-view/graph/layout";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { IoGraphResponse } from "@/lib/types";
+import { useUIStore } from "@/stores/ui";
 import {
   Background,
   Controls,
@@ -32,6 +33,7 @@ const edgeTypes = { agentEdge: AgentEdge };
 function GraphCanvas({ ioGraph, runId }: InteractiveGraphProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const selectedInvocationAgentPath = useUIStore((s) => s.selectedInvocationAgentPath);
   const [groups, setGroups] = useState<CompositeGroup[]>(() =>
     deriveCompositeGroups(ioGraph ?? { root: null, nodes: [], edges: [] }),
   );
@@ -48,15 +50,16 @@ function GraphCanvas({ ioGraph, runId }: InteractiveGraphProps) {
   }, [ioGraph]);
 
   const nodes: Node[] = useMemo(() => {
+    const activeEdgePath = selectedEdgeId ?? selectedInvocationAgentPath;
     const graphNodes = source.nodes.map((node) => {
       const incidentEdge = source.edges.find(
         (edge) => edge.from === node.key || edge.to === node.key,
       );
       const selected = selectedNodeId === node.key;
-      const dimmed = selectedEdgeId
+      const dimmed = activeEdgePath
         ? !source.edges.some(
             (edge) =>
-              edge.agent_path === selectedEdgeId &&
+              edge.agent_path === activeEdgePath &&
               (edge.from === node.key || edge.to === node.key),
           )
         : false;
@@ -82,8 +85,8 @@ function GraphCanvas({ ioGraph, runId }: InteractiveGraphProps) {
     });
 
     const graphEdges: Edge[] = source.edges.map((edge) => {
-      const selected = selectedEdgeId === edge.agent_path;
-      const dimmed = Boolean(selectedEdgeId && selectedEdgeId !== edge.agent_path);
+      const selected = activeEdgePath === edge.agent_path;
+      const dimmed = Boolean(activeEdgePath && activeEdgePath !== edge.agent_path);
       return {
         id: edge.agent_path,
         source: edge.from,
@@ -106,30 +109,29 @@ function GraphCanvas({ ioGraph, runId }: InteractiveGraphProps) {
     });
 
     return applyDagreLayout(graphNodes, graphEdges);
-  }, [source, selectedEdgeId, selectedNodeId, runId]);
+  }, [source, selectedEdgeId, selectedInvocationAgentPath, selectedNodeId, runId]);
 
-  const edges: Edge[] = useMemo(
-    () =>
-      source.edges.map((edge) => ({
-        id: edge.agent_path,
-        source: edge.from,
-        target: edge.to,
-        type: "agentEdge",
-        data: {
-          runId,
-          agentPath: edge.agent_path,
-          label: edge.class_name,
-          selected: selectedEdgeId === edge.agent_path,
-          dimmed: Boolean(selectedEdgeId && selectedEdgeId !== edge.agent_path),
-          onSelect: () => {
-            setSelectedNodeId(null);
-            setSelectedEdgeId((curr) => (curr === edge.agent_path ? null : edge.agent_path));
-          },
-          onClose: () => setSelectedEdgeId(null),
+  const edges: Edge[] = useMemo(() => {
+    const activeEdgePath = selectedEdgeId ?? selectedInvocationAgentPath;
+    return source.edges.map((edge) => ({
+      id: edge.agent_path,
+      source: edge.from,
+      target: edge.to,
+      type: "agentEdge",
+      data: {
+        runId,
+        agentPath: edge.agent_path,
+        label: edge.class_name,
+        selected: activeEdgePath === edge.agent_path,
+        dimmed: Boolean(activeEdgePath && activeEdgePath !== edge.agent_path),
+        onSelect: () => {
+          setSelectedNodeId(null);
+          setSelectedEdgeId((curr) => (curr === edge.agent_path ? null : edge.agent_path));
         },
-      })),
-    [source, runId, selectedEdgeId],
-  );
+        onClose: () => setSelectedEdgeId(null),
+      },
+    }));
+  }, [source, runId, selectedEdgeId, selectedInvocationAgentPath]);
 
   return (
     <div className="h-[520px] overflow-hidden rounded border border-border">

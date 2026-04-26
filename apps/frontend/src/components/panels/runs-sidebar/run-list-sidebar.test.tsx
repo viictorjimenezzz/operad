@@ -61,6 +61,8 @@ describe("RunListSidebar", () => {
       sidebarCollapsed: false,
       drawer: null,
       drawerWidth: 420,
+      selectedInvocationId: null,
+      selectedInvocationAgentPath: null,
     });
   });
 

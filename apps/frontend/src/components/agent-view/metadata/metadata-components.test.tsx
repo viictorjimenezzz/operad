@@ -50,6 +50,8 @@ describe("InvocationsTable", () => {
       sidebarCollapsed: false,
       drawer: null,
       drawerWidth: 420,
+      selectedInvocationId: null,
+      selectedInvocationAgentPath: null,
     });
   });
 
@@ -156,6 +158,8 @@ describe("InvocationsTable", () => {
       invocationId: "inv-2",
       hashPrompt: "p2",
     });
+    expect(useUIStore.getState().selectedInvocationId).toBe("inv-2");
+    expect(useUIStore.getState().selectedInvocationAgentPath).toBe("Pipeline.stage_0");
 
     const diffButtons = screen.getAllByRole("button", { name: "diff" });
     const secondDiff = diffButtons[1];

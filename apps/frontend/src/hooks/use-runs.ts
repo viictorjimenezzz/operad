@@ -64,6 +64,24 @@ export function useAgentMeta(
   });
 }
 
+export function useAgentValues(
+  runId: string | null | undefined,
+  agentPath: string | null | undefined,
+  attr: string | null | undefined,
+  side: "in" | "out",
+) {
+  return useQuery({
+    queryKey: ["run", "agent-values", runId, agentPath, attr, side] as const,
+    queryFn: () => {
+      if (!runId) throw new Error("useAgentValues: runId is required");
+      if (!agentPath) throw new Error("useAgentValues: agentPath is required");
+      if (!attr) throw new Error("useAgentValues: attr is required");
+      return dashboardApi.agentValues(runId, agentPath, attr, side);
+    },
+    enabled: !!runId && !!agentPath && !!attr,
+  });
+}
+
 export function useGraph(runId: string | null | undefined) {
   return useQuery({
     queryKey: ["run", "graph", runId] as const,

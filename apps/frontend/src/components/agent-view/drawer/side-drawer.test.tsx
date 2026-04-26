@@ -33,6 +33,8 @@ describe("SideDrawer", () => {
       sidebarCollapsed: false,
       drawer: null,
       drawerWidth: 480,
+      selectedInvocationId: null,
+      selectedInvocationAgentPath: null,
     });
   });
 

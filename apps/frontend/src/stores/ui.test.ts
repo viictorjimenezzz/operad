@@ -18,6 +18,8 @@ describe("useUIStore", () => {
       sidebarCollapsed: false,
       drawer: null,
       drawerWidth: 480,
+      selectedInvocationId: null,
+      selectedInvocationAgentPath: null,
     });
   });
 
@@ -72,5 +74,14 @@ describe("useUIStore", () => {
     };
     expect(parsed.state.sidebarCollapsed).toBe(true);
     expect(parsed.state.drawerWidth).toBe(512);
+  });
+
+  it("tracks selected invocation context", () => {
+    useUIStore.getState().setSelectedInvocation("Root:5", "Root");
+    expect(useUIStore.getState().selectedInvocationId).toBe("Root:5");
+    expect(useUIStore.getState().selectedInvocationAgentPath).toBe("Root");
+    useUIStore.getState().clearSelectedInvocation();
+    expect(useUIStore.getState().selectedInvocationId).toBeNull();
+    expect(useUIStore.getState().selectedInvocationAgentPath).toBeNull();
   });
 });
