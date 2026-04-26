@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import BaseModel
 
 from operad import Agent
 from operad.agents.reasoning.schemas import Candidate, Score
@@ -73,11 +74,10 @@ async def test_beam_picks_highest_scoring_candidate(cfg) -> None:
     outs = await beam.run(A(text="go"))
 
     assert isinstance(outs, list)
-    assert len(outs) == 1
-    assert isinstance(outs[0], B)
-    # Four generator calls mint 10, 20, 30, 40 via the shared counter;
-    # the judge scores by value, so the highest wins.
-    assert outs[0].value == 40
+    assert len(outs) == 4
+    assert all(isinstance(o, B) for o in outs)
+    # top_k defaults to n, so all candidates are returned in ranked order.
+    assert [o.value for o in outs] == [40, 30, 20, 10]
 
 
 async def test_beam_top_k_returns_multiple(cfg) -> None:
@@ -85,7 +85,15 @@ async def test_beam_top_k_returns_multiple(cfg) -> None:
     _SHARED_COUNTER[0] = 0
     outs = await beam.run(A(text="go"))
     assert len(outs) == 2
-    assert {o.value for o in outs} == {30, 40}
+    assert [o.value for o in outs] == [40, 30]
+
+
+async def test_beam_without_judge_keeps_generation_order(cfg) -> None:
+    beam = await _make_beam(cfg, n=4, top_k=2)
+    beam.judge = None
+    _SHARED_COUNTER[0] = 0
+    outs = await beam.run(A(text="go"))
+    assert [o.value for o in outs] == [10, 20]
 
 
 async def test_beam_rejects_zero_n() -> None:
@@ -96,6 +104,37 @@ async def test_beam_rejects_zero_n() -> None:
 async def test_beam_rejects_top_k_larger_than_n() -> None:
     with pytest.raises(ValueError, match="top_k"):
         Beam(n=2, top_k=3)
+
+
+class _Scored(BaseModel):
+    value: int = 0
+    score: float | None = None
+
+
+class _CounterScored(Agent[A, _Scored]):
+    input = A
+    output = _Scored
+
+    def __init__(self, cfg) -> None:
+        super().__init__(config=cfg, input=A, output=_Scored)
+
+    async def forward(self, x: A) -> _Scored:  # type: ignore[override]
+        from operad.core.agent import _TRACER
+
+        if _TRACER.get() is not None:
+            return _Scored.model_construct(value=0, score=None)
+        _SHARED_COUNTER[0] += 1
+        return _Scored.model_construct(value=_SHARED_COUNTER[0] * 10, score=None)
+
+
+async def test_beam_injects_score_when_output_declares_score(cfg) -> None:
+    beam: Beam[A, _Scored] = Beam(n=3, top_k=2)
+    beam.generator = await _CounterScored(cfg).abuild()
+    beam.judge = await _ScoreByCandidate(config=cfg).abuild()
+    _SHARED_COUNTER[0] = 0
+    outs = await beam.run(A(text="go"))
+    assert [o.value for o in outs] == [30, 20]
+    assert [o.score for o in outs] == [30.0, 20.0]
 
 
 async def test_beam_is_not_an_agent() -> None:

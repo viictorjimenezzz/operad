@@ -8,6 +8,7 @@ sequence.
 from __future__ import annotations
 
 import pytest
+from pydantic import BaseModel
 
 from operad import Agent
 from operad.agents import Reflection, ReflectionInput
@@ -37,11 +38,20 @@ from operad.algorithms import (
     AutoResearcher,
     Beam,
     Debate,
+    MutationBeam,
     ResearchInput,
     ResearchPlan,
     Sweep,
     VerifierLoop,
 )
+from operad.algorithms.mutation_beam import (
+    MutationJudgeCandidate,
+    MutationJudgeInput,
+    MutationProposal,
+    MutationProposalBatch,
+    MutationProposalInput,
+)
+from operad.metrics.base import MetricBase
 from operad.runtime.events import AlgorithmEvent
 from operad.runtime.observers import AgentEvent, Event
 from operad.runtime.observers import registry as obs_registry
@@ -122,6 +132,24 @@ async def test_beam_emits_candidate_events(cfg, col) -> None:
     assert [e.payload["candidate_index"] for e in candidates] == [0, 1, 2]
     assert "top_indices" in algo[-1].payload
     assert "top_scores" in algo[-1].payload
+
+
+async def test_beam_without_judge_emits_truncate_phase(cfg, col) -> None:
+    beam: Beam = Beam(n=3, top_k=2)
+    beam.generator = await _Counter(cfg).abuild()
+    beam.generator.calls = 0
+    beam.judge = None
+    await beam.run(A(text="go"))
+
+    kinds = _algo_kinds(col.events)
+    assert kinds == ["algo_start", "candidate", "candidate", "candidate", "iteration", "algo_end"]
+    algo = _algo_events(col.events)
+    candidates = [e for e in algo if e.kind == "candidate"]
+    assert all(c.payload["score"] is None for c in candidates)
+    iteration = [e for e in algo if e.kind == "iteration"][0]
+    assert iteration.payload["phase"] == "truncate"
+    assert iteration.payload["top_indices"] == [0, 1]
+    assert algo[-1].payload["top_scores"] == [None, None]
 
 
 async def test_run_id_shared_with_agent_events(cfg, col) -> None:
@@ -312,6 +340,110 @@ async def test_auto_researcher_emits_iteration_events(cfg, col) -> None:
     iters = [e for e in algo if e.kind == "iteration"]
     assert len(iters) == 2
     assert all(i.payload["phase"] == "reason" for i in iters)
+
+
+# ----- mutation_beam ----------------------------------------------------
+
+
+class _MBQ(BaseModel):
+    text: str = ""
+
+
+class _MBR(BaseModel):
+    value: float = 0.0
+
+
+class _MBLeaf(Agent[_MBQ, _MBR]):
+    input = _MBQ
+    output = _MBR
+
+    async def forward(self, x: _MBQ) -> _MBR:  # type: ignore[override]
+        _ = x
+        temp = 0.0 if self.config is None else self.config.sampling.temperature
+        return _MBR.model_construct(value=float(temp))
+
+
+class _MBMetric(MetricBase):
+    name = "identity"
+
+    async def score(self, predicted: BaseModel, expected: BaseModel) -> float:
+        _ = expected
+        return float(getattr(predicted, "value", 0.0))
+
+
+class _MBProposer(Agent[MutationProposalInput, MutationProposalBatch]):
+    input = MutationProposalInput
+    output = MutationProposalBatch
+
+    async def forward(self, x: MutationProposalInput) -> MutationProposalBatch:  # type: ignore[override]
+        from operad.core.agent import _TRACER
+
+        if _TRACER.get() is not None:
+            return MutationProposalBatch()
+        if x.generation_index == 0:
+            return MutationProposalBatch(
+                proposals=[
+                    MutationProposal(op="set_temperature", temperature=0.2),
+                    MutationProposal(op="set_temperature", temperature=0.9),
+                ]
+            )
+        return MutationProposalBatch(
+            proposals=[
+                MutationProposal(op="set_temperature", temperature=0.8),
+                MutationProposal(op="set_temperature", temperature=0.3),
+            ]
+        )
+
+
+class _MBJudge(Agent[Candidate[MutationJudgeInput, MutationJudgeCandidate], Score]):
+    input = Candidate
+    output = Score
+
+    async def forward(
+        self,
+        x: Candidate[MutationJudgeInput, MutationJudgeCandidate],
+    ) -> Score:  # type: ignore[override]
+        metric_score = 0.0 if x.output is None else x.output.metric_score
+        return Score(score=metric_score, rationale="")
+
+
+async def test_mutation_beam_emits_generation_events(cfg, col) -> None:
+    seed = _MBLeaf(config=cfg)
+    seed.config = seed.config.model_copy(
+        update={"sampling": seed.config.sampling.model_copy(update={"temperature": 0.1})}
+    )
+    await seed.abuild()
+
+    mb = MutationBeam(
+        seed,
+        metric=_MBMetric(),
+        dataset=[(_MBQ(text="go"), _MBR())],
+        allowed_mutations=["set_temperature"],
+        branches_per_parent=2,
+        frontier_size=1,
+        top_k=1,
+        proposer=_MBProposer(config=cfg),
+        judge=_MBJudge(config=cfg),
+        config=cfg,
+    )
+    await mb.abuild()
+    await mb.run(generations=2)
+
+    mutation_events = [
+        e
+        for e in _algo_events(col.events)
+        if e.algorithm_path == "MutationBeam"
+    ]
+    assert [e.kind for e in mutation_events] == [
+        "algo_start",
+        "generation",
+        "generation",
+        "algo_end",
+    ]
+    generations = [e for e in mutation_events if e.kind == "generation"]
+    assert len(generations) == 2
+    assert all(len(g.payload["selected_candidate_ids"]) == 1 for g in generations)
+    assert all(g.payload["used_judge"] is True for g in generations)
 
 
 # ----- error path -------------------------------------------------------

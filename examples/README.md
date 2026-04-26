@@ -13,9 +13,9 @@ exit cleanly with an error if the backend is not up.
 | # | Script                                  | What it shows |
 | - | --------------------------------------- | ------------- |
 | 1 | `01_agent.py`    | A single `await agent(x)` over four nested composition layers (Sequential ⊃ Parallel × 3 ⊃ Sequential ⊃ ReAct). 28 typed nodes, 27 edges, all checked at `build()` time. Every leaf is a vanilla `Planner(...)` / `Reasoner(...)` / `ReAct(...)` instance — no subclasses. |
-| 2 | `02_talker_reasoner_intake.py`          | The new `TalkerReasoner` algorithm walking a user through a four-stage scenario tree. Exercises stay/advance/branch/finish decisions. The algorithm's class-level navigator + voice are vanilla `Reasoner(...)` instances; the example just passes `config=` through. |
-| 3 | `03_train_config_temperature.py`        | A small training loop that tunes `config.sampling.temperature` of a vanilla `Reasoner` via `EvoGradient` with `SetTemperature` mutations. A reference-free length-band metric (no second LLM call) provides the signal. |
-| 4 | `04_evolutionary_best_of_n.py`          | A complex training loop: subclassed `EvoGradient` whose `step()` (a) refreshes the mutation pool every generation, (b) launches Best-of-N **in parallel** across all individuals, (c) keeps the top-K survivors. Real `Reasoner` agent + reference-free length-band metric. |
+| 2 | `02_talker_reasoner_intake.py`          | `TalkerReasoner` over a four-stage scenario tree with two run paths: interactive REPL (`input()`) by default, or `--scripted` replay. Exercises stay/advance/branch/finish decisions. |
+| 3 | `03_train_config_temperature.py`        | Training loop with `MutationBeam`: ReAct-in-Parallel mutation proposal branches, typed `set_temperature` proposals, and Beam+judge selection. A reference-free length-band metric (no second LLM call) tracks progress. |
+| 4 | `04_evolutionary_best_of_n.py`          | Evolutionary loop with `MutationBeam` over prompt-rule mutations (`append_rule`, `replace_rule`, `drop_rule`) and Beam+judge top-k survivor selection across generations. Real `Reasoner` agent + reference-free length-band metric. |
 
 Run them from the repo root:
 

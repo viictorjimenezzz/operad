@@ -30,6 +30,14 @@ from .talker_reasoner import (
 )
 from .self_refine import RefineInput, SelfRefine, SelfRefineState
 from .verifier_loop import VerifierLoop
+from .mutation_beam import (
+    AllowedMutation,
+    MutationBeam,
+    MutationBeamReport,
+    MutationCandidate,
+    MutationGeneration,
+    MutationProposal,
+)
 
 __all__ = [
     "AssistantMessage",
@@ -55,4 +63,10 @@ __all__ = [
     "SelfRefine",
     "SelfRefineState",
     "VerifierLoop",
+    "AllowedMutation",
+    "MutationBeam",
+    "MutationBeamReport",
+    "MutationCandidate",
+    "MutationGeneration",
+    "MutationProposal",
 ]
