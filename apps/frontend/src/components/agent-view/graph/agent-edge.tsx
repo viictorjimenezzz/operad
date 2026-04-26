@@ -123,7 +123,6 @@ export function AgentEdge({
                 onOpenGradient={(paramPath) =>
                   openDrawer("gradients", { agentPath: d.agentPath, paramPath })
                 }
-                onOpenExperiment={() => openDrawer("experiment", { agentPath: d.agentPath })}
                 onClose={d.onClose}
               />
             </div>

@@ -10,10 +10,12 @@ describe("AgentEdgePopup", () => {
         agentPath="Root.stage_0"
         meta={null}
         invocations={{ agent_path: "Root.stage_0", invocations: [] }}
+        parameters={{ agent_path: "Root.stage_0", parameters: [] }}
         onOpenLangfuse={vi.fn()}
         onOpenEvents={vi.fn()}
         onOpenPrompts={vi.fn()}
         onOpenExperiment={onOpenExperiment}
+        onOpenGradient={vi.fn()}
         onClose={vi.fn()}
       />,
     );
