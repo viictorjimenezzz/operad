@@ -1,0 +1,105 @@
+{
+  "algorithm": "agent.overview",
+  "version": 1,
+  "dataSources": {
+    "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "invocations": { "endpoint": "/runs/$context.runId/invocations" }
+  },
+  "spec": {
+    "root": "page",
+    "elements": {
+      "page": {
+        "type": "Stack",
+        "props": { "gap": 16 },
+        "children": ["latest", "more", "sections"]
+      },
+      "latest": {
+        "type": "LatestInvocationCard",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceInvocations": "$queries.invocations",
+          "runId": "$context.runId"
+        }
+      },
+      "more": {
+        "type": "InvocationsList",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceInvocations": "$queries.invocations",
+          "runId": "$context.runId",
+          "skipLatest": true,
+          "density": "compact"
+        }
+      },
+      "sections": {
+        "type": "Stack",
+        "props": { "gap": 8 },
+        "children": [
+          "repro",
+          "backend",
+          "config",
+          "examples",
+          "drift",
+          "cost",
+          "trainable",
+          "sister"
+        ]
+      },
+      "repro": {
+        "type": "ReproducibilityBlock",
+        "props": {
+          "sourceInvocations": "$queries.invocations"
+        }
+      },
+      "backend": {
+        "type": "BackendBlock",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceInvocations": "$queries.invocations",
+          "runId": "$context.runId"
+        }
+      },
+      "config": {
+        "type": "ConfigBlock",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "runId": "$context.runId"
+        }
+      },
+      "examples": {
+        "type": "ExamplesBlock",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "runId": "$context.runId"
+        }
+      },
+      "drift": {
+        "type": "DriftBlock",
+        "props": {
+          "sourceInvocations": "$queries.invocations",
+          "runId": "$context.runId"
+        }
+      },
+      "cost": {
+        "type": "CostLatencyBlock",
+        "props": {
+          "sourceInvocations": "$queries.invocations"
+        }
+      },
+      "trainable": {
+        "type": "TrainableParamsBlock",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "runId": "$context.runId"
+        }
+      },
+      "sister": {
+        "type": "SisterRunsBlock",
+        "props": {
+          "sourceInvocations": "$queries.invocations",
+          "runId": "$context.runId"
+        }
+      }
+    }
+  }
+}

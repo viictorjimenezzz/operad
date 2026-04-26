@@ -1,4 +1,5 @@
 export { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+export type { CardProps } from "@/components/ui/card";
 export { Button, buttonVariants } from "@/components/ui/button";
 export type { ButtonProps } from "@/components/ui/button";
 export { Badge } from "@/components/ui/badge";
@@ -17,4 +18,26 @@ export { Toolbar } from "@/components/ui/toolbar";
 export { FollowToggle } from "@/components/ui/follow-toggle";
 export type { FollowToggleProps } from "@/components/ui/follow-toggle";
 export { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+
+// New design-system atoms
+export { Eyebrow } from "@/components/ui/eyebrow";
+export type { EyebrowProps } from "@/components/ui/eyebrow";
+export { StatTile } from "@/components/ui/stat-tile";
+export type { StatTileProps } from "@/components/ui/stat-tile";
+export { Section } from "@/components/ui/section";
+export type { SectionProps } from "@/components/ui/section";
+export { HashTag } from "@/components/ui/hash-tag";
+export type { HashTagProps } from "@/components/ui/hash-tag";
+export { Pill } from "@/components/ui/pill";
+export type { PillProps, PillTone } from "@/components/ui/pill";
+export { IconButton } from "@/components/ui/icon-button";
+export type { IconButtonProps } from "@/components/ui/icon-button";
+export { Sparkline } from "@/components/ui/sparkline";
+export type { SparklineProps } from "@/components/ui/sparkline";
+export { FieldTree } from "@/components/ui/field-tree";
+export type { FieldTreeProps } from "@/components/ui/field-tree";
+export { KeyValueGrid } from "@/components/ui/key-value-grid";
+export type { KeyValueGridProps } from "@/components/ui/key-value-grid";
+export { Divider } from "@/components/ui/divider";
+
 export { uiRegistry } from "@/components/ui/registry";

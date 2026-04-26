@@ -1,27 +1,43 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #0a0c12;
-  --color-bg-1: #12151e;
-  --color-bg-2: #181c28;
-  --color-bg-3: #1f2432;
-  --color-border: #262c3b;
-  --color-border-strong: #313849;
+  --color-bg: #07080d;
+  --color-bg-1: #0d101a;
+  --color-bg-2: #141826;
+  --color-bg-3: #1c2233;
+  --color-bg-inset: #090b12;
+  --color-border: #232a3d;
+  --color-border-strong: #313a52;
   --color-text: #e7e9f1;
   --color-muted: #8991a7;
   --color-muted-2: #5a6275;
-  --color-accent: #46a7ff;
-  --color-accent-dim: #264b72;
+  --color-accent: #5aa9ff;
+  --color-accent-strong: #7cb9ff;
+  --color-accent-dim: #1c324d;
   --color-ok: #43c871;
   --color-ok-dim: #1c3d27;
   --color-warn: #f2a93a;
+  --color-warn-dim: #3d2c14;
   --color-err: #ff6b7a;
   --color-err-dim: #4a1c23;
   --color-algo: #b794f4;
+  --color-algo-dim: #311e4a;
   --color-chunk: #778bae;
 
-  --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --shadow-card-soft: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 4px 18px rgba(0, 0, 0, 0.28);
+  --shadow-card-raised: 0 1px 0 rgba(255, 255, 255, 0.025) inset, 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-inspector: -16px 0 56px rgba(0, 0, 0, 0.45);
+  --shadow-popover: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--color-border-strong);
+  --shadow-focus: 0 0 0 2px var(--color-accent-dim);
+
+  --motion-quick: 80ms;
+  --motion-reveal: 150ms;
+  --motion-tab: 200ms;
+  --motion-inspector: 220ms;
+  --motion-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 html,
@@ -35,6 +51,36 @@ body {
   font-family: var(--font-sans);
   background: var(--color-bg);
   color: var(--color-text);
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.5;
+  font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-bg-3);
+  border-radius: 8px;
+  border: 2px solid var(--color-bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-strong);
+}
+
+::selection {
+  background: var(--color-accent-dim);
+  color: var(--color-text);
+}
+
+/* Focus rings handled per-component, but a sane default for keyboard users */
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }

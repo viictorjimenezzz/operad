@@ -49,9 +49,9 @@ describe("Experiments helpers", () => {
     expect(parseRunsParam("run-a,,run-b,run-a, run-c ")).toEqual(["run-a", "run-b", "run-c"]);
   });
 
-  it("URL ids take precedence over pinned ids", () => {
-    expect(resolveComparisonRunIds("url-a,url-b", ["pin-1", "pin-2"])).toEqual(["url-a", "url-b"]);
-    expect(resolveComparisonRunIds(null, ["pin-1", "pin-2", "pin-1"])).toEqual(["pin-1", "pin-2"]);
+  it("resolveComparisonRunIds parses URL parameter", () => {
+    expect(resolveComparisonRunIds("url-a,url-b")).toEqual(["url-a", "url-b"]);
+    expect(resolveComparisonRunIds(null)).toEqual([]);
   });
 
   it("updateRunsSearch sets and clears runs param", () => {

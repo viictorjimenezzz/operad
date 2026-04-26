@@ -1,4 +1,3 @@
-import { SideDrawer } from "@/components/agent-view/drawer/side-drawer";
 import { GlobalStatsBar } from "@/components/panels/global-stats-bar";
 import { RunListSidebar } from "@/components/panels/runs-sidebar/run-list-sidebar";
 import { useDashboardStream } from "@/hooks/use-event-stream";
@@ -11,12 +10,12 @@ export function Shell() {
   // Single multiplex /stream subscription for the whole dashboard.
   useDashboardStream("/stream");
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col bg-bg">
       <GlobalStatsBar subtitle="dashboard" />
       <div
         className="grid flex-1 overflow-hidden transition-[grid-template-columns] duration-200 ease-out"
         style={{
-          gridTemplateColumns: `${sidebarCollapsed ? 56 : 300}px minmax(0, 1fr)`,
+          gridTemplateColumns: `${sidebarCollapsed ? 56 : 280}px minmax(0, 1fr)`,
         }}
       >
         <RunListSidebar />
@@ -24,7 +23,6 @@ export function Shell() {
           <Outlet />
         </main>
       </div>
-      <SideDrawer />
     </div>
   );
 }

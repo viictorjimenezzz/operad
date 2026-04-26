@@ -1,78 +1,83 @@
-import { Badge } from "@/components/ui/badge";
-import { usePinnedRuns } from "@/hooks/use-pinned-runs";
+import { HashTag, Pill } from "@/components/ui";
 import { getAlgorithmMetric } from "@/lib/algorithm-metrics";
 import type { RunSummary } from "@/lib/types";
-import { formatRelativeTime, truncateMiddle } from "@/lib/utils";
-import { Star } from "lucide-react";
+import { cn, formatRelativeTime, truncateMiddle } from "@/lib/utils";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { Link } from "react-router-dom";
-
-function StatusDot({ state }: { state: RunSummary["state"] }) {
-  const base = "inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full";
-  if (state === "running")
-    return <span className={`${base} animate-pulse bg-[--color-ok]`} aria-label="running" />;
-  if (state === "error") return <span className={`${base} bg-[--color-err]`} aria-label="error" />;
-  return <span className={`${base} bg-[--color-muted-2]`} aria-label="ended" />;
-}
 
 interface RunRowProps {
   run: RunSummary;
   active: boolean;
-  checked: boolean;
-  onCheck: (e: ReactMouseEvent) => void;
+  selected: boolean;
+  onSelect: (e: ReactMouseEvent) => void;
 }
 
-export function RunRow({ run, active, checked, onCheck }: RunRowProps) {
-  const { pinned, toggle } = usePinnedRuns();
-  const isPinned = pinned.includes(run.run_id);
+function classNameFor(run: RunSummary): string {
+  if (run.algorithm_class) return run.algorithm_class;
+  if (run.root_agent_path) {
+    const tail = run.root_agent_path.split(".").at(-1);
+    if (tail) return tail;
+  }
+  return "Agent";
+}
+
+function statusTone(state: RunSummary["state"]): "live" | "ok" | "error" | "default" {
+  if (state === "running") return "live";
+  if (state === "error") return "error";
+  if (state === "ended") return "ok";
+  return "default";
+}
+
+export function RunRow({ run, active, selected, onSelect }: RunRowProps) {
+  const className = classNameFor(run);
+  const metric = getAlgorithmMetric(run);
 
   return (
     <li>
       <Link
         to={`/runs/${run.run_id}`}
-        className={`flex items-center gap-1.5 border-b border-border/60 px-2 py-1.5 transition-colors hover:bg-bg-2 ${
-          active ? "bg-bg-2" : ""
-        }`}
-      >
-        <input
-          type="checkbox"
-          checked={checked}
-          aria-label={`select run ${run.run_id}`}
-          onClick={(e) => {
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey) {
             e.preventDefault();
-            e.stopPropagation();
-            onCheck(e);
-          }}
-          onChange={() => {}}
-          className="h-3 w-3 flex-shrink-0 cursor-pointer accent-[--color-accent]"
-        />
-        <StatusDot state={run.state} />
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-text">
-          {truncateMiddle(run.run_id, 12)}
-        </span>
-        {run.algorithm_class && (
-          <Badge variant="algo" className="flex-shrink-0 text-[9px]">
-            {run.algorithm_class}
-          </Badge>
+            onSelect(e);
+          }
+        }}
+        className={cn(
+          "group flex flex-col gap-0.5 border-l-2 border-transparent px-3 py-2 transition-colors duration-[var(--motion-quick)] ease-out",
+          "hover:bg-bg-2",
+          active && "border-l-accent bg-bg-2",
+          selected && !active && "bg-bg-3",
         )}
-        <span className="flex-shrink-0 text-[10px] tabular-nums text-muted">
-          {getAlgorithmMetric(run)}
-        </span>
-        <span className="flex-shrink-0 text-[9px] text-muted-2">
-          {formatRelativeTime(run.started_at)}
-        </span>
-        <button
-          type="button"
-          aria-label={isPinned ? "unpin run" : "pin run"}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            toggle(run.run_id);
-          }}
-          className="flex-shrink-0 text-muted hover:text-text"
-        >
-          <Star size={11} className={isPinned ? "fill-[--color-warn] text-[--color-warn]" : ""} />
-        </button>
+      >
+        <div className="flex items-center gap-2">
+          <HashTag hash={run.run_id} dotOnly size="sm" />
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-text">
+            {className}
+          </span>
+          {run.state === "running" ? (
+            <Pill tone="live" pulse size="sm">
+              live
+            </Pill>
+          ) : run.state === "error" ? (
+            <Pill tone="error" size="sm">
+              err
+            </Pill>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2 pl-[14px] text-[10px] text-muted-2">
+          <span className="truncate font-mono">{truncateMiddle(run.run_id, 14)}</span>
+          <span aria-hidden>·</span>
+          <span className="flex-shrink-0">{formatRelativeTime(run.started_at)}</span>
+          {metric !== "—" ? (
+            <>
+              <span aria-hidden className="ml-auto">
+                ·
+              </span>
+              <span className="flex-shrink-0 truncate font-mono">{metric}</span>
+            </>
+          ) : null}
+        </div>
+        <span className="sr-only">{statusTone(run.state)}</span>
       </Link>
     </li>
   );

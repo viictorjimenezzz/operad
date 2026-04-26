@@ -29,6 +29,7 @@
     "@tanstack/react-virtual": "^3.13.24",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
+    "framer-motion": "^11.18.0",
     "lucide-react": "^0.460.0",
     "mermaid": "^11.4.0",
     "react": "^19.0.0",

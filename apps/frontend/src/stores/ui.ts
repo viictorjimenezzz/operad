@@ -2,40 +2,36 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type EventKindFilter = "all" | "agent" | "algo" | "error";
-export type DrawerKind =
-  | "langfuse"
-  | "events"
-  | "prompts"
-  | "values"
-  | "find-runs"
-  | "experiment"
-  | "diff"
-  | "gradients"
+
+export type GraphSelection =
+  | { kind: "node"; nodeKey: string }
+  | { kind: "edge"; agentPath: string }
+  | { kind: "group"; compositePath: string }
   | null;
-export type DrawerPayload = {
-  agentPath?: string;
-  attr?: string;
-  side?: "in" | "out";
-  invocationId?: string;
-  fromInvocationId?: string;
-  toInvocationId?: string;
-  paramPath?: string;
-  mode?: string;
-  panel?: string;
-  filter?: string;
-  sort?: "time" | "frequency" | "length";
-  [k: string]: unknown;
-};
 
-const DRAWER_MIN_WIDTH = 320;
-const DRAWER_DEFAULT_WIDTH = 480;
+export type GraphInspectorTab =
+  | "overview"
+  | "invocations"
+  | "prompts"
+  | "events"
+  | "experiment"
+  | "langfuse"
+  | "fields";
 
-export function clampDrawerWidth(
+const SPLIT_MIN = 320;
+const SPLIT_DEFAULT = 0.5; // fraction of viewport
+
+export function clampSplitFraction(fraction: number): number {
+  if (!Number.isFinite(fraction)) return SPLIT_DEFAULT;
+  return Math.max(0.25, Math.min(0.75, fraction));
+}
+
+export function clampSplitWidth(
   px: number,
   viewportWidth = typeof window === "undefined" ? 1200 : window.innerWidth,
 ): number {
-  const max = Math.max(DRAWER_MIN_WIDTH, Math.floor(viewportWidth * 0.6));
-  return Math.max(DRAWER_MIN_WIDTH, Math.min(max, Math.round(px)));
+  const max = Math.max(SPLIT_MIN, viewportWidth - SPLIT_MIN);
+  return Math.max(SPLIT_MIN, Math.min(max, Math.round(px)));
 }
 
 interface UIState {
@@ -45,12 +41,14 @@ interface UIState {
   autoFollow: boolean;
   eventsFollow: boolean;
   sidebarCollapsed: boolean;
-  drawer: { kind: Exclude<DrawerKind, null>; payload: DrawerPayload } | null;
-  drawerWidth: number;
   selectedInvocationId: string | null;
   selectedInvocationAgentPath: string | null;
   comparisonInvocationId: string | null;
   comparisonInvocationAgentPath: string | null;
+  graphSelection: GraphSelection;
+  graphInspectorTab: GraphInspectorTab;
+  /** Inspector pane width as a fraction of viewport (0.25–0.75). */
+  graphSplitFraction: number;
   setCurrentTab: (tab: string) => void;
   setEventKindFilter: (f: EventKindFilter) => void;
   setEventSearch: (s: string) => void;
@@ -58,13 +56,14 @@ interface UIState {
   setEventsFollow: (v: boolean) => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (v: boolean) => void;
-  openDrawer: (kind: Exclude<DrawerKind, null>, payload?: DrawerPayload) => void;
-  closeDrawer: () => void;
-  setDrawerWidth: (px: number) => void;
   setSelectedInvocation: (invocationId: string, agentPath: string) => void;
   clearSelectedInvocation: () => void;
   setComparisonInvocation: (invocationId: string, agentPath: string) => void;
   clearComparisonInvocation: () => void;
+  setGraphSelection: (selection: GraphSelection) => void;
+  clearGraphSelection: () => void;
+  setGraphInspectorTab: (tab: GraphInspectorTab) => void;
+  setGraphSplitFraction: (f: number) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -76,12 +75,13 @@ export const useUIStore = create<UIState>()(
       autoFollow: true,
       eventsFollow: true,
       sidebarCollapsed: false,
-      drawer: null,
-      drawerWidth: DRAWER_DEFAULT_WIDTH,
       selectedInvocationId: null,
       selectedInvocationAgentPath: null,
       comparisonInvocationId: null,
       comparisonInvocationAgentPath: null,
+      graphSelection: null,
+      graphInspectorTab: "overview",
+      graphSplitFraction: SPLIT_DEFAULT,
       setCurrentTab: (tab) => set({ currentTab: tab }),
       setEventKindFilter: (f) => set({ eventKindFilter: f }),
       setEventSearch: (s) => set({ eventSearch: s }),
@@ -89,9 +89,6 @@ export const useUIStore = create<UIState>()(
       setEventsFollow: (v) => set({ eventsFollow: v }),
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
       setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
-      openDrawer: (kind, payload = {}) => set({ drawer: { kind, payload } }),
-      closeDrawer: () => set({ drawer: null }),
-      setDrawerWidth: (px) => set({ drawerWidth: clampDrawerWidth(px) }),
       setSelectedInvocation: (invocationId, agentPath) =>
         set({ selectedInvocationId: invocationId, selectedInvocationAgentPath: agentPath }),
       clearSelectedInvocation: () =>
@@ -100,6 +97,20 @@ export const useUIStore = create<UIState>()(
         set({ comparisonInvocationId: invocationId, comparisonInvocationAgentPath: agentPath }),
       clearComparisonInvocation: () =>
         set({ comparisonInvocationId: null, comparisonInvocationAgentPath: null }),
+      setGraphSelection: (selection) =>
+        set((s) => {
+          // Selecting a different leaf-edge resets the inspector tab to overview;
+          // selecting a type node forces the fields tab; switching back keeps the
+          // last tab the user was on.
+          if (selection?.kind === "node")
+            return { graphSelection: selection, graphInspectorTab: "fields" };
+          if (selection?.kind === "edge" && s.graphInspectorTab === "fields")
+            return { graphSelection: selection, graphInspectorTab: "overview" };
+          return { graphSelection: selection };
+        }),
+      clearGraphSelection: () => set({ graphSelection: null }),
+      setGraphInspectorTab: (tab) => set({ graphInspectorTab: tab }),
+      setGraphSplitFraction: (f) => set({ graphSplitFraction: clampSplitFraction(f) }),
     }),
     {
       name: "operad.ui",
@@ -108,7 +119,7 @@ export const useUIStore = create<UIState>()(
         autoFollow: s.autoFollow,
         eventsFollow: s.eventsFollow,
         sidebarCollapsed: s.sidebarCollapsed,
-        drawerWidth: s.drawerWidth,
+        graphSplitFraction: s.graphSplitFraction,
       }),
     },
   ),
