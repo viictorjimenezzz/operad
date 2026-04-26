@@ -25,6 +25,7 @@ function makeRun(overrides: Partial<RunSummary> = {}): RunSummary {
     algorithm_kinds: [],
     algorithm_class: null,
     root_agent_path: null,
+    script: null,
     event_counts: {},
     event_total: 5,
     duration_ms: 1000,
