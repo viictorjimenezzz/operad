@@ -106,24 +106,25 @@ async def main(args: argparse.Namespace) -> None:
     print(f"{'gen':>4}  {'best':>6}  {'mean':>6}  {'diversity':>9}")
     print("-" * 34)
 
-    with TRACE_PATH.open("a") as trace_file:
-        for gen in range(args.generations):
-            await optimizer.step()
-            scores = list(optimizer._last_scores or [])
-            pop = optimizer._population or []
-            d = diversity(pop)
-            best = max(scores) if scores else 0.0
-            mean = sum(scores) / len(scores) if scores else 0.0
-            print(f"{gen:>4}  {best:>6.3f}  {mean:>6.3f}  {d:>9}")
-            row = {
-                "gen": gen,
-                "best": best,
-                "mean": mean,
-                "population_scores": scores,
-                "diversity": d,
-            }
-            trace_file.write(json.dumps(row) + "\n")
-            trace_file.flush()
+    async with optimizer.session():
+        with TRACE_PATH.open("a") as trace_file:
+            for gen in range(args.generations):
+                await optimizer.step()
+                scores = list(optimizer._last_scores or [])
+                pop = optimizer._population or []
+                d = diversity(pop)
+                best = max(scores) if scores else 0.0
+                mean = sum(scores) / len(scores) if scores else 0.0
+                print(f"{gen:>4}  {best:>6.3f}  {mean:>6.3f}  {d:>9}")
+                row = {
+                    "gen": gen,
+                    "best": best,
+                    "mean": mean,
+                    "population_scores": scores,
+                    "diversity": d,
+                }
+                trace_file.write(json.dumps(row) + "\n")
+                trace_file.flush()
 
     print("=" * 34)
     print(f"seed rules  : {0}")

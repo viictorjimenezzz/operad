@@ -5,19 +5,22 @@ Use when the dashboard runs in its own terminal (``operad-dashboard
 
 Transport reliability guarantee
 ---------------------------------
-Events are serialised into an in-process ``asyncio.Queue`` (capacity 2 000).
-A background drain task collects up to 50 items or waits 50 ms, then posts
-a JSON batch via ``run_in_executor`` so urllib never blocks the event loop.
+Events are serialised into a thread-safe ``queue.Queue`` (capacity 2 000).
+A daemon background thread drains up to 50 items at a time and posts them
+as a JSON batch via blocking urllib. The queue and the worker thread are
+**decoupled from asyncio** — they survive ``asyncio.run()`` teardown,
+which is the failure mode that previously dropped most events.
+
 Failed POSTs are retried up to 3 times with 0.1 s / 0.2 s delays; after
 that the batch is silently dropped so a down dashboard never stalls the
 agent.
 
 Shutdown flush
 --------------
-``atexit.register`` is called once, at ``attach()`` time.  When the
-interpreter exits — including after the event loop has been torn down —
-the atexit handler drains any remaining queue items synchronously via
-urllib, honouring the same retry policy.  No events are lost as long as
+``atexit.register`` is wired in ``attach()``. When the interpreter exits,
+the atexit handler tells the drain thread to stop, joins it (so any
+in-flight POSTs complete), then drains any residual items synchronously
+through the same retry-bound POST helper. No events are lost as long as
 the process exits cleanly after printing its last output line.
 
 No new runtime dependencies are required; only stdlib.
@@ -25,9 +28,9 @@ No new runtime dependencies are required; only stdlib.
 
 from __future__ import annotations
 
-import asyncio
 import atexit
 import json
+import queue
 import threading
 import time
 import urllib.request
@@ -36,8 +39,9 @@ from typing import Any
 from .runtime.events import AlgorithmEvent
 from .runtime.observers.base import AgentEvent, Event, registry
 
+_QUEUE_CAPACITY = 2000
 _DRAIN_BATCH_SIZE = 50
-_DRAIN_INTERVAL_S = 0.05   # 50 ms
+_DRAIN_GET_TIMEOUT_S = 0.05
 _RETRY_DELAYS = (0.1, 0.2)
 
 
@@ -96,93 +100,36 @@ def _post_batch_sync(url: str, batch: list[dict]) -> None:
 
 
 class _HttpForwardObserver:
-    """HTTP-forwarding observer with reliable async transport.
+    """HTTP-forwarding observer with reliable thread-based transport.
 
     See module docstring for the full reliability contract.
     """
 
     def __init__(self, url: str) -> None:
         self.url = url
-        self._queue: asyncio.Queue | None = None
-        self._drain_task: asyncio.Task | None = None
-        self._lock = threading.Lock()  # guards lazy init
+        self._queue: queue.Queue[dict[str, Any]] = queue.Queue(
+            maxsize=_QUEUE_CAPACITY
+        )
+        self._stop = threading.Event()
+        self._thread = threading.Thread(
+            target=self._drain_loop,
+            name="operad-dashboard-drain",
+            daemon=True,
+        )
+        self._thread.start()
 
     # ------------------------------------------------------------------
-    # Async path
+    # Producer side — called from the agent's event loop.
     # ------------------------------------------------------------------
-
-    def _ensure_drain_task(self) -> asyncio.Queue:
-        with self._lock:
-            if self._queue is None:
-                self._queue = asyncio.Queue(maxsize=2000)
-                self._drain_task = asyncio.get_event_loop().create_task(
-                    self._drain_loop(), name="operad-dashboard-drain"
-                )
-        return self._queue  # type: ignore[return-value]
 
     async def on_event(self, event: Event) -> None:
-        q = self._ensure_drain_task()
+        # `queue.Queue.put_nowait` is thread-safe; no await needed. We
+        # serialise here (rather than in the worker) so that mutations
+        # to event-payload objects after enqueue do not race the POST.
         try:
-            q.put_nowait(_serialize(event))
-        except asyncio.QueueFull:
+            self._queue.put_nowait(_serialize(event))
+        except queue.Full:
             pass
-
-    async def _drain_loop(self) -> None:
-        loop = asyncio.get_event_loop()
-        while True:
-            batch: list[dict] = []
-            try:
-                item = await self._queue.get()  # type: ignore[union-attr]
-                batch.append(item)
-                deadline = loop.time() + _DRAIN_INTERVAL_S
-                while len(batch) < _DRAIN_BATCH_SIZE:
-                    remaining = deadline - loop.time()
-                    if remaining <= 0:
-                        break
-                    try:
-                        item = await asyncio.wait_for(
-                            self._queue.get(), timeout=remaining  # type: ignore[union-attr]
-                        )
-                        batch.append(item)
-                    except asyncio.TimeoutError:
-                        break
-            except asyncio.CancelledError:
-                if self._queue is not None:
-                    while not self._queue.empty():
-                        try:
-                            batch.append(self._queue.get_nowait())
-                        except asyncio.QueueEmpty:
-                            break
-                if batch:
-                    await loop.run_in_executor(
-                        None, _post_batch_sync, self.url, batch
-                    )
-                return
-            if batch:
-                await loop.run_in_executor(
-                    None, _post_batch_sync, self.url, batch
-                )
-
-    # ------------------------------------------------------------------
-    # Synchronous flush (called by atexit — loop may already be closed)
-    # ------------------------------------------------------------------
-
-    def _flush_sync(self) -> None:
-        """Drain remaining queue items synchronously at process exit."""
-        if self._queue is None:
-            return
-        batch: list[dict] = []
-        while not self._queue.empty():
-            try:
-                batch.append(self._queue.get_nowait())
-            except asyncio.QueueEmpty:
-                break
-        if batch:
-            _post_batch_sync(self.url, batch)
-
-    # ------------------------------------------------------------------
-    # Graph envelope
-    # ------------------------------------------------------------------
 
     def post_graph(
         self, run_id: str, mermaid: str, agents: list[dict]
@@ -190,11 +137,7 @@ class _HttpForwardObserver:
         """Queue a graph_envelope for delivery to the dashboard.
 
         Schema: ``{"type": "graph_envelope", "run_id": ...,
-        "mermaid": ..., "agents": [{"path": ..., "input": ...,
-        "output": ...}, ...]}``.
-
-        Falls back to a synchronous POST if the drain task has not
-        started yet (i.e. called before any events are emitted).
+        "mermaid": ..., "agents": [...]}``.
         """
         envelope: dict[str, Any] = {
             "type": "graph_envelope",
@@ -202,13 +145,51 @@ class _HttpForwardObserver:
             "mermaid": mermaid,
             "agents": agents,
         }
-        if self._queue is None:
-            _post_batch_sync(self.url, [envelope])
-            return
         try:
             self._queue.put_nowait(envelope)
-        except asyncio.QueueFull:
+        except queue.Full:
             pass
+
+    # ------------------------------------------------------------------
+    # Consumer side — runs on the daemon thread.
+    # ------------------------------------------------------------------
+
+    def _drain_loop(self) -> None:
+        while not self._stop.is_set():
+            try:
+                first = self._queue.get(timeout=_DRAIN_GET_TIMEOUT_S)
+            except queue.Empty:
+                continue
+            batch: list[dict] = [first]
+            for _ in range(_DRAIN_BATCH_SIZE - 1):
+                try:
+                    batch.append(self._queue.get_nowait())
+                except queue.Empty:
+                    break
+            _post_batch_sync(self.url, batch)
+
+    # ------------------------------------------------------------------
+    # Shutdown — invoked by atexit.
+    # ------------------------------------------------------------------
+
+    def _flush_sync(self) -> None:
+        """Stop the worker thread and POST any remaining queued items.
+
+        Idempotent. Safe to call from atexit even after the asyncio
+        event loop has been torn down.
+        """
+        self._stop.set()
+        # Wait for the worker to finish its current iteration. With a
+        # 50ms get timeout it will return promptly.
+        self._thread.join(timeout=2.0)
+        residual: list[dict] = []
+        while True:
+            try:
+                residual.append(self._queue.get_nowait())
+            except queue.Empty:
+                break
+        if residual:
+            _post_batch_sync(self.url, residual)
 
 
 def attach(host: str = "127.0.0.1", port: int = 7860) -> _HttpForwardObserver:

@@ -17,11 +17,13 @@ lifetime.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import copy
 import random
 import statistics
+import uuid
 import warnings
-from typing import Any, Iterable
+from typing import Any, AsyncIterator, Iterable
 
 from operad.benchmark.evaluate import evaluate
 from operad.core.agent import Agent
@@ -97,6 +99,11 @@ class EvoGradient(Optimizer):
         # the "improved vs previous generation median" flag on the next
         # emission. Seeded from a one-off root eval on the first step.
         self._last_scores: list[float] | None = None
+        # Stable run_id pinned for the duration of this optimizer's life
+        # so every step() and every nested agent invocation share one
+        # identity in the dashboard. Lazily minted on first step() —
+        # callers can also pin it explicitly via `session()`.
+        self._algo_run_id: str | None = None
 
     def _discover_root(self) -> Agent[Any, Any]:
         for group in self.param_groups:
@@ -137,7 +144,35 @@ class EvoGradient(Optimizer):
         self._origin_ops[id(fallback)] = (_IDENTITY_OP, "")
         return fallback
 
+    @contextlib.asynccontextmanager
+    async def session(self) -> AsyncIterator[str]:
+        """Wrap a multi-step run with a stable run_id and `algo_end` emission.
+
+        Every event emitted while the session is active — algorithm
+        events from `step()` and nested agent events from each
+        evaluation — shares one run_id, so the dashboard groups them as
+        a single optimizer run. On exit, an `algo_end` event flips the
+        run state to `ended`.
+        """
+        if self._algo_run_id is None:
+            self._algo_run_id = uuid.uuid4().hex
+        with _enter_algorithm_run(self._algo_run_id) as rid:
+            try:
+                yield rid
+            finally:
+                await emit_algorithm_event(
+                    "algo_end",
+                    algorithm_path=type(self).__name__,
+                    payload={"total_generations": self._generation},
+                )
+
     async def step(self) -> None:
+        if self._algo_run_id is None:
+            self._algo_run_id = uuid.uuid4().hex
+        with _enter_algorithm_run(self._algo_run_id):
+            await self._step_body()
+
+    async def _step_body(self) -> None:
         if self._population is None:
             await self._emit_algo_start()
             # Seed-score baseline drives the first-generation `improved`

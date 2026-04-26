@@ -21,7 +21,7 @@ import { useEventBufferStore } from "@/stores";
  * is from @json-render/core.
  */
 import type { UITree } from "@json-render/core";
-import { Renderer } from "@json-render/react";
+import { JSONUIProvider, Renderer } from "@json-render/react";
 import { useQueryClient, useQueries } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import { z } from "zod";
@@ -110,7 +110,11 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
     return { root: layout.spec.root, elements };
   }, [entries, layout, runEvents, context, queryDatas]);
 
-  return <Renderer tree={tree} registry={registry} />;
+  return (
+    <JSONUIProvider registry={registry}>
+      <Renderer tree={tree} registry={registry} />
+    </JSONUIProvider>
+  );
 }
 
 const EMPTY_EVENTS: EventEnvelope[] = [];
