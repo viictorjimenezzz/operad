@@ -53,6 +53,7 @@ RUN uv pip install --system -e . \
  && uv pip install --system "operad[otel] @ /workspace"
 
 EXPOSE 7860
+VOLUME ["/app/.dashboard-data"]
 
 ENTRYPOINT ["operad-dashboard"]
 CMD ["--host", "0.0.0.0", "--port", "7860"]

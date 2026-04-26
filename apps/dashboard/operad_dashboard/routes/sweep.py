@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from ..observer import WebDashboardObserver
-from . import per_run_sse
+from . import iter_run_events, per_run_sse
 
 
 router = APIRouter(tags=["sweep"])
@@ -21,9 +21,7 @@ _ALGORITHM_PATH = "Sweep"
 @router.get("/runs/{run_id}/sweep.json")
 async def sweep_json(request: Request, run_id: str) -> JSONResponse:
     obs: WebDashboardObserver = request.app.state.observer
-    if obs.registry.get(run_id) is None:
-        raise HTTPException(status_code=404, detail="unknown run_id")
-    snapshot = _compute_snapshot(obs.registry.iter_events(run_id))
+    snapshot = _compute_snapshot(iter_run_events(request, obs, run_id))
     return JSONResponse(snapshot)
 
 
@@ -32,7 +30,7 @@ async def sweep_sse(request: Request, run_id: str) -> EventSourceResponse:
     obs: WebDashboardObserver = request.app.state.observer
 
     def _snapshot(_env: dict[str, Any]) -> dict[str, Any]:
-        return _compute_snapshot(obs.registry.iter_events(run_id))
+        return _compute_snapshot(iter_run_events(request, obs, run_id))
 
     return EventSourceResponse(
         per_run_sse(

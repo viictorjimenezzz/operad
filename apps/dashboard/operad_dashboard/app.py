@@ -22,6 +22,8 @@ from operad.runtime.slots import registry as slot_registry
 
 from .benchmark_store import BenchmarkStore
 from .observer import WebDashboardObserver, serialize_event
+from .persistence import SQLiteRunArchive
+from .routes import archive as archive_routes
 from .routes import benchmarks as benchmark_routes
 from .routes import checkpoints as checkpoints_routes
 from .routes import cassettes as cassettes_routes
@@ -57,6 +59,7 @@ def create_app(
     cost_observer: CostObserver | None = None,
     auto_register: bool = True,
     langfuse_url: str | None = None,
+    data_dir: Path | str | None = None,
     benchmark_dir: str = "./.benchmarks/",
 ) -> FastAPI:
     """Build a FastAPI app wired to a `WebDashboardObserver`.
@@ -71,7 +74,12 @@ def create_app(
     minimal HTML shell that still satisfies the legacy assertions.
     """
     app = FastAPI(title="operad-dashboard")
-    obs = observer or WebDashboardObserver()
+    archive_store = (
+        SQLiteRunArchive(data_dir) if data_dir is not None else None
+    )
+    obs = observer or WebDashboardObserver(persistence=archive_store)
+    if observer is not None and archive_store is not None:
+        obs.persistence = archive_store
     cost = cost_observer or CostObserver()
     if auto_register:
         operad_registry.register(obs)
@@ -80,6 +88,7 @@ def create_app(
     app.state.observer = obs
     app.state.cost_observer = cost
     app.state.langfuse_url = (langfuse_url or "").rstrip("/") or None
+    app.state.archive_store = archive_store
     app.state.benchmark_store = BenchmarkStore()
     app.state.benchmark_dir = benchmark_dir
 
@@ -141,19 +150,31 @@ def create_app(
     @app.get("/graph/{run_id}")
     async def graph(run_id: str) -> JSONResponse:
         info = obs.registry.get(run_id)
-        if info is None:
-            raise HTTPException(status_code=404, detail="unknown run_id")
-        if info.mermaid is None:
+        mermaid = info.mermaid if info is not None else None
+        if mermaid is None and archive_store is not None:
+            mermaid = archive_store.get_mermaid(run_id)
+        if mermaid is None:
+            if info is None:
+                raise HTTPException(status_code=404, detail="unknown run_id")
             raise HTTPException(status_code=404, detail="no graph captured for run")
-        return JSONResponse({"mermaid": info.mermaid})
+        return JSONResponse({"mermaid": mermaid})
 
     @app.get("/runs/{run_id}/summary")
     async def run_summary(run_id: str) -> JSONResponse:
         info = obs.registry.get(run_id)
-        if info is None:
+        if info is not None:
+            data = info.summary()
+        elif archive_store is not None:
+            archived = archive_store.get_run(run_id)
+            if archived is None:
+                raise HTTPException(status_code=404, detail="unknown run_id")
+            summary = archived.get("summary")
+            if not isinstance(summary, dict):
+                raise HTTPException(status_code=500, detail="corrupt archive record")
+            data = summary
+        else:
             raise HTTPException(status_code=404, detail="unknown run_id")
         totals = cost.totals().get(run_id, {})
-        data = info.summary()
         data["cost"] = totals
         return JSONResponse(data)
 
@@ -187,10 +208,19 @@ def create_app(
     @app.get("/runs/{run_id}/events")
     async def run_events(run_id: str, limit: int = 200) -> JSONResponse:
         info = obs.registry.get(run_id)
-        if info is None:
-            raise HTTPException(status_code=404, detail="unknown run_id")
         limit = max(1, min(limit, _MAX_EVENTS_PER_REQUEST))
-        events = list(info.events)[-limit:]
+        if info is not None:
+            events = list(info.events)[-limit:]
+        elif archive_store is not None:
+            archived = archive_store.get_run(run_id)
+            if archived is None:
+                raise HTTPException(status_code=404, detail="unknown run_id")
+            events_raw = archived.get("events")
+            if not isinstance(events_raw, list):
+                raise HTTPException(status_code=500, detail="corrupt archive record")
+            events = events_raw[-limit:]
+        else:
+            raise HTTPException(status_code=404, detail="unknown run_id")
         return JSONResponse({"run_id": run_id, "events": events})
 
     @app.post("/_ingest")
@@ -228,6 +258,7 @@ def create_app(
     app.include_router(checkpoints_routes.router)
     app.include_router(gradients_routes.router)
     app.include_router(sweep_routes.router)
+    app.include_router(archive_routes.router)
     app.include_router(benchmark_routes.router)
     app.include_router(cassettes_routes.router)
 

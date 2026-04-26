@@ -157,3 +157,47 @@ export function useManifest() {
     retry: false,
   });
 }
+
+export function useArchiveRuns(params: {
+  from?: number;
+  to?: number;
+  algorithm?: string;
+  limit?: number;
+}) {
+  return useQuery({
+    queryKey: ["archive", "list", params] as const,
+    queryFn: () => dashboardApi.archive(params),
+  });
+}
+
+export function useArchivedRun(runId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["archive", "detail", runId] as const,
+    queryFn: () => {
+      if (!runId) throw new Error("useArchivedRun: runId is required");
+      return dashboardApi.archivedRun(runId);
+    },
+    enabled: !!runId,
+  });
+}
+
+export function useRestoreArchivedRun() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => dashboardApi.restoreArchivedRun(runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+      queryClient.invalidateQueries({ queryKey: ["archive"] });
+    },
+  });
+}
+
+export function useDeleteArchivedRun() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) => dashboardApi.deleteArchivedRun(runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["archive"] });
+    },
+  });
+}

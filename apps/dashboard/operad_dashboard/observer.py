@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from operad.runtime.events import AlgorithmEvent
 from operad.runtime.observers.base import AgentEvent, Event
 
+from .persistence import SQLiteRunArchive
 from .runs import RunRegistry
 
 
@@ -84,6 +85,7 @@ class WebDashboardObserver:
         registry: RunRegistry | None = None,
         *,
         events_per_run: int | None = None,
+        persistence: SQLiteRunArchive | None = None,
     ) -> None:
         if registry is not None:
             self.registry = registry
@@ -91,6 +93,7 @@ class WebDashboardObserver:
             self.registry = RunRegistry(events_per_run=events_per_run)
         else:
             self.registry = RunRegistry()
+        self.persistence = persistence
         self._subscribers: list[asyncio.Queue[dict[str, Any]]] = []
 
     def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
@@ -111,6 +114,7 @@ class WebDashboardObserver:
     async def on_event(self, event: Event) -> None:
         envelope = serialize_event(event)
         self.registry.record_envelope(envelope)
+        self._maybe_snapshot_terminal(envelope)
         await self.broadcast(envelope, record=False)
 
     async def broadcast(
@@ -125,8 +129,22 @@ class WebDashboardObserver:
         """
         if record:
             self.registry.record_envelope(envelope)
+            self._maybe_snapshot_terminal(envelope)
         for q in list(self._subscribers):
             _put_drop_oldest(q, envelope)
+
+    def _maybe_snapshot_terminal(self, envelope: dict[str, Any]) -> None:
+        if self.persistence is None:
+            return
+        if not _is_terminal_envelope(envelope):
+            return
+        run_id = envelope.get("run_id")
+        if not isinstance(run_id, str) or not run_id:
+            return
+        info = self.registry.get(run_id)
+        if info is None:
+            return
+        asyncio.create_task(asyncio.to_thread(self.persistence.upsert_snapshot, info))
 
 
 def _put_drop_oldest(q: asyncio.Queue[dict[str, Any]], item: dict[str, Any]) -> None:
@@ -139,3 +157,14 @@ def _put_drop_oldest(q: asyncio.Queue[dict[str, Any]], item: dict[str, Any]) -> 
                 q.get_nowait()
             except asyncio.QueueEmpty:
                 return
+
+
+def _is_terminal_envelope(envelope: dict[str, Any]) -> bool:
+    env_type = envelope.get("type")
+    kind = envelope.get("kind")
+    if env_type == "algo_event":
+        return kind in {"algo_end", "algo_error"}
+    if env_type != "agent_event":
+        return False
+    metadata = envelope.get("metadata") or {}
+    return bool(metadata.get("is_root")) and kind in {"end", "error"}

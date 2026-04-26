@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import os
 import sys
+from pathlib import Path
 
 import uvicorn
 
@@ -41,6 +42,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     p.add_argument(
+        "--data-dir",
+        type=Path,
+        default=Path("./.dashboard-data"),
+        help="Directory where dashboard persistence files are stored.",
+    )
+    p.add_argument(
         "--benchmark-dir",
         default=os.environ.get("OPERAD_DASHBOARD_BENCHMARK_DIR", "./.benchmarks/"),
         help=(
@@ -61,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
 def _run_live(args: argparse.Namespace) -> int:
     app = create_app(
         langfuse_url=args.langfuse_url,
+        data_dir=args.data_dir,
         benchmark_dir=args.benchmark_dir,
     )
     print(
@@ -80,6 +88,7 @@ def _run_replay(args: argparse.Namespace) -> int:
         observer=observer,
         auto_register=False,
         langfuse_url=args.langfuse_url,
+        data_dir=args.data_dir,
         benchmark_dir=args.benchmark_dir,
     )
 

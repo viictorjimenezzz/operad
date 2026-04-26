@@ -10,6 +10,7 @@ import {
   DebateRoundsResponse,
   DriftEntry,
   EvolutionResponse,
+  ArchivedRunRecord,
   FitnessEntry,
   GraphResponse,
   IterationsResponse,
@@ -136,4 +137,39 @@ export const dashboardApi = {
       CassettePreviewResponse,
     ),
   manifest: () => getJson("/api/manifest", Manifest),
+  archive: (params: { from?: number; to?: number; algorithm?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params.from != null) qs.set("from", String(params.from));
+    if (params.to != null) qs.set("to", String(params.to));
+    if (params.algorithm) qs.set("algorithm", params.algorithm);
+    if (params.limit != null) qs.set("limit", String(params.limit));
+    const suffix = qs.size > 0 ? `?${qs.toString()}` : "";
+    return getJson(`/archive${suffix}`, z.array(RunSummary));
+  },
+  archivedRun: (runId: string) => getJson(`/archive/${runId}`, ArchivedRunRecord),
+  restoreArchivedRun: async (runId: string) => {
+    const url = `/archive/${runId}/restore`;
+    const r = await fetch(url, { method: "POST", headers: { accept: "application/json" } });
+    if (!r.ok) throw new HttpError(r.status, `${r.status} ${r.statusText} ← ${url}`);
+    const raw: unknown = await r.json();
+    const parsed = z.object({ ok: z.boolean(), run: RunSummary }).safeParse(raw);
+    if (!parsed.success) throw new ParseError(url, parsed.error);
+    return parsed.data;
+  },
+  deleteArchivedRun: async (runId: string) => {
+    const r = await fetch(`/archive/${runId}`, { method: "DELETE" });
+    if (!r.ok) throw new HttpError(r.status, `${r.status} ${r.statusText} ← /archive/${runId}`);
+    const raw: unknown = await r.json();
+    const parsed = z.object({ ok: z.boolean() }).safeParse(raw);
+    if (!parsed.success) throw new ParseError(`/archive/${runId}`, parsed.error);
+    return parsed.data;
+  },
+  exportArchiveJsonl: async () => {
+    const r = await fetch("/archive/_export?format=jsonl", {
+      method: "POST",
+      headers: { accept: "application/x-ndjson" },
+    });
+    if (!r.ok) throw new HttpError(r.status, `${r.status} ${r.statusText} ← /archive/_export?format=jsonl`);
+    return r.text();
+  },
 } as const;

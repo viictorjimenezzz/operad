@@ -5,12 +5,12 @@ from __future__ import annotations
 from statistics import fmean
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from ..observer import WebDashboardObserver
-from . import per_run_sse
+from . import iter_run_events, per_run_sse
 
 
 router = APIRouter(tags=["fitness"])
@@ -21,9 +21,7 @@ _GEN_KINDS = ("generation", "iteration", "batch_end")
 @router.get("/runs/{run_id}/fitness.json")
 async def fitness_json(request: Request, run_id: str) -> JSONResponse:
     obs: WebDashboardObserver = request.app.state.observer
-    if obs.registry.get(run_id) is None:
-        raise HTTPException(status_code=404, detail="unknown run_id")
-    entries = [_to_entry(env) for env in obs.registry.iter_events(run_id)]
+    entries = [_to_entry(env) for env in iter_run_events(request, obs, run_id)]
     entries = [e for e in entries if e is not None]
     entries.sort(key=lambda e: (e["gen_index"], e["timestamp"]))
     return JSONResponse(entries)

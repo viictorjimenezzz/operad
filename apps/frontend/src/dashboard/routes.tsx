@@ -1,3 +1,5 @@
+import { ArchivePage } from "@/dashboard/pages/ArchivePage";
+import { ArchivedRunPage } from "@/dashboard/pages/ArchivedRunPage";
 import { BenchmarkDetailPage } from "@/dashboard/pages/BenchmarkDetailPage";
 import { BenchmarksPage } from "@/dashboard/pages/BenchmarksPage";
 import { CassetteDetailPage } from "@/dashboard/pages/CassetteDetailPage";
@@ -15,6 +17,8 @@ export const dashboardRoutes = [
     element: <Shell />,
     children: [
       { index: true, element: <RunListPage /> },
+      { path: "archive", element: <ArchivePage /> },
+      { path: "archive/:runId", element: <ArchivedRunPage /> },
       { path: "runs/:runId", element: <RunDetailPage /> },
       { path: "benchmarks", element: <BenchmarksPage /> },
       { path: "benchmarks/:benchmarkId", element: <BenchmarkDetailPage /> },

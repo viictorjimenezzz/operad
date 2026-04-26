@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from ..observer import WebDashboardObserver
-from . import per_run_sse
+from . import iter_run_events, per_run_sse
 
 
 router = APIRouter(tags=["drift"])
@@ -18,14 +18,12 @@ router = APIRouter(tags=["drift"])
 @router.get("/runs/{run_id}/drift.json")
 async def drift_json(request: Request, run_id: str) -> JSONResponse:
     obs: WebDashboardObserver = request.app.state.observer
-    if obs.registry.get(run_id) is None:
-        raise HTTPException(status_code=404, detail="unknown run_id")
-    gradients = _gradient_index(obs.registry.iter_events(run_id))
+    all_events = list(iter_run_events(request, obs, run_id))
+    gradients = _gradient_index(all_events)
     entries = [
         _to_entry(env)
-        for env in obs.registry.iter_events(
-            run_id, kind="iteration", algorithm_path="PromptDrift"
-        )
+        for env in all_events
+        if env.get("kind") == "iteration" and env.get("algorithm_path") == "PromptDrift"
     ]
     entries = [_attach_gradient(e, gradients) for e in entries]
     entries.sort(key=lambda e: (e["epoch"], e["timestamp"]))
