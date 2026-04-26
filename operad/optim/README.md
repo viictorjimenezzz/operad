@@ -33,7 +33,7 @@ from operad.optim.lr_scheduler import CosineExplorationLR
 from operad.train import Trainer
 from operad.data import DataLoader, random_split
 
-agent = Pipeline(Planner(...), Reasoner(...), Critic(...))
+agent = Sequential(Planner(...), Reasoner(...), Critic(...))
 agent.mark_trainable(role=True, task=True, rules=True)
 await agent.abuild()
 
@@ -109,7 +109,7 @@ Propagation rules mirror the structural primitives:
 | Primitive  | Backward rule                                                  |
 | ---------- | -------------------------------------------------------------- |
 | Leaf       | Compute per-parameter grad from (prompt, input, output, grad_out)  |
-| `Pipeline` | Propagate grad sequentially back through each stage            |
+| `Sequential` | Propagate grad sequentially back through each stage            |
 | `Parallel` | Distribute grad to each branch, possibly weighted by `combine` |
 | `Switch`   | Backprop only into the branch actually taken                   |
 | `Debate`   | Distribute grad to proposers weighted by critic rationales     |

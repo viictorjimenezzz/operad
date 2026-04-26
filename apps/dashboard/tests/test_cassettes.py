@@ -29,7 +29,7 @@ def _trace_rows() -> list[dict]:
         {
             "event": "agent",
             "run_id": "trace-run",
-            "agent_path": "Pipeline",
+            "agent_path": "Sequential",
             "kind": "start",
             "input": {"text": "hi"},
             "output": None,
@@ -40,7 +40,7 @@ def _trace_rows() -> list[dict]:
         {
             "event": "agent",
             "run_id": "trace-run",
-            "agent_path": "Pipeline",
+            "agent_path": "Sequential",
             "kind": "end",
             "input": {"text": "hi"},
             "output": {"answer": "ok"},

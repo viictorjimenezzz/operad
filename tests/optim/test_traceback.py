@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from operad.agents.pipeline import Pipeline
+from operad.agents.pipelines import Sequential
 from operad.optim import (
     PromptTraceback,
     Tape,
@@ -42,18 +42,18 @@ def _clear_registry():
 
 
 # ---------------------------------------------------------------------------
-# Pipeline builders
+# Sequential builders
 # ---------------------------------------------------------------------------
 
 
-async def _build_3stage(cfg: Any) -> Pipeline[A, D]:
+async def _build_3stage(cfg: Any) -> Sequential[A, D]:
     leaf1 = FakeLeaf(config=cfg, input=A, output=B, canned={"value": 1})
     leaf2 = FakeLeaf(config=cfg, input=B, output=C, canned={"label": "ok"})
     leaf3 = FakeLeaf(config=cfg, input=C, output=D, canned={"payload": ["x"]})
-    return await Pipeline(leaf1, leaf2, leaf3, input=A, output=D).abuild()
+    return await Sequential(leaf1, leaf2, leaf3, input=A, output=D).abuild()
 
 
-async def _record_3stage(cfg: Any) -> tuple[Pipeline[A, D], Tape]:
+async def _record_3stage(cfg: Any) -> tuple[Sequential[A, D], Tape]:
     pipe = await _build_3stage(cfg)
     async with tape() as t:
         await pipe(A(text="start"))
@@ -71,10 +71,10 @@ async def test_frames_are_in_reverse_call_order(cfg) -> None:
 
     paths = [f.agent_path for f in tb.frames()]
     assert paths == [
-        "Pipeline.stage_2",
-        "Pipeline.stage_1",
-        "Pipeline.stage_0",
-        "Pipeline",
+        "Sequential.stage_2",
+        "Sequential.stage_1",
+        "Sequential.stage_0",
+        "Sequential",
     ]
 
 
@@ -83,10 +83,10 @@ async def test_leaf_frames_flagged(cfg) -> None:
     tb = PromptTraceback(t)
 
     leaf_flags = {f.agent_path: f.is_leaf for f in tb.frames()}
-    assert leaf_flags["Pipeline"] is False
-    assert leaf_flags["Pipeline.stage_0"] is True
-    assert leaf_flags["Pipeline.stage_1"] is True
-    assert leaf_flags["Pipeline.stage_2"] is True
+    assert leaf_flags["Sequential"] is False
+    assert leaf_flags["Sequential.stage_0"] is True
+    assert leaf_flags["Sequential.stage_1"] is True
+    assert leaf_flags["Sequential.stage_2"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -97,8 +97,8 @@ async def test_leaf_frames_flagged(cfg) -> None:
 async def test_str_contains_stanza_per_node(cfg) -> None:
     pipe, t = await _record_3stage(cfg)
     grads = {
-        "Pipeline": TextualGradient(message="root critique", severity=1.0),
-        "Pipeline.stage_2": TextualGradient(
+        "Sequential": TextualGradient(message="root critique", severity=1.0),
+        "Sequential.stage_2": TextualGradient(
             message="answer is correct but too long", severity=0.4
         ),
     }
@@ -107,10 +107,10 @@ async def test_str_contains_stanza_per_node(cfg) -> None:
 
     assert rendered.startswith("Traceback (most recent agent call last):")
     for path in [
-        "Pipeline",
-        "Pipeline.stage_0",
-        "Pipeline.stage_1",
-        "Pipeline.stage_2",
+        "Sequential",
+        "Sequential.stage_0",
+        "Sequential.stage_1",
+        "Sequential.stage_2",
     ]:
         assert f'File "agent://{path}"' in rendered
     assert "answer is correct but too long" in rendered
@@ -121,12 +121,12 @@ async def test_str_contains_stanza_per_node(cfg) -> None:
 async def test_str_leaf_stanza_shows_input_output_and_gradient(cfg) -> None:
     pipe, t = await _record_3stage(cfg)
     grads = {
-        "Pipeline.stage_0": TextualGradient(message="stage-0 critique", severity=0.5),
+        "Sequential.stage_0": TextualGradient(message="stage-0 critique", severity=0.5),
     }
     tb = PromptTraceback(t, grads)
     rendered = str(tb)
 
-    # The innermost leaf (Pipeline.stage_0) should show its canned output
+    # The innermost leaf (Sequential.stage_0) should show its canned output
     # ({"value": 1}) and the gradient we seeded.
     assert '"value": 1' in rendered
     assert "stage-0 critique" in rendered
@@ -147,10 +147,10 @@ async def test_from_run_matches_explicit_gradients_via_pipeline_split(cfg) -> No
     # and a copy to the earlier stages and to the pipeline itself. Rebuild
     # the expected dict and compare frame-by-frame.
     expected = {
-        "Pipeline": loss,
-        "Pipeline.stage_0": loss.model_copy(),
-        "Pipeline.stage_1": loss.model_copy(),
-        "Pipeline.stage_2": loss,
+        "Sequential": loss,
+        "Sequential.stage_0": loss.model_copy(),
+        "Sequential.stage_1": loss.model_copy(),
+        "Sequential.stage_2": loss,
     }
     explicit_tb = PromptTraceback(t, expected)
 
@@ -169,9 +169,9 @@ async def test_from_run_last_stage_gradient_is_loss_instance(cfg) -> None:
     # The pipeline split gives the *identical* loss object to the last
     # stage (no copy). This documents the structural-split reuse.
     grads = tb.gradients
-    assert grads["Pipeline.stage_2"] is loss
-    assert grads["Pipeline.stage_0"] is not loss
-    assert grads["Pipeline.stage_0"].model_dump() == loss.model_dump()
+    assert grads["Sequential.stage_2"] is loss
+    assert grads["Sequential.stage_0"] is not loss
+    assert grads["Sequential.stage_0"].model_dump() == loss.model_dump()
 
 
 async def test_traceback_function_dispatches_to_from_run(cfg) -> None:
@@ -180,14 +180,14 @@ async def test_traceback_function_dispatches_to_from_run(cfg) -> None:
 
     tb = traceback(t, loss=loss)
     assert isinstance(tb, PromptTraceback)
-    assert tb.gradients["Pipeline.stage_2"] is loss
+    assert tb.gradients["Sequential.stage_2"] is loss
 
 
 async def test_traceback_function_rejects_both_inputs(cfg) -> None:
     pipe, t = await _record_3stage(cfg)
     loss = TextualGradient(message="bad", severity=1.0)
     with pytest.raises(ValueError):
-        traceback(t, loss=loss, gradients={"Pipeline": loss})
+        traceback(t, loss=loss, gradients={"Sequential": loss})
 
 
 # ---------------------------------------------------------------------------
@@ -198,14 +198,14 @@ async def test_traceback_function_rejects_both_inputs(cfg) -> None:
 async def test_to_markdown_uses_fenced_blocks_and_headings(cfg) -> None:
     pipe, t = await _record_3stage(cfg)
     grads = {
-        "Pipeline.stage_2": TextualGradient(message="too verbose", severity=0.6),
+        "Sequential.stage_2": TextualGradient(message="too verbose", severity=0.6),
     }
     tb = PromptTraceback(t, grads)
     md = tb.to_markdown()
 
     assert md.startswith("# PromptTraceback")
-    assert '### File "agent://Pipeline.stage_2"' in md
-    assert '### File "agent://Pipeline"' in md
+    assert '### File "agent://Sequential.stage_2"' in md
+    assert '### File "agent://Sequential"' in md
     assert "```text" in md
     assert "```" in md
     assert "too verbose" in md
@@ -219,7 +219,7 @@ async def test_to_markdown_uses_fenced_blocks_and_headings(cfg) -> None:
 async def test_save_produces_valid_ndjson(cfg, tmp_path: Path) -> None:
     pipe, t = await _record_3stage(cfg)
     grads = {
-        "Pipeline.stage_1": TextualGradient(message="mid critique", severity=0.3),
+        "Sequential.stage_1": TextualGradient(message="mid critique", severity=0.3),
     }
     tb = PromptTraceback(t, grads)
 
@@ -233,18 +233,18 @@ async def test_save_produces_valid_ndjson(cfg, tmp_path: Path) -> None:
     records = [json.loads(ln) for ln in lines]
     paths = [r["agent_path"] for r in records]
     assert paths == [
-        "Pipeline.stage_2",
-        "Pipeline.stage_1",
-        "Pipeline.stage_0",
-        "Pipeline",
+        "Sequential.stage_2",
+        "Sequential.stage_1",
+        "Sequential.stage_0",
+        "Sequential",
     ]
 
-    mid = next(r for r in records if r["agent_path"] == "Pipeline.stage_1")
+    mid = next(r for r in records if r["agent_path"] == "Sequential.stage_1")
     assert mid["gradient"]["message"] == "mid critique"
     assert mid["gradient"]["severity"] == 0.3
     assert mid["is_leaf"] is True
 
-    root = next(r for r in records if r["agent_path"] == "Pipeline")
+    root = next(r for r in records if r["agent_path"] == "Sequential")
     assert root["gradient"] is None
     assert root["is_leaf"] is False
 
@@ -279,7 +279,7 @@ async def test_long_values_are_truncated_with_marker(cfg) -> None:
     pipe, t = await _record_3stage(cfg)
     huge = "x" * 5000
     grads = {
-        "Pipeline.stage_2": TextualGradient(message=huge, severity=1.0),
+        "Sequential.stage_2": TextualGradient(message=huge, severity=1.0),
     }
     tb = PromptTraceback(t, grads, max_value_chars=200)
     rendered = str(tb)
@@ -325,7 +325,7 @@ async def test_callback_saves_ndjson_when_tape_present(
     assert len(lines) == 4  # one per tape entry
     # Gradient for the last stage must be the seeded loss.
     records = [json.loads(ln) for ln in lines]
-    last = next(r for r in records if r["agent_path"] == "Pipeline.stage_2")
+    last = next(r for r in records if r["agent_path"] == "Sequential.stage_2")
     assert last["gradient"]["message"] == "final answer is bad"
 
 

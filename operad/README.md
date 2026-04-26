@@ -22,7 +22,7 @@ Four idioms a contributor must internalize before adding code:
    is a first-class data structure you can hash, export, replay, or
    feed to `backward()`.
 
-3. **Composition is by tree.** `Pipeline` (sequential), `Parallel`
+3. **Composition is by tree.** `Sequential` (sequential), `Parallel`
    (fan-out + combine), `Switch` (runtime routing), `Router` (typed
    choice). Composites assigned as `__setattr__` children are
    auto-registered, in PyTorch `nn.Module` style.
@@ -64,7 +64,7 @@ configs/│   │     │     ┌───────────  improvement 
 
 ### `core/` — the foundation
 
-`Agent`, `Pipeline`, `Parallel`, `build`, `AgentGraph`, `Configuration`,
+`Agent`, `Sequential`, `Parallel`, `build`, `AgentGraph`, `Configuration`,
 `Example`, `OperadOutput`, `freeze`/`thaw`, model backend dispatch,
 state diffing. The shape of every other submodule is constrained by
 what `core` exposes: an `Agent` is the unit, the `AgentGraph` is the

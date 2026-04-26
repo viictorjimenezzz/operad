@@ -8,7 +8,7 @@ import pickle
 import pytest
 
 from operad import Agent, BuildError, Configuration
-from operad.agents.pipeline import Pipeline
+from operad.agents.pipelines import Sequential
 
 from ..conftest import A, B, C, FakeLeaf
 
@@ -19,7 +19,7 @@ pytestmark = pytest.mark.asyncio
 async def test_freeze_thaw_roundtrip_skips_tracing(
     cfg: Configuration, tmp_path, monkeypatch
 ) -> None:
-    p = await Pipeline(
+    p = await Sequential(
         FakeLeaf(config=cfg, input=A, output=B, canned={"value": 7}),
         FakeLeaf(config=cfg, input=B, output=C, canned={"label": "ok"}),
         input=A,
@@ -37,8 +37,8 @@ async def test_freeze_thaw_roundtrip_skips_tracing(
 
     monkeypatch.setattr(build_mod, "_trace", _should_not_trace)
 
-    restored = Pipeline.thaw(str(path))
-    assert isinstance(restored, Pipeline)
+    restored = Sequential.thaw(str(path))
+    assert isinstance(restored, Sequential)
     assert restored._built
     out = await restored(A(text="hi"))
     assert out.response.label == "ok"
@@ -82,7 +82,7 @@ async def test_freeze_rejects_unbuilt(cfg: Configuration, tmp_path) -> None:
 async def test_freeze_rejects_non_pickleable_routing(
     cfg: Configuration, tmp_path
 ) -> None:
-    p = await Pipeline(
+    p = await Sequential(
         FakeLeaf(config=cfg, input=A, output=B),
         FakeLeaf(config=cfg, input=B, output=C),
         input=A,
@@ -102,9 +102,9 @@ async def test_thaw_classmethod_checks_type(
     leaf = await FakeLeaf(config=cfg, input=A, output=B).abuild()
     path = tmp_path / "leaf.json"
     leaf.freeze(str(path))
-    # Thawing as Pipeline when the frozen root is a FakeLeaf must raise.
+    # Thawing as Sequential when the frozen root is a FakeLeaf must raise.
     with pytest.raises(BuildError) as exc:
-        Pipeline.thaw(str(path))
+        Sequential.thaw(str(path))
     assert exc.value.reason == "not_built"
 
 
@@ -122,3 +122,23 @@ async def test_freeze_thaw_two_backend_variants(tmp_path) -> None:
         assert restored.config.backend == label
         out = await restored(A(text="hi"))
         assert out.response.value == 1
+
+
+async def test_freeze_thaw_preserves_custom_name(cfg: Configuration, tmp_path) -> None:
+    leaf = FakeLeaf(
+        config=cfg,
+        input=A,
+        output=B,
+        canned={"value": 7},
+    )
+    leaf.name = "named_leaf"
+    leaf = await leaf.abuild()
+    path = tmp_path / "named.json"
+    leaf.freeze(str(path))
+
+    restored = FakeLeaf.thaw(str(path))
+    assert restored.name == "named_leaf"
+
+    out = await restored(A(text="hi"))
+    assert out.response.value == 7
+    assert out.agent_path == "named_leaf"

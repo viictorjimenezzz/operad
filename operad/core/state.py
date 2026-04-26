@@ -30,6 +30,7 @@ class AgentState(BaseModel):
     """
 
     class_name: str
+    name: str = ""
     role: str
     task: str
     style: str = ""

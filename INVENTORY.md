@@ -52,7 +52,7 @@ leaf = MyLeaf(config=Configuration(backend="llamacpp",
 | `explain(x)`                 | Run with per-leaf scratchpad injection; prints DSPy-style chain-of-thought.   |
 | `summary()`                  | One-paragraph overview (`ClassName: N leaves, hash=…, graph=…`).              |
 | `__rich__()`                 | Structured tree for `rich.print(agent)`.                                      |
-| `a >> b`                     | Build a `Pipeline(a, b)`; chains flatten (`a >> b >> c` → three stages).      |
+| `a >> b`                     | Build a `Sequential(a, b)`; chains flatten (`a >> b >> c` → three stages).      |
 | `freeze(path)` / `thaw(path)`| Persist a built graph to disk, reconstitute without re-tracing (secrets stripped). |
 | `state()` / `load_state(…)`  | Snapshot / restore declared attributes.                                       |
 | `clone()`                    | Deep copy of state, unbuilt.                                                  |
@@ -61,12 +61,12 @@ leaf = MyLeaf(config=Configuration(backend="llamacpp",
 
 ## 2. Structural composition
 
-`Pipeline` chains agents left-to-right; `Parallel` fans out to a dict
+`Sequential` chains agents left-to-right; `Parallel` fans out to a dict
 of children and combines results.
 
 ```python
-from operad import Pipeline, Parallel
-p = Pipeline(stage_a, stage_b, stage_c)               # In → Out pipeline
+from operad import Sequential, Parallel
+p = Sequential(stage_a, stage_b, stage_c)               # In → Out pipeline
 r = Parallel({"a": leaf_a, "b": leaf_b},              # dict fan-out
              input=InType, output=OutType,
              combine=lambda results: ...)
@@ -122,7 +122,7 @@ Type mismatches raise `BuildError("input_mismatch", …)` with a Mermaid
 fragment pointing at the failing edge:
 
 ```
-BuildError(input_mismatch): at Pipeline.stage_1 → stage_2
+BuildError(input_mismatch): at Sequential.stage_1 → stage_2
     expected Question, got Utterance
 
 --- mermaid ---

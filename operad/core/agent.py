@@ -236,6 +236,7 @@ class Agent(Generic[In, Out]):
     task: ClassVar[str] = ""
     style: ClassVar[str] = ""
     context: ClassVar[str] = ""
+    name: ClassVar[str] = ""
     rules: ClassVar[Sequence[str]] = ()
     examples: ClassVar[Sequence[Example[Any, Any]]] = ()
     renderer: ClassVar[str | None] = None
@@ -254,6 +255,7 @@ class Agent(Generic[In, Out]):
 
     # --- instance state (populated by __init__ / build) ---------------------
     config: Configuration | None
+    name: str
     _built: bool
     _children: dict[str, "Agent[Any, Any]"]
     _graph: Any  # populated by build(); typed as AgentGraph in operad.core.build
@@ -266,6 +268,7 @@ class Agent(Generic[In, Out]):
         task: str | None = None,
         style: str | None = None,
         context: str | None = None,
+        name: str | None = None,
         rules: Sequence[str] | None = None,
         examples: Sequence[Example[In, Out]] | None = None,
         input: type[In] | None = None,
@@ -297,6 +300,7 @@ class Agent(Generic[In, Out]):
         self.task = task if task is not None else cls.task
         self.style = style if style is not None else cls.style
         self.context = context if context is not None else cls.context
+        self.name = name if name is not None else (cls.name or cls.__name__)
         self.rules = list(rules if rules is not None else cls.rules)
         self.examples = list(examples if examples is not None else cls.examples)
         self.input = in_cls
@@ -316,6 +320,7 @@ class Agent(Generic[In, Out]):
         out_name = self.output.__name__ if self.output is not None else "?"
         return (
             f"{type(self).__name__}("
+            f"name={self.name}, "
             f"input={in_name}, "
             f"output={out_name}, "
             f"children={list(self._children)})"
@@ -329,17 +334,19 @@ class Agent(Generic[In, Out]):
         are rebuilt by `build()`. Children are walked recursively and keyed
         by the attribute name under which they were attached.
         """
-        return AgentState(
+        cfg = self.config.model_copy(deep=True) if self.config is not None else None
+        # Thawed snapshots may contain intentionally redacted provider keys.
+        # Construct without re-validation so state()/hash_content still work.
+        return AgentState.model_construct(
             class_name=type(self).__name__,
+            name=self.name,
             role=self.role,
             task=self.task,
             style=self.style,
             context=self.context,
             rules=list(self.rules),
             examples=[e.model_dump(mode="json") for e in self.examples],
-            config=(
-                self.config.model_copy(deep=True) if self.config is not None else None
-            ),
+            config=cfg,
             input_type_name=self.input.__name__,  # type: ignore[union-attr]
             output_type_name=self.output.__name__,  # type: ignore[union-attr]
             children={
@@ -369,6 +376,7 @@ class Agent(Generic[In, Out]):
         self.task = s.task
         self.style = s.style
         self.context = s.context
+        self.name = s.name or self.name or type(self).__name__
         self.rules = list(s.rules)
         self.examples = [
             Example(
@@ -401,7 +409,7 @@ class Agent(Generic[In, Out]):
         Preserves declared Agent state (role, task, context, rules,
         examples, config, input/output types) and the composite routing
         structure. Composite subclasses' extra attributes (e.g.
-        `Pipeline._stages`, `Parallel._keys`/`_combine`) are deep-copied
+        `Sequential._stages`, `Parallel._keys`/`_combine`) are deep-copied
         with cloned children substituted for their originals.
         Default-forward leaves skip the strands-owned internals written
         by `build()`; the caller rebuilds.
@@ -428,6 +436,7 @@ class Agent(Generic[In, Out]):
         new.task = self.task
         new.style = self.style
         new.context = context if context is not None else self.context
+        new.name = self.name
         new.rules = list(self.rules)
         new.examples = [e.model_copy(deep=True) for e in self.examples]
         new.config = (
@@ -445,13 +454,13 @@ class Agent(Generic[In, Out]):
             setattr(new, name, cloned)
 
         # Composite subclasses may hold non-Agent routing state
-        # (Pipeline._stages, Parallel._keys, Parallel._combine, etc.) that
+        # (Sequential._stages, Parallel._keys, Parallel._combine, etc.) that
         # references children. Deep-copy it with the clone memo so those
         # references point at the new clones. The Strands runner is
         # rebuilt by the next `abuild()`, never deep-copied.
         if type(self).forward is not Agent.forward:
             _known = {
-                "role", "task", "style", "context", "rules", "examples", "config",
+                "role", "task", "style", "context", "name", "rules", "examples", "config",
                 "input", "output",
                 "_children", "_built", "_graph", "_runner",
                 "_requires_grad_overrides",
@@ -828,14 +837,14 @@ class Agent(Generic[In, Out]):
 
     # --- composition --------------------------------------------------------
     def __rshift__(self, other: "Agent[Any, Any]") -> "Agent[Any, Any]":
-        """`a >> b` constructs a `Pipeline(a, b)`; flattens when chained."""
-        from ..agents.pipeline import Pipeline
+        """`a >> b` constructs a `Sequential(a, b)`; flattens when chained."""
+        from ..agents.pipelines import Sequential
 
-        if isinstance(self, Pipeline):
-            return Pipeline(
+        if isinstance(self, Sequential):
+            return Sequential(
                 *self._stages, other, input=self.input, output=other.output
             )
-        return Pipeline(self, other, input=self.input, output=other.output)
+        return Sequential(self, other, input=self.input, output=other.output)
 
     # --- message formatting (overridable) -----------------------------------
     def format_system_message(self) -> str | list[dict[str, str]]:
@@ -971,6 +980,52 @@ class Agent(Generic[In, Out]):
         if self._built and graph is not None and hasattr(graph, "_repr_html_"):
             return graph._repr_html_()  # type: ignore[no-any-return]
         return f"<pre>{_html.escape(repr(self))}</pre>"
+
+    def graph_json(self) -> dict[str, Any]:
+        """Return the built graph as JSON."""
+        graph = self.__dict__.get("_graph")
+        if graph is None:
+            raise BuildError(
+                "not_built",
+                "agent graph is missing; call .abuild() first",
+                agent=self.name,
+            )
+        from .graph import to_json as _graph_to_json
+
+        return _graph_to_json(graph)
+
+    def graph_mermaid(self) -> str:
+        """Return the built graph as Mermaid source."""
+        graph = self.__dict__.get("_graph")
+        if graph is None:
+            raise BuildError(
+                "not_built",
+                "agent graph is missing; call .abuild() first",
+                agent=self.name,
+            )
+        from .graph import to_mermaid as _graph_to_mermaid
+
+        return _graph_to_mermaid(graph)
+
+    def graph_outline(self) -> str:
+        """Return a compact text outline of the built graph."""
+        graph = self.__dict__.get("_graph")
+        if graph is None:
+            raise BuildError(
+                "not_built",
+                "agent graph is missing; call .abuild() first",
+                agent=self.name,
+            )
+        lines: list[str] = []
+        for node in graph.nodes:
+            kind = "composite" if node.kind == "composite" else "leaf"
+            in_name = getattr(node.input_type, "__name__", repr(node.input_type))
+            out_name = getattr(node.output_type, "__name__", repr(node.output_type))
+            cls = node.class_name or node.path.rsplit(".", 1)[-1]
+            lines.append(f"{node.path} [{kind}] {cls}: {in_name} -> {out_name}")
+        for edge in graph.edges:
+            lines.append(f"{edge.caller} -> {edge.callee}")
+        return "\n".join(lines)
 
     def _apply_default_sampling(self) -> None:
         if self.config is None or not type(self).default_sampling:
@@ -1133,7 +1188,7 @@ class Agent(Generic[In, Out]):
 
         run_id = _obs._RUN_ID.get() or ""
         entry = _obs._PATH_STACK.get()
-        path = entry[1] if entry else type(self).__name__
+        path = entry[1] if entry else self.name
         await _obs.registry.notify(
             _obs.AgentEvent(
                 run_id, path, "chunk", None, None, None,
@@ -1227,9 +1282,9 @@ class Agent(Generic[In, Out]):
 
         parent_entry = _obs._PATH_STACK.get()
         if parent_entry is None:
-            return type(self).__name__
+            return self.name
         parent_agent, parent_path = parent_entry
-        attr = _attr_name_hint(parent_agent, self) or type(self).__name__
+        attr = _attr_name_hint(parent_agent, self) or self.name
         return f"{parent_path}.{attr}"
 
     def _enter_run(
@@ -1464,6 +1519,7 @@ class Agent(Generic[In, Out]):
             )
         return {
             "class_name": type(self).__name__,
+            "name": self.name,
             "kind": "composite" if self._children else "leaf",
             "hash_content": self.hash_content,
             "state_snapshot": self.state().model_dump(mode="json"),
@@ -1827,7 +1883,7 @@ class Agent(Generic[In, Out]):
         """
         n_leaves, n_composites = _count_tree(self)
         line = (
-            f"{type(self).__name__}: {n_leaves} leaves, {n_composites} composites, "
+            f"{self.name}: {n_leaves} leaves, {n_composites} composites, "
             f"hash_content={self.hash_content[:8]}"
         )
         extras: list[str] = []
@@ -1851,7 +1907,7 @@ class Agent(Generic[In, Out]):
         out_name = self.output.__name__ if self.output is not None else "?"
         n_leaves, _ = _count_tree(self)
         header = (
-            f"{type(self).__name__}[{in_name} → {out_name}] "
+            f"{self.name}[{in_name} → {out_name}] "
             f"· {n_leaves} leaves · hash={self.hash_content[:8]}"
         )
         tree = Tree(header)
@@ -2029,7 +2085,7 @@ def _compute_graph_hash(agent: "Agent[Any, Any]") -> str:
     """
     graph = getattr(agent, "_graph", None)
     if graph is None:
-        return hash_str(type(agent).__name__)
+        return hash_str(agent.name)
     from .graph import to_json as _graph_to_json
 
     return hash_json(_graph_to_json(graph))
@@ -2076,10 +2132,10 @@ def _labelled_tree(
     """Yield `(qualified_path, agent)` for `root` and every descendant.
 
     Breadth-first with `id()` de-duplication, matching the walk pattern in
-    `operad.core.build._tree`. The root's path is its class name; each
+    `operad.core.build._tree`. The root's path is the agent's `name`; each
     descendant's path appends the attribute it was attached under.
     """
-    root_name = type(root).__name__
+    root_name = root.name
     out: list[tuple[str, "Agent[Any, Any]"]] = [(root_name, root)]
     seen: set[int] = {id(root)}
     queue: list[tuple[str, "Agent[Any, Any]"]] = [(root_name, root)]

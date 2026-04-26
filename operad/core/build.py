@@ -226,7 +226,7 @@ class Tracer:
 
     def __init__(self, root: Agent[Any, Any]) -> None:
         self.root = root
-        root_name = type(root).__name__
+        root_name = root.name
         self.graph = AgentGraph(
             root=root_name,
             nodes=[
@@ -244,11 +244,11 @@ class Tracer:
     async def record(self, child: Agent[Any, Any], x: Any) -> Any:
         if not self._stack:
             parent_agent: Agent[Any, Any] = self.root
-            parent_name = type(self.root).__name__
+            parent_name = self.root.name
         else:
             parent_agent, parent_name = self._stack[-1]
 
-        attr = _find_attr_name(parent_agent, child) or type(child).__name__
+        attr = _find_attr_name(parent_agent, child) or child.name
         callee = f"{parent_name}.{attr}"
 
         if child.input is None or child.output is None:
@@ -451,7 +451,7 @@ def _warn_shared_children(root: Agent[Any, Any]) -> None:
     so surface it.
     """
     parents_by_id: dict[int, list[str]] = {}
-    queue: list[tuple[Agent[Any, Any], str]] = [(root, type(root).__name__)]
+    queue: list[tuple[Agent[Any, Any], str]] = [(root, root.name)]
     visited: set[int] = {id(root)}
     while queue:
         parent, parent_path = queue.pop(0)
@@ -483,7 +483,7 @@ async def _trace(root: Agent[Any, Any], tracer: Tracer) -> Any:
             except (_PayloadBranchAccess, _PayloadBranchDunder) as exc:
                 _raise_payload_branch(
                     exc,
-                    agent_name=type(root).__name__,
+                    agent_name=root.name,
                     composite_cls=type(root).__name__,
                     io=(root.input, root.output),  # type: ignore[arg-type]
                 )
@@ -515,7 +515,7 @@ async def abuild_agent(root: Agent[Any, Any]) -> Agent[Any, Any]:
             raise
         except Exception as e:
             raise BuildError(
-                "trace_failed", str(e), agent=type(root).__name__
+                "trace_failed", str(e), agent=root.name
             ) from e
 
         if not isinstance(out, root.output):  # type: ignore[arg-type]
@@ -523,11 +523,11 @@ async def abuild_agent(root: Agent[Any, Any]) -> Agent[Any, Any]:
 
             raise BuildError(
                 "output_mismatch",
-                f"{type(root).__name__}.forward returned {type(out).__name__}, "
+                f"{root.name}.forward returned {type(out).__name__}, "
                 f"expected {root.output.__name__}",  # type: ignore[union-attr]
-                agent=type(root).__name__,
+                agent=root.name,
                 mermaid=to_mermaid_node(
-                    type(root).__name__,
+                    root.name,
                     (root.input, root.output),  # type: ignore[arg-type]
                     note=(
                         f"returned {type(out).__name__}, expected "
@@ -540,11 +540,11 @@ async def abuild_agent(root: Agent[Any, Any]) -> Agent[Any, Any]:
 
             raise BuildError(
                 "sentinel_bypass",
-                f"root composite {type(root).__name__}.forward returned without "
+                f"root composite {root.name}.forward returned without "
                 "invoking any child; the sentinel was not routed through the graph",
-                agent=type(root).__name__,
+                agent=root.name,
                 mermaid=to_mermaid_node(
-                    type(root).__name__,
+                    root.name,
                     (root.input, root.output),  # type: ignore[arg-type]
                     note="no child was invoked",
                 ),
@@ -559,10 +559,10 @@ async def abuild_agent(root: Agent[Any, Any]) -> Agent[Any, Any]:
         except Exception as e:
             raise BuildError(
                 "output_mismatch",
-                f"leaf root {type(root).__name__}.output "
+                f"leaf root {root.name}.output "
                 f"({getattr(root.output, '__name__', root.output)!r}) "
                 f"is not a usable Pydantic model: {e}",
-                agent=type(root).__name__,
+                agent=root.name,
             ) from e
 
     for a in _tree(root):

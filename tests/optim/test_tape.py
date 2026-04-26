@@ -16,8 +16,8 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from operad.agents.parallel import Parallel
-from operad.agents.pipeline import Pipeline
+from operad.agents.pipelines import Parallel
+from operad.agents.pipelines import Sequential
 from operad.optim import Tape, TapeEntry, TapeObserver, tape
 from operad.runtime.observers import registry as obs_registry
 
@@ -61,14 +61,14 @@ async def test_single_leaf_records_one_entry(cfg) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Pipeline: forward order and reverse iteration
+# Sequential: forward order and reverse iteration
 # ---------------------------------------------------------------------------
 
 
-async def _build_pipeline(cfg: Any) -> Pipeline[A, C]:
+async def _build_pipeline(cfg: Any) -> Sequential[A, C]:
     leaf1 = FakeLeaf(config=cfg, input=A, output=B, canned={"value": 1})
     leaf2 = FakeLeaf(config=cfg, input=B, output=C, canned={"label": "ok"})
-    return await Pipeline(leaf1, leaf2, input=A, output=C).abuild()
+    return await Sequential(leaf1, leaf2, input=A, output=C).abuild()
 
 
 async def test_pipeline_forward_order(cfg) -> None:
@@ -78,7 +78,7 @@ async def test_pipeline_forward_order(cfg) -> None:
         await pipe(A(text="go"))
 
     paths = [e.agent_path for e in t.entries]
-    assert paths == ["Pipeline", "Pipeline.stage_0", "Pipeline.stage_1"]
+    assert paths == ["Sequential", "Sequential.stage_0", "Sequential.stage_1"]
 
 
 async def test_entries_in_reverse(cfg) -> None:
@@ -89,9 +89,9 @@ async def test_entries_in_reverse(cfg) -> None:
 
     reversed_paths = [e.agent_path for e in t.entries_in_reverse()]
     assert reversed_paths == [
-        "Pipeline.stage_1",
-        "Pipeline.stage_0",
-        "Pipeline",
+        "Sequential.stage_1",
+        "Sequential.stage_0",
+        "Sequential",
     ]
 
 
@@ -145,14 +145,14 @@ async def test_error_mid_pipeline_leaves_partial_tape(cfg) -> None:
 
     leaf2.forward = boom  # type: ignore[method-assign]
 
-    pipe = await Pipeline(leaf1, leaf2, input=A, output=C).abuild()
+    pipe = await Sequential(leaf1, leaf2, input=A, output=C).abuild()
 
     with pytest.raises(ValueError, match="kaboom"):
         async with tape() as t:
             await pipe(A(text="x"))
 
     paths = [e.agent_path for e in t.entries]
-    assert paths == ["Pipeline.stage_0"]
+    assert paths == ["Sequential.stage_0"]
     assert t.entries[0].output is not None
 
 

@@ -9,9 +9,9 @@ from operad import Agent, BuildError, Configuration, Example
 from ..conftest import A, B
 import io
 from typing import Any
-from operad import Agent, AgentDiff, Configuration, Example, Pipeline
+from operad import Agent, AgentDiff, Configuration, Example, Sequential
 from ..conftest import A, B, C, FakeLeaf
-from operad import Agent, AgentState, BuildError, Example, Pipeline
+from operad import Agent, AgentState, BuildError, Example, Sequential
 
 
 # --- from test_agent.py ---
@@ -252,26 +252,26 @@ def test_operad_dump_skips_custom_forward_leaves(cfg: Configuration) -> None:
 def test_operad_dump_skips_composites_but_walks_children(cfg: Configuration) -> None:
     leaf1 = _DefaultLeaf(config=cfg, task="t1", input=A, output=B)
     leaf2 = _DefaultLeaf(config=cfg, task="t2", input=B, output=C)
-    p = Pipeline(leaf1, leaf2, input=A, output=C)
+    p = Sequential(leaf1, leaf2, input=A, output=C)
 
     dump = p.operad_dump()
 
-    assert set(dump) == {"Pipeline.stage_0", "Pipeline.stage_1"}
-    assert "t1" in dump["Pipeline.stage_0"]
-    assert "t2" in dump["Pipeline.stage_1"]
+    assert set(dump) == {"Sequential.stage_0", "Sequential.stage_1"}
+    assert "t1" in dump["Sequential.stage_0"]
+    assert "t2" in dump["Sequential.stage_1"]
 
 
 def test_operad_prints_labelled_blocks(cfg: Configuration) -> None:
     leaf1 = _DefaultLeaf(config=cfg, task="first", input=A, output=B)
     leaf2 = _DefaultLeaf(config=cfg, task="second", input=B, output=C)
-    p = Pipeline(leaf1, leaf2, input=A, output=C)
+    p = Sequential(leaf1, leaf2, input=A, output=C)
 
     buf = io.StringIO()
     p.operad(file=buf)
     text = buf.getvalue()
 
-    assert "=== Pipeline.stage_0 ===" in text
-    assert "=== Pipeline.stage_1 ===" in text
+    assert "=== Sequential.stage_0 ===" in text
+    assert "=== Sequential.stage_1 ===" in text
     assert "first" in text
     assert "second" in text
 
@@ -361,15 +361,15 @@ def test_diff_detects_config_field_changes(cfg: Configuration) -> None:
 def test_diff_detects_added_and_removed_children(cfg: Configuration) -> None:
     leaf1 = FakeLeaf(config=cfg, input=A, output=B)
     leaf2 = FakeLeaf(config=cfg, input=B, output=C)
-    p1 = Pipeline(leaf1, leaf2, input=A, output=C)
+    p1 = Sequential(leaf1, leaf2, input=A, output=C)
 
     leaf1b = FakeLeaf(config=cfg, input=A, output=B)
-    p2 = Pipeline(leaf1b, input=A, output=B)
+    p2 = Sequential(leaf1b, input=A, output=B)
 
     d = p1.diff(p2)
     kinds = {(c.path, c.kind) for c in d.changes}
 
-    assert ("Pipeline.stage_1", "removed") in kinds
+    assert ("Sequential.stage_1", "removed") in kinds
 
 
 def test_diff_does_not_mutate_either_agent(cfg: Configuration) -> None:
@@ -402,7 +402,7 @@ def test_diff_str_is_nonempty_when_changes_exist(cfg: Configuration) -> None:
 async def test_graph_repr_html_contains_mermaid(cfg: Configuration) -> None:
     leaf1 = FakeLeaf(config=cfg, input=A, output=B)
     leaf2 = FakeLeaf(config=cfg, input=B, output=C)
-    p = Pipeline(leaf1, leaf2, input=A, output=C)
+    p = Sequential(leaf1, leaf2, input=A, output=C)
     await p.abuild()
 
     html = p._graph._repr_html_()
@@ -415,7 +415,7 @@ async def test_graph_repr_html_contains_mermaid(cfg: Configuration) -> None:
 async def test_agent_repr_html_delegates_when_built(cfg: Configuration) -> None:
     leaf1 = FakeLeaf(config=cfg, input=A, output=B)
     leaf2 = FakeLeaf(config=cfg, input=B, output=C)
-    p = Pipeline(leaf1, leaf2, input=A, output=C)
+    p = Sequential(leaf1, leaf2, input=A, output=C)
     await p.abuild()
 
     assert p._repr_html_() == p._graph._repr_html_()
@@ -447,7 +447,7 @@ def test_introspection_does_not_emit_observer_events(cfg: Configuration) -> None
     try:
         leaf1 = _DefaultLeaf(config=cfg, task="a", input=A, output=B)
         leaf2 = _DefaultLeaf(config=cfg, task="b", input=B, output=C)
-        p = Pipeline(leaf1, leaf2, input=A, output=C)
+        p = Sequential(leaf1, leaf2, input=A, output=C)
 
         p.operad(file=io.StringIO())
         p.operad_dump()
@@ -505,6 +505,17 @@ def test_state_captures_declared_fields(cfg) -> None:
     assert s.children == {}
 
 
+def test_state_roundtrip_preserves_custom_name(cfg) -> None:
+    src = FakeLeaf(config=cfg, input=A, output=B)
+    src.name = "analysis_leaf"
+    dst = FakeLeaf(config=cfg, input=A, output=B)
+
+    s = src.state()
+    assert s.name == "analysis_leaf"
+    dst.load_state(s)
+    assert dst.name == "analysis_leaf"
+
+
 def test_load_state_roundtrip_is_noop_on_field_values(cfg) -> None:
     leaf = FakeLeaf(config=cfg, input=A, output=B, task="v1")
     leaf.role = "persona"
@@ -556,7 +567,7 @@ async def test_state_survives_build_on_default_forward_leaf(cfg) -> None:
 async def test_clone_build_clone_cycle_on_default_forward_leaves(cfg) -> None:
     leaf1 = _DefaultLeaf(config=cfg, input=A, output=B, task="t1")
     leaf2 = _DefaultLeaf(config=cfg, input=B, output=C, task="t2")
-    p = Pipeline(leaf1, leaf2, input=A, output=C)
+    p = Sequential(leaf1, leaf2, input=A, output=C)
 
     await p.abuild()
     first = p.clone()
@@ -572,7 +583,7 @@ async def test_clone_build_clone_cycle_on_default_forward_leaves(cfg) -> None:
 def test_state_nests_children_under_attribute_names(cfg) -> None:
     leaf1 = FakeLeaf(config=cfg, input=A, output=B)
     leaf2 = FakeLeaf(config=cfg, input=B, output=C)
-    p = Pipeline(leaf1, leaf2, input=A, output=C)
+    p = Sequential(leaf1, leaf2, input=A, output=C)
 
     s = p.state()
 
@@ -585,7 +596,7 @@ def test_state_nests_children_under_attribute_names(cfg) -> None:
 def test_load_state_recurses_into_children(cfg) -> None:
     leaf1 = FakeLeaf(config=cfg, input=A, output=B, task="orig-0")
     leaf2 = FakeLeaf(config=cfg, input=B, output=C, task="orig-1")
-    p = Pipeline(leaf1, leaf2, input=A, output=C)
+    p = Sequential(leaf1, leaf2, input=A, output=C)
 
     s = p.state()
     s.children["stage_0"].task = "patched-0"
@@ -612,7 +623,7 @@ def test_load_state_extra_child_raises(cfg) -> None:
 def test_load_state_missing_child_raises(cfg) -> None:
     leaf1 = FakeLeaf(config=cfg, input=A, output=B)
     leaf2 = FakeLeaf(config=cfg, input=B, output=C)
-    p = Pipeline(leaf1, leaf2, input=A, output=C)
+    p = Sequential(leaf1, leaf2, input=A, output=C)
 
     s = p.state()
     del s.children["stage_0"]
@@ -655,7 +666,7 @@ def test_clone_deep_copies_examples(cfg) -> None:
 def test_clone_pipeline_preserves_nested_structure(cfg) -> None:
     leaf1 = FakeLeaf(config=cfg, input=A, output=B)
     leaf2 = FakeLeaf(config=cfg, input=B, output=C)
-    p = Pipeline(leaf1, leaf2, input=A, output=C)
+    p = Sequential(leaf1, leaf2, input=A, output=C)
 
     clone = p.clone()
 
@@ -700,7 +711,7 @@ def test_clone_composite_preserves_non_agent_extras(cfg) -> None:
 async def test_clone_rebuilds_to_equivalent_graph(cfg) -> None:
     leaf1 = FakeLeaf(config=cfg, input=A, output=B)
     leaf2 = FakeLeaf(config=cfg, input=B, output=C)
-    p = Pipeline(leaf1, leaf2, input=A, output=C)
+    p = Sequential(leaf1, leaf2, input=A, output=C)
     await p.abuild()
 
     clone = p.clone()
@@ -730,9 +741,9 @@ def test_repr_leaf_shape(cfg) -> None:
 def test_repr_composite_lists_child_names(cfg) -> None:
     leaf1 = FakeLeaf(config=cfg, input=A, output=B)
     leaf2 = FakeLeaf(config=cfg, input=B, output=C)
-    p = Pipeline(leaf1, leaf2, input=A, output=C)
+    p = Sequential(leaf1, leaf2, input=A, output=C)
     r = repr(p)
-    assert "Pipeline(" in r
+    assert "Sequential(" in r
     assert "input=A" in r
     assert "output=C" in r
     assert "stage_0" in r

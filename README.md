@@ -129,7 +129,7 @@ leaf = Concise(config=Configuration(backend="llamacpp",
                                     model="qwen2.5-7b"))
 ```
 
-Compose leaves with `Pipeline` (sequential), `Parallel` (fan-out), or
+Compose leaves with `Sequential` (sequential), `Parallel` (fan-out), or
 `Switch` (runtime routing). For the full component library — domain
 folders for reasoning, coding, conversational, memory, retrieval,
 safeguard, debate — see

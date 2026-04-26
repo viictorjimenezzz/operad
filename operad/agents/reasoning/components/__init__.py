@@ -12,15 +12,18 @@ from .actor import Actor
 from .bm25_retriever import BM25Retriever
 from .chat_reasoner import ChatReasoner
 from .classifier import Classifier
+from .decontextualizer import Decontextualizer
 from .critic import Critic
 from .evaluator import Evaluator
 from .extractor import Extractor
 from .fake_retriever import FakeRetriever
 from .planner import Planner
 from .reasoner import Reasoner
+from .reformulator import Reformulator
 from .reflector import Reflection, ReflectionInput, Reflector
 from .retriever import Hit, Hits, Query, Retriever
 from .router import Choice, RouteInput, Router
+from .summarizer import Summarizer
 from .tool_user import Tool, ToolCall, ToolResult, ToolUser
 
 __all__ = [
@@ -29,6 +32,7 @@ __all__ = [
     "ChatReasoner",
     "Choice",
     "Classifier",
+    "Decontextualizer",
     "Critic",
     "Evaluator",
     "Extractor",
@@ -37,6 +41,7 @@ __all__ = [
     "Hits",
     "Planner",
     "Query",
+    "Reformulator",
     "Reasoner",
     "Reflection",
     "ReflectionInput",
@@ -44,6 +49,7 @@ __all__ = [
     "Retriever",
     "RouteInput",
     "Router",
+    "Summarizer",
     "Tool",
     "ToolCall",
     "ToolResult",

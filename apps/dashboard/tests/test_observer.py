@@ -25,7 +25,7 @@ class _Out(BaseModel):
 def _agent_event(run_id: str = "r1", kind: str = "start", **meta: Any) -> AgentEvent:
     return AgentEvent(
         run_id=run_id,
-        agent_path="Pipeline",
+        agent_path="Sequential",
         kind=kind,  # type: ignore[arg-type]
         input=None,
         output=_Out() if kind == "end" else None,

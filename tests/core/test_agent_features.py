@@ -187,17 +187,17 @@ def test_summary_postbuild_includes_graph_hash(cfg) -> None:
 
 
 def test_rshift_two_stages(cfg) -> None:
-    from operad.agents.pipeline import Pipeline
+    from operad.agents.pipelines import Sequential
 
     a = FakeLeaf(config=cfg, input=A, output=B)
     b = FakeLeaf(config=cfg, input=B, output=C)
     p = a >> b
-    assert isinstance(p, Pipeline)
+    assert isinstance(p, Sequential)
     assert p._stages == [a, b]
 
 
 def test_rshift_flattens_three_stages(cfg) -> None:
-    from operad.agents.pipeline import Pipeline
+    from operad.agents.pipelines import Sequential
 
     class D_(BaseModel):
         d: str = ""
@@ -206,6 +206,6 @@ def test_rshift_flattens_three_stages(cfg) -> None:
     b = FakeLeaf(config=cfg, input=B, output=C)
     c = FakeLeaf(config=cfg, input=C, output=D_)
     p = a >> b >> c
-    assert isinstance(p, Pipeline)
+    assert isinstance(p, Sequential)
     assert len(p._stages) == 3
     assert p._stages == [a, b, c]

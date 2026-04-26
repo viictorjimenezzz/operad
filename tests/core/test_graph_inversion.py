@@ -8,7 +8,7 @@ from typing import Any, Literal
 import pytest
 from pydantic import BaseModel, Field
 
-from operad import Agent, Parallel, Pipeline
+from operad import Agent, Parallel, Sequential
 from operad.agents import Choice, Router, Switch
 from operad.core.graph import to_io_graph, to_io_graph_from_json, to_json
 
@@ -83,7 +83,7 @@ async def test_leaf_root_emits_one_edge_and_two_type_nodes(cfg) -> None:
 
 
 async def test_pipeline_inversion_has_three_edges_and_deduped_type_nodes(cfg) -> None:
-    p = Pipeline(
+    p = Sequential(
         FakeLeaf(config=cfg, input=A, output=B),
         FakeLeaf(config=cfg, input=B, output=C),
         FakeLeaf(config=cfg, input=C, output=D),
@@ -152,7 +152,7 @@ async def test_io_graph_field_metadata_includes_system_and_extended_fields(cfg) 
 
 
 async def test_to_io_graph_output_is_json_serializable(cfg) -> None:
-    p = Pipeline(
+    p = Sequential(
         FakeLeaf(config=cfg, input=A, output=B),
         FakeLeaf(config=cfg, input=B, output=C),
         input=A,
@@ -165,13 +165,13 @@ async def test_to_io_graph_output_is_json_serializable(cfg) -> None:
 
 
 async def test_composite_path_uses_nearest_non_root_composite(cfg) -> None:
-    inner = Pipeline(
+    inner = Sequential(
         FakeLeaf(config=cfg, input=A, output=B),
         FakeLeaf(config=cfg, input=B, output=C),
         input=A,
         output=C,
     )
-    outer = Pipeline(
+    outer = Sequential(
         inner,
         FakeLeaf(config=cfg, input=C, output=D),
         input=A,
@@ -182,14 +182,14 @@ async def test_composite_path_uses_nearest_non_root_composite(cfg) -> None:
     data = to_io_graph(outer._graph)
     by_path = {e["agent_path"]: e for e in data["edges"]}
 
-    assert by_path["Pipeline.stage_0.stage_0"]["composite_path"] == "Pipeline.stage_0"
-    assert by_path["Pipeline.stage_0.stage_1"]["composite_path"] == "Pipeline.stage_0"
-    assert by_path["Pipeline.stage_1"]["composite_path"] is None
+    assert by_path["Sequential.stage_0.stage_0"]["composite_path"] == "Sequential.stage_0"
+    assert by_path["Sequential.stage_0.stage_1"]["composite_path"] == "Sequential.stage_0"
+    assert by_path["Sequential.stage_1"]["composite_path"] is None
 
 
 async def test_to_io_graph_from_json_matches_live_graph(cfg) -> None:
     """JSON-only inversion (used by the dashboard) matches the live walker."""
-    p = Pipeline(
+    p = Sequential(
         FakeLeaf(config=cfg, input=A, output=B),
         FakeLeaf(config=cfg, input=B, output=C),
         input=A,
@@ -220,14 +220,14 @@ async def test_to_io_graph_from_json_handles_unimportable_types() -> None:
     referenced as ``__main__.Foo`` cannot be imported. Inversion must still
     produce edges and field metadata when those are embedded inline."""
     graph_json = {
-        "root": "Pipeline",
+        "root": "Sequential",
         "nodes": [
             {
-                "path": "Pipeline",
+                "path": "Sequential",
                 "kind": "composite",
                 "input": "__main__.Question",
                 "output": "__main__.Answer",
-                "class_name": "Pipeline",
+                "class_name": "Sequential",
                 "input_fields": [
                     {"name": "text", "type": "str", "description": "the question", "system": False},
                 ],
@@ -236,7 +236,7 @@ async def test_to_io_graph_from_json_handles_unimportable_types() -> None:
                 ],
             },
             {
-                "path": "Pipeline.stage_0",
+                "path": "Sequential.stage_0",
                 "kind": "leaf",
                 "input": "__main__.Question",
                 "output": "__main__.Answer",
@@ -251,8 +251,8 @@ async def test_to_io_graph_from_json_handles_unimportable_types() -> None:
         ],
         "edges": [
             {
-                "caller": "Pipeline",
-                "callee": "Pipeline.stage_0",
+                "caller": "Sequential",
+                "callee": "Sequential.stage_0",
                 "input": "__main__.Question",
                 "output": "__main__.Answer",
                 "class_name": "MyLeaf",
@@ -262,7 +262,7 @@ async def test_to_io_graph_from_json_handles_unimportable_types() -> None:
 
     data = to_io_graph_from_json(graph_json)
 
-    assert data["root"] == "Pipeline"
+    assert data["root"] == "Sequential"
     assert [e["class_name"] for e in data["edges"]] == ["MyLeaf"]
     assert {n["key"] for n in data["nodes"]} == {"__main__.Question", "__main__.Answer"}
     text_field = next(

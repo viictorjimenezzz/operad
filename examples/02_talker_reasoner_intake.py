@@ -29,9 +29,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import socket
 import sys
-from urllib.parse import urlparse
 
 from operad.algorithms import (
     ScenarioNode,
@@ -43,13 +41,19 @@ from operad.algorithms import (
 from operad.core.config import Resilience, Sampling
 
 from _config import local_config, server_reachable
+from utils import (
+    attach_dashboard,
+    parse_dashboard_target,
+    print_panel,
+    print_rule,
+    rich_available,
+)
 
 try:
     from rich.console import Console
-    from rich.panel import Panel
     from rich.table import Table
 
-    _RICH = True
+    _RICH = rich_available()
 except ImportError:
     _RICH = False
 
@@ -164,20 +168,8 @@ SCRIPT: list[str] = [
 # ---------------------------------------------------------------------------
 
 
-def _rule(title: str) -> None:
-    if _RICH:
-        Console(width=120).rule(f"[bold cyan]{title}")
-    else:
-        bar = "═" * (len(title) + 6)
-        print(f"\n{bar}\n   {title}\n{bar}")
-
-
-def _panel(title: str, body: str) -> None:
-    if _RICH:
-        Console(width=120).print(Panel(body, title=title, border_style="cyan"))
-    else:
-        bar = "─" * 60
-        print(f"\n{bar}\n{title}\n{bar}\n{body}\n{bar}")
+_rule = print_rule
+_panel = print_panel
 
 
 def _print_tree(tree: ScenarioTree) -> None:
@@ -277,47 +269,6 @@ def _print_summary(transcript: Transcript) -> None:
     )
 
 
-def _parse_dashboard_target(value: str) -> tuple[str, int]:
-    raw = value or DEFAULT_DASHBOARD
-    if "://" not in raw:
-        raw = "http://" + raw
-    parsed = urlparse(raw)
-    host = parsed.hostname or "127.0.0.1"
-    port = parsed.port or 7860
-    return host, port
-
-
-def _server_up(host: str, port: int, timeout: float = 0.5) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=timeout):
-            return True
-    except OSError:
-        return False
-
-
-def _attach_dashboard(target: str, *, open_browser: bool = True) -> bool:
-    host, port = _parse_dashboard_target(target)
-    if not _server_up(host, port):
-        print(
-            f"[dashboard] no server at {host}:{port} — "
-            "start one with `operad-dashboard --port 7860` then re-run with --dashboard"
-        )
-        return False
-    from operad.dashboard import attach
-
-    attach(host=host, port=port)
-    url = f"http://{host}:{port}"
-    print(f"[dashboard] attached → {url}")
-    if open_browser:
-        try:
-            import webbrowser
-
-            webbrowser.open_new_tab(url)
-        except Exception:
-            pass
-    return True
-
-
 # ---------------------------------------------------------------------------
 # Main.
 # ---------------------------------------------------------------------------
@@ -332,7 +283,11 @@ async def main(args: argparse.Namespace) -> None:
         return
     attached = False
     if args.dashboard is not None:
-        attached = _attach_dashboard(args.dashboard, open_browser=not args.no_open)
+        attached = attach_dashboard(
+            args.dashboard,
+            open_browser=not args.no_open,
+            default=DEFAULT_DASHBOARD,
+        )
 
     cfg = local_config(
         sampling=Sampling(temperature=0.3, max_tokens=2048),
@@ -377,7 +332,7 @@ async def main(args: argparse.Namespace) -> None:
     _rule("Stage 4 — run summary")
     _print_summary(transcript)
     if attached:
-        host, port = _parse_dashboard_target(args.dashboard)
+        host, port = parse_dashboard_target(args.dashboard, default=DEFAULT_DASHBOARD)
         print(
             f"[dashboard] still live at http://{host}:{port}  "
             "(ctrl+c the dashboard server to stop)"

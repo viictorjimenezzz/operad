@@ -4,8 +4,8 @@ The package is organized by *domain*: each subfolder
 (``reasoning/``, ``coding/``, ``conversational/``, ``memory/``,
 ``safeguard/``, ``retrieval/``) groups its leaf components under
 ``components/`` and its composed multi-agent patterns at the domain
-root. Structural operators (``Pipeline``, ``Parallel``) live here at
-the top level because they are domain-agnostic.
+root. Structural operators (``Sequential``, ``Parallel``, ``Loop``)
+live here at the top level because they are domain-agnostic.
 """
 
 from __future__ import annotations
@@ -69,8 +69,7 @@ from .memory import (
     UserInput,
     UserOutput,
 )
-from .parallel import Parallel
-from .pipeline import Pipeline
+from .pipelines import Loop, Parallel, Sequential
 from .reasoning import (
     Action,
     Actor,
@@ -82,6 +81,7 @@ from .reasoning import (
     ChatRoute,
     Choice,
     Classifier,
+    Decontextualizer,
     Critic,
     Evaluator,
     Extractor,
@@ -91,6 +91,7 @@ from .reasoning import (
     Planner,
     Query,
     ReAct,
+    Reformulator,
     Reasoner,
     Reflection,
     ReflectionInput,
@@ -99,6 +100,7 @@ from .reasoning import (
     RouteInput,
     Router,
     Switch,
+    Summarizer,
     Task,
     Thought,
     Tool,
@@ -150,6 +152,7 @@ __all__ = [
     "CitationGistInput",
     "ClaimItem",
     "Classifier",
+    "Decontextualizer",
     "CodeReviewer",
     "Context",
     "ContextInput",
@@ -199,13 +202,15 @@ __all__ = [
     "PRDiff",
     "PRReviewer",
     "PRSummary",
+    "Loop",
     "Parallel",
-    "Pipeline",
+    "Sequential",
     "Planner",
     "Proposal",
     "Proposer",
     "Query",
     "ReAct",
+    "Reformulator",
     "Reasoner",
     "DebateAgent",
     "VerifierAgent",
@@ -226,6 +231,7 @@ __all__ = [
     "SessionOperation",
     "SessionTarget",
     "Switch",
+    "Summarizer",
     "Synthesizer",
     "Task",
     "TextResponse",

@@ -36,7 +36,7 @@ points toward making improvement loops first-class citizens.
 
 ### 2.1 Typed compositional definition
 
-`Agent[In, Out]` is a typed unit of work. `Pipeline`, `Parallel`,
+`Agent[In, Out]` is a typed unit of work. `Sequential`, `Parallel`,
 `Switch`, and `Router` compose units into trees. `build()` walks the
 tree symbolically, type-checks every parent-to-child handoff, and
 freezes the result into an `AgentGraph` — a first-class value you can
@@ -155,7 +155,7 @@ We deliberately do not reimplement what strands already does well:
 | Provided by strands              | Provided by operad                     |
 | -------------------------------- | -------------------------------------- |
 | Tool calls, MCP                  | Typed `Agent[In, Out]` over strands    |
-| Structured output                | `Pipeline` / `Parallel` / `Switch`     |
+| Structured output                | `Sequential` / `Parallel` / `Switch`     |
 | OpenAI-compatible adapters       | `build()` symbolic trace + type check  |
 | Backend selection                | `Parameter` + textual gradients        |
 | Conversation state               | `Trainer` + callbacks + LR schedulers  |
@@ -177,7 +177,7 @@ rationale of every submodule and links to per-submodule READMEs.
 | `core/`           | `Agent`, `build`, `AgentGraph`, `Configuration`, model dispatch, freeze/diff      |
 | `utils/`          | hashing, errors, mutation primitives (`Op`/`CompoundOp`), cassette record/replay  |
 | `runtime/`        | concurrency slots, traces, observer registry (Rich/JSONL/OTel/Web), cost, retry, sandbox launcher |
-| `agents/`         | the component library: `reasoning/`, `coding/`, `conversational/`, `memory/`, `retrieval/`, `safeguard/`, `debate/` + `Pipeline` / `Parallel` |
+| `agents/`         | the component library: `reasoning/`, `coding/`, `conversational/`, `memory/`, `retrieval/`, `safeguard/`, `debate/` + `Sequential` / `Parallel` |
 | `algorithms/`     | `Beam`, `Debate`, `Sweep`, `VerifierLoop`, `AutoResearcher`                       |
 | `metrics/`        | deterministic scorers + `RubricCritic` + `CostTracker`                            |
 | `benchmark/`      | `Dataset`, `Entry`, `evaluate`, `Experiment`, `SensitivityReport`, `RegressionReport` |

@@ -2,7 +2,7 @@
 
 Every LLM call is stubbed via `BackpropAgent` / `ParameterGradAgent`
 subclasses with overridden `forward`. The tests cover the full
-backward walk (leaf, Pipeline, Parallel, Switch), null-gradient
+backward walk (leaf, Sequential, Parallel, Switch), null-gradient
 short-circuit, backward hooks, custom split rules, error surfacing,
 determinism, plus direct unit tests for each built-in split rule.
 """
@@ -16,8 +16,8 @@ from typing import Any, Literal
 import pytest
 from pydantic import BaseModel
 
-from operad.agents.parallel import Parallel
-from operad.agents.pipeline import Pipeline
+from operad.agents.pipelines import Parallel
+from operad.agents.pipelines import Sequential
 from operad.agents.reasoning.components.router import Router
 from operad.agents.reasoning.schemas import Choice
 from operad.agents.reasoning.switch import Switch
@@ -153,7 +153,7 @@ async def test_leaf_populates_grad_on_every_trainable_param(cfg) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 2. Pipeline — both stages see propagate and get per-param grads
+# 2. Sequential — both stages see propagate and get per-param grads
 # ---------------------------------------------------------------------------
 
 
@@ -162,7 +162,7 @@ async def test_pipeline_propagates_through_each_stage(cfg) -> None:
     s1 = FakeLeaf(config=cfg, input=B, output=C, canned={"label": "ok"})
     s0.mark_trainable(role=True)
     s1.mark_trainable(role=True)
-    pipe = await Pipeline(s0, s1, input=A, output=C).abuild()
+    pipe = await Sequential(s0, s1, input=A, output=C).abuild()
 
     params = list(pipe.parameters())
 
@@ -187,7 +187,7 @@ async def test_pipeline_propagates_through_each_stage(cfg) -> None:
     }
     assert role_grads.get(s0) is not None
     assert role_grads.get(s1) is not None
-    # propagate fired at least 3 times: Pipeline + stage_0 + stage_1.
+    # propagate fired at least 3 times: Sequential + stage_0 + stage_1.
     assert len(bp.calls) >= 3
 
 
@@ -413,7 +413,7 @@ async def test_register_backward_rule_overrides_builtin(cfg) -> None:
     s1 = FakeLeaf(config=cfg, input=B, output=C, canned={"label": "ok"})
     s0.mark_trainable(role=True)
     s1.mark_trainable(role=True)
-    pipe = await Pipeline(s0, s1, input=A, output=C).abuild()
+    pipe = await Sequential(s0, s1, input=A, output=C).abuild()
 
     params = list(pipe.parameters())
 
@@ -433,8 +433,8 @@ async def test_register_backward_rule_overrides_builtin(cfg) -> None:
             for ch in children
         }
 
-    original = _RULES.get(Pipeline)
-    register_backward_rule(Pipeline, only_last)
+    original = _RULES.get(Sequential)
+    register_backward_rule(Sequential, only_last)
     try:
         bp = await _built_backprop()
         pg = await _built_param_grad()
@@ -447,9 +447,9 @@ async def test_register_backward_rule_overrides_builtin(cfg) -> None:
         )
     finally:
         if original is None:
-            _RULES.pop(Pipeline, None)
+            _RULES.pop(Sequential, None)
         else:
-            _RULES[Pipeline] = original
+            _RULES[Sequential] = original
 
     role_s0 = next(
         p for p in params if p.path == "role" and p._agent() is s0
@@ -505,7 +505,7 @@ async def test_two_backward_runs_produce_identical_grads(cfg) -> None:
     s1 = FakeLeaf(config=cfg, input=B, output=C, canned={"label": "ok"})
     s0.mark_trainable(role=True)
     s1.mark_trainable(role=True)
-    pipe = await Pipeline(s0, s1, input=A, output=C).abuild()
+    pipe = await Sequential(s0, s1, input=A, output=C).abuild()
 
     params = list(pipe.parameters())
 
@@ -621,26 +621,26 @@ def _mk_entry(path: str, *, output: BaseModel | None = None) -> TapeEntry:
 async def test_pipeline_split_gives_last_stage_full_grad() -> None:
     g = TextualGradient(message="fix", severity=0.9)
     children = [
-        _mk_entry("Pipeline.stage_0"),
-        _mk_entry("Pipeline.stage_1"),
+        _mk_entry("Sequential.stage_0"),
+        _mk_entry("Sequential.stage_1"),
     ]
-    out = _pipeline_split(_mk_entry("Pipeline"), g, children)
-    assert out["Pipeline.stage_1"].message == "fix"
-    assert out["Pipeline.stage_1"].severity == 0.9
+    out = _pipeline_split(_mk_entry("Sequential"), g, children)
+    assert out["Sequential.stage_1"].message == "fix"
+    assert out["Sequential.stage_1"].severity == 0.9
     # Earlier stages get a copy (not the same instance).
-    assert out["Pipeline.stage_0"].message == "fix"
+    assert out["Sequential.stage_0"].message == "fix"
 
 
 async def test_pipeline_split_with_single_child() -> None:
     g = TextualGradient(message="fix", severity=0.5)
-    children = [_mk_entry("Pipeline.stage_0")]
-    out = _pipeline_split(_mk_entry("Pipeline"), g, children)
-    assert out["Pipeline.stage_0"] is g  # last == only
+    children = [_mk_entry("Sequential.stage_0")]
+    out = _pipeline_split(_mk_entry("Sequential"), g, children)
+    assert out["Sequential.stage_0"] is g  # last == only
 
 
 async def test_pipeline_split_with_no_children() -> None:
     g = TextualGradient(message="fix", severity=0.5)
-    assert _pipeline_split(_mk_entry("Pipeline"), g, []) == {}
+    assert _pipeline_split(_mk_entry("Sequential"), g, []) == {}
 
 
 async def test_parallel_split_fans_out_uniformly() -> None:
