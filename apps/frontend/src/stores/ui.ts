@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type EventKindFilter = "all" | "agent" | "algo" | "error";
-export type DrawerKind = "langfuse" | "events" | "prompts" | "values" | null;
+export type DrawerKind = "langfuse" | "events" | "prompts" | "values" | "find-runs" | null;
 export type DrawerPayload = {
   agentPath?: string;
   attr?: string;

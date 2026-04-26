@@ -91,6 +91,23 @@ export const catalog = createCatalog({
         mutationsSource: sourceExpr,
       }),
     },
+    AgentInsightsRow: {
+      props: z.object({
+        sourceSummary: sourceExpr,
+        sourceInvocations: sourceExpr,
+        runId: z.string().optional(),
+        summary: z.unknown().optional(),
+        invocations: z.unknown().optional(),
+      }),
+    },
+    ValueDistribution: {
+      props: z.object({
+        source: sourceExpr,
+        label: z.string().optional(),
+        agentPath: z.string().optional(),
+        side: z.enum(["in", "out"]).optional(),
+      }),
+    },
 
     // Diagnostics
     EventTimeline: {

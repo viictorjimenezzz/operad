@@ -38,6 +38,29 @@ export function useRunEvents(runId: string | null | undefined, limit = 500) {
   });
 }
 
+export function useRunInvocations(runId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["run", "invocations", runId] as const,
+    queryFn: () => {
+      if (!runId) throw new Error("useRunInvocations: runId is required");
+      return dashboardApi.runInvocations(runId);
+    },
+    enabled: !!runId,
+  });
+}
+
+export function useAgentMeta(runId: string | null | undefined, agentPath: string | null | undefined) {
+  return useQuery({
+    queryKey: ["run", "agent-meta", runId, agentPath] as const,
+    queryFn: () => {
+      if (!runId) throw new Error("useAgentMeta: runId is required");
+      if (!agentPath) throw new Error("useAgentMeta: agentPath is required");
+      return dashboardApi.agentMeta(runId, agentPath);
+    },
+    enabled: !!runId && !!agentPath,
+  });
+}
+
 export function useGraph(runId: string | null | undefined) {
   return useQuery({
     queryKey: ["run", "graph", runId] as const,
