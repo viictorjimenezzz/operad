@@ -153,6 +153,48 @@ class RunRegistry:
     def clear(self) -> None:
         self._runs.clear()
 
+    def restore_snapshot(
+        self,
+        *,
+        summary: dict[str, Any],
+        events: list[dict[str, Any]],
+    ) -> RunInfo:
+        run_id = str(summary.get("run_id") or "")
+        if not run_id:
+            raise ValueError("summary missing run_id")
+        started_at = float(summary.get("started_at") or time.time())
+        info = self._new_run_info(run_id, started_at)
+        info.last_event_at = float(summary.get("last_event_at") or started_at)
+        info.state = summary.get("state") or "running"
+        info.mermaid = None
+        info.algorithm_path = summary.get("algorithm_path")
+        info.algorithm_kinds = set(summary.get("algorithm_kinds") or [])
+        info.generations = list(summary.get("generations") or [])
+        info.iterations = list(summary.get("iterations") or [])
+        info.rounds = list(summary.get("rounds") or [])
+        info.candidates = list(summary.get("candidates") or [])
+        info.batches = list(summary.get("batches") or [])
+        info.root_agent_path = summary.get("root_agent_path")
+        info.total_prompt_tokens = int(summary.get("prompt_tokens") or 0)
+        info.total_completion_tokens = int(summary.get("completion_tokens") or 0)
+        info.error_message = summary.get("error")
+        score = summary.get("algorithm_terminal_score")
+        info.algorithm_terminal_score = float(score) if isinstance(score, (int, float)) else None
+        info.parent_run_id = summary.get("parent_run_id")
+        info.synthetic = bool(summary.get("synthetic"))
+        info.event_counts = dict(summary.get("event_counts") or {})
+        info.events.clear()
+        for envelope in events:
+            info.events.append(envelope)
+            if info.mermaid is None and envelope.get("type") == "graph_envelope":
+                mermaid = envelope.get("mermaid")
+                if isinstance(mermaid, str):
+                    info.mermaid = mermaid
+        self._runs[run_id] = info
+        self._runs.move_to_end(run_id)
+        self._evict_if_needed()
+        return info
+
     def all_generations(self) -> list[dict[str, Any]]:
         """Flatten generation events across all runs, ordered by time."""
         out: list[dict[str, Any]] = []

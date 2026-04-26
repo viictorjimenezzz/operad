@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from ..observer import WebDashboardObserver
-from . import per_run_sse
+from . import iter_run_events, per_run_sse
 
 
 router = APIRouter(tags=["iterations"])
@@ -26,10 +26,7 @@ _PHASE_ORDER = {
 @router.get("/runs/{run_id}/iterations.json")
 async def iterations_json(run_id: str, request: Request) -> JSONResponse:
     obs: WebDashboardObserver = request.app.state.observer
-    if obs.registry.get(run_id) is None:
-        raise HTTPException(status_code=404, detail="unknown run_id")
-
-    all_events = list(obs.registry.iter_events(run_id))
+    all_events = list(iter_run_events(request, obs, run_id))
 
     iteration_envs = [env for env in all_events if env.get("kind") == "iteration"]
     iteration_envs = sorted(

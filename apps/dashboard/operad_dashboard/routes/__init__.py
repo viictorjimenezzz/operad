@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import AsyncIterator, Callable
+from typing import Any, AsyncIterator, Callable, Iterable
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from ..observer import WebDashboardObserver
 
@@ -42,7 +42,7 @@ async def per_run_sse(
 
     queue = obs.subscribe()
     try:
-        for env in list(obs.registry.iter_events(run_id)):
+        for env in list(iter_run_events(request, obs, run_id)):
             if _matches(env, event_type, kinds, paths):
                 payload = transform(env) if transform else env
                 yield {"event": "message", "data": json.dumps(payload, default=str)}
@@ -89,4 +89,39 @@ def _matches(
     return True
 
 
-__all__ = ["per_run_sse"]
+def iter_run_events(
+    request: Request,
+    obs: WebDashboardObserver,
+    run_id: str,
+    *,
+    event_type: str | None = None,
+    kind: str | tuple[str, ...] | None = None,
+    algorithm_path: str | tuple[str, ...] | None = None,
+) -> Iterable[dict[str, Any]]:
+    info = obs.registry.get(run_id)
+    if info is not None:
+        return obs.registry.iter_events(
+            run_id,
+            event_type=event_type,
+            kind=kind,
+            algorithm_path=algorithm_path,
+        )
+    store = getattr(request.app.state, "archive_store", None)
+    if store is None:
+        raise HTTPException(status_code=404, detail="unknown run_id")
+    record = store.get_run(run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="unknown run_id")
+    events = record.get("events")
+    if not isinstance(events, list):
+        return []
+    kinds = _as_tuple(kind)
+    paths = _as_tuple(algorithm_path)
+    return [
+        env
+        for env in events
+        if isinstance(env, dict) and _matches(env, event_type, kinds, paths)
+    ]
+
+
+__all__ = ["iter_run_events", "per_run_sse"]

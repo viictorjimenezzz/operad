@@ -303,6 +303,12 @@ export const RunEventsResponse = z.object({
 });
 export type RunEventsResponse = z.infer<typeof RunEventsResponse>;
 
+export const ArchivedRunRecord = z.object({
+  summary: RunSummary,
+  events: z.array(Envelope),
+});
+export type ArchivedRunRecord = z.infer<typeof ArchivedRunRecord>;
+
 export const StatsResponse = GlobalStats.extend({
   cost_totals: z.record(CostTotals).default({}),
 });

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse
 
 from ..observer import WebDashboardObserver
-from . import per_run_sse
+from . import iter_run_events, per_run_sse
 
 
 router = APIRouter(tags=["mutations"])
@@ -18,9 +18,7 @@ router = APIRouter(tags=["mutations"])
 @router.get("/runs/{run_id}/mutations.json")
 async def mutations_json(request: Request, run_id: str) -> JSONResponse:
     obs: WebDashboardObserver = request.app.state.observer
-    if obs.registry.get(run_id) is None:
-        raise HTTPException(status_code=404, detail="unknown run_id")
-    matrix = _aggregate(obs.registry.iter_events(run_id))
+    matrix = _aggregate(iter_run_events(request, obs, run_id))
     return JSONResponse(matrix)
 
 
@@ -29,7 +27,7 @@ async def mutations_sse(request: Request, run_id: str) -> EventSourceResponse:
     obs: WebDashboardObserver = request.app.state.observer
 
     def _snapshot(_env: dict[str, Any]) -> dict[str, Any]:
-        return _aggregate(obs.registry.iter_events(run_id))
+        return _aggregate(iter_run_events(request, obs, run_id))
 
     return EventSourceResponse(
         per_run_sse(

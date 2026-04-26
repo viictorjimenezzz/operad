@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import os
 import sys
+from pathlib import Path
 
 import uvicorn
 
@@ -40,6 +41,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "environment variable."
         ),
     )
+    p.add_argument(
+        "--data-dir",
+        type=Path,
+        default=Path("./.dashboard-data"),
+        help="Directory where dashboard persistence files are stored.",
+    )
     return p.parse_args(argv)
 
 
@@ -51,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run_live(args: argparse.Namespace) -> int:
-    app = create_app(langfuse_url=args.langfuse_url)
+    app = create_app(langfuse_url=args.langfuse_url, data_dir=args.data_dir)
     print(
         f"Dashboard live at http://{args.host}:{args.port}\n"
         "Run your operad agent in the same Python process, "
@@ -66,7 +73,10 @@ def _run_live(args: argparse.Namespace) -> int:
 def _run_replay(args: argparse.Namespace) -> int:
     observer = WebDashboardObserver()
     app = create_app(
-        observer=observer, auto_register=False, langfuse_url=args.langfuse_url
+        observer=observer,
+        auto_register=False,
+        langfuse_url=args.langfuse_url,
+        data_dir=args.data_dir,
     )
 
     async def _replay_then_idle() -> None:

@@ -32,6 +32,7 @@ packages = ["operad_dashboard"]
 # CI / make build-frontend / Dockerfile populate it before packaging.
 [tool.hatch.build.targets.wheel.force-include]
 "operad_dashboard/web" = "operad_dashboard/web"
+"operad_dashboard/migrations" = "operad_dashboard/migrations"
 
 [tool.uv.sources]
 operad = { path = "../..", editable = true }

@@ -6,7 +6,7 @@ import { SearchInput } from "@/shared/ui/search-input";
 import { useRunsFilterStore, type RunStatusFilter, type RunTimeFilter } from "@/stores/runs-filter";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { RunGroupSection } from "./run-group-section";
 
 const TIME_CUTOFFS: Record<RunTimeFilter, number | null> = {
@@ -136,7 +136,12 @@ export function RunListSidebar() {
   return (
     <aside className="flex h-full flex-col border-r border-border bg-bg-1">
       <div className="border-b border-border px-2 py-2">
-        <h2 className="m-0 mb-1.5 text-[0.68rem] uppercase tracking-[0.1em] text-muted">runs</h2>
+        <div className="mb-1.5 flex items-center justify-between">
+          <h2 className="m-0 text-[0.68rem] uppercase tracking-[0.1em] text-muted">runs</h2>
+          <Link to="/archive" className="text-[10px] uppercase tracking-[0.08em] text-muted hover:text-text">
+            archive
+          </Link>
+        </div>
         <SearchInput value={search} onChange={setSearch} placeholder="search id, class, path…" />
       </div>
 

@@ -1,3 +1,5 @@
+import { ArchivePage } from "@/dashboard/pages/ArchivePage";
+import { ArchivedRunPage } from "@/dashboard/pages/ArchivedRunPage";
 import { Shell } from "@/dashboard/Shell";
 import { NotFoundPage } from "@/dashboard/pages/NotFoundPage";
 import { RunDetailPage } from "@/dashboard/pages/RunDetailPage";
@@ -10,6 +12,8 @@ export const dashboardRouter = createBrowserRouter([
     element: <Shell />,
     children: [
       { index: true, element: <RunListPage /> },
+      { path: "archive", element: <ArchivePage /> },
+      { path: "archive/:runId", element: <ArchivedRunPage /> },
       { path: "runs/:runId", element: <RunDetailPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],
