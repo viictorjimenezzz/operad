@@ -1011,7 +1011,10 @@ class Agent(Generic[In, Out]):
         def _escape(label: str) -> str:
             return label.replace('"', "'")
 
-        node_ids = {node.path: f"n{i}" for i, node in enumerate(graph.nodes)}
+        def _node_id(path: str) -> str:
+            return path.replace(".", "_")
+
+        node_ids = {node.path: _node_id(node.path) for node in graph.nodes}
         lines: list[str] = ["flowchart LR"]
         for node in graph.nodes:
             nid = node_ids[node.path]

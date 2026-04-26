@@ -45,7 +45,7 @@ async def test_pipeline_build_captures_edges(cfg) -> None:
     e1, e2 = g.edges
     assert e1.caller == "Sequential" and e1.callee == "Sequential.first"
     assert e1.input_type is A and e1.output_type is B
-    assert e2.caller == "Sequential" and e2.callee == "Sequential.second"
+    assert e2.caller == "Sequential.first" and e2.callee == "Sequential.second"
     assert e2.input_type is B and e2.output_type is C
 
 

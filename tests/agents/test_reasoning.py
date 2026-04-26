@@ -173,6 +173,10 @@ async def test_react_graph_captures_four_typed_edges(cfg) -> None:
     assert callees["ReAct.extractor"].output_type is Observation
     assert callees["ReAct.evaluator"].input_type is Observation
     assert callees["ReAct.evaluator"].output_type is Answer
+    assert callees["ReAct.reasoner"].caller == "ReAct"
+    assert callees["ReAct.actor"].caller == "ReAct.reasoner"
+    assert callees["ReAct.extractor"].caller == "ReAct.actor"
+    assert callees["ReAct.evaluator"].caller == "ReAct.extractor"
 
 
 async def test_react_end_to_end_routes_through_stub_pipeline(cfg) -> None:
@@ -180,6 +184,14 @@ async def test_react_end_to_end_routes_through_stub_pipeline(cfg) -> None:
     out = await r(Task(goal="what is the answer?"))
     assert isinstance(out.response, Answer)
     assert out.response.answer == "42"
+
+
+async def test_react_mermaid_renders_sequential_edges(cfg) -> None:
+    r = await _stub_react(cfg).abuild()
+    text = r.graph_mermaid()
+    assert "ReAct_reasoner -->|\"Thought -> Action\"| ReAct_actor" in text
+    assert "ReAct_actor -->|\"Action -> Observation\"| ReAct_extractor" in text
+    assert "ReAct_extractor -->|\"Observation -> Answer\"| ReAct_evaluator" in text
 
 
 async def test_react_subagents_use_component_defaults(cfg) -> None:
