@@ -19,7 +19,7 @@ code that makes them work.
 | ---------------- | --------------------------------------------------------------------------------- |
 | `agent.py`       | `Agent[In, Out]` base, child registration, `parameters()`, hooks, `register_*_hook`. |
 | `build.py`       | `build_agent` / `abuild_agent`, `Tracer`, sentinel proxy that catches payload-branching at trace time. |
-| `graph.py`       | `to_mermaid`, `to_json`, `from_json` graph exporters.                             |
+| `graph.py`       | `to_mermaid`, `to_json`, `from_json`, `to_io_graph`, `to_io_graph_from_json` graph exporters. |
 | `config.py`      | `Configuration`, `Backend`, `Sampling`, `Resilience`, `IOConfig`, `Runtime` knobs. |
 | `models.py`      | Backend dispatcher: `Configuration` → `strands.models.Model` per backend.         |
 | `output.py`      | `OperadOutput[Out]` envelope — typed response + reproducibility metadata.         |
@@ -45,7 +45,7 @@ from operad import (
     AgentState, AgentDiff, Change,
     abuild_agent, build_agent,
     freeze_agent, thaw_agent, thaw_pair,
-    to_json, to_mermaid, from_json,
+    to_json, to_mermaid, from_json, to_io_graph, to_io_graph_from_json,
 )
 ```
 

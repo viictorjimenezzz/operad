@@ -110,6 +110,14 @@ exports the inverted view: type schemas as nodes and leaf agents as typed
 edges (`from`/`to`), with each edge carrying `agent_path`, runtime
 `class_name`, and nearest `composite_path` for UI grouping.
 
+`to_json` itself embeds `class_name`, `input_fields`, and `output_fields`
+per node so consumers in a different process (e.g. the dashboard
+backend, which receives `graph_json` over the wire and cannot
+`importlib.import_module` user-defined types) can produce the inverted
+view without round-tripping types. `to_io_graph_from_json(graph_json)`
+is the JSON-only equivalent of `to_io_graph` and is the canonical path
+for any out-of-process consumer.
+
 Type mismatches raise `BuildError("input_mismatch", …)` with a Mermaid
 fragment pointing at the failing edge:
 
