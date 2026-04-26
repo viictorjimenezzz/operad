@@ -235,7 +235,7 @@ make up           # bring up the 8-service stack (~2-3 min on first boot)
 make demo         # run agent_evolution with dashboard + Langfuse OTel wired
 make demo-script  # run demo.py with dashboard + Langfuse OTel wired
 make demo-triage  # run triage_reply with dashboard + Langfuse OTel wired
-make example-observed EXAMPLE=01_composition_research_analyst.py
+make example-observed EXAMPLE=01_agent.py
 ```
 
 All top-level scripts in `examples/` plus `demo.py` accept

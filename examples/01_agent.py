@@ -41,7 +41,7 @@ except ImportError:
     _RICH = False
 
 
-_SCRIPT = "01_composition_research_analyst"
+_SCRIPT = "01_agent"
 DEFAULT_DASHBOARD = "127.0.0.1:7860"
 
 

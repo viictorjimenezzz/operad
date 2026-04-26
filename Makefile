@@ -55,7 +55,7 @@ help:
 	@printf '    make demo         agent_evolution offline + dashboard attach + Langfuse OTel\n\n'
 	@printf '    make demo-script  demo.py live run + dashboard attach + Langfuse OTel\n'
 	@printf '    make demo-triage  triage_reply demo + dashboard attach + Langfuse OTel\n'
-	@printf '    make example-observed EXAMPLE=01_composition_research_analyst.py  run one examples/* script with dashboard attach + Langfuse OTel\n\n'
+	@printf '    make example-observed EXAMPLE=01_agent.py  run one examples/* script with dashboard attach + Langfuse OTel\n\n'
 	@printf '  Frontend (apps/frontend/):\n'
 	@printf '    make build-frontend     Build dashboard + studio bundles, copy into both apps\n'
 	@printf '    make dev-frontend       Vite dev server for dashboard (:5173, proxies to :$(DASHBOARD_PORT))\n'
@@ -158,7 +158,7 @@ studio: ensure-bundles
 # ------------------------------------------------------------------
 
 ensure-docker-dashboard:
-	docker compose up -d --build operad-dashboard
+	docker compose up -d operad-dashboard
 
 demo: ensure-docker-dashboard
 	@$(ENV_LOAD); \
@@ -181,7 +181,7 @@ demo-triage: ensure-docker-dashboard
 	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}/api/public/otel}" \
 	uv run --extra otel python apps/demos/triage_reply/run.py --dashboard
 
-EXAMPLE ?= 01_composition_research_analyst.py
+EXAMPLE ?= 01_agent.py
 example-observed: ensure-bundles ensure-docker-dashboard
 	@$(ENV_LOAD); \
 	bash scripts/check_dashboard_contract.sh "$(DASHBOARD_HOST)" "$(DASHBOARD_PORT)" && \
