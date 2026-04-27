@@ -8,8 +8,13 @@ import {
   Eyebrow,
   HashTag,
   KeyValueGrid,
+  PanelCard,
+  PanelGrid,
+  PanelGridItem,
+  PanelSection,
   Pill,
   Section,
+  SectionVariantContext,
   Sparkline,
   StatTile,
   Tabs,
@@ -77,6 +82,11 @@ export const uiRegistry: ComponentRegistry = {
       </div>
     );
   },
+  SectionGroup: ({ children }) => (
+    <div className="overflow-hidden rounded-lg border border-border divide-y divide-border">
+      <SectionVariantContext.Provider value="row">{children}</SectionVariantContext.Provider>
+    </div>
+  ),
   Tabs: ({ element, children }) => {
     const tabs = (element.props as { tabs: Array<{ id: string; label: string }> }).tabs;
     const firstTab = tabs[0]?.id ?? "tab-0";
@@ -176,4 +186,50 @@ export const uiRegistry: ComponentRegistry = {
     return <KeyValueGrid rows={p.rows ?? []} {...defined({ density: p.density })} />;
   },
   Divider: () => <Divider />,
+  PanelCard: ({ element, children }) => {
+    const p = element.props as {
+      title?: string;
+      eyebrow?: string;
+      flush?: boolean;
+      bodyMinHeight?: number;
+      surface?: "panel" | "inset";
+      bare?: boolean;
+    };
+    return (
+      <PanelCard
+        {...defined({
+          title: p.title,
+          eyebrow: p.eyebrow,
+          flush: p.flush,
+          bodyMinHeight: p.bodyMinHeight,
+          surface: p.surface,
+          bare: p.bare,
+        })}
+      >
+        {children}
+      </PanelCard>
+    );
+  },
+  PanelGrid: ({ element, children }) => {
+    const p = element.props as { cols?: 1 | 2 | 3 | 4; gap?: "sm" | "md" | "lg" };
+    return (
+      <PanelGrid {...defined({ cols: p.cols, gap: p.gap })}>{children}</PanelGrid>
+    );
+  },
+  PanelGridItem: ({ element, children }) => {
+    const p = element.props as { colSpan?: 1 | 2 | 3 | 4; rowSpan?: 1 | 2 };
+    return (
+      <PanelGridItem {...defined({ colSpan: p.colSpan, rowSpan: p.rowSpan })}>
+        {children}
+      </PanelGridItem>
+    );
+  },
+  PanelSection: ({ element, children }) => {
+    const p = element.props as { label: string; count?: number };
+    return (
+      <PanelSection label={p.label} {...defined({ count: p.count })}>
+        {children}
+      </PanelSection>
+    );
+  },
 };

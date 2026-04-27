@@ -1,4 +1,5 @@
-import { Section, Sparkline, StatTile } from "@/components/ui";
+import { PanelCard, Sparkline, StatTile } from "@/components/ui";
+import { hashColor } from "@/lib/hash-color";
 import { RunInvocationsResponse } from "@/lib/types";
 import { formatCost, formatDurationMs, formatTokens } from "@/lib/utils";
 import { useMemo } from "react";
@@ -6,7 +7,7 @@ import { useMemo } from "react";
 export interface CostLatencyBlockProps {
   dataInvocations?: unknown;
   invocations?: unknown;
-  defaultOpen?: boolean;
+  runId?: string;
 }
 
 export function CostLatencyBlock(props: CostLatencyBlockProps) {
@@ -52,52 +53,51 @@ export function CostLatencyBlock(props: CostLatencyBlockProps) {
 
   const hasTokens = stats.totalTokens > 0;
   const hasCost = stats.costValues.length > 0;
-  const tokenSummary = hasTokens ? formatTokens(stats.totalTokens) : "tokens unavailable";
-  const summary =
-    rows.length === 0
-      ? "no invocations yet"
-      : `${rows.length} invocations · avg ${formatDurationMs(stats.avgLatency)} · ${tokenSummary}`;
-  const disabled = rows.length === 0;
+  const color = hashColor(props.runId);
 
   return (
-    <Section
-      title="Cost & latency"
-      summary={summary}
-      disabled={disabled}
-      defaultOpen={props.defaultOpen ?? false}
+    <PanelCard
+      eyebrow="Cost & latency"
+      title={
+        rows.length === 0
+          ? "no invocations yet"
+          : `${rows.length} invocations · avg ${formatDurationMs(stats.avgLatency)}`
+      }
     >
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatTile
-          size="sm"
-          label="avg latency"
-          value={formatDurationMs(stats.avgLatency)}
-          sub={
-            stats.latencyValues.length > 1 ? (
-              <Sparkline values={stats.latencyValues} width={80} height={18} />
-            ) : undefined
-          }
-        />
-        <StatTile
-          size="sm"
-          label="p95 latency"
-          value={rows.length >= 2 ? formatDurationMs(stats.p95Latency) : "needs 2+"}
-        />
-        <StatTile
-          size="sm"
-          label="total tokens"
-          value={hasTokens ? formatTokens(stats.totalTokens) : "unavailable"}
-          sub={
-            stats.tokenValues.length > 1 ? (
-              <Sparkline values={stats.tokenValues} width={80} height={18} />
-            ) : undefined
-          }
-        />
-        <StatTile
-          size="sm"
-          label="total cost"
-          value={hasCost ? formatCost(stats.totalCost) : "unavailable"}
-        />
-      </div>
-    </Section>
+      {rows.length === 0 ? null : (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatTile
+            size="sm"
+            label="avg latency"
+            value={formatDurationMs(stats.avgLatency)}
+            sub={
+              stats.latencyValues.length > 1 ? (
+                <Sparkline values={stats.latencyValues} width={80} height={18} color={color} />
+              ) : undefined
+            }
+          />
+          <StatTile
+            size="sm"
+            label="p95 latency"
+            value={rows.length >= 2 ? formatDurationMs(stats.p95Latency) : "needs 2+"}
+          />
+          <StatTile
+            size="sm"
+            label="total tokens"
+            value={hasTokens ? formatTokens(stats.totalTokens) : "unavailable"}
+            sub={
+              stats.tokenValues.length > 1 ? (
+                <Sparkline values={stats.tokenValues} width={80} height={18} color={color} />
+              ) : undefined
+            }
+          />
+          <StatTile
+            size="sm"
+            label="total cost"
+            value={hasCost ? formatCost(stats.totalCost) : "unavailable"}
+          />
+        </div>
+      )}
+    </PanelCard>
   );
 }

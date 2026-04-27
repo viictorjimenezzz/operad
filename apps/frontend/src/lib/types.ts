@@ -843,6 +843,69 @@ export const TrainingEvent = z
   .passthrough();
 export type TrainingEvent = z.infer<typeof TrainingEvent>;
 
+// --- Group / rail projections ----------------------------------------------
+
+export const AgentGroupSummary = z.object({
+  hash_content: z.string(),
+  class_name: stringOrNull.default(null),
+  root_agent_path: stringOrNull.default(null),
+  count: z.number(),
+  running: z.number(),
+  errors: z.number(),
+  last_seen: z.number(),
+  first_seen: z.number(),
+  latencies: z.array(z.number()).default([]),
+  prompt_tokens: z.number().default(0),
+  completion_tokens: z.number().default(0),
+  cost_usd: z.number().default(0),
+  run_ids: z.array(z.string()).default([]),
+  is_trainer: z.boolean().default(false),
+});
+export type AgentGroupSummary = z.infer<typeof AgentGroupSummary>;
+
+export const AgentGroupDetail = z.object({
+  hash_content: z.string(),
+  class_name: stringOrNull.default(null),
+  root_agent_path: stringOrNull.default(null),
+  count: z.number(),
+  running: z.number(),
+  errors: z.number(),
+  last_seen: z.number(),
+  first_seen: z.number(),
+  latencies: z.array(z.number()).default([]),
+  prompt_tokens: z.number().default(0),
+  completion_tokens: z.number().default(0),
+  cost_usd: z.number().default(0),
+  is_trainer: z.boolean().default(false),
+  runs: z.array(RunSummary).default([]),
+});
+export type AgentGroupDetail = z.infer<typeof AgentGroupDetail>;
+
+export const AlgorithmGroup = z.object({
+  algorithm_path: z.string(),
+  class_name: stringOrNull.default(null),
+  count: z.number(),
+  running: z.number(),
+  errors: z.number(),
+  last_seen: z.number(),
+  first_seen: z.number(),
+  runs: z.array(RunSummary).default([]),
+});
+export type AlgorithmGroup = z.infer<typeof AlgorithmGroup>;
+
+export const TrainingGroup = z.object({
+  hash_content: stringOrNull.default(null),
+  class_name: stringOrNull.default(null),
+  root_agent_path: stringOrNull.default(null),
+  count: z.number(),
+  running: z.number(),
+  errors: z.number(),
+  last_seen: z.number(),
+  first_seen: z.number(),
+  runs: z.array(RunSummary).default([]),
+});
+export type TrainingGroup = z.infer<typeof TrainingGroup>;
+
 // --- Manifest ---------------------------------------------------------------
 
 export const Manifest = z.object({

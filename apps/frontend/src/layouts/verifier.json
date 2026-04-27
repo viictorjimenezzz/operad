@@ -26,20 +26,30 @@
       },
 
       "t-overview": {
-        "type": "Col",
-        "props": { "gap": 12 },
+        "type": "Stack",
+        "props": { "gap": 16 },
+        "children": ["section"]
+      },
+      "section": {
+        "type": "PanelSection",
+        "props": { "label": "Overview" },
+        "children": ["grid"]
+      },
+      "grid": {
+        "type": "PanelGrid",
+        "props": { "cols": 2 },
         "children": ["meta-card", "curve-card", "progression-card"]
       },
       "meta-card": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "meta" },
         "children": ["meta", "langfuse"]
       },
       "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
       "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
       "curve-card": {
-        "type": "Card",
-        "props": { "title": "convergence" },
+        "type": "PanelCard",
+        "props": { "title": "convergence", "bodyMinHeight": 260 },
         "children": ["curve"]
       },
       "curve": {
@@ -47,7 +57,7 @@
         "props": { "source": "$queries.iterations", "height": 240 }
       },
       "progression-card": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "iterations" },
         "children": ["progression"]
       },
@@ -57,7 +67,7 @@
       },
 
       "t-feedback": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "verifier feedback" },
         "children": ["feedback"]
       },
@@ -66,7 +76,11 @@
         "props": { "source": "$queries.iterations", "phaseFilter": "verify" }
       },
 
-      "t-graph": { "type": "Card", "props": { "title": "agent graph" }, "children": ["graph"] },
+      "t-graph": {
+        "type": "PanelCard",
+        "props": { "title": "agent graph" },
+        "children": ["graph"]
+      },
       "graph": { "type": "AgentGraph", "props": { "source": "$queries.graph" } },
 
       "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } }

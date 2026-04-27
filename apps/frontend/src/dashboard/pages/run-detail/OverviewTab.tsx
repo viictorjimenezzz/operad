@@ -10,8 +10,8 @@ export function OverviewTab() {
   if (!runId) return null;
 
   return (
-    <div className="h-full overflow-auto px-6 py-6">
-      <div className="mx-auto max-w-[1100px]">
+    <div className="h-full overflow-auto">
+      <div className="p-4">
         <DashboardRenderer layout={overviewLayout} context={{ runId }} />
       </div>
     </div>

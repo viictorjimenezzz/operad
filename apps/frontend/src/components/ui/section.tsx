@@ -1,7 +1,13 @@
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronRight } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, createContext, useContext, useState } from "react";
+
+/**
+ * When Section is rendered inside a SectionGroup, the group sets this context
+ * to "row" so sections render as flat table rows instead of floating cards.
+ */
+export const SectionVariantContext = createContext<"card" | "row">("card");
 
 export interface SectionProps {
   title: string;
@@ -35,13 +41,19 @@ export function Section({
 }: SectionProps) {
   const [open, setOpen] = useState(defaultOpen);
   const expanded = open && !disabled;
+  const variant = useContext(SectionVariantContext);
+  const isRow = variant === "row";
 
   return (
     <div
       className={cn(
-        "rounded-lg border border-border bg-bg-1 transition-colors",
-        expanded ? "border-border-strong" : "",
-        disabled ? "opacity-60" : "hover:border-border-strong",
+        isRow
+          ? cn("bg-bg-1 transition-colors", disabled ? "opacity-60" : "")
+          : cn(
+              "rounded-lg border border-border bg-bg-1 transition-colors",
+              expanded ? "border-border-strong" : "",
+              disabled ? "opacity-60" : "hover:border-border-strong",
+            ),
         className,
       )}
     >

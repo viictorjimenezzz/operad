@@ -26,19 +26,29 @@
       },
 
       "t-overview": {
-        "type": "Col",
-        "props": { "gap": 12 },
+        "type": "Stack",
+        "props": { "gap": 16 },
+        "children": ["overviewSection"]
+      },
+      "overviewSection": {
+        "type": "PanelSection",
+        "props": { "label": "Overview" },
+        "children": ["overviewGrid"]
+      },
+      "overviewGrid": {
+        "type": "PanelGrid",
+        "props": { "cols": 2 },
         "children": ["meta-card", "rounds-card", "consensus-card"]
       },
       "meta-card": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "meta" },
         "children": ["meta", "langfuse"]
       },
       "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
       "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
       "rounds-card": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "round scores" },
         "children": ["rounds"]
       },
@@ -47,7 +57,7 @@
         "props": { "source": "$queries.summary.rounds" }
       },
       "consensus-card": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "consensus over rounds" },
         "children": ["consensus"]
       },
@@ -57,7 +67,7 @@
       },
 
       "t-transcript": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "transcript" },
         "children": ["transcript"]
       },
@@ -67,7 +77,7 @@
       },
 
       "t-graph": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "agent graph" },
         "children": ["graph"]
       },

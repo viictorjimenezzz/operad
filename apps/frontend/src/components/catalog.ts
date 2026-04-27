@@ -22,6 +22,46 @@ export const catalog = createCatalog({
     Card: { props: z.object({ title: z.string().optional() }), hasChildren: true },
     Row: { props: z.object({ gap: z.number().optional() }), hasChildren: true },
     Col: { props: z.object({ gap: z.number().optional() }), hasChildren: true },
+    Stack: { props: z.object({ gap: z.number().optional() }), hasChildren: true },
+    SectionGroup: { props: z.object({}), hasChildren: true },
+    Section: {
+      props: z.object({
+        title: z.string(),
+        summary: z.string().optional(),
+        defaultOpen: z.boolean().optional(),
+        disabled: z.boolean().optional(),
+      }),
+      hasChildren: true,
+    },
+    PanelCard: {
+      props: z.object({
+        title: z.string().optional(),
+        eyebrow: z.string().optional(),
+        flush: z.boolean().optional(),
+        bodyMinHeight: z.number().optional(),
+        surface: z.enum(["panel", "inset"]).optional(),
+        bare: z.boolean().optional(),
+      }),
+      hasChildren: true,
+    },
+    PanelGrid: {
+      props: z.object({
+        cols: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
+        gap: z.enum(["sm", "md", "lg"]).optional(),
+      }),
+      hasChildren: true,
+    },
+    PanelGridItem: {
+      props: z.object({
+        colSpan: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
+        rowSpan: z.union([z.literal(1), z.literal(2)]).optional(),
+      }),
+      hasChildren: true,
+    },
+    PanelSection: {
+      props: z.object({ label: z.string(), count: z.number().optional() }),
+      hasChildren: true,
+    },
     Tabs: {
       props: z.object({ tabs: z.array(tab) }),
       hasChildren: true,

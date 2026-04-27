@@ -1,5 +1,6 @@
 import { IOFieldPreview } from "@/components/agent-view/overview/io-field-preview";
-import { HashTag, Metric, Pill, Sparkline } from "@/components/ui";
+import { HashTag, Metric, PanelCard, PanelGrid, Pill, Sparkline, StatusDot } from "@/components/ui";
+import { hashColor } from "@/lib/hash-color";
 import { type RunInvocation, RunInvocationsResponse, RunSummary } from "@/lib/types";
 import {
   formatCostOrUnavailable,
@@ -32,82 +33,87 @@ export function InvocationsBanner(props: InvocationsBannerProps) {
 
   const rows = invocationsParsed.data.invocations;
 
-  if (rows.length === 0) {
-    return <Empty />;
-  }
-
+  if (rows.length === 0) return <Empty />;
   if (rows.length === 1) {
     const row = rows[0];
     if (!row) return <Empty />;
-    return <SingleInvocation row={row} />;
+    return <SingleInvocation row={row} runId={props.runId ?? null} />;
   }
-
   return <MultiSummary rows={rows} runId={props.runId ?? null} />;
 }
 
-// ---------- 0 invocations ----------
-
 function Empty() {
   return (
-    <div className="rounded-lg border border-border bg-bg-1 px-4 py-5">
-      <Pill tone="live" pulse>
-        waiting for first invocation
-      </Pill>
-      <div className="mt-2 text-[13px] text-muted">
+    <PanelCard
+      eyebrow={
+        <span className="flex items-center gap-1.5">
+          <StatusDot state="running" size="sm" pulse />
+          <span>Live</span>
+        </span>
+      }
+      title="waiting for first invocation"
+    >
+      <span className="text-[12px] text-muted">
         The agent is built but no invocation has produced output yet.
-      </div>
-    </div>
+      </span>
+    </PanelCard>
   );
 }
 
-// ---------- 1 invocation ----------
-
-function SingleInvocation({ row }: { row: RunInvocation }) {
+function SingleInvocation({ row, runId }: { row: RunInvocation; runId: string | null }) {
   const ok = row.status === "ok";
-
+  const ident = row.hash_content ?? runId ?? "row";
   return (
-    <article className="overflow-hidden rounded-lg border border-border bg-bg-1">
-      <header className="flex flex-wrap items-center gap-3 border-b border-border bg-bg-2/40 px-4 py-2">
-        {ok ? <Pill tone="ok">ok</Pill> : <Pill tone="error">error</Pill>}
-        {row.hash_content ? <HashTag hash={row.hash_content} mono size="sm" /> : null}
-        <div className="flex items-center gap-4">
+    <PanelCard
+      flush
+      eyebrow={
+        <span className="flex items-center gap-1.5">
+          <StatusDot identity={ident} state={ok ? "ended" : "error"} size="sm" />
+          <span>Latest invocation</span>
+        </span>
+      }
+      title={
+        <span className="flex flex-wrap items-center gap-2">
+          {ok ? <Pill tone="ok" size="sm">ok</Pill> : <Pill tone="error" size="sm">error</Pill>}
+          {row.hash_content ? <HashTag hash={row.hash_content} mono size="sm" /> : null}
           <Metric label="ago" value={formatRelativeTime(row.started_at)} />
           <Metric label="latency" value={formatDurationMs(row.latency_ms ?? null)} />
           <Metric
             label="tokens"
             value={formatTokenPairOrUnavailable(row.prompt_tokens, row.completion_tokens)}
-            sub={hasTokenUsage(row.prompt_tokens, row.completion_tokens) ? "in / out" : undefined}
+            {...(hasTokenUsage(row.prompt_tokens, row.completion_tokens)
+              ? { sub: "in / out" }
+              : {})}
           />
           <Metric label="cost" value={formatCostOrUnavailable(row.cost_usd)} />
-        </div>
-        {row.langfuse_url ? (
+        </span>
+      }
+      toolbar={
+        row.langfuse_url ? (
           <a
             href={row.langfuse_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="ml-auto inline-flex items-center gap-1 text-[12px] text-accent transition-colors hover:text-[--color-accent-strong]"
+            className="inline-flex items-center gap-1 text-[12px] text-accent transition-colors hover:text-[--color-accent-strong]"
           >
-            Open in Langfuse
+            Langfuse
             <ExternalLink size={11} />
           </a>
-        ) : null}
-      </header>
-
+        ) : null
+      }
+    >
       {!ok && row.error ? (
-        <div className="border-b border-border bg-[--color-err-dim]/30 px-4 py-2 font-mono text-[11px] text-[--color-err]">
+        <div className="border-b border-border bg-[--color-err-dim]/30 px-3 py-2 font-mono text-[11px] text-[--color-err]">
           {row.error}
         </div>
       ) : null}
-
-      <div className="grid grid-cols-1 gap-3 p-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 p-3 lg:grid-cols-2">
         <IOFieldPreview label="Input" data={row.input} defaultExpanded />
         <IOFieldPreview label="Output" data={row.output} defaultExpanded={!ok} />
       </div>
-    </article>
+    </PanelCard>
   );
 }
-
-// ---------- N invocations ----------
 
 function MultiSummary({ rows, runId }: { rows: RunInvocation[]; runId: string | null }) {
   const stats = useMemo(() => {
@@ -137,57 +143,63 @@ function MultiSummary({ rows, runId }: { rows: RunInvocation[]; runId: string | 
       errors,
     };
   }, [rows]);
-
   const latencyValues = useMemo(() => rows.map((r) => r.latency_ms ?? null), [rows]);
-
   return (
-    <article className="overflow-hidden rounded-lg border border-border bg-bg-1">
-      <header className="flex flex-wrap items-center gap-3 border-b border-border bg-bg-2/40 px-4 py-2">
-        <span className="text-[13px] font-medium text-text">{stats.count} invocations</span>
-        {stats.errors > 0 ? (
-          <Pill tone="error">
-            {stats.errors} error{stats.errors === 1 ? "" : "s"}
-          </Pill>
-        ) : (
-          <Pill tone="ok">all ok</Pill>
-        )}
-        <div className="ml-auto flex items-center gap-4">
-          <Metric label="avg latency" value={formatDurationMs(stats.avgLatency)} />
-          <Metric label="total tokens" value={formatTokensOrUnavailable(stats.tokens)} />
-          <Metric
-            label="total cost"
-            value={stats.costCount > 0 ? formatCostOrUnavailable(stats.cost) : "unavailable"}
-          />
-        </div>
-      </header>
-      <div className="flex items-center gap-3 px-4 py-2">
-        <div className="text-[10px] uppercase tracking-[0.06em] text-muted-2">latency</div>
-        <Sparkline values={latencyValues} width={320} height={28} className="text-accent" />
-        {runId ? (
+    <PanelCard
+      eyebrow="This run"
+      title={
+        <span className="flex items-center gap-3">
+          <span>{stats.count} invocations</span>
+          {stats.errors > 0 ? (
+            <Pill tone="error" size="sm">
+              {stats.errors} error{stats.errors === 1 ? "" : "s"}
+            </Pill>
+          ) : (
+            <Pill tone="ok" size="sm">all ok</Pill>
+          )}
+        </span>
+      }
+      toolbar={
+        runId ? (
           <Link
             to={`/runs/${runId}/invocations`}
-            className="ml-auto inline-flex items-center gap-1 text-[12px] text-accent transition-colors hover:text-[--color-accent-strong]"
+            className="inline-flex items-center gap-1 text-[12px] text-accent hover:text-[--color-accent-strong]"
           >
-            View all {stats.count} invocations
+            View all
             <ArrowRight size={12} />
           </Link>
-        ) : null}
-      </div>
-    </article>
+        ) : null
+      }
+    >
+      <PanelGrid cols={4} gap="sm">
+        <Metric label="avg latency" value={formatDurationMs(stats.avgLatency)} />
+        <Metric label="total tokens" value={formatTokensOrUnavailable(stats.tokens)} />
+        <Metric
+          label="total cost"
+          value={stats.costCount > 0 ? formatCostOrUnavailable(stats.cost) : "unavailable"}
+        />
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-[0.06em] text-muted-2">latency</span>
+          <Sparkline
+            values={latencyValues}
+            width={140}
+            height={22}
+            color={hashColor(runId ?? "row")}
+          />
+        </div>
+      </PanelGrid>
+    </PanelCard>
   );
 }
 
-// ---------- skeleton ----------
-
 function Skeleton() {
   return (
-    <div className="rounded-lg border border-border bg-bg-1 p-4">
-      <div className="h-4 w-40 animate-pulse rounded bg-bg-3" />
-      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <PanelCard eyebrow="Run" title="loading…">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="h-7 animate-pulse rounded bg-bg-2" />
         ))}
       </div>
-    </div>
+    </PanelCard>
   );
 }

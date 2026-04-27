@@ -19,7 +19,6 @@ export { FollowToggle } from "@/components/ui/follow-toggle";
 export type { FollowToggleProps } from "@/components/ui/follow-toggle";
 export { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
-// New design-system atoms
 export { Eyebrow } from "@/components/ui/eyebrow";
 export type { EyebrowProps } from "@/components/ui/eyebrow";
 export { StatTile } from "@/components/ui/stat-tile";
@@ -28,7 +27,7 @@ export { Metric } from "@/components/ui/metric";
 export type { MetricProps } from "@/components/ui/metric";
 export { Table } from "@/components/ui/table";
 export type { Column, TableProps } from "@/components/ui/table";
-export { Section } from "@/components/ui/section";
+export { Section, SectionVariantContext } from "@/components/ui/section";
 export type { SectionProps } from "@/components/ui/section";
 export { HashTag } from "@/components/ui/hash-tag";
 export type { HashTagProps } from "@/components/ui/hash-tag";
@@ -43,5 +42,28 @@ export type { FieldTreeProps } from "@/components/ui/field-tree";
 export { KeyValueGrid } from "@/components/ui/key-value-grid";
 export type { KeyValueGridProps } from "@/components/ui/key-value-grid";
 export { Divider } from "@/components/ui/divider";
+
+export { PanelCard } from "@/components/ui/panel-card";
+export type { PanelCardProps, PanelMenuItem } from "@/components/ui/panel-card";
+export { PanelGrid, PanelGridItem, PanelSection } from "@/components/ui/panel-grid";
+export type {
+  PanelGridProps,
+  PanelGridItemProps,
+  PanelSectionProps,
+} from "@/components/ui/panel-grid";
+export { MultiSeriesChart } from "@/components/ui/multi-series-chart";
+export type {
+  MultiSeries,
+  MultiSeriesPoint,
+  MultiSeriesChartProps,
+} from "@/components/ui/multi-series-chart";
+export { StatusDot } from "@/components/ui/status-dot";
+export type { StatusDotProps, StatusDotState } from "@/components/ui/status-dot";
+export { Breadcrumb } from "@/components/ui/breadcrumb";
+export type { BreadcrumbItem, BreadcrumbProps } from "@/components/ui/breadcrumb";
+export { GroupTreeSection } from "@/components/ui/group-tree";
+export type { GroupTreeRow, GroupTreeGroupProps } from "@/components/ui/group-tree";
+export { Pager } from "@/components/ui/pager";
+export type { PagerProps } from "@/components/ui/pager";
 
 export { uiRegistry } from "@/components/ui/registry";

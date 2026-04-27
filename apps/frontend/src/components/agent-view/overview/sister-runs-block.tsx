@@ -1,4 +1,4 @@
-import { HashTag, Pill, Section } from "@/components/ui";
+import { PanelCard, Pill, StatusDot } from "@/components/ui";
 import { dashboardApi } from "@/lib/api/dashboard";
 import { RunInvocationsResponse } from "@/lib/types";
 import { formatRelativeTime, truncateMiddle } from "@/lib/utils";
@@ -28,72 +28,70 @@ export function SisterRunsBlock(props: SisterRunsBlockProps) {
 
   const matches = sisterQuery.data?.matches ?? [];
   const otherRuns = matches.filter((m) => m.run_id !== props.runId);
-  const summary = !hashContent
-    ? "no hash_content captured yet"
+  const titleNode = !hashContent
+    ? "no hash_content yet"
     : sisterQuery.isLoading
-      ? "searching for sister runs…"
+      ? "searching…"
       : sisterQuery.error
         ? "endpoint unavailable"
         : otherRuns.length === 0
           ? "no other runs share this fingerprint"
           : `${otherRuns.length} other run${otherRuns.length === 1 ? "" : "s"} share this fingerprint`;
 
-  const disabled = !hashContent || otherRuns.length === 0;
-
-  const succinct =
-    !disabled && otherRuns.length > 0 ? (
-      <div className="text-[12px] text-muted">
-        {otherRuns.length} other run{otherRuns.length === 1 ? "" : "s"} share this fingerprint
-        {hashContent ? (
-          <span className="ml-2">
-            <HashTag hash={hashContent} mono size="sm" />
-          </span>
-        ) : null}
-      </div>
-    ) : null;
-
   return (
-    <Section
-      title="Sister runs"
-      summary={summary}
-      {...(succinct ? { succinct } : {})}
-      disabled={disabled}
-    >
-      <ul className="space-y-1.5">
-        {otherRuns.slice(0, 8).map((run) => (
-          <li
-            key={run.run_id}
-            className="flex items-center gap-3 rounded-md border border-border px-3 py-2 transition-colors hover:bg-bg-3"
-          >
-            <HashTag hash={run.run_id} dotOnly />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 text-[13px]">
-                <span className="font-medium">{run.algorithm_class ?? "Agent"}</span>
-                <span className="font-mono text-[11px] text-muted-2">
-                  {truncateMiddle(run.run_id, 16)}
-                </span>
-              </div>
-              <div className="text-[11px] text-muted-2">{formatRelativeTime(run.started_at)}</div>
-            </div>
-            {run.state === "running" ? (
-              <Pill tone="live" pulse size="sm">
-                live
-              </Pill>
-            ) : run.state === "error" ? (
-              <Pill tone="error" size="sm">
-                error
-              </Pill>
-            ) : null}
+    <PanelCard
+      eyebrow="Sister runs"
+      title={
+        <span className="flex items-center gap-2">
+          {titleNode}
+          {hashContent && otherRuns.length > 0 ? (
             <Link
-              to={`/runs/${run.run_id}`}
-              className="rounded p-1 text-muted-2 hover:text-text"
-              aria-label="open run"
+              to={`/agents/${hashContent}`}
+              className="ml-auto text-[11px] text-accent hover:text-[--color-accent-strong]"
             >
-              <ExternalLink size={12} />
+              view group →
             </Link>
-          </li>
-        ))}
-      </ul>
-    </Section>
+          ) : null}
+        </span>
+      }
+    >
+      {otherRuns.length === 0 ? null : (
+        <ul className="space-y-1.5">
+          {otherRuns.slice(0, 8).map((run) => (
+            <li
+              key={run.run_id}
+              className="flex items-center gap-3 rounded-md border border-border px-3 py-2 transition-colors hover:bg-bg-3"
+            >
+              <StatusDot identity={run.run_id} state={run.state === "running" ? "running" : run.state === "error" ? "error" : "ended"} size="sm" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 text-[13px]">
+                  <span className="font-medium">{run.algorithm_class ?? "Agent"}</span>
+                  <span className="font-mono text-[11px] text-muted-2">
+                    {truncateMiddle(run.run_id, 16)}
+                  </span>
+                </div>
+                <div className="text-[11px] text-muted-2">{formatRelativeTime(run.started_at)}</div>
+              </div>
+              {run.state === "running" ? (
+                <Pill tone="live" pulse size="sm">live</Pill>
+              ) : run.state === "error" ? (
+                <Pill tone="error" size="sm">error</Pill>
+              ) : null}
+              <Link
+                to={
+                  hashContent
+                    ? `/agents/${hashContent}/runs/${run.run_id}`
+                    : `/runs/${run.run_id}`
+                }
+                className="rounded p-1 text-muted-2 hover:text-text"
+                aria-label="open run"
+              >
+                <ExternalLink size={12} />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </PanelCard>
   );
 }
