@@ -8,6 +8,7 @@ export interface TrainableParamsBlockProps {
   dataSummary?: unknown;
   summary?: unknown;
   runId?: string;
+  defaultOpen?: boolean;
 }
 
 function valuePreview(value: unknown): string {
@@ -43,7 +44,12 @@ export function TrainableParamsBlock(props: TrainableParamsBlockProps) {
   const disabled = trainable.length === 0;
 
   return (
-    <Section title="Trainable parameters" summary={summaryText} disabled={disabled}>
+    <Section
+      title="Trainable parameters"
+      summary={summaryText}
+      disabled={disabled}
+      defaultOpen={props.defaultOpen ?? false}
+    >
       <ul className="grid gap-2">
         {trainable.map((p) => (
           <li

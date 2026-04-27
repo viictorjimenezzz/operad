@@ -1,7 +1,7 @@
 import { HashTag } from "@/components/ui";
 import { cn, formatDurationMs, formatTokens } from "@/lib/utils";
 import { BaseEdge, EdgeLabelRenderer, type EdgeProps, getBezierPath } from "@xyflow/react";
-import { Activity, Flame } from "lucide-react";
+import { Activity, ChevronDown, ChevronRight, Flame } from "lucide-react";
 
 export type AgentEdgeCardData = {
   agentPath: string;
@@ -17,6 +17,10 @@ export type AgentEdgeCardData = {
   latencyMs: number | null;
   tokens: number | null;
   invocationCount: number;
+  /** When true and classKind === "composite", chevron points down (expanded). */
+  expanded?: boolean;
+  /** Called when the composite's chevron is clicked (toggle expand/collapse). */
+  onToggleExpand?: () => void;
   onSelect: () => void;
 };
 
@@ -91,7 +95,36 @@ export function AgentEdgeCard({
               {d.className}
             </span>
             {d.classKind === "composite" ? (
-              <span className="text-[9px] uppercase tracking-[0.06em] text-muted-2">comp</span>
+              <span
+                role={d.onToggleExpand ? "button" : undefined}
+                tabIndex={d.onToggleExpand ? 0 : undefined}
+                aria-label={d.expanded ? "collapse composite" : "expand composite"}
+                title={d.expanded ? "collapse this composite" : "expand to show children"}
+                onClick={(e) => {
+                  if (!d.onToggleExpand) return;
+                  e.stopPropagation();
+                  d.onToggleExpand();
+                }}
+                onKeyDown={(e) => {
+                  if (!d.onToggleExpand) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    d.onToggleExpand();
+                  }
+                }}
+                className={cn(
+                  "flex items-center gap-0.5 rounded bg-[--color-algo-dim] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.06em] text-[--color-algo]",
+                  d.onToggleExpand && "cursor-pointer hover:bg-[--color-algo]/30",
+                )}
+              >
+                comp
+                {d.expanded ? (
+                  <ChevronDown size={10} className="-mr-0.5" />
+                ) : (
+                  <ChevronRight size={10} className="-mr-0.5" />
+                )}
+              </span>
             ) : null}
           </div>
           <div className="flex items-center gap-2 font-mono text-[10px] text-muted">

@@ -1,8 +1,14 @@
-import { AgentHero } from "@/components/agent-view/page-shell/agent-hero";
-import { AgentTabs } from "@/components/agent-view/page-shell/agent-tabs";
+import { AgentChrome } from "@/components/agent-view/page-shell/agent-chrome";
+import type { AgentTabSpec } from "@/components/agent-view/page-shell/agent-tabs";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { useRunEvents, useRunInvocations, useRunSummary } from "@/hooks/use-runs";
+import {
+  useAgentMeta,
+  useDrift,
+  useRunEvents,
+  useRunInvocations,
+  useRunSummary,
+} from "@/hooks/use-runs";
 import { useEventBufferStore } from "@/stores";
 import { useRunStore } from "@/stores/run";
 import { useEffect, useMemo } from "react";
@@ -31,6 +37,29 @@ export function RunDetailLayout() {
     const rows = invocations.data?.invocations ?? [];
     return rows[rows.length - 1] ?? null;
   }, [invocations.data]);
+
+  const rootAgentPath = summary.data?.root_agent_path ?? null;
+  const meta = useAgentMeta(runId ?? null, rootAgentPath);
+  const drift = useDrift(runId ?? null);
+
+  const showTrain = (meta.data?.trainable_paths?.length ?? 0) > 0;
+  const showDrift = (drift.data?.length ?? 0) > 0;
+
+  const tabs = useMemo<AgentTabSpec[]>(() => {
+    const base: AgentTabSpec[] = [
+      { to: "", label: "Overview", end: true },
+      { to: "/graph", label: "Graph" },
+      {
+        to: "/invocations",
+        label: "Invocations",
+        badge: invocationCount > 0 ? invocationCount : undefined,
+      },
+      { to: "/cost", label: "Cost" },
+    ];
+    if (showTrain) base.push({ to: "/train", label: "Train" });
+    if (showDrift) base.push({ to: "/drift", label: "Drift" });
+    return base;
+  }, [invocationCount, showTrain, showDrift]);
 
   if (!runId) return <EmptyState title="missing run id" />;
   if (summary.isLoading) {
@@ -62,27 +91,12 @@ export function RunDetailLayout() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-border bg-bg px-4 py-1.5 text-[12px]">
-        <Link to="/" className="text-muted-2 transition-colors hover:text-text">
-          runs
-        </Link>
-        <span className="text-muted-2" aria-hidden>
-          /
-        </span>
-        <span className="font-mono text-muted">{run.run_id.slice(0, 12)}…</span>
-      </div>
-      <AgentHero run={run} langfuseUrl={langfuseUrl} hashContent={hashContent} />
-      <AgentTabs
-        base={`/runs/${runId}`}
-        tabs={[
-          { to: "", label: "Overview", end: true },
-          { to: "/graph", label: "Graph" },
-          {
-            to: "/invocations",
-            label: "Invocations",
-            badge: invocationCount > 0 ? invocationCount : undefined,
-          },
-        ]}
+      <AgentChrome
+        run={run}
+        langfuseUrl={langfuseUrl}
+        hashContent={hashContent}
+        basePath={`/runs/${runId}`}
+        tabs={tabs}
       />
       <div className="flex-1 overflow-hidden">
         <Outlet />

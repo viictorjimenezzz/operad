@@ -38,6 +38,12 @@
   --motion-tab: 200ms;
   --motion-inspector: 220ms;
   --motion-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --row-height-sm: 28px;
+  --row-height-xs: 22px;
+  --pad-cell: 8px 12px;
+  --pad-cell-tight: 4px 8px;
+  --chrome-row: 36px;
 }
 
 html,

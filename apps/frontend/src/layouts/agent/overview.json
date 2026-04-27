@@ -10,45 +10,34 @@
     "elements": {
       "page": {
         "type": "Stack",
-        "props": { "gap": 16 },
-        "children": ["latest", "more", "sections"]
+        "props": { "gap": 12 },
+        "children": ["banner", "sections"]
       },
-      "latest": {
-        "type": "LatestInvocationCard",
+      "banner": {
+        "type": "InvocationsBanner",
         "props": {
           "sourceSummary": "$queries.summary",
           "sourceInvocations": "$queries.invocations",
           "runId": "$context.runId"
         }
       },
-      "more": {
-        "type": "InvocationsList",
-        "props": {
-          "sourceSummary": "$queries.summary",
-          "sourceInvocations": "$queries.invocations",
-          "runId": "$context.runId",
-          "skipLatest": true,
-          "density": "compact"
-        }
-      },
       "sections": {
         "type": "Stack",
-        "props": { "gap": 8 },
+        "props": { "gap": 6 },
         "children": [
-          "repro",
+          "identity",
           "backend",
           "config",
           "examples",
-          "drift",
-          "cost",
-          "trainable",
+          "repro",
           "sister"
         ]
       },
-      "repro": {
-        "type": "ReproducibilityBlock",
+      "identity": {
+        "type": "IdentityBlock",
         "props": {
-          "sourceInvocations": "$queries.invocations"
+          "sourceSummary": "$queries.summary",
+          "runId": "$context.runId"
         }
       },
       "backend": {
@@ -73,24 +62,10 @@
           "runId": "$context.runId"
         }
       },
-      "drift": {
-        "type": "DriftBlock",
-        "props": {
-          "sourceInvocations": "$queries.invocations",
-          "runId": "$context.runId"
-        }
-      },
-      "cost": {
-        "type": "CostLatencyBlock",
+      "repro": {
+        "type": "ReproducibilityBlock",
         "props": {
           "sourceInvocations": "$queries.invocations"
-        }
-      },
-      "trainable": {
-        "type": "TrainableParamsBlock",
-        "props": {
-          "sourceSummary": "$queries.summary",
-          "runId": "$context.runId"
         }
       },
       "sister": {
