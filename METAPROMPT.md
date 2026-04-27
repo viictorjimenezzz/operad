@@ -33,6 +33,7 @@ then follow `AGENTS.md` for repo-wide working rules.
 - Keep the change scoped to the user's request and the active brief.
 - Preserve the architecture in `VISION.md` and the invariants in `AGENTS.md`.
 - Prefer linking to authoritative docs over copying long explanations here.
+- DO NOT KEEP BACKWARDS COMPATIBILITY, CHANGE EVERYTHING THAT IS NEEDED FOR THE NEW CODE TO WORK!!
 
 ## Before PR
 
