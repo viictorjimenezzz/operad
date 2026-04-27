@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import {
   Activity,
+  Beaker,
   Boxes,
   Database,
   GitBranch,
@@ -8,7 +9,7 @@ import {
   Layers,
   Workflow,
 } from "lucide-react";
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
 /**
@@ -46,6 +47,12 @@ const RAIL_ITEMS: GlobalRailItem[] = [
     to: "/training",
     label: "Training",
     icon: <GraduationCap size={16} />,
+  },
+  {
+    id: "opro",
+    to: "/opro",
+    label: "OPRO",
+    icon: <Beaker size={16} />,
   },
   {
     id: "experiments",
@@ -93,9 +100,7 @@ export function GlobalRail() {
             title={it.label}
             className={cn(
               "group relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors duration-[var(--motion-quick)]",
-              isActive
-                ? "bg-bg-3 text-text"
-                : "text-muted-2 hover:bg-bg-2 hover:text-text",
+              isActive ? "bg-bg-3 text-text" : "text-muted-2 hover:bg-bg-2 hover:text-text",
             )}
           >
             {it.icon}

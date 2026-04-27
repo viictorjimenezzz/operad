@@ -165,3 +165,33 @@ def test_synthetic_algorithm_child_stays_on_algorithms_rail(app_and_obs) -> None
     assert groups[0]["class_name"] == "OPROOptimizer"
     assert groups[0]["runs"][0]["run_id"] == "opro-child"
     assert groups[0]["runs"][0]["synthetic"] is True
+
+
+def test_opro_endpoint_filters_opro_algorithm_runs(app_and_obs) -> None:
+    app, obs = app_and_obs
+    for run_id, path, ts in [
+        ("opro-run", "OPRO", 1.0),
+        ("beam-run", "Beam", 2.0),
+    ]:
+        obs.registry.record_envelope(
+            {
+                "type": "algo_event",
+                "run_id": run_id,
+                "algorithm_path": path,
+                "kind": "algo_start",
+                "payload": {},
+                "started_at": ts,
+                "finished_at": None,
+                "metadata": {},
+            }
+        )
+
+    with TestClient(app) as client:
+        alias = client.get("/api/opro")
+        filtered = client.get("/api/algorithms?path=OPRO")
+
+    assert alias.status_code == 200
+    assert filtered.status_code == 200
+    assert [group["algorithm_path"] for group in alias.json()] == ["OPRO"]
+    assert [group["algorithm_path"] for group in filtered.json()] == ["OPRO"]
+    assert alias.json()[0]["runs"][0]["run_id"] == "opro-run"

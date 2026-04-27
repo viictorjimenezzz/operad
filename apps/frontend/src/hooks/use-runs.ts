@@ -68,6 +68,14 @@ export function useAlgorithmGroups() {
   });
 }
 
+export function useOPRORuns() {
+  return useQuery({
+    queryKey: ["opro"] as const,
+    queryFn: () => dashboardApi.oproGroups(),
+    refetchInterval: 5_000,
+  });
+}
+
 export function useTrainingGroups() {
   return useQuery({
     queryKey: ["trainings"] as const,

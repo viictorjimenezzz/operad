@@ -3,6 +3,8 @@
   "version": 1,
   "dataSources": {
     "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "iterations": { "endpoint": "/runs/$context.runId/iterations.json" },
+    "events": { "endpoint": "/runs/$context.runId/events?limit=500" },
     "children": { "endpoint": "/runs/$context.runId/children" },
     "graph": { "endpoint": "/graph/$context.runId" }
   },
@@ -14,42 +16,60 @@
         "props": {
           "tabs": [
             { "id": "overview", "label": "Overview" },
-            { "id": "iterations", "label": "Iterations" },
+            { "id": "history", "label": "History" },
+            { "id": "candidates", "label": "Candidates" },
+            { "id": "parameter", "label": "Parameter" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
             { "id": "graph", "label": "Graph" }
           ]
         },
-        "children": ["overview", "iterations", "agents", "events", "graph"]
+        "children": ["overview", "history", "candidates", "parameter", "agents", "events", "graph"]
       },
       "overview": {
-        "type": "PanelCard",
+        "type": "OPRODetailOverview",
         "props": {
-          "title": "OPRO overview",
-          "bodyMinHeight": 220
-        },
-        "children": ["overview-empty"]
-      },
-      "overview-empty": {
-        "type": "EmptyState",
-        "props": {
-          "title": "overview pending",
-          "description": "OPRO-specific panels are owned by Brief 16"
+          "sourceSummary": "$queries.summary",
+          "sourceIterations": "$queries.iterations",
+          "sourceEvents": "$queries.events",
+          "sourceChildren": "$queries.children",
+          "runId": "$context.runId"
         }
       },
-      "iterations": {
-        "type": "PanelCard",
-        "props": { "title": "optimizer iterations", "bodyMinHeight": 320 },
-        "children": ["iterations-empty"]
-      },
-      "iterations-empty": {
-        "type": "EmptyState",
+      "history": {
+        "type": "OPROHistoryTab",
         "props": {
-          "title": "iteration view pending",
-          "description": "candidate proposal and evaluation panels are owned by Brief 16"
+          "sourceIterations": "$queries.iterations",
+          "sourceEvents": "$queries.events",
+          "sourceChildren": "$queries.children"
         }
       },
-      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
+      "candidates": {
+        "type": "OPROCandidatesTab",
+        "props": {
+          "sourceIterations": "$queries.iterations",
+          "sourceEvents": "$queries.events",
+          "sourceChildren": "$queries.children",
+          "runId": "$context.runId"
+        }
+      },
+      "parameter": {
+        "type": "OPROParameterTab",
+        "props": {
+          "sourceIterations": "$queries.iterations",
+          "sourceEvents": "$queries.events",
+          "sourceChildren": "$queries.children"
+        }
+      },
+      "agents": {
+        "type": "AgentsTab",
+        "props": {
+          "runId": "$context.runId",
+          "groupBy": "hash",
+          "emptyTitle": "no OPRO child agents yet",
+          "emptyDescription": "proposer and evaluator child runs appear after OPRO emits synthetic invocations"
+        }
+      },
       "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
       "graph": {
         "type": "PanelCard",
