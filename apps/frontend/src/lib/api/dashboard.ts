@@ -141,6 +141,7 @@ export const dashboardApi = {
       AgentGroupParametersResponse,
     ),
   algorithmGroups: () => getJson("/api/algorithms", z.array(AlgorithmGroup)),
+  oproGroups: () => getJson("/api/opro", z.array(AlgorithmGroup)),
   trainingGroups: () => getJson("/api/trainings", z.array(TrainingGroup)),
   runSummary: (runId: string) => getJson(`/runs/${runId}/summary`, RunSummary),
   runInvocations: (runId: string) => getJson(`/runs/${runId}/invocations`, RunInvocationsResponse),

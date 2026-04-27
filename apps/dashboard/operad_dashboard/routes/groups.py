@@ -399,9 +399,26 @@ async def agent_group_parameters(
 
 
 @router.get("/api/algorithms")
-async def list_algorithm_runs(request: Request) -> JSONResponse:
+async def list_algorithm_runs(request: Request, path: str | None = None) -> JSONResponse:
     """Return one entry per algorithm orchestrator run, grouped by class."""
+    return JSONResponse(_algorithm_groups(request, path_filter=path))
+
+
+@router.get("/api/opro")
+async def list_opro_runs(request: Request) -> JSONResponse:
+    """Return OPRO optimizer algorithm runs only."""
+    return JSONResponse(_algorithm_groups(request, path_filter="OPRO"))
+
+
+def _algorithm_groups(request: Request, path_filter: str | None = None) -> list[dict[str, Any]]:
     runs = _all_runs(request)
+    cost_totals: dict[str, Any] = {}
+    cost = getattr(request.app.state, "cost_observer", None)
+    if cost is not None:
+        try:
+            cost_totals = cost.totals()
+        except Exception:
+            cost_totals = {}
     groups: dict[str, list[RunInfo]] = {}
     for info in runs:
         if not info.is_algorithm:
@@ -409,6 +426,8 @@ async def list_algorithm_runs(request: Request) -> JSONResponse:
         if _is_trainer(info):
             # Trainer goes on its own rail; keep the algorithms rail focused
             # on Beam / Sweep / Debate / Evo / SelfRefine / AutoResearcher.
+            continue
+        if path_filter is not None and info.algorithm_path != path_filter:
             continue
         key = info.algorithm_path or "_unknown"
         groups.setdefault(key, []).append(info)
@@ -425,11 +444,19 @@ async def list_algorithm_runs(request: Request) -> JSONResponse:
                 "errors": sum(1 for r in members if r.state == "error"),
                 "last_seen": max(r.last_event_at for r in members),
                 "first_seen": min(r.started_at for r in members),
-                "runs": [r.summary() for r in members],
+                "runs": [_summary_with_cost(r, cost_totals) for r in members],
             }
         )
     out.sort(key=lambda g: g["last_seen"], reverse=True)
-    return JSONResponse(out)
+    return out
+
+
+def _summary_with_cost(info: RunInfo, cost_totals: dict[str, Any]) -> dict[str, Any]:
+    summary = info.summary()
+    total = cost_totals.get(info.run_id)
+    if isinstance(total, dict):
+        summary["cost"] = total
+    return summary
 
 
 # ---------------------------------------------------------------------------

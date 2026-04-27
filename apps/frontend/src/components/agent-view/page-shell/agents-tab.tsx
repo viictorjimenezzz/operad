@@ -171,6 +171,7 @@ function childToRow(
     latency: { kind: "num", value: child.duration_ms, format: "ms" },
     tokens: { kind: "num", value: totalTokens, format: "tokens" },
     cost: { kind: "num", value: child.cost?.cost_usd ?? null, format: "cost" },
+    route: { kind: "text", value: childRoute(child, hash), mono: true },
   };
 
   for (const key of extraColumns) {
@@ -217,7 +218,10 @@ function groupByHash(row: RunRow, labels: Map<string, string>): { key: string; l
 }
 
 function childHref(row: RunRow): string {
-  return `/agents/${encodeURIComponent(row.identity)}/runs/${encodeURIComponent(row.id)}`;
+  return (
+    textField(row.fields.route) ??
+    `/agents/${encodeURIComponent(row.identity)}/runs/${encodeURIComponent(row.id)}`
+  );
 }
 
 function childHash(child: ChildRunSummary): string {
@@ -230,13 +234,23 @@ function childHash(child: ChildRunSummary): string {
   );
 }
 
+function childRoute(child: ChildRunSummary, hash: string): string {
+  if (child.algorithm_path === "OPRO") return `/opro/${encodeURIComponent(child.run_id)}`;
+  if (child.algorithm_path === "Trainer" || child.algorithm_path?.endsWith(".Trainer")) {
+    return `/training/${encodeURIComponent(child.run_id)}`;
+  }
+  if (child.is_algorithm) return `/algorithms/${encodeURIComponent(child.run_id)}`;
+  return `/agents/${encodeURIComponent(hash)}/runs/${encodeURIComponent(child.run_id)}`;
+}
+
 function extraField(
   child: ChildRunSummary,
   key: string,
   sweepCell: SweepSnapshot["cells"][number] | null,
 ): RunRow["fields"][string] | null {
   if (key === "score") {
-    const score = numberAt(child.metrics, "score") ?? child.algorithm_terminal_score ?? sweepCell?.score;
+    const score =
+      numberAt(child.metrics, "score") ?? child.algorithm_terminal_score ?? sweepCell?.score;
     return { kind: "num", value: score ?? null, format: "score" };
   }
   if (key === "axisValues") {

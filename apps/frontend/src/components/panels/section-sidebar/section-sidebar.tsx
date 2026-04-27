@@ -1,5 +1,6 @@
 import { AgentsTree } from "@/components/panels/section-sidebar/agents-tree";
 import { AlgorithmsTree } from "@/components/panels/section-sidebar/algorithms-tree";
+import { OPROTree } from "@/components/panels/section-sidebar/opro-tree";
 import { TrainingTree } from "@/components/panels/section-sidebar/training-tree";
 import { IconButton } from "@/components/ui";
 import { useUIStore } from "@/stores";
@@ -33,15 +34,22 @@ export function SectionSidebar() {
   const onSearchChange = (e: ChangeEvent<HTMLInputElement>) => setSearch(e.target.value);
 
   const path = location.pathname;
-  const rail =
-    path.startsWith("/algorithms")
-      ? "algorithms"
-      : path.startsWith("/training")
-        ? "training"
+  const rail = path.startsWith("/algorithms")
+    ? "algorithms"
+    : path.startsWith("/training")
+      ? "training"
+      : path.startsWith("/opro")
+        ? "opro"
         : "agents";
 
   const railTitle =
-    rail === "algorithms" ? "Algorithms" : rail === "training" ? "Training" : "Agents";
+    rail === "algorithms"
+      ? "Algorithms"
+      : rail === "training"
+        ? "Training"
+        : rail === "opro"
+          ? "OPRO"
+          : "Agents";
 
   return (
     <aside
@@ -89,6 +97,7 @@ export function SectionSidebar() {
             {rail === "agents" ? <AgentsTree search={search} /> : null}
             {rail === "algorithms" ? <AlgorithmsTree search={search} /> : null}
             {rail === "training" ? <TrainingTree search={search} /> : null}
+            {rail === "opro" ? <OPROTree search={search} /> : null}
           </div>
         </>
       ) : (
