@@ -322,7 +322,9 @@ def _build_gemini(cfg: Configuration) -> "GeminiModel":
                 }
             )
     if cfg.resilience.timeout is not None:
-        client_args["timeout"] = cfg.resilience.timeout
+        # google-genai >= 1.0 uses http_options.timeout (milliseconds); the
+        # old top-level `timeout` kwarg was removed.
+        client_args["http_options"] = {"timeout": int(cfg.resilience.timeout * 1000)}
 
     return GeminiModel(
         client_args=client_args or None,
