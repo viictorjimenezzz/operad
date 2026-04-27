@@ -111,13 +111,22 @@ def test_gemini_vertex_service_account_configures_client_args(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     pytest.importorskip("strands.models")
-    if "strands.models.gemini" not in sys.modules:
-        _install_fake_google_genai(monkeypatch)
+    _install_fake_google_genai(monkeypatch)
 
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    seen: dict[str, Any] = {}
+
+    def _fake_sa(info: dict[str, Any], scopes: list[str] | None = None) -> dict[str, Any]:
+        seen["scopes"] = scopes
+        return {
+            "kind": "fake-sa-creds",
+            "project_id": info.get("project_id"),
+            "scopes": scopes,
+        }
+
     monkeypatch.setattr(
         "google.oauth2.service_account.Credentials.from_service_account_info",
-        lambda info: {"kind": "fake-sa-creds", "project_id": info.get("project_id")},
+        _fake_sa,
     )
     monkeypatch.setenv(
         "GOOGLE_VERTEX_AI_SERVICE_ACCOUNT",
@@ -139,6 +148,7 @@ def test_gemini_vertex_service_account_configures_client_args(
     assert model.client_args["project"] == "vertex-proj"
     assert model.client_args["location"] == "europe-west4"
     assert model.client_args["credentials"]["kind"] == "fake-sa-creds"
+    assert seen["scopes"] == ["https://www.googleapis.com/auth/cloud-platform"]
 
 
 def test_huggingface_resolver_returns_wrapper(

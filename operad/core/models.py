@@ -309,7 +309,10 @@ def _build_gemini(cfg: Configuration) -> "GeminiModel":
                     "bad_config",
                     "Vertex Gemini auth needs project id; set GOOGLE_CLOUD_PROJECT or include project_id in GOOGLE_VERTEX_AI_SERVICE_ACCOUNT.",
                 )
-            credentials = service_account.Credentials.from_service_account_info(sa_info)
+            credentials = service_account.Credentials.from_service_account_info(
+                sa_info,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
             client_args.update(
                 {
                     "vertexai": True,
