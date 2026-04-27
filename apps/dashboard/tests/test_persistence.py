@@ -55,12 +55,25 @@ def _run_info(
 def test_upsert_snapshot_persists_summary_and_events(tmp_path: Path) -> None:
     store = SQLiteRunArchive(tmp_path)
     info = _run_info(run_id="r-1", started_at=100.0)
+    info.notes_markdown = "hello"
     store.upsert_snapshot(info)
 
     restored = store.get_run("r-1")
     assert restored is not None
     assert restored["summary"]["run_id"] == "r-1"
+    assert restored["summary"]["notes_markdown"] == "hello"
     assert len(restored["events"]) == 2
+
+
+def test_set_notes_updates_existing_snapshot(tmp_path: Path) -> None:
+    store = SQLiteRunArchive(tmp_path)
+    info = _run_info(run_id="r-notes", started_at=100.0)
+    store.upsert_snapshot(info)
+    store.set_notes("r-notes", "**updated**")
+
+    restored = store.get_run("r-notes")
+    assert restored is not None
+    assert restored["summary"]["notes_markdown"] == "**updated**"
 
 
 def test_synthetic_run_skips_event_persistence(tmp_path: Path) -> None:
@@ -97,8 +110,14 @@ def test_migrations_apply_on_existing_db(tmp_path: Path) -> None:
         }
         assert "runs" in tables
         assert "events" in tables
+        cols = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(runs)").fetchall()
+        }
+        assert "notes_markdown" in cols
         applied = {
             row[0]
             for row in conn.execute("SELECT migration FROM _meta").fetchall()
         }
         assert "0001_archive_schema.sql" in applied
+        assert "0002_notes_markdown.sql" in applied

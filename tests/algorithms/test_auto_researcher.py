@@ -28,6 +28,8 @@ from operad.algorithms import (
     ResearchInput,
     ResearchPlan,
 )
+from operad.runtime.events import AlgorithmEvent
+from operad.runtime.observers import registry as obs_registry
 
 
 pytestmark = pytest.mark.asyncio
@@ -169,6 +171,32 @@ async def test_auto_researcher_loops_when_score_below_threshold(cfg) -> None:
     assert ar.reasoner.calls == 2
     assert ar.reflector.calls == 1
     assert ar.critic.calls == 2
+
+
+async def test_auto_researcher_emits_plan_and_attempt_index(cfg) -> None:
+    events: list[AlgorithmEvent] = []
+
+    class _Collector:
+        async def on_event(self, event: object) -> None:
+            if isinstance(event, AlgorithmEvent):
+                events.append(event)
+
+    obs_registry.clear()
+    obs_registry.register(_Collector())
+    try:
+        ar, _ = await _make_ar(cfg, n=2, max_iter=0)
+        await ar.run(ResearchContext(goal="go"))
+    finally:
+        obs_registry.clear()
+
+    plans = sorted(
+        [e for e in events if e.kind == "plan"],
+        key=lambda e: e.payload["attempt_index"],
+    )
+    iterations = [e for e in events if e.kind == "iteration"]
+    assert [e.payload["attempt_index"] for e in plans] == [0, 1]
+    assert [e.payload["plan"]["query"] for e in plans] == ["q-1", "q-2"]
+    assert {e.payload["attempt_index"] for e in iterations} == {0, 1}
 
 
 async def test_auto_researcher_rejects_zero_n() -> None:

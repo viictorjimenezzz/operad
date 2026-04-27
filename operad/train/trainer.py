@@ -17,6 +17,7 @@ brief; `Momentum` optimizers fold the merged grad into their summary.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 from datetime import datetime, timezone
@@ -32,6 +33,7 @@ from ..data.loader import Batch, DataLoader
 from ..metrics.metric import Metric
 from ..optim.backprop.backward import backward
 from ..optim.backprop.tape import tape
+from ..optim.backprop.traceback import PromptTraceback
 from ..optim.gradmode import no_grad
 from ..optim.losses.loss import Loss
 from ..optim.optimizers.optimizer import Optimizer
@@ -115,6 +117,7 @@ class Trainer(Generic[In, Out]):
         metrics: list[Metric] | None = None,
         max_grad_norm: float | None = None,
         accumulation_steps: int = 1,
+        traceback_dir: Path | None = None,
     ) -> None:
         if accumulation_steps < 1:
             raise ValueError("accumulation_steps must be >= 1")
@@ -126,12 +129,17 @@ class Trainer(Generic[In, Out]):
         self.scheduler = scheduler
         self.metrics: list[Metric] = list(metrics or [])
         self.accumulation_steps = accumulation_steps
+        self.traceback_dir = (
+            Path(traceback_dir) if traceback_dir is not None else None
+        )
         self.max_grad_norm = max_grad_norm
         self._callbacks: list[Callback] = list(callbacks or [])
         if max_grad_norm is not None:
             self._callbacks.append(GradClip(max_severity=max_grad_norm))
         self._should_stop: bool = False
         self._last_batch_tape_entries: int = 0
+        self._last_prompt_traceback: PromptTraceback | None = None
+        self._active_run_id: str | None = None
         self._last_report: TrainingReport | None = None
         self.last_epoch_per_sample_severity: dict[int, float] = {}
         self.loader: DataLoader[In, Out] | None = None
@@ -181,7 +189,8 @@ class Trainer(Generic[In, Out]):
         epoch_reports: list[EpochReport] = []
         batch_counter = 0
 
-        with _enter_algorithm_run():
+        with _enter_algorithm_run() as run_id:
+            self._active_run_id = run_id
             await emit_algorithm_event(
                 "algo_start",
                 algorithm_path="Trainer",
@@ -191,24 +200,34 @@ class Trainer(Generic[In, Out]):
                     "batch_size": getattr(loader, "batch_size", None),
                 },
             )
-            training = await self._fit_loop(
-                loader=loader,
-                val_ds=val_ds,
-                epochs=epochs,
-                cbs=cbs,
-                seed_hash=seed_hash,
-                early_stopping=early_stopping,
-                epoch_reports=epoch_reports,
-                batch_counter=batch_counter,
-            )
-            await emit_algorithm_event(
-                "algo_end",
-                algorithm_path="Trainer",
-                payload={
-                    "epochs_completed": len(epoch_reports),
-                    "final_hash_content": self.agent.hash_content,
-                },
-            )
+            try:
+                async with contextlib.AsyncExitStack() as stack:
+                    session = getattr(self.optimizer, "session", None)
+                    if (
+                        callable(session)
+                        and getattr(self.optimizer, "auto_session_in_trainer", False)
+                    ):
+                        await stack.enter_async_context(session())
+                    training = await self._fit_loop(
+                        loader=loader,
+                        val_ds=val_ds,
+                        epochs=epochs,
+                        cbs=cbs,
+                        seed_hash=seed_hash,
+                        early_stopping=early_stopping,
+                        epoch_reports=epoch_reports,
+                        batch_counter=batch_counter,
+                    )
+                await emit_algorithm_event(
+                    "algo_end",
+                    algorithm_path="Trainer",
+                    payload={
+                        "epochs_completed": len(epoch_reports),
+                        "final_hash_content": self.agent.hash_content,
+                    },
+                )
+            finally:
+                self._active_run_id = None
         self._last_report = training
         return training
 
@@ -347,10 +366,10 @@ class Trainer(Generic[In, Out]):
                                 payload = self._finalize_gradient_payload(
                                     grad_payload, params=all_params
                                 )
-                                await emit_algorithm_event(
-                                    "gradient_applied",
-                                    algorithm_path="Trainer",
-                                    payload=payload,
+                                await self._emit_gradient_applied(
+                                    payload,
+                                    epoch=epoch,
+                                    batch=epoch_batch,
                                 )
                             self.optimizer.zero_grad()
                             if tc is not None and tc.mode == "record":
@@ -392,10 +411,10 @@ class Trainer(Generic[In, Out]):
                             payload = self._finalize_gradient_payload(
                                 grad_payload, params=all_params
                             )
-                            await emit_algorithm_event(
-                                "gradient_applied",
-                                algorithm_path="Trainer",
-                                payload=payload,
+                            await self._emit_gradient_applied(
+                                payload,
+                                epoch=epoch,
+                                batch=epoch_batch,
                             )
                         self.optimizer.zero_grad()
                         if tc is not None and tc.mode == "record":
@@ -605,6 +624,8 @@ class Trainer(Generic[In, Out]):
             loss_sum += score
             sample_count += 1
             self.last_epoch_per_sample_severity[idx] = grad.severity
+            if self.traceback_dir is not None and grad.severity > 0:
+                self._last_prompt_traceback = PromptTraceback.from_run(t, grad)
             if grad.severity <= 0:
                 continue
             await backward(t, grad, parameters=params)
@@ -712,6 +733,46 @@ class Trainer(Generic[In, Out]):
                 changes.append(f"{path}\n- {before}\n+ {after}")
         payload["applied_diff"] = "\n\n".join(changes)
         return payload
+
+    async def _emit_gradient_applied(
+        self,
+        payload: dict[str, Any],
+        *,
+        epoch: int,
+        batch: int,
+    ) -> None:
+        await emit_algorithm_event(
+            "gradient_applied",
+            algorithm_path="Trainer",
+            payload=payload,
+        )
+        path = self._persist_prompt_traceback(epoch=epoch, batch=batch)
+        if path is None:
+            return
+        await emit_algorithm_event(
+            "iteration",
+            algorithm_path="Trainer",
+            payload={
+                "iter_index": int(epoch),
+                "phase": "traceback",
+                "epoch": int(epoch),
+                "batch": int(batch),
+                "path": path,
+            },
+        )
+
+    def _persist_prompt_traceback(self, *, epoch: int, batch: int) -> str | None:
+        if self.traceback_dir is None or self._last_prompt_traceback is None:
+            return None
+        if self._active_run_id is None:
+            return None
+        path = (
+            self.traceback_dir
+            / self._active_run_id
+            / f"epoch_{epoch}_batch_{batch}.ndjson"
+        )
+        self._last_prompt_traceback.save(path)
+        return str(path)
 
     def _build_training_report(
         self,

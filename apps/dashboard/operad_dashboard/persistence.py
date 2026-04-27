@@ -43,8 +43,9 @@ class SQLiteRunArchive:
                     parent_run_id,
                     synthetic,
                     mermaid_text,
+                    notes_markdown,
                     summary_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(run_id) DO UPDATE SET
                     algorithm_path=excluded.algorithm_path,
                     state=excluded.state,
@@ -53,6 +54,7 @@ class SQLiteRunArchive:
                     parent_run_id=excluded.parent_run_id,
                     synthetic=excluded.synthetic,
                     mermaid_text=excluded.mermaid_text,
+                    notes_markdown=excluded.notes_markdown,
                     summary_json=excluded.summary_json
                 """,
                 (
@@ -64,6 +66,7 @@ class SQLiteRunArchive:
                     info.parent_run_id,
                     1 if info.synthetic else 0,
                     info.mermaid,
+                    info.notes_markdown,
                     summary_json,
                 ),
             )
@@ -97,7 +100,7 @@ class SQLiteRunArchive:
         with self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT summary_json
+                SELECT summary_json, notes_markdown
                 FROM runs
                 WHERE (? IS NULL OR started_at >= ?)
                   AND (? IS NULL OR started_at <= ?)
@@ -120,12 +123,12 @@ class SQLiteRunArchive:
                     safe_limit,
                 ),
             ).fetchall()
-        return [json.loads(row[0]) for row in rows]
+        return [_summary_with_notes(row[0], row[1]) for row in rows]
 
     def get_run(self, run_id: str) -> dict[str, Any] | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT summary_json FROM runs WHERE run_id = ?",
+                "SELECT summary_json, notes_markdown FROM runs WHERE run_id = ?",
                 (run_id,),
             ).fetchone()
             if row is None:
@@ -140,7 +143,7 @@ class SQLiteRunArchive:
                 (run_id,),
             ).fetchall()
         return {
-            "summary": json.loads(row[0]),
+            "summary": _summary_with_notes(row[0], row[1]),
             "events": [json.loads(ev[0]) for ev in event_rows],
         }
 
@@ -159,13 +162,33 @@ class SQLiteRunArchive:
         with self._connect() as conn:
             conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
 
+    def set_notes(self, run_id: str, markdown: str) -> None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT summary_json FROM runs WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()
+            if row is None:
+                return
+            summary = json.loads(row[0])
+            if isinstance(summary, dict):
+                summary["notes_markdown"] = markdown
+            conn.execute(
+                """
+                UPDATE runs
+                SET notes_markdown = ?, summary_json = ?
+                WHERE run_id = ?
+                """,
+                (markdown, _canonical_json(summary), run_id),
+            )
+
     def iter_export_records(self) -> list[dict[str, Any]]:
         with self._connect() as conn:
             run_rows = conn.execute(
-                "SELECT run_id, summary_json FROM runs ORDER BY started_at DESC"
+                "SELECT run_id, summary_json, notes_markdown FROM runs ORDER BY started_at DESC"
             ).fetchall()
             out: list[dict[str, Any]] = []
-            for run_id, summary_json in run_rows:
+            for run_id, summary_json, notes_markdown in run_rows:
                 event_rows = conn.execute(
                     """
                     SELECT envelope_json
@@ -177,7 +200,7 @@ class SQLiteRunArchive:
                 ).fetchall()
                 out.append(
                     {
-                        "summary": json.loads(summary_json),
+                        "summary": _summary_with_notes(summary_json, notes_markdown),
                         "events": [json.loads(ev[0]) for ev in event_rows],
                     }
                 )
@@ -215,6 +238,19 @@ class SQLiteRunArchive:
 
 def _canonical_json(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _summary_with_notes(
+    summary_json: str,
+    notes_markdown: str | None,
+) -> dict[str, Any]:
+    summary = json.loads(summary_json)
+    if isinstance(summary, dict):
+        summary["notes_markdown"] = (
+            notes_markdown or summary.get("notes_markdown") or ""
+        )
+        return summary
+    return {"notes_markdown": notes_markdown or ""}
 
 
 def _envelope_timestamp(envelope: dict[str, Any], *, fallback: float) -> float:

@@ -11,11 +11,14 @@ gradients.
 
 from __future__ import annotations
 
+import contextlib
 import inspect
 import math
+import time
+import uuid
 from collections.abc import Awaitable
 from inspect import cleandoc
-from typing import Any, Callable, Iterable
+from typing import Any, AsyncIterator, Callable, Iterable
 
 from pydantic import BaseModel, Field
 
@@ -26,6 +29,8 @@ from operad.metrics.metric import Metric
 from operad.optim.parameter import Parameter
 from operad.optim.backprop.rewrite import _describe_constraint, _parse, _serialize
 from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
+from operad.runtime.observers import base as _obs
+from operad.runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +152,8 @@ OPROFactory = Callable[[], OPROAgent | Awaitable[OPROAgent]]
 class OPROOptimizer(Optimizer):
     """LLM-as-optimizer over a parameter's value history."""
 
+    auto_session_in_trainer = True
+
     def __init__(
         self,
         params: Iterable[Parameter[Any]] | Iterable[dict[str, Any]],
@@ -169,6 +176,9 @@ class OPROOptimizer(Optimizer):
         self._history_k = int(history_k)
         self._max_retries = int(max_retries)
         self._opro: OPROAgent | None = None
+        self._algo_run_id: str | None = None
+        self._step_index = 0
+        self._best_score: float | None = None
 
     async def _resolve_opro(self) -> OPROAgent:
         if self._opro is not None:
@@ -193,7 +203,81 @@ class OPROOptimizer(Optimizer):
                 items.append((p, group))
         if not items:
             return
-        await self._apply_updates(items)
+        if self._algo_run_id is None:
+            async with self.session():
+                await self._step_with_context(items)
+            return
+        await self._step_with_context(items)
+
+    @contextlib.asynccontextmanager
+    async def session(self) -> AsyncIterator["OPROOptimizer"]:
+        owns_session = self._algo_run_id is None
+        if owns_session:
+            self._algo_run_id = uuid.uuid4().hex
+        run_id = self._algo_run_id or uuid.uuid4().hex
+        parent_run_id = _obs._RUN_ID.get()
+        metadata = (
+            {"parent_run_id": parent_run_id}
+            if parent_run_id is not None and parent_run_id != run_id
+            else {}
+        )
+        if owns_session:
+            with _enter_algorithm_run(run_id, reuse_existing=False):
+                await emit_algorithm_event(
+                    "algo_start",
+                    algorithm_path=type(self).__name__,
+                    payload={
+                        "params": [p.path for p in self._all_params()],
+                        "history_window": self._history_k,
+                        "max_retries": self._max_retries,
+                    },
+                    started_at=time.time(),
+                    metadata=metadata,
+                )
+        try:
+            yield self
+            if owns_session:
+                with _enter_algorithm_run(run_id, reuse_existing=False):
+                    await emit_algorithm_event(
+                        "algo_end",
+                        algorithm_path=type(self).__name__,
+                        payload={
+                            "steps": self._step_index,
+                            "best_score": self._best_score,
+                            "final_values": {
+                                p.path: str(p.read()) for p in self._all_params()
+                            },
+                        },
+                        started_at=time.time(),
+                        finished_at=time.time(),
+                    )
+        except Exception as e:
+            if owns_session:
+                with _enter_algorithm_run(run_id, reuse_existing=False):
+                    await emit_algorithm_event(
+                        "algo_error",
+                        algorithm_path=type(self).__name__,
+                        payload={"type": type(e).__name__, "message": str(e)},
+                        started_at=time.time(),
+                        finished_at=time.time(),
+                    )
+            raise
+        finally:
+            if owns_session:
+                self._algo_run_id = None
+
+    async def _step_with_context(
+        self,
+        items: list[tuple[Parameter[Any], ParamGroup]],
+    ) -> None:
+        if self._algo_run_id is None:
+            await self._apply_updates(items)
+            return
+        with _enter_algorithm_run(self._algo_run_id, reuse_existing=False):
+            await self._apply_updates(items)
+
+    def _all_params(self) -> list[Parameter[Any]]:
+        return [p for group in self.param_groups for p in group.params]
 
     async def _apply_param_update(
         self, param: Parameter[Any], group: ParamGroup
@@ -202,10 +286,16 @@ class OPROOptimizer(Optimizer):
             "opro", []
         )
         best_score = max((s for _, s in history), default=-math.inf)
+        if history:
+            history_best = max(s for _, s in history)
+            if self._best_score is None or history_best > self._best_score:
+                self._best_score = history_best
         opro_agent = await self._resolve_opro()
         hint = _describe_constraint(param.constraint)
 
         for _ in range(self._max_retries):
+            self._step_index += 1
+            step_index = self._step_index
             payload = OPROInput(
                 parameter_kind=param.kind,
                 current_value=_serialize(param),
@@ -218,6 +308,18 @@ class OPROOptimizer(Optimizer):
             envelope = await opro_agent(payload)
             resp: OPROOutput = envelope.response
             raw_new = resp.new_value
+            await emit_algorithm_event(
+                "iteration",
+                algorithm_path=type(self).__name__,
+                payload={
+                    "iter_index": step_index,
+                    "step_index": step_index,
+                    "phase": "propose",
+                    "param_path": param.path,
+                    "candidate_value": raw_new,
+                    "history_size": len(history),
+                },
+            )
 
             try:
                 parsed = _parse(raw_new, param)
@@ -232,7 +334,23 @@ class OPROOptimizer(Optimizer):
             score = float(await self._evaluator(param, parsed))
             history.append((raw_new, score))
             self._truncate_history(history)
-            if score > best_score:
+            accepted = score > best_score
+            await emit_algorithm_event(
+                "iteration",
+                algorithm_path=type(self).__name__,
+                payload={
+                    "iter_index": step_index,
+                    "step_index": step_index,
+                    "phase": "evaluate",
+                    "param_path": param.path,
+                    "candidate_value": raw_new,
+                    "score": score,
+                    "accepted": accepted,
+                },
+            )
+            if self._best_score is None or score > self._best_score:
+                self._best_score = score
+            if accepted:
                 param.write(parsed)
                 return
             best_score = max(best_score, score)

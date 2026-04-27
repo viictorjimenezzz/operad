@@ -21,6 +21,7 @@ Conventions:
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -80,6 +81,29 @@ def _is_trainer(info: RunInfo) -> bool:
     return isinstance(info.algorithm_path, str) and info.algorithm_path.endswith(".Trainer")
 
 
+def _short_hash(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
+
+
+def _range_limited_runs(
+    runs: list[RunInfo],
+    range_spec: str | None,
+) -> list[RunInfo]:
+    if not range_spec:
+        return runs
+    start, sep, end = range_spec.partition(":")
+    if not sep:
+        return runs
+    start_idx = 0
+    end_idx = len(runs)
+    for idx, info in enumerate(runs):
+        if start and info.run_id == start:
+            start_idx = idx
+        if end and info.run_id == end:
+            end_idx = idx + 1
+    return runs[start_idx:end_idx]
+
+
 # ---------------------------------------------------------------------------
 # /agents — agent instances (groups by hash_content)
 # ---------------------------------------------------------------------------
@@ -137,6 +161,7 @@ async def list_agent_groups(request: Request) -> JSONResponse:
                 "cost_usd": 0.0,
                 "run_ids": [],
                 "is_trainer": False,
+                "notes_markdown_count": 0,
             },
         )
         bucket["count"] += 1
@@ -151,6 +176,8 @@ async def list_agent_groups(request: Request) -> JSONResponse:
         bucket["prompt_tokens"] += info.total_prompt_tokens
         bucket["completion_tokens"] += info.total_completion_tokens
         bucket["run_ids"].append(info.run_id)
+        if info.notes_markdown.strip():
+            bucket["notes_markdown_count"] += 1
         if not bucket["class_name"] and info.root_agent_path:
             bucket["class_name"] = _agent_class_name(info)
         if _is_trainer(info):
@@ -238,6 +265,9 @@ async def get_agent_group(request: Request, hash_content: str) -> JSONResponse:
             "completion_tokens": completion_tokens,
             "cost_usd": cost_usd,
             "is_trainer": any(_is_trainer(r) for r in group_runs),
+            "notes_markdown_count": sum(
+                1 for r in group_runs if r.notes_markdown.strip()
+            ),
             "runs": [r.summary() for r in sorted(group_runs, key=lambda r: r.started_at)],
         }
     )
@@ -261,6 +291,108 @@ async def list_agent_group_runs(request: Request, hash_content: str) -> JSONResp
     return JSONResponse([r.summary() for r in matches])
 
 
+@router.get("/api/agents/{hash_content}/metrics")
+async def agent_group_metrics(
+    request: Request,
+    hash_content: str,
+    metric: str | None = None,
+    range: str | None = None,
+) -> JSONResponse:
+    """Per-invocation metric series for the group sharing this hash."""
+    obs = request.app.state.observer
+    runs = obs.registry.runs_by_hash_full(hash_content)
+    runs = _range_limited_runs(runs, range)
+    cost_totals: dict[str, Any] = {}
+    cost = getattr(request.app.state, "cost_observer", None)
+    if cost is not None:
+        try:
+            cost_totals = cost.totals()
+        except Exception:
+            cost_totals = {}
+
+    units = {
+        "latency_ms": "ms",
+        "prompt_tokens": "tokens",
+        "completion_tokens": "tokens",
+        "cost_usd": "usd",
+    }
+
+    def cost_for(info: RunInfo) -> float | None:
+        total = cost_totals.get(info.run_id)
+        if not isinstance(total, dict):
+            return None
+        value = total.get("cost_usd")
+        return float(value) if isinstance(value, (int, float)) else None
+
+    builtins = {
+        "latency_ms": lambda info: info.duration_ms,
+        "prompt_tokens": lambda info: info.total_prompt_tokens,
+        "completion_tokens": lambda info: info.total_completion_tokens,
+        "cost_usd": cost_for,
+    }
+    selected = {metric} if metric else None
+    metrics: dict[str, dict[str, Any]] = {}
+    for info in runs:
+        for name, getter in builtins.items():
+            if selected is not None and name not in selected:
+                continue
+            metrics.setdefault(name, {"unit": units[name], "series": []})
+            metrics[name]["series"].append(
+                {
+                    "run_id": info.run_id,
+                    "started_at": info.started_at,
+                    "value": getter(info),
+                }
+            )
+        for name, value in info.metrics.items():
+            if selected is not None and name not in selected:
+                continue
+            metrics.setdefault(name, {"unit": None, "series": []})
+            metrics[name]["series"].append(
+                {
+                    "run_id": info.run_id,
+                    "started_at": info.started_at,
+                    "value": value,
+                }
+            )
+    return JSONResponse({"hash_content": hash_content, "metrics": metrics})
+
+
+@router.get("/api/agents/{hash_content}/parameters")
+async def agent_group_parameters(
+    request: Request,
+    hash_content: str,
+) -> JSONResponse:
+    runs = request.app.state.observer.registry.runs_by_hash_full(hash_content)
+    paths: set[str] = set()
+    series: list[dict[str, Any]] = []
+    for info in runs:
+        snapshot = info.latest_parameter_snapshot()
+        if not snapshot:
+            continue
+        paths.update(str(path) for path in snapshot)
+        series.append(
+            {
+                "run_id": info.run_id,
+                "started_at": info.started_at,
+                "values": {
+                    str(path): {
+                        "value": value,
+                        "hash": _short_hash(repr(value)),
+                    }
+                    for path, value in snapshot.items()
+                },
+            }
+        )
+    return JSONResponse(
+        {
+            "hash_content": hash_content,
+            "paths": sorted(paths),
+            "series": series,
+        }
+    )
+
+
 # ---------------------------------------------------------------------------
 # /algorithms — algorithm orchestrator runs
 # ---------------------------------------------------------------------------
@@ -273,8 +405,6 @@ async def list_algorithm_runs(request: Request) -> JSONResponse:
     groups: dict[str, list[RunInfo]] = {}
     for info in runs:
         if not info.is_algorithm:
-            continue
-        if info.synthetic:
             continue
         if _is_trainer(info):
             # Trainer goes on its own rail; keep the algorithms rail focused

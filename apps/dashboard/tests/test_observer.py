@@ -92,6 +92,37 @@ async def test_run_registry_tracks_state_transitions() -> None:
     assert obs.registry.get("r1").state == "ended"
 
 
+async def test_run_registry_tracks_metadata_metrics() -> None:
+    obs = WebDashboardObserver()
+    await obs.on_event(_agent_event(kind="end", is_root=True, metrics={"quality": 0.75}))
+    info = obs.registry.get("r1")
+    assert info is not None
+    assert info.metrics == {"quality": 0.75}
+    assert info.summary()["metrics"] == {"quality": 0.75}
+
+
+async def test_run_registry_tracks_traceback_path() -> None:
+    obs = WebDashboardObserver()
+    await obs.on_event(
+        AlgorithmEvent(
+            run_id="r-traceback",
+            algorithm_path="Trainer",
+            kind="iteration",
+            payload={
+                "iter_index": 0,
+                "phase": "traceback",
+                "path": "/tmp/tb.ndjson",
+            },
+            started_at=1.0,
+            finished_at=1.0,
+        )
+    )
+    info = obs.registry.get("r-traceback")
+    assert info is not None
+    assert info.summary()["traceback_path"] == "/tmp/tb.ndjson"
+    assert info.summary()["has_traceback"] is True
+
+
 async def test_unsubscribe_stops_delivery() -> None:
     obs = WebDashboardObserver()
     q = obs.subscribe()

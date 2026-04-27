@@ -96,6 +96,31 @@ class ScenarioTree(BaseModel):
         return walk(self.root)
 
 
+def _serialize_tree(tree: ScenarioTree) -> dict[str, Any]:
+    nodes: list[dict[str, Any]] = []
+
+    def walk(node: ScenarioNode, parent_id: str | None) -> None:
+        nodes.append(
+            {
+                "id": node.id,
+                "title": node.title,
+                "prompt": node.prompt,
+                "terminal": node.terminal,
+                "parent_id": parent_id,
+            }
+        )
+        for child in node.children:
+            walk(child, node.id)
+
+    walk(tree.root, None)
+    return {
+        "name": tree.name,
+        "purpose": tree.purpose,
+        "rootId": tree.root.id,
+        "nodes": nodes,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Typed I/O for the two internal agents.
 # ---------------------------------------------------------------------------
@@ -444,9 +469,11 @@ class TalkerReasoner:
                 algorithm_path=path,
                 payload={
                     "process": self.tree.name,
+                    "purpose": self.tree.purpose,
                     "start_node_id": self._current_id,
                     "max_turns": self.max_turns,
                     "scripted_messages": len(user_messages),
+                    "tree": _serialize_tree(self.tree),
                 },
                 started_at=started,
             )

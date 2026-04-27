@@ -119,6 +119,13 @@ async def test_beam_emits_candidate_events(cfg, col) -> None:
     assert all(e.algorithm_path == "Beam" for e in algo)
     candidates = [e for e in algo if e.kind == "candidate"]
     assert [e.payload["candidate_index"] for e in candidates] == [0, 1, 2]
+    for i, event in enumerate(candidates):
+        roles = {
+            child["role"]
+            for child in event.metadata.get("synthetic_children", [])
+            if child.get("candidate_index") == i
+        }
+        assert roles == {"beam_generator", "beam_critic"}
     assert "top_indices" in algo[-1].payload
     assert "top_scores" in algo[-1].payload
 
