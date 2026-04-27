@@ -159,6 +159,18 @@ class ArtemisRunState(BaseModel):
 
 ## Notes
 
-(Append discoveries here as you implement. In particular: any field on
-selfserve's `ArtemisState` you considered including but excluded under
-"phase-1 out-of-scope".)
+- Implemented under `apps/uthereal/apps_uthereal/workflow/state.py`,
+  matching the editable app package layout already present in this
+  workspace.
+- Excluded `ArtemisState` production handles and phase-1 out-of-scope
+  fields: backend/config, live agent/workflow instances, input safeguards,
+  event listener/streaming, memory manager and persisted memory state,
+  image attachments/visual inspection, datasource/index caches, citation
+  gist internals, titles, assistant examples, and tool-call stats.
+- Contract gap: the assigned state includes `CHAR_LIMIT_REJECTED`, but
+  the existing immutable
+  `ArtemisFinalAnswer.intent_decision` schema only admits
+  `DIRECT_ANSWER`, `RAG_NEEDED`, and `SAFEGUARD_REJECTED`. The state keeps
+  `CHAR_LIMIT_REJECTED` for the terminal path and uses
+  `ArtemisFinalAnswer.model_construct()` only for that projection, leaving
+  the 1-2 vendored schema untouched.
