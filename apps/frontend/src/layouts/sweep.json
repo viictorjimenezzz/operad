@@ -124,12 +124,22 @@
         "children": ["cells-timeline"]
       },
       "cells-timeline": {
-        "type": "EventTimeline",
-        "props": { "source": "$run.events", "kindFilter": "cell" }
+        "type": "EventsTab",
+        "props": { "runId": "$context.runId", "defaultKindFilter": ["cell"] }
       },
 
-      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
-      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
+      "agents": {
+        "type": "AgentsTab",
+        "props": {
+          "runId": "$context.runId",
+          "groupBy": "none",
+          "extraColumns": ["axisValues", "score"]
+        }
+      },
+      "events": {
+        "type": "EventsTab",
+        "props": { "runId": "$context.runId", "defaultKindFilter": ["cell"] }
+      },
       "graph": {
         "type": "PanelCard",
         "props": { "title": "agent graph" },

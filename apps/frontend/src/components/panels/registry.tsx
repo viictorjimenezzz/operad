@@ -1,4 +1,3 @@
-import { EventTimeline } from "@/components/panels/event-timeline";
 import { IODetail } from "@/components/panels/io-detail";
 import { KpiTile } from "@/components/panels/kpi-tile";
 import { LangfuseLink } from "@/components/panels/langfuse-link";
@@ -31,10 +30,6 @@ export const panelsRegistry: ComponentRegistry = {
   LangfuseSummaryCard: ({ element }) => {
     const p = element.props as { runId?: string; data?: unknown };
     return <LangfuseSummaryCard runId={p.runId ?? null} data={p.data} />;
-  },
-  EventTimeline: ({ element }) => {
-    const p = element.props as { data?: unknown; kindFilter?: string };
-    return <EventTimeline data={p.data} {...(p.kindFilter ? { kindFilter: p.kindFilter } : {})} />;
   },
   IODetail: ({ element }) => <IODetail data={(element.props as { data?: unknown }).data} />,
   RawEnvelope: () => <RawEnvelopePanel />,

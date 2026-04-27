@@ -166,13 +166,25 @@ export const catalog = createCatalog({
       }),
     },
 
-    // Diagnostics
-    EventTimeline: {
+    // Universal tabs
+    AgentsTab: {
       props: z.object({
-        source: sourceExpr,
-        kindFilter: z.string().optional(),
+        runId: z.string(),
+        groupBy: z.enum(["hash", "none"]).optional(),
+        extraColumns: z.array(z.string()).optional(),
+        emptyTitle: z.string().optional(),
+        emptyDescription: z.string().optional(),
       }),
     },
+    EventsTab: {
+      props: z.object({
+        runId: z.string(),
+        defaultKindFilter: z.array(z.string()).optional(),
+        defaultPathFilter: z.string().optional(),
+      }),
+    },
+
+    // Diagnostics
     IODetail: { props: z.object({ source: sourceExpr }) },
     RawEnvelope: { props: z.object({}) },
   },
