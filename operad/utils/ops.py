@@ -207,7 +207,7 @@ class AppendExample(_OpBase):
     _prev_examples: list[Any] | None = PrivateAttr(default=None)
 
     def apply(self, agent: "Agent[Any, Any]") -> None:
-        from ..core.example import Example
+        from ..core.agent import Example
 
         if not isinstance(self.example, Example):
             raise ValueError(

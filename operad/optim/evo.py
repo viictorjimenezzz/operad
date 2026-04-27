@@ -249,7 +249,7 @@ class EvoGradient(Optimizer):
         evaluations during a run carry separate run_ids, so without
         this the algorithm run has no graph to render.
         """
-        from operad.core.graph import to_mermaid
+        from operad.core.view import to_mermaid
 
         graph_mermaid: str | None = None
         graph = getattr(self._root, "_graph", None)

@@ -2,7 +2,7 @@
 
 A `operad.Agent` is a typed, composable component with PyTorch-style
 child tracking and a `build()` step. The Strands runtime is wrapped
-internally by `operad.core._strands_runner.StrandsRunner` for default-
+internally by `operad.core.runner.StrandsRunner` for default-
 forward leaves; nothing else in operad imports `strands.Agent`.
 Everything a user would have put on a separate `Prompt` object — role,
 task, rules, examples, typed input/output, config — lives directly on
@@ -27,7 +27,7 @@ from typing import Any, ClassVar, Generic, Literal, Self, TextIO, TYPE_CHECKING,
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
-from ._strands_runner import StrandsRunner
+from .runner import StrandsRunner
 
 from ..runtime import acquire as _acquire_slot
 from ..runtime.retry import with_retry as _with_retry
@@ -35,7 +35,6 @@ from ..runtime.streaming import ChunkEvent
 from ..utils.errors import BuildError
 from .config import Configuration
 from .diff import AgentDiff, diff_states
-from .example import Example
 from .output import (
     OPERAD_VERSION_HASH,
     PYTHON_VERSION_HASH,
@@ -59,6 +58,25 @@ if TYPE_CHECKING:
 
 In = TypeVar("In", bound=BaseModel)
 Out = TypeVar("Out", bound=BaseModel)
+
+
+# ---------------------------------------------------------------------------
+# Domain schemas.
+# ---------------------------------------------------------------------------
+
+
+class Example(BaseModel, Generic[In, Out]):
+    """Typed few-shot demonstration: one `(input, output)` pair."""
+
+    input: In
+    output: Out
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+# ---------------------------------------------------------------------------
+# Module helpers.
+# ---------------------------------------------------------------------------
 
 
 def _system_to_str(rendered: str | list[dict[str, str]] | None) -> str:
@@ -867,22 +885,24 @@ class Agent(Generic[In, Out]):
         mode = type(self).renderer or (
             self.config.io.renderer if self.config is not None else "xml"
         )
-        if mode == "markdown":
-            return render.markdown.render_system(self)
-        if mode == "chat":
-            return render.chat.render_system(self)
-        return render.xml.render_system(self)
+        return render.render(self, format=mode)
 
     def format_user_message(self, x: In) -> str:
         """Render a per-call input into the user-message string.
 
         Default: ``<input>`` block with one ``<field>`` per Pydantic
         field *without* the ``operad.system`` marker. Fields tagged as
-        system (see :mod:`operad.core.fields`) are routed to
+        system (see :mod:`operad.core.render`) are routed to
         :meth:`format_system_input` instead so they can be appended to
         the cached system prompt.
         """
-        return render.render_input(x)
+        mode = type(self).renderer or (
+            self.config.io.renderer if self.config is not None else "xml"
+        )
+        rendered = render.render(x, format=mode)
+        if isinstance(rendered, list):
+            return "\n\n".join(m.get("content", "") for m in rendered)
+        return rendered
 
     def format_system_input(self, x: In) -> str:
         """Render system-flagged input fields for the per-call system prompt.
@@ -898,12 +918,10 @@ class Agent(Generic[In, Out]):
         mode = type(self).renderer or (
             self.config.io.renderer if self.config is not None else "xml"
         )
-        if mode == "markdown":
-            return render.markdown.render_system_input(x)
-        if mode == "chat":
-            msgs = render.chat.render_system_input(x)
-            return "\n\n".join(m.get("content", "") for m in msgs)
-        return render.xml.render_system_input(x)
+        rendered = render.render(x, format=mode, target="system_input")
+        if isinstance(rendered, list):
+            return "\n\n".join(m.get("content", "") for m in rendered)
+        return rendered
 
     def _compose_system_for_call(self, x: In) -> str:
         """Compose the per-call system prompt: static base + system-input block.
@@ -996,7 +1014,7 @@ class Agent(Generic[In, Out]):
                 "agent graph is missing; call .abuild() first",
                 agent=self.name,
             )
-        from .graph import to_json as _graph_to_json
+        from .view import to_json as _graph_to_json
 
         return _graph_to_json(graph)
 
@@ -2109,13 +2127,13 @@ def _graph_json_or_none(agent: "Agent[Any, Any]") -> Any:
     graph = getattr(agent, "_graph", None)
     if graph is None:
         return None
-    from .graph import to_json as _graph_to_json
+    from .view import to_json as _graph_to_json
 
     return _graph_to_json(graph)
 
 
 def _qualified(t: type) -> str:
-    from .graph import _qualified_name
+    from .view import _qualified_name
 
     return _qualified_name(t)
 
@@ -2130,7 +2148,7 @@ def _compute_graph_hash(agent: "Agent[Any, Any]") -> str:
     graph = getattr(agent, "_graph", None)
     if graph is None:
         return hash_str(agent.name)
-    from .graph import to_json as _graph_to_json
+    from .view import to_json as _graph_to_json
 
     return hash_json(_graph_to_json(graph))
 

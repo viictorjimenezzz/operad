@@ -17,9 +17,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
 from operad.core.config import Configuration
-from operad.core.example import Example
+from operad.core.agent import Example
 from operad.core.diff import diff_states
-from operad.core.graph import to_io_graph_from_json
+from operad.core.view import to_io_graph_from_json
 from operad.core.state import AgentState
 from operad.runtime.observers.base import suppress_notifications
 

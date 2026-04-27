@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..core.graph import TypeRegistry, from_json as _graph_from_json
+from ..core.view import TypeRegistry, from_json as _graph_from_json
 from ..core.output import OperadOutput
 from ..utils.errors import BuildError
 from ..utils.hashing import hash_schema

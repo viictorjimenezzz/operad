@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from operad import Agent, Trace
-from operad.core.graph import TypeRegistry
+from operad.core.view import TypeRegistry
 from operad.runtime.trace import TraceObserver
 from operad.runtime.observers import base as _obs
 

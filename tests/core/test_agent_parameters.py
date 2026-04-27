@@ -132,7 +132,7 @@ def test_element_wise_rule_param_is_text(cfg: Configuration) -> None:
 
 
 def test_element_wise_expands_examples(cfg: Configuration) -> None:
-    from operad.core.example import Example
+    from operad.core.agent import Example
     leaf = _leaf(cfg)
     leaf.examples = [
         Example(input=A(text="i0"), output=B(value=0)),
@@ -145,7 +145,7 @@ def test_element_wise_expands_examples(cfg: Configuration) -> None:
 
 
 def test_element_wise_example_uses_base_parameter(cfg: Configuration) -> None:
-    from operad.core.example import Example
+    from operad.core.agent import Example
     leaf = _leaf(cfg)
     leaf.examples = [Example(input=A(text="x"), output=B(value=1))]
     by_path = dict(leaf.named_parameters(recurse=False, element_wise=True))

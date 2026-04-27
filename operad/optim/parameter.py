@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Annotated, Any, Generic, Literal, TypeVar, Uni
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from operad.core.config import Backend, Configuration
-from operad.core.example import Example
+from operad.core.agent import Example
 from operad.utils.paths import resolve_parent
 
 if TYPE_CHECKING:

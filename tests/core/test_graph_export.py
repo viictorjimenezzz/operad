@@ -1,4 +1,4 @@
-"""Tests for `operad.core.graph` exporters."""
+"""Tests for `operad.core.view` exporters."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import pytest
 
 from operad import Agent, Sequential
 from operad.agents import Loop
-from operad.core.graph import to_json, to_mermaid
+from operad.core.view import to_json, to_mermaid
 
 from ..conftest import A, B, C, FakeLeaf
 

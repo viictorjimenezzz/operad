@@ -8,12 +8,12 @@ the flattest possible call site.
 from __future__ import annotations
 
 from .agent import Agent, In, Out
-from .example import Example
+from .agent import Example
 from .build import AgentGraph, Edge, Node, abuild_agent, build_agent
 from .config import Backend, Configuration, IOConfig, Resilience, Runtime, Sampling
 from .diff import AgentDiff, Change
 from .freeze import freeze_agent, thaw_agent, thaw_pair
-from .graph import from_json, to_io_graph, to_io_graph_from_json, to_json, to_mermaid
+from .view import from_json, to_io_graph, to_io_graph_from_json, to_json, to_mermaid
 from .output import OperadOutput
 from .flow import Loop, Parallel, Router, Sequential
 from .state import AgentState

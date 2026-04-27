@@ -1,11 +1,4 @@
-"""Export / round-trip helpers for `AgentGraph` (Mermaid, JSON).
-
-Free functions rather than methods on `AgentGraph` so that graph
-export stays a pure view — adding new formats doesn't widen the data
-class. `to_json` emits fully qualified type names so that `from_json`
-can rehydrate the exact same types, with a `TypeRegistry` as the
-escape hatch when `importlib` lookup isn't enough.
-"""
+"""Views over `AgentGraph` for Mermaid, JSON, and IO-oriented displays."""
 
 from __future__ import annotations
 
@@ -17,7 +10,12 @@ from typing import Any, Literal, Union, get_args, get_origin
 from pydantic import BaseModel
 
 from .build import AgentGraph, Edge, Node
-from .fields import is_system_field
+from .render import is_system_field
+
+
+# ---------------------------------------------------------------------------
+# Domain helpers.
+# ---------------------------------------------------------------------------
 
 _PIPELINE_KINDS = {"Sequential", "Parallel", "Router", "Loop"}
 
@@ -209,7 +207,12 @@ def _nearest_composite_path(
     return None
 
 
-def to_mermaid(graph: AgentGraph) -> str:
+# ---------------------------------------------------------------------------
+# Mermaid view.
+# ---------------------------------------------------------------------------
+
+
+def _render_mermaid(graph: AgentGraph) -> str:
     """Render an `AgentGraph` as a Mermaid `flowchart LR`."""
     lines: list[str] = ["flowchart LR"]
     nodes = _dedupe_nodes(graph.nodes)
@@ -251,7 +254,7 @@ def to_mermaid(graph: AgentGraph) -> str:
     return "\n".join(lines)
 
 
-def to_mermaid_edge(
+def _render_mermaid_edge(
     caller: str,
     callee: str,
     callee_io: tuple[type, type],
@@ -289,7 +292,7 @@ def to_mermaid_edge(
     return "\n".join(lines)
 
 
-def to_mermaid_node(
+def _render_mermaid_node(
     path: str, io: tuple[type, type], *, note: str | None = None
 ) -> str:
     """Render a single-node Mermaid fragment for BuildError footers.
@@ -303,6 +306,11 @@ def to_mermaid_node(
     if note is not None:
         label = f"{label}<br/>❌ {note}"
     return "flowchart LR\n" + f'    {nid}["{label}"]'
+
+
+# ---------------------------------------------------------------------------
+# JSON graph view.
+# ---------------------------------------------------------------------------
 
 
 def _node_json(n: Node) -> dict[str, Any]:
@@ -344,7 +352,12 @@ def to_json(graph: AgentGraph) -> dict[str, Any]:
     }
 
 
-def to_io_graph(graph: AgentGraph) -> dict[str, Any]:
+# ---------------------------------------------------------------------------
+# IO graph view.
+# ---------------------------------------------------------------------------
+
+
+def _render_io_graph(graph: AgentGraph) -> dict[str, Any]:
     """Inverted view: input/output types as nodes, agents as edges.
 
     Each leaf in the AgentGraph contributes one edge from its input-type
@@ -472,7 +485,7 @@ def to_io_graph(graph: AgentGraph) -> dict[str, Any]:
     }
 
 
-def to_io_graph_from_json(graph_json: dict[str, Any]) -> dict[str, Any]:
+def _render_io_graph_from_json(graph_json: dict[str, Any]) -> dict[str, Any]:
     """JSON-only equivalent of :func:`to_io_graph`.
 
     The full :func:`to_io_graph` walks live Pydantic classes to extract
@@ -558,7 +571,101 @@ def to_io_graph_from_json(graph_json: dict[str, Any]) -> dict[str, Any]:
     return {"root": root or None, "nodes": list(type_nodes.values()), "edges": io_edges}
 
 
-# --- round-trip -------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# View classes.
+# ---------------------------------------------------------------------------
+
+
+class MermaidView:
+    """Render build graphs as Mermaid flowcharts."""
+
+    def render(self, graph: AgentGraph) -> str:
+        return _render_mermaid(graph)
+
+    def render_edge(
+        self,
+        caller: str,
+        callee: str,
+        callee_io: tuple[type, type],
+        *,
+        caller_io: tuple[type, type] | None = None,
+        note: str | None = None,
+    ) -> str:
+        return _render_mermaid_edge(
+            caller,
+            callee,
+            callee_io,
+            caller_io=caller_io,
+            note=note,
+        )
+
+    def render_node(
+        self,
+        path: str,
+        io: tuple[type, type],
+        *,
+        note: str | None = None,
+    ) -> str:
+        return _render_mermaid_node(path, io, note=note)
+
+
+class IOView:
+    """Render build graphs as input/output type nodes plus agent edges."""
+
+    def render(self, graph: AgentGraph) -> dict[str, Any]:
+        return _render_io_graph(graph)
+
+    def render_json(self, graph_json: dict[str, Any]) -> dict[str, Any]:
+        return _render_io_graph_from_json(graph_json)
+
+
+_MERMAID_VIEW = MermaidView()
+_IO_VIEW = IOView()
+
+
+# ---------------------------------------------------------------------------
+# Public wrappers.
+# ---------------------------------------------------------------------------
+
+
+def to_mermaid(graph: AgentGraph) -> str:
+    return _MERMAID_VIEW.render(graph)
+
+
+def to_mermaid_edge(
+    caller: str,
+    callee: str,
+    callee_io: tuple[type, type],
+    *,
+    caller_io: tuple[type, type] | None = None,
+    note: str | None = None,
+) -> str:
+    return _MERMAID_VIEW.render_edge(
+        caller,
+        callee,
+        callee_io,
+        caller_io=caller_io,
+        note=note,
+    )
+
+
+def to_mermaid_node(
+    path: str, io: tuple[type, type], *, note: str | None = None
+) -> str:
+    return _MERMAID_VIEW.render_node(path, io, note=note)
+
+
+def to_io_graph(graph: AgentGraph) -> dict[str, Any]:
+    return _IO_VIEW.render(graph)
+
+
+def to_io_graph_from_json(graph_json: dict[str, Any]) -> dict[str, Any]:
+    return _IO_VIEW.render_json(graph_json)
+
+
+# ---------------------------------------------------------------------------
+# Round-trip.
+# ---------------------------------------------------------------------------
 
 
 class TypeRegistry:
@@ -622,6 +729,8 @@ def from_json(
 
 
 __all__ = [
+    "IOView",
+    "MermaidView",
     "TypeRegistry",
     "from_json",
     "to_io_graph",

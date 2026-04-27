@@ -32,7 +32,7 @@ from ..core.freeze import (
     _redact_state,
     _resolve_class,
 )
-from ..core.graph import to_json as _graph_to_json
+from ..core.view import to_json as _graph_to_json
 from ..core.state import AgentState
 from ..metrics.base import Metric
 from ..runtime.observers.base import registry

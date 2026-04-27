@@ -32,8 +32,8 @@ from pydantic import BaseModel
 
 from ..utils.errors import BuildError
 from .agent import Agent, _labelled_tree, _system_to_str
-from .example import Example
-from .graph import from_json, to_json
+from .agent import Example
+from .view import from_json, to_json
 from .output import OPERAD_VERSION_HASH, PYTHON_VERSION_HASH
 from .state import AgentState
 
