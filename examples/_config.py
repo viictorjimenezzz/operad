@@ -47,9 +47,13 @@ def local_config(**overrides) -> Configuration:
 
 def server_reachable(host: str, timeout: float = 0.5) -> bool:
     """Return True if a TCP connection to ``host`` (``h:p``) succeeds."""
+    if not host:
+        return False
     h, _, p = host.partition(":")
+    if not h or not p:
+        return False
     try:
         with socket.create_connection((h, int(p)), timeout=timeout):
             return True
-    except OSError:
+    except (OSError, ValueError):
         return False
