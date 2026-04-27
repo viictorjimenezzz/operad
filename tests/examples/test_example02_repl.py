@@ -79,3 +79,58 @@ async def test_example02_repl_quit_path(monkeypatch: pytest.MonkeyPatch) -> None
     )
 
     await module.main(args)
+
+
+@pytest.mark.asyncio
+async def test_example02_repl_quit_path_gemini_skips_local_server_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_example02_module()
+
+    cfg = Configuration(backend="gemini", model="gemini-1.5-pro", api_key="x")
+    monkeypatch.setattr(module, "local_config", lambda **kwargs: cfg)
+
+    def _fail_if_called(host: str) -> bool:
+        _ = host
+        raise AssertionError("server_reachable() should not be called for gemini")
+
+    monkeypatch.setattr(module, "server_reachable", _fail_if_called)
+    monkeypatch.setattr(module, "print_scenario_tree", lambda tree: None)
+    monkeypatch.setattr(module, "print_talker_turn", lambda turn: None)
+    monkeypatch.setattr(module, "print_talker_summary", lambda transcript: None)
+    monkeypatch.setattr(module, "print_panel", lambda title, body: None)
+    monkeypatch.setattr(module, "print_rule", lambda title: None)
+
+    class _DummyComponent:
+        input = type("DummyInput", (), {})
+        output = type("DummyOutput", (), {})
+
+    class _FakeTalkerReasoner:
+        def __init__(self, tree, max_turns, config):
+            _ = (tree, config)
+            self.max_turns = max_turns
+            self._current_id = "greet"
+            self._history = []
+            self.reasoner = _DummyComponent()
+            self.talker = _DummyComponent()
+            self.finished = False
+
+        async def abuild(self):
+            return self
+
+        async def step(self, message):
+            _ = message
+            raise AssertionError("step() should not be called when first input is quit")
+
+    monkeypatch.setattr(module, "TalkerReasoner", _FakeTalkerReasoner)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "quit")
+
+    args = argparse.Namespace(
+        scripted=False,
+        max_turns=10,
+        offline=False,
+        dashboard=None,
+        no_open=False,
+    )
+
+    await module.main(args)

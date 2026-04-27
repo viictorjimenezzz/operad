@@ -15,6 +15,7 @@ from operad import Configuration
 
 DEFAULT_HOST = "127.0.0.1:9000"
 DEFAULT_MODEL = "google/gemma-4-e2b"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
 
 def local_config(**overrides) -> Configuration:
@@ -25,11 +26,21 @@ def local_config(**overrides) -> Configuration:
     ``runtime=Runtime(...)``) as well as the top-level fields
     ``backend``, ``model``, ``host``, ``api_key``, ``batch``.
     """
+    backend = os.environ.get("OPERAD_BACKEND", "llamacpp")
     base: dict = dict(
-        backend=os.environ.get("OPERAD_BACKEND", "llamacpp"),
-        host=os.environ.get("OPERAD_LLAMACPP_HOST", DEFAULT_HOST),
-        model=os.environ.get("OPERAD_LLAMACPP_MODEL", DEFAULT_MODEL),
+        backend=backend,
     )
+    if backend == "gemini":
+        base["model"] = os.environ.get(
+            "OPERAD_GEMINI_MODEL",
+            os.environ.get("OPERAD_MODEL", DEFAULT_GEMINI_MODEL),
+        )
+    else:
+        base["host"] = os.environ.get("OPERAD_LLAMACPP_HOST", DEFAULT_HOST)
+        base["model"] = os.environ.get(
+            "OPERAD_LLAMACPP_MODEL",
+            os.environ.get("OPERAD_MODEL", DEFAULT_MODEL),
+        )
     base.update(overrides)
     return Configuration(**base)
 

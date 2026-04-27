@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import types
+import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -31,9 +32,23 @@ def _install_fake_google_genai(monkeypatch: pytest.MonkeyPatch) -> None:
     genai_mod.types = genai_types  # type: ignore[attr-defined]
     google_pkg.genai = genai_mod  # type: ignore[attr-defined]
 
+    oauth2_mod = types.ModuleType("google.oauth2")
+    sa_mod = types.ModuleType("google.oauth2.service_account")
+
+    class _Credentials:
+        @staticmethod
+        def from_service_account_info(info: dict[str, Any]) -> Any:
+            return {"kind": "fake-sa-creds", "project_id": info.get("project_id")}
+
+    sa_mod.Credentials = _Credentials  # type: ignore[attr-defined]
+    oauth2_mod.service_account = sa_mod  # type: ignore[attr-defined]
+    google_pkg.oauth2 = oauth2_mod  # type: ignore[attr-defined]
+
     monkeypatch.setitem(sys.modules, "google", google_pkg)
     monkeypatch.setitem(sys.modules, "google.genai", genai_mod)
     monkeypatch.setitem(sys.modules, "google.genai.types", genai_types)
+    monkeypatch.setitem(sys.modules, "google.oauth2", oauth2_mod)
+    monkeypatch.setitem(sys.modules, "google.oauth2.service_account", sa_mod)
     # strands.models.gemini is cached after a first successful import;
     # drop it so our fake google.genai is used.
     monkeypatch.delitem(sys.modules, "strands.models.gemini", raising=False)
@@ -90,6 +105,40 @@ def test_gemini_missing_extra_raises_clear_hint(
     )
     with pytest.raises(ImportError, match=r"\[gemini\]"):
         resolve_model(cfg)
+
+
+def test_gemini_vertex_service_account_configures_client_args(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("strands.models")
+    if "strands.models.gemini" not in sys.modules:
+        _install_fake_google_genai(monkeypatch)
+
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "google.oauth2.service_account.Credentials.from_service_account_info",
+        lambda info: {"kind": "fake-sa-creds", "project_id": info.get("project_id")},
+    )
+    monkeypatch.setenv(
+        "GOOGLE_VERTEX_AI_SERVICE_ACCOUNT",
+        json.dumps(
+            {
+                "project_id": "vertex-proj",
+                "client_email": "svc@example.iam.gserviceaccount.com",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "private_key": "-----BEGIN PRIVATE KEY-----\\nFAKE\\n-----END PRIVATE KEY-----\\n",
+            }
+        ),
+    )
+    monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "europe-west4")
+
+    cfg = Configuration(backend="gemini", model="gemini-1.5-pro")
+    model = resolve_model(cfg)
+    assert model.__class__.__name__ == "GeminiModel"
+    assert model.client_args["vertexai"] is True
+    assert model.client_args["project"] == "vertex-proj"
+    assert model.client_args["location"] == "europe-west4"
+    assert model.client_args["credentials"]["kind"] == "fake-sa-creds"
 
 
 def test_huggingface_resolver_returns_wrapper(

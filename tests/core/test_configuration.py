@@ -143,8 +143,16 @@ def test_anthropic_requires_api_key_or_env(monkeypatch) -> None:
 
 def test_gemini_requires_api_key_or_env(monkeypatch) -> None:
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    with pytest.raises(ValidationError, match="GOOGLE_API_KEY"):
+    monkeypatch.delenv("GOOGLE_VERTEX_AI_SERVICE_ACCOUNT", raising=False)
+    with pytest.raises(ValidationError, match="GOOGLE_VERTEX_AI_SERVICE_ACCOUNT"):
         Configuration(backend="gemini", model="gemini-2.0-flash")
+
+
+def test_gemini_accepts_vertex_service_account_env(monkeypatch) -> None:
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.setenv("GOOGLE_VERTEX_AI_SERVICE_ACCOUNT", '{"project_id":"p"}')
+    cfg = Configuration(backend="gemini", model="gemini-2.0-flash")
+    assert cfg.backend == "gemini"
 
 
 def test_bedrock_no_api_key_required() -> None:

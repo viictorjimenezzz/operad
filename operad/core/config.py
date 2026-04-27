@@ -98,7 +98,8 @@ class Configuration(BaseModel):
 
     - ``openai``: ``api_key`` field, then ``OPENAI_API_KEY`` env var.
     - ``anthropic``: ``api_key`` field, then ``ANTHROPIC_API_KEY`` env var.
-    - ``gemini``: ``api_key`` field, then ``GOOGLE_API_KEY`` env var.
+    - ``gemini``: ``api_key`` field, then ``GOOGLE_API_KEY`` env var, or
+      Vertex AI service-account JSON via ``GOOGLE_VERTEX_AI_SERVICE_ACCOUNT``.
     - ``bedrock``: no API key; uses AWS SDK credential chain (IAM, boto3, etc.).
     - Local backends (llamacpp, lmstudio, ollama, huggingface): no API key required.
 
@@ -151,6 +152,27 @@ class Configuration(BaseModel):
 
     @model_validator(mode="after")
     def _check_api_key(self) -> "Configuration":
+        if self.backend == "gemini":
+            if self.api_key is not None:
+                return self
+            if os.environ.get("GOOGLE_API_KEY"):
+                _logger.debug(
+                    "backend=%r: no api_key set, relying on env var %r",
+                    self.backend,
+                    "GOOGLE_API_KEY",
+                )
+                return self
+            if os.environ.get("GOOGLE_VERTEX_AI_SERVICE_ACCOUNT"):
+                _logger.debug(
+                    "backend=%r: no api_key set, relying on Vertex service account env",
+                    self.backend,
+                )
+                return self
+            raise ValueError(
+                "backend='gemini' requires auth; set api_key=, export GOOGLE_API_KEY, "
+                "or export GOOGLE_VERTEX_AI_SERVICE_ACCOUNT"
+            )
+
         env_var = _API_KEY_ENV_VARS.get(self.backend)
         if env_var is None:
             return self
