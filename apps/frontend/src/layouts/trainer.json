@@ -3,6 +3,7 @@
   "version": 1,
   "dataSources": {
     "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "events": { "endpoint": "/runs/$context.runId/events?limit=1000" },
     "progress": {
       "endpoint": "/runs/$context.runId/progress.json",
       "stream": "/runs/$context.runId/progress.sse"
@@ -33,64 +34,95 @@
         "type": "Tabs",
         "props": {
           "tabs": [
+            { "id": "workspace", "label": "Workspace" },
             { "id": "loss", "label": "Loss" },
+            { "id": "parameters", "label": "Parameters" },
             { "id": "drift", "label": "Drift" },
             { "id": "gradients", "label": "Gradients" },
             { "id": "checkpoints", "label": "Checkpoints" },
             { "id": "progress", "label": "Progress" },
+            {
+              "id": "traceback",
+              "label": "Traceback",
+              "condition": "$queries.summary.has_traceback"
+            },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
             { "id": "graph", "label": "Graph" }
           ]
         },
         "children": [
+          "workspace",
           "loss",
+          "parameters",
           "drift",
           "gradients",
           "checkpoints",
           "progress",
+          "traceback",
           "agents",
           "events",
           "graph"
         ]
       },
 
+      "workspace": {
+        "type": "TrainingWorkspace",
+        "props": {
+          "sourceFitness": "$queries.fitness",
+          "sourceCheckpoints": "$queries.checkpoints",
+          "sourceDrift": "$queries.drift",
+          "sourceGradients": "$queries.gradients",
+          "sourceProgress": "$queries.progress",
+          "sourceSummary": "$queries.summary",
+          "runId": "$context.runId"
+        }
+      },
+
       "loss": {
         "type": "Stack",
         "props": { "gap": 16 },
-        "children": ["lossSection"]
+        "children": ["loss-grid"]
       },
-      "lossSection": {
-        "type": "PanelSection",
-        "props": { "label": "Loss" },
-        "children": ["lossGrid"]
-      },
-      "lossGrid": {
+      "loss-grid": {
         "type": "PanelGrid",
         "props": { "cols": 2 },
         "children": ["loss-card", "lr-card"]
       },
       "loss-card": {
         "type": "PanelCard",
-        "props": { "title": "loss curve", "bodyMinHeight": 260 },
-        "children": ["loss"]
+        "props": { "title": "loss curve", "bodyMinHeight": 300 },
+        "children": ["loss-chart"]
       },
-      "loss": {
+      "loss-chart": {
         "type": "TrainingLossCurve",
         "props": {
           "source": "$queries.fitness",
-          "checkpointSource": "$queries.checkpoints",
-          "height": 240
+          "sourceCheckpoint": "$queries.checkpoints",
+          "height": 280
         }
       },
       "lr-card": {
         "type": "PanelCard",
-        "props": { "title": "learning rate", "bodyMinHeight": 200 },
-        "children": ["lr"]
+        "props": { "title": "learning rate", "bodyMinHeight": 300 },
+        "children": ["lr-chart"]
       },
-      "lr": {
+      "lr-chart": {
         "type": "LrScheduleCurve",
-        "props": { "source": "$queries.fitness", "height": 180 }
+        "props": { "source": "$queries.fitness", "height": 280 }
+      },
+
+      "parameters": {
+        "type": "PanelCard",
+        "props": { "title": "parameter evolution" },
+        "children": ["parameters-view"]
+      },
+      "parameters-view": {
+        "type": "ParameterEvolutionMultiples",
+        "props": {
+          "sourceCheckpoints": "$queries.checkpoints",
+          "sourceSummary": "$queries.summary"
+        }
       },
 
       "drift": {
@@ -118,30 +150,25 @@
       },
 
       "progress": {
-        "type": "Stack",
-        "props": { "gap": 16 },
-        "children": ["progressGrid"]
+        "type": "TrainingProgressPanel",
+        "props": {
+          "sourceProgress": "$queries.progress",
+          "sourceEvents": "$queries.events.events"
+        }
       },
-      "progressGrid": {
-        "type": "PanelGrid",
-        "props": { "cols": 2 },
-        "children": ["meta-card", "progress-card"]
-      },
-      "meta-card": {
-        "type": "PanelCard",
-        "props": { "title": "meta" },
-        "children": ["meta", "langfuse"]
-      },
-      "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
-      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
-      "progress-card": {
-        "type": "PanelCard",
-        "props": { "title": "training progress" },
-        "children": ["progress"]
-      },
-      "progress": { "type": "TrainingProgress", "props": { "source": "$queries.progress" } },
 
-      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
+      "traceback": {
+        "type": "TrainingTracebackTab",
+        "props": {
+          "runId": "$context.runId",
+          "sourceSummary": "$queries.summary"
+        }
+      },
+
+      "agents": {
+        "type": "AgentsTab",
+        "props": { "runId": "$context.runId", "groupBy": "hash" }
+      },
       "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
       "graph": {
         "type": "PanelCard",
