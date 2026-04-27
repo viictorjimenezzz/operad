@@ -129,9 +129,19 @@ class AutoResearcher:
         self.max_iter = max_iter
         self.threshold = threshold
 
-    async def _one_attempt(self, x: ResearchContext) -> tuple[Answer, float]:
+    async def _one_attempt(
+        self,
+        x: ResearchContext,
+        *,
+        attempt_index: int,
+    ) -> tuple[Answer, float]:
         path = type(self).__name__
         plan = (await self.planner(x)).response
+        await emit_algorithm_event(
+            "plan",
+            algorithm_path=path,
+            payload={"attempt_index": attempt_index, "plan": plan.model_dump()},
+        )
         hits = (await self.retriever(Query(text=plan.query))).response
         draft = (
             await self.reasoner(ResearchInput(context=x, hits=hits))
@@ -142,7 +152,12 @@ class AutoResearcher:
         await emit_algorithm_event(
             "iteration",
             algorithm_path=path,
-            payload={"iter_index": 0, "phase": "reason", "score": score},
+            payload={
+                "attempt_index": attempt_index,
+                "iter_index": 0,
+                "phase": "reason",
+                "score": score,
+            },
         )
 
         for iter_index in range(1, self.max_iter + 1):
@@ -161,6 +176,7 @@ class AutoResearcher:
                 "iteration",
                 algorithm_path=path,
                 payload={
+                    "attempt_index": attempt_index,
                     "iter_index": iter_index,
                     "phase": "reflect",
                     "score": score,
@@ -182,6 +198,7 @@ class AutoResearcher:
                 "iteration",
                 algorithm_path=path,
                 payload={
+                    "attempt_index": attempt_index,
                     "iter_index": iter_index,
                     "phase": "reason",
                     "score": score,
@@ -213,7 +230,10 @@ class AutoResearcher:
                         self.reflector,
                     )
                 pairs = await asyncio.gather(
-                    *(self._one_attempt(x) for _ in range(self.n))
+                    *(
+                        self._one_attempt(x, attempt_index=i)
+                        for i in range(self.n)
+                    )
                 )
                 best = max(pairs, key=lambda p: p[1])
                 await emit_algorithm_event(

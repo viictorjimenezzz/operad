@@ -188,6 +188,62 @@ def create_app(
         data["cost"] = totals
         return JSONResponse(data)
 
+    @app.patch("/api/runs/{run_id}/notes")
+    async def update_notes(request: Request, run_id: str) -> JSONResponse:
+        body = await request.json()
+        markdown = str(body.get("markdown") or "")
+        info = obs.registry.get(run_id)
+        if info is not None:
+            info.notes_markdown = markdown
+        if archive_store is not None:
+            if info is not None:
+                archive_store.upsert_snapshot(info)
+            archive_store.set_notes(run_id, markdown)
+        return JSONResponse(
+            {
+                "run_id": run_id,
+                "notes_markdown": markdown,
+                "updated_at": time.time(),
+            }
+        )
+
+    @app.get("/runs/{run_id}/traceback")
+    async def run_traceback(
+        run_id: str,
+        epoch: int | None = None,
+        batch: int | None = None,
+    ) -> Response:
+        info = obs.registry.get(run_id)
+        if info is not None:
+            summary = info.summary()
+        elif archive_store is not None:
+            archived = archive_store.get_run(run_id)
+            if archived is None:
+                raise HTTPException(status_code=404, detail="unknown run_id")
+            raw = archived.get("summary")
+            summary = raw if isinstance(raw, dict) else {}
+        else:
+            raise HTTPException(status_code=404, detail="unknown run_id")
+
+        raw_path = summary.get("traceback_path")
+        if not isinstance(raw_path, str) or not raw_path:
+            raise HTTPException(
+                status_code=404,
+                detail="no traceback captured for run",
+            )
+        path = Path(raw_path)
+        if epoch is not None and batch is not None:
+            path = path.parent / f"epoch_{epoch}_batch_{batch}.ndjson"
+        if not path.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail="traceback artifact not found",
+            )
+        return Response(
+            path.read_text(encoding="utf-8"),
+            media_type="application/x-ndjson",
+        )
+
     @app.get("/runs/{run_id}/children")
     async def run_children(run_id: str) -> JSONResponse:
         if obs.registry.get(run_id) is None:

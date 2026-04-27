@@ -20,6 +20,8 @@ must tolerate unknown keys):
 | `iteration`   | `iter_index:int, phase:str, score:float \\| None`                                                                                   | SelfRefine, VerifierAgent, AutoResearcher |
 | `batch_start` | `batch_index:int, batch_size:int, hash_batch:str, epoch:int \\| None`                                                                | DataLoader   |
 | `batch_end`   | `batch_index:int, batch_size:int, duration_ms:float, epoch:int \\| None`                                                             | DataLoader (fires on *next* `__anext__` or `StopAsyncIteration`; measures how long the consumer held the batch) |
+| `gradient_applied` | `epoch:int, batch:int, message:str, target_paths:list[str]`                                                                     | Trainer      |
+| `plan`        | `attempt_index:int, plan:dict`                                                                                                      | AutoResearcher |
 
 The `mutations` entries in `generation` payloads have shape
 `{"individual_id": int, "op": str | None, "improved": bool}`, where
@@ -48,6 +50,8 @@ AlgoKind = Literal[
     "iteration",
     "batch_start",
     "batch_end",
+    "gradient_applied",
+    "plan",
 ]
 
 

@@ -6,24 +6,12 @@ import asyncio
 import time
 from typing import ClassVar, Generic
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from ..agents.reasoning.components import Critic, Reasoner
 from ..agents.reasoning.schemas import Answer, Candidate, Score, Task
 from ..core.agent import Agent, In, Out, _TRACER
-from ..core.flow import Parallel
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
-
-
-# ---------------------------------------------------------------------------
-# Domain schemas.
-# ---------------------------------------------------------------------------
-
-
-class CandidateBatch(BaseModel):
-    """Outputs from a beam fanout, in candidate-index order."""
-
-    candidates: list[BaseModel] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -46,6 +34,15 @@ def _as_text(x: object) -> str:
     if isinstance(answer, str):
         return answer
     return str(x)
+
+
+def _child_ref(role: str, candidate_index: int, envelope: object) -> dict[str, object]:
+    return {
+        "role": role,
+        "candidate_index": candidate_index,
+        "run_id": getattr(envelope, "run_id", ""),
+        "agent_path": getattr(envelope, "agent_path", ""),
+    }
 
 
 async def _ensure_built(*agents: Agent | None) -> None:
@@ -121,20 +118,14 @@ class Beam(Generic[In, Out]):
                 if _TRACER.get() is None:
                     await _ensure_built(*generators.values(), self.judge)
 
-                fanout = Parallel(
-                    generators,
-                    input=self.generator.input,  # type: ignore[arg-type]
-                    output=CandidateBatch,
-                    combine=lambda results: CandidateBatch(
-                        candidates=[
-                            results[f"candidate_{i}"] for i in range(self.n)
-                        ]
-                    ),
+                generator_outputs = await asyncio.gather(
+                    *(generators[f"candidate_{i}"](x) for i in range(self.n))
                 )
-                candidates: list[Out] = (
-                    await fanout.forward(x)
-                ).candidates  # type: ignore[assignment]
+                candidates: list[Out] = [
+                    out.response for out in generator_outputs
+                ]  # type: ignore[assignment]
 
+                judge_outputs = None
                 if self.judge is None:
                     scores: list[Score | None] = [None] * self.n
                     order = list(range(self.n))
@@ -155,6 +146,11 @@ class Beam(Generic[In, Out]):
 
                 for i, candidate in enumerate(candidates):
                     score = scores[i].score if scores[i] is not None else None
+                    children = [
+                        _child_ref("beam_generator", i, generator_outputs[i])
+                    ]
+                    if judge_outputs is not None:
+                        children.append(_child_ref("beam_critic", i, judge_outputs[i]))
                     await emit_algorithm_event(
                         "candidate",
                         algorithm_path=path,
@@ -164,6 +160,7 @@ class Beam(Generic[In, Out]):
                             "score": score,
                             "text": _as_text(candidate),
                         },
+                        metadata={"synthetic_children": children},
                     )
 
                 top = order[: self.top_k]

@@ -58,6 +58,10 @@ class RunInfo:
     script: str | None = None
     total_prompt_tokens: int = 0
     total_completion_tokens: int = 0
+    metrics: dict[str, float] = field(default_factory=dict)
+    notes_markdown: str = ""
+    parameter_snapshots: list[dict[str, Any]] = field(default_factory=list)
+    traceback_path: str | None = None
     error_message: str | None = None
     algorithm_terminal_score: float | None = None
     parent_run_id: str | None = None
@@ -80,6 +84,13 @@ class RunInfo:
     @property
     def event_total(self) -> int:
         return sum(self.event_counts.values())
+
+    def latest_parameter_snapshot(self) -> dict[str, Any]:
+        for snapshot in reversed(self.parameter_snapshots):
+            values = snapshot.get("values")
+            if isinstance(values, dict) and values:
+                return dict(values)
+        return {}
 
     def summary(self) -> dict[str, Any]:
         return {
@@ -104,6 +115,11 @@ class RunInfo:
             "batches": list(self.batches),
             "prompt_tokens": self.total_prompt_tokens,
             "completion_tokens": self.total_completion_tokens,
+            "metrics": dict(self.metrics),
+            "notes_markdown": self.notes_markdown,
+            "parameter_snapshots": list(self.parameter_snapshots),
+            "traceback_path": self.traceback_path,
+            "has_traceback": self.traceback_path is not None,
             "error": self.error_message,
             "algorithm_terminal_score": self.algorithm_terminal_score,
             "parent_run_id": self.parent_run_id,
@@ -155,6 +171,15 @@ class RunRegistry:
     def list_children(self, parent_run_id: str) -> list[RunInfo]:
         return [r for r in self._runs.values() if r.parent_run_id == parent_run_id]
 
+    def runs_by_hash_full(self, hash_content: str) -> list[RunInfo]:
+        target = hash_content.strip()
+        matches = [
+            r for r in self._runs.values()
+            if _latest_hash_content(r) == target
+        ]
+        matches.sort(key=lambda r: r.started_at)
+        return matches
+
     def clear(self) -> None:
         self._runs.clear()
 
@@ -184,6 +209,27 @@ class RunRegistry:
         info.script = summary.get("script")
         info.total_prompt_tokens = int(summary.get("prompt_tokens") or 0)
         info.total_completion_tokens = int(summary.get("completion_tokens") or 0)
+        metrics = summary.get("metrics")
+        if isinstance(metrics, dict):
+            info.metrics = {
+                str(k): float(v)
+                for k, v in metrics.items()
+                if isinstance(v, (int, float)) and not isinstance(v, bool)
+            }
+        notes = summary.get("notes_markdown")
+        info.notes_markdown = notes if isinstance(notes, str) else ""
+        snapshots = summary.get("parameter_snapshots")
+        info.parameter_snapshots = (
+            [s for s in snapshots if isinstance(s, dict)]
+            if isinstance(snapshots, list)
+            else []
+        )
+        traceback_path = summary.get("traceback_path")
+        info.traceback_path = (
+            traceback_path
+            if isinstance(traceback_path, str) and traceback_path
+            else None
+        )
         info.error_message = summary.get("error")
         score = summary.get("algorithm_terminal_score")
         info.algorithm_terminal_score = float(score) if isinstance(score, (int, float)) else None
@@ -264,6 +310,7 @@ class RunRegistry:
         info.event_counts[kind] = info.event_counts.get(kind, 0) + 1
         if ts > info.last_event_at:
             info.last_event_at = ts
+        self._record_metrics(info, envelope)
 
         if env_type == "algo_event":
             self._record_algo(info, envelope, kind)
@@ -356,6 +403,25 @@ class RunRegistry:
                 for k, v in payload.items()
                 if k not in {"iter_index", "phase", "score", "text"}
             }
+            parameter_snapshot = payload.get("parameter_snapshot")
+            if payload.get("phase") == "epoch_end" and isinstance(
+                parameter_snapshot, dict
+            ):
+                info.parameter_snapshots.append(
+                    {
+                        "source": "epoch_end",
+                        "epoch": payload.get("epoch"),
+                        "values": dict(parameter_snapshot),
+                        "timestamp": ts,
+                    }
+                )
+            traceback_path = payload.get("path")
+            if (
+                payload.get("phase") == "traceback"
+                and isinstance(traceback_path, str)
+                and traceback_path
+            ):
+                info.traceback_path = traceback_path
             info.iterations.append(
                 {
                     "iter_index": payload.get("iter_index"),
@@ -437,6 +503,28 @@ class RunRegistry:
                     info.total_prompt_tokens += p
                 if isinstance(c, int):
                     info.total_completion_tokens += c
+        if kind == "end":
+            params = metadata.get("parameters")
+            if isinstance(params, list):
+                values: dict[str, Any] = {}
+                for raw in params:
+                    if not isinstance(raw, dict):
+                        continue
+                    if not raw.get("requires_grad"):
+                        continue
+                    path = raw.get("path")
+                    if isinstance(path, str) and path:
+                        values[path] = raw.get("value")
+                if values:
+                    info.parameter_snapshots.append(
+                        {
+                            "source": "agent_event",
+                            "agent_path": agent_path,
+                            "values": values,
+                            "timestamp": envelope.get("finished_at")
+                            or envelope.get("started_at"),
+                        }
+                    )
 
     # --- legacy facade kept so existing callers continue to work ------
 
@@ -483,6 +571,17 @@ class RunRegistry:
         if isinstance(path, str) and path:
             info.events_by_agent_path.setdefault(path, []).append(envelope)
 
+    def _record_metrics(self, info: RunInfo, envelope: dict[str, Any]) -> None:
+        metadata = envelope.get("metadata")
+        if not isinstance(metadata, dict):
+            return
+        metrics = metadata.get("metrics")
+        if not isinstance(metrics, dict):
+            return
+        for name, value in metrics.items():
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                info.metrics[str(name)] = float(value)
+
     def _evict_if_needed(self) -> None:
         while len(self._runs) > self._capacity:
             self._runs.popitem(last=False)
@@ -515,3 +614,21 @@ def _fallback_mermaid(graph_data: dict[str, Any]) -> str:
         callee = str(e.get("callee", "?")).replace(".", "_")
         lines.append(f"    {caller} --> {callee}")
     return "\n".join(lines)
+
+
+def _latest_hash_content(info: RunInfo) -> str | None:
+    root = info.root_agent_path
+    for env in reversed(list(info.events)):
+        if env.get("type") != "agent_event":
+            continue
+        if env.get("kind") not in {"end", "start"}:
+            continue
+        if isinstance(root, str) and env.get("agent_path") != root:
+            continue
+        meta = env.get("metadata")
+        if not isinstance(meta, dict):
+            continue
+        hc = meta.get("hash_content")
+        if isinstance(hc, str) and hc:
+            return hc
+    return None
