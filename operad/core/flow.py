@@ -171,7 +171,7 @@ class Router(Agent[In, Out]):
         label = getattr(choice, self._key_field, None)
         branch = self._branches.get(label)
         if branch is None:
-            from .graph import to_mermaid_node
+            from .view import to_mermaid_node
 
             raise BuildError(
                 "router_miss",

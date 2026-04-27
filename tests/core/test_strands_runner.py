@@ -11,7 +11,7 @@ import pytest
 import strands
 
 from operad import Agent
-from operad.core._strands_runner import StrandsRunner
+from operad.core.runner import StrandsRunner
 
 from .._helpers.fake_leaf import A, B, FakeLeaf
 from .._helpers.spy_strands import StrandsSpy, install_spy

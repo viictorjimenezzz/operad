@@ -19,17 +19,16 @@ code that makes them work.
 | ---------------- | --------------------------------------------------------------------------------- |
 | `agent.py`       | `Agent[In, Out]` base, child registration, `parameters()`, hooks, `register_*_hook`. |
 | `build.py`       | `build_agent` / `abuild_agent`, `Tracer`, sentinel proxy that catches payload-branching at trace time. |
-| `graph.py`       | `to_mermaid`, `to_json`, `from_json`, `to_io_graph`, `to_io_graph_from_json` graph exporters. |
+| `view.py`        | `to_mermaid`, `to_json`, `from_json`, `to_io_graph`, `to_io_graph_from_json` graph views. |
 | `config.py`      | `Configuration`, `Backend`, `Sampling`, `Resilience`, `IOConfig`, `Runtime` knobs. |
 | `models.py`      | Backend dispatcher: `Configuration` → `strands.models.Model` per backend.         |
 | `output.py`      | `OperadOutput[Out]` envelope — typed response + reproducibility metadata.         |
-| `example.py`     | `Example[In, Out]` typed few-shot pair (DSPy-style).                              |
 | `freeze.py`      | `freeze_agent(path)` / `thaw_agent(path)` / `thaw_pair`. API keys stripped.       |
 | `state.py`       | `AgentState` — declared-attribute snapshot for `state()` / `load_state()`.        |
 | `diff.py`        | `AgentDiff` + `Change` — structural diff between two agents.                      |
 | `gradmode.py`    | `requires_grad` plumbing on `Agent` (consumed by `optim/`).                       |
-| `fields.py`      | Helpers for class-attribute defaults (`role`/`task`/`rules`/`examples`).          |
-| `render.py`      | XML / Markdown / chat-template renderers for the system prompt.                   |
+| `render.py`      | XML / Markdown / chat-template renderers and `operad.system` field helpers.       |
+| `runner.py`      | Narrow Strands adapter used by default-forward leaves.                            |
 
 ## Public API
 

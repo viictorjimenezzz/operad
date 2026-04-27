@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from operad.core.agent import Agent
 from operad.core.config import Configuration
-from operad.core.example import Example
+from operad.core.agent import Example
 from operad.optim.parameter import (
     ConfigurationConstraint,
     ConfigurationParameter,

@@ -21,7 +21,7 @@ from operad import Agent, BuildError
 from operad.agents import Choice, RouteClassifier, RouteInput, Router
 from tests.conftest import A, B
 from operad import Agent, Parallel, Sequential
-from operad.core.graph import to_json, to_mermaid
+from operad.core.view import to_json, to_mermaid
 from ..conftest import A, FakeLeaf
 
 

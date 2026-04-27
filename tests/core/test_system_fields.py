@@ -2,7 +2,7 @@
 
 Covers:
 
-* :mod:`operad.core.fields` detection helpers.
+* :mod:`operad.core.render` detection helpers.
 * Renderer split: ``render_input`` emits user fields only,
   ``render_system_input`` emits system-flagged fields only, examples
   stay whole.
@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from operad import Agent, Configuration, Example
 from operad.core import render
 from operad.core.config import IOConfig
-from operad.core.fields import is_system_field, split_fields
+from operad.core.render import is_system_field, split_fields
 
 from .._helpers.spy_strands import StrandsSpy, install_spy
 
@@ -119,7 +119,7 @@ def test_render_input_emits_user_fields_only() -> None:
         message="hi",
         extra="e1",
     )
-    out = render.render_input(x)
+    out = render.render(x)
     assert "<input" in out
     assert "<message" in out and "hi" in out
     assert "<extra" in out and "e1" in out
@@ -135,7 +135,7 @@ def test_render_system_input_emits_system_fields_only() -> None:
         message="hi",
         extra="e1",
     )
-    out = render.render_system_input(x)
+    out = render.render(x, target="system_input")
     assert "<system_input" in out
     assert "<context" in out and "persona A" in out
     assert "<workspace_guide" in out and "KB X" in out
@@ -146,7 +146,7 @@ def test_render_system_input_emits_system_fields_only() -> None:
 
 def test_render_system_input_empty_when_no_system_fields() -> None:
     x = _AllUserInput(message="hi")
-    assert render.render_system_input(x) == ""
+    assert render.render(x, target="system_input") == ""
 
 
 def test_render_input_empty_when_all_fields_system() -> None:
@@ -154,7 +154,7 @@ def test_render_input_empty_when_all_fields_system() -> None:
         a: str = _system_field("a")
         b: str = _system_field("b")
 
-    assert render.render_input(_AllSystem(a="x", b="y")) == ""
+    assert render.render(_AllSystem(a="x", b="y")) == ""
 
 
 def test_render_examples_includes_all_fields() -> None:

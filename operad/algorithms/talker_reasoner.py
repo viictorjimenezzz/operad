@@ -29,7 +29,7 @@ from typing import ClassVar, Literal, Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..core.agent import Agent
-from ..core.example import Example
+from ..core.agent import Example
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 
 

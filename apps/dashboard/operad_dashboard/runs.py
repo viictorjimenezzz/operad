@@ -27,7 +27,7 @@ from collections import OrderedDict, deque
 from dataclasses import dataclass, field
 from typing import Any, Deque, Iterator, Literal
 
-from operad.core.graph import TypeRegistry, from_json, to_mermaid
+from operad.core.view import TypeRegistry, from_json, to_mermaid
 
 
 RunState = Literal["running", "ended", "error"]

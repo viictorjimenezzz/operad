@@ -27,7 +27,7 @@ from typing import Any, Literal, NoReturn
 from pydantic import BaseModel
 
 from .models import resolve_model
-from ._strands_runner import StrandsRunner
+from .runner import StrandsRunner
 from ..utils.errors import BuildError
 from .agent import Agent, _TRACER
 
@@ -144,7 +144,7 @@ def _raise_payload_branch(
     (truthy/comparison/iter) funnel through here so the two catch sites
     in ``_trace`` and ``Tracer.record`` stay tiny.
     """
-    from .graph import to_mermaid_node
+    from .view import to_mermaid_node
 
     if isinstance(exc, _PayloadBranchAccess):
         access = f"{exc.cls_name}.{exc.field_name!r}"
@@ -212,7 +212,7 @@ class AgentGraph:
         """
         import html as _html
 
-        from .graph import to_mermaid
+        from .view import to_mermaid
 
         return f'<pre class="mermaid">{_html.escape(to_mermaid(self))}</pre>'
 
@@ -263,7 +263,7 @@ class Tracer:
                 "prompt_incomplete", "missing input/output type", agent=callee
             )
         if not isinstance(x, child.input):
-            from .graph import to_mermaid_edge
+            from .view import to_mermaid_edge
 
             caller_io = (
                 (parent_agent.input, parent_agent.output)
@@ -321,7 +321,7 @@ class Tracer:
                         io=(child.input, child.output),
                     )
                 if not isinstance(out, child.output):
-                    from .graph import to_mermaid_node
+                    from .view import to_mermaid_node
 
                     raise BuildError(
                         "output_mismatch",
@@ -338,7 +338,7 @@ class Tracer:
                         ),
                     )
                 if len(self.graph.edges) == edges_before:
-                    from .graph import to_mermaid_node
+                    from .view import to_mermaid_node
 
                     raise BuildError(
                         "sentinel_bypass",
@@ -397,7 +397,7 @@ def _validate(a: Agent[Any, Any]) -> None:
         )
     _needs_config = _is_default_forward(a) or getattr(a, "requires_config_at_build", False)
     if not a._children and a.config is None and _needs_config:
-        from .graph import to_mermaid_node
+        from .view import to_mermaid_node
 
         raise BuildError(
             "prompt_incomplete",
@@ -528,7 +528,7 @@ async def abuild_agent(root: Agent[Any, Any]) -> Agent[Any, Any]:
             ) from e
 
         if not isinstance(out, root.output):  # type: ignore[arg-type]
-            from .graph import to_mermaid_node
+            from .view import to_mermaid_node
 
             raise BuildError(
                 "output_mismatch",
@@ -545,7 +545,7 @@ async def abuild_agent(root: Agent[Any, Any]) -> Agent[Any, Any]:
                 ),
             )
         if root._children and len(tracer.graph.edges) == 0:
-            from .graph import to_mermaid_node
+            from .view import to_mermaid_node
 
             raise BuildError(
                 "sentinel_bypass",

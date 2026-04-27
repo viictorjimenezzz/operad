@@ -30,7 +30,7 @@ can be taken by a separate agent.
 - **2026-04-25 (Iter 5, Stream 1)** — strands decoupling landed:
   **F-2 — resolved-by-removal.** `Agent` no longer inherits from
   `strands.Agent`; the runtime is composed via
-  `operad.core._strands_runner.StrandsRunner`, so the
+  `operad.core.runner.StrandsRunner`, so the
   `_strands_state` workaround is gone (not just bypassed). Package
   bumped to 0.2.0; existing freeze artefacts auto-reject on load.
   - **H-4 (High) — RESOLVED.** `evaluate()` had no per-row error

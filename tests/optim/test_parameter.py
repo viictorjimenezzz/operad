@@ -13,7 +13,7 @@ import gc
 
 import pytest
 
-from operad.core.example import Example
+from operad.core.agent import Example
 from operad.optim import (
     CategoricalParameter,
     ConfigurationConstraint,

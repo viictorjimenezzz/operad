@@ -29,7 +29,7 @@ from rich.panel import Panel
 from operad import Sequential
 from operad.core.config import Sampling
 from operad.agents import Classifier, Reasoner
-from operad.core.graph import to_mermaid
+from operad.core.view import to_mermaid
 from operad.runtime.observers import RichDashboardObserver, registry as observers
 from operad.runtime.trace import TraceObserver
 from operad.utils.ops import AppendRule

@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 from operad.agents import CodeReviewer, ContextOptimizer, DiffChunk, DiffSummarizer, PRDiff, PRSummary, ReviewReport
 from operad.agents import CodeReviewer, ContextOptimizer, DiffChunk, DiffSummarizer, PRDiff, PRReviewer, PRSummary, ReviewComment, ReviewReport
-from operad.core.graph import to_mermaid
+from operad.core.view import to_mermaid
 from ..conftest import FakeLeaf
 
 

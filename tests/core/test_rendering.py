@@ -48,7 +48,7 @@ def _agent(**overrides) -> Agent:
 
 
 def test_render_system_omits_empty_sections() -> None:
-    out = render.render_system(_agent())
+    out = render.render(_agent())
     assert "<role" not in out
     assert "<task" not in out
     assert "<rules" not in out
@@ -57,7 +57,7 @@ def test_render_system_omits_empty_sections() -> None:
 
 
 def test_render_system_includes_section_descriptions() -> None:
-    out = render.render_system(_agent(role="r", task="t", rules=["a"]))
+    out = render.render(_agent(role="r", task="t", rules=["a"]))
     assert "<role" in out and 'desc="Persona' in out
     assert "<task" in out and "desc" in out
     assert "<rules" in out
@@ -65,7 +65,7 @@ def test_render_system_includes_section_descriptions() -> None:
 
 
 def test_render_system_includes_output_schema_with_field_descs() -> None:
-    out = render.render_system(_agent())
+    out = render.render(_agent())
     assert '<output_schema desc="A reasoned answer."' in out
     assert 'name="reasoning"' in out
     assert 'desc="Step-by-step deliberation."' in out
@@ -75,7 +75,7 @@ def test_render_system_includes_output_schema_with_field_descs() -> None:
 
 def test_render_user_surfaces_in_field_descriptions() -> None:
     x = _Question(text="what is 2+2?", topic="math")
-    out = render.render_input(x)
+    out = render.render(x)
     assert 'desc="A user question with optional topic hint."' in out
     assert '<text desc="The user\'s question.">what is 2+2?</text>' in out
     assert '<topic desc="Optional topic hint.">math</topic>' in out
@@ -83,7 +83,7 @@ def test_render_user_surfaces_in_field_descriptions() -> None:
 
 def test_render_user_xml_escapes_values() -> None:
     x = _Question(text="<script>alert('xss')</script>")
-    out = render.render_input(x)
+    out = render.render(x)
     assert "<script>" not in out
     assert "&lt;script&gt;" in out
 
@@ -93,7 +93,7 @@ def test_render_examples_block_serializes_typed_pairs() -> None:
         input=_Question(text="q1", topic="t1"),
         output=_Answer(reasoning="r", answer="a"),
     )
-    out = render.render_system(_agent(examples=[ex]))
+    out = render.render(_agent(examples=[ex]))
     assert "<examples" in out
     assert "<example>" in out
     assert "<text" in out and "q1" in out
@@ -101,12 +101,12 @@ def test_render_examples_block_serializes_typed_pairs() -> None:
 
 
 def test_render_system_joins_sections_with_blank_lines() -> None:
-    out = render.render_system(_agent(role="r", task="t"))
+    out = render.render(_agent(role="r", task="t"))
     assert "</role>\n\n<task" in out
 
 
 def test_render_system_includes_context_when_set() -> None:
-    out = render.render_system(
+    out = render.render(
         _agent(role="r", task="t", context="user is a senior engineer")
     )
     assert "<context" in out
@@ -116,14 +116,12 @@ def test_render_system_includes_context_when_set() -> None:
 
 
 def test_render_system_omits_context_when_blank() -> None:
-    out = render.render_system(_agent(role="r", task="t"))
+    out = render.render(_agent(role="r", task="t"))
     assert "<context" not in out
 
 
 def test_render_system_markdown_includes_context_when_set() -> None:
-    from operad.core.render import markdown as md
-
-    out = md.render_system(_agent(role="r", task="t", context="hello"))
+    out = render.render(_agent(role="r", task="t", context="hello"), format="markdown")
     assert "# Context\nhello" in out
 
 
@@ -177,7 +175,7 @@ def _cfg(renderer: str = "xml") -> Configuration:
 
 def test_markdown_render_surfaces_field_descriptions_and_rules() -> None:
     agent = _leaf_cls()(config=None)
-    out = render.markdown.render_system(agent)
+    out = render.render(agent, format="markdown")
 
     assert "# Role" in out
     assert "# Task" in out
@@ -194,7 +192,7 @@ def test_markdown_render_surfaces_field_descriptions_and_rules() -> None:
 
 def test_chat_render_returns_list_with_system_message_carrying_schema() -> None:
     agent = _leaf_cls()(config=None)
-    out = render.chat.render_system(agent)
+    out = render.render(agent, format="chat")
 
     assert isinstance(out, list)
     assert len(out) >= 1

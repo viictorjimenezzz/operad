@@ -4,10 +4,7 @@
 `operad.core.agent.Agent`'s default forward and stream paths need:
 ``model``, ``system_prompt`` (read/write), ``invoke_async``,
 ``stream_async``. Every other Strands attribute stays inside this
-module — operad never reaches in directly.
-
-This is composition, not abstraction. There is one runner type and it
-is named after its substrate on purpose.
+module.
 """
 
 from __future__ import annotations
@@ -19,6 +16,11 @@ from strands.types.agent import ConcurrentInvocationMode
 
 if TYPE_CHECKING:
     from strands.models.model import Model
+
+
+# ---------------------------------------------------------------------------
+# Strands runner.
+# ---------------------------------------------------------------------------
 
 
 class StrandsRunner:

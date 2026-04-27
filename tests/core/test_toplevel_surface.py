@@ -33,9 +33,21 @@ def test_moved_names_still_reachable() -> None:
     from operad.utils.hashing import hash_config  # noqa: F401
 
 
-def test_example_not_in_agent_module() -> None:
+def test_example_lives_in_agent_module() -> None:
     from operad.core import agent as agent_mod
-    from operad.core import example as example_mod
 
-    assert "Example" not in vars(agent_mod) or vars(agent_mod)["Example"] is example_mod.Example
-    assert example_mod.Example is operad.Example
+    assert agent_mod.Example is operad.Example
+
+
+def test_removed_core_modules_are_gone() -> None:
+    for name in (
+        "operad.core.example",
+        "operad.core.fields",
+        "operad.core.graph",
+        "operad.core._strands_runner",
+        "operad.core.render.markdown",
+        "operad.core.render.xml",
+        "operad.core.render.chat",
+    ):
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module(name)

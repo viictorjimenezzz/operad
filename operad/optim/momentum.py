@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 from operad.core.agent import Agent
 from operad.core.config import Configuration
-from operad.core.example import Example
+from operad.core.agent import Example
 from operad.optim.optimizer import ParamGroup
 from operad.optim.parameter import Parameter, TextualGradient
 from operad.optim.rewrite import apply_rewrite

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from operad import Agent, Parallel, Sequential
 from operad.agents import Choice, RouteClassifier, Router
-from operad.core.graph import to_io_graph, to_io_graph_from_json, to_json
+from operad.core.view import to_io_graph, to_io_graph_from_json, to_json
 
 from ..conftest import A, B, C, D, FakeLeaf
 
