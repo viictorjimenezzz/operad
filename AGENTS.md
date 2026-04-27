@@ -54,6 +54,31 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. Codebase Invariants
+
+**Preserve the architecture unless the task explicitly changes it.**
+
+- Components are `Agent[In, Out]`; algorithms stay as plain orchestration loops under `operad/algorithms`.
+- Agent contracts live on class attributes such as `input`, `output`, `role`, `task`, `rules`, and `examples`.
+- Call `build()` before invocation; constructors should not touch providers.
+- Composite agents route; payload-value decisions belong in leaves or routers.
+- Offline tests should use `FakeLeaf`; live provider tests belong under `tests/integration` and stay gated by `OPERAD_INTEGRATION`.
+
+## 6. Verification
+
+**Run checks that match the risk of the change.**
+
+- Run the narrow relevant tests first.
+- Run `uv run pytest tests/` before PRs when practical.
+- Run `uv run python -c "import operad"` after changes to exports, package layout, or public APIs.
+
+## 7. Documentation
+
+**Keep docs close to their source of truth.**
+
+- Prefer linking to the authoritative doc or code location instead of copying long explanations into prompt files.
+- Update nearby docs when behavior, imports, or public APIs change.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
