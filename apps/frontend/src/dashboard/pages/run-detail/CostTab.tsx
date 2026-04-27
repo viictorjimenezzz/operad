@@ -18,7 +18,7 @@ export function CostTab() {
             description="cost & latency are computed once the agent has run at least once"
           />
         ) : (
-          <CostLatencyBlock dataInvocations={invocations.data} defaultOpen />
+          <CostLatencyBlock dataInvocations={invocations.data} />
         )}
       </div>
     </div>

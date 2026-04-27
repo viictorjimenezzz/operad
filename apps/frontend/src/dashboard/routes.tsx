@@ -1,11 +1,19 @@
 import { Shell } from "@/dashboard/Shell";
+import { AgentGroupOverviewTab, AgentGroupPage } from "@/dashboard/pages/AgentGroupPage";
+import {
+  AgentGroupCostTab,
+  AgentGroupDriftTab,
+  AgentGroupRunsTab,
+} from "@/dashboard/pages/AgentGroupSubpages";
+import { AgentsIndexPage } from "@/dashboard/pages/AgentsIndexPage";
+import { AlgorithmsIndexPage } from "@/dashboard/pages/AlgorithmsIndexPage";
 import { BenchmarkDetailPage } from "@/dashboard/pages/BenchmarkDetailPage";
 import { BenchmarksPage } from "@/dashboard/pages/BenchmarksPage";
 import { CassetteDetailPage } from "@/dashboard/pages/CassetteDetailPage";
 import { CassettesPage } from "@/dashboard/pages/CassettesPage";
 import { ExperimentsPage } from "@/dashboard/pages/ExperimentsPage";
 import { NotFoundPage } from "@/dashboard/pages/NotFoundPage";
-import { RunListPage } from "@/dashboard/pages/RunListPage";
+import { TrainingIndexPage } from "@/dashboard/pages/TrainingIndexPage";
 import { CostTab } from "@/dashboard/pages/run-detail/CostTab";
 import { DriftTab } from "@/dashboard/pages/run-detail/DriftTab";
 import { GraphTab } from "@/dashboard/pages/run-detail/GraphTab";
@@ -13,26 +21,67 @@ import { InvocationsTab } from "@/dashboard/pages/run-detail/InvocationsTab";
 import { OverviewTab } from "@/dashboard/pages/run-detail/OverviewTab";
 import { RunDetailLayout } from "@/dashboard/pages/run-detail/RunDetailLayout";
 import { TrainTab } from "@/dashboard/pages/run-detail/TrainTab";
-import { createBrowserRouter, useRouteError } from "react-router-dom";
+import { Navigate, createBrowserRouter, useRouteError } from "react-router-dom";
+
+const runDetailChildren = [
+  { index: true, element: <OverviewTab /> },
+  { path: "graph", element: <GraphTab />, errorElement: <GraphRouteErrorBoundary /> },
+  { path: "invocations", element: <InvocationsTab /> },
+  { path: "train", element: <TrainTab /> },
+  { path: "cost", element: <CostTab /> },
+  { path: "drift", element: <DriftTab /> },
+];
 
 export const dashboardRoutes = [
   {
     path: "/",
     element: <Shell />,
     children: [
-      { index: true, element: <RunListPage /> },
+      // Default landing -> agents.
+      { index: true, element: <Navigate to="/agents" replace /> },
+
+      // Agents rail.
+      { path: "agents", element: <AgentsIndexPage /> },
+      {
+        path: "agents/:hashContent",
+        element: <AgentGroupPage />,
+        children: [
+          { index: true, element: <AgentGroupOverviewTab /> },
+          { path: "runs", element: <AgentGroupRunsTab /> },
+          { path: "cost", element: <AgentGroupCostTab /> },
+          { path: "drift", element: <AgentGroupDriftTab /> },
+        ],
+      },
+      {
+        path: "agents/:hashContent/runs/:runId",
+        element: <RunDetailLayout />,
+        children: runDetailChildren,
+      },
+
+      // Algorithms rail.
+      { path: "algorithms", element: <AlgorithmsIndexPage /> },
+      {
+        path: "algorithms/:runId",
+        element: <RunDetailLayout />,
+        children: runDetailChildren,
+      },
+
+      // Training rail.
+      { path: "training", element: <TrainingIndexPage /> },
+      {
+        path: "training/:runId",
+        element: <RunDetailLayout />,
+        children: runDetailChildren,
+      },
+
+      // Legacy: /runs/:runId still resolves through the same layout.
       {
         path: "runs/:runId",
         element: <RunDetailLayout />,
-        children: [
-          { index: true, element: <OverviewTab /> },
-          { path: "graph", element: <GraphTab />, errorElement: <GraphRouteErrorBoundary /> },
-          { path: "invocations", element: <InvocationsTab /> },
-          { path: "train", element: <TrainTab /> },
-          { path: "cost", element: <CostTab /> },
-          { path: "drift", element: <DriftTab /> },
-        ],
+        children: runDetailChildren,
       },
+
+      // Other rails.
       { path: "benchmarks", element: <BenchmarksPage /> },
       { path: "benchmarks/:benchmarkId", element: <BenchmarkDetailPage /> },
       { path: "cassettes", element: <CassettesPage /> },

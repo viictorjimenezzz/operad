@@ -16,6 +16,42 @@ export function useRunsFiltered(includeSynthetic: boolean) {
   });
 }
 
+export function useAgentGroups() {
+  return useQuery({
+    queryKey: ["agents"] as const,
+    queryFn: () => dashboardApi.agentGroups(),
+    refetchInterval: 5_000,
+  });
+}
+
+export function useAgentGroup(hashContent: string | null | undefined) {
+  return useQuery({
+    queryKey: ["agents", hashContent] as const,
+    queryFn: () => {
+      if (!hashContent) throw new Error("useAgentGroup: hashContent is required");
+      return dashboardApi.agentGroup(hashContent);
+    },
+    enabled: !!hashContent,
+    refetchInterval: 5_000,
+  });
+}
+
+export function useAlgorithmGroups() {
+  return useQuery({
+    queryKey: ["algorithms"] as const,
+    queryFn: () => dashboardApi.algorithmGroups(),
+    refetchInterval: 5_000,
+  });
+}
+
+export function useTrainingGroups() {
+  return useQuery({
+    queryKey: ["trainings"] as const,
+    queryFn: () => dashboardApi.trainingGroups(),
+    refetchInterval: 5_000,
+  });
+}
+
 export function useRunSummary(runId: string | null | undefined) {
   return useQuery({
     queryKey: ["run", "summary", runId] as const,

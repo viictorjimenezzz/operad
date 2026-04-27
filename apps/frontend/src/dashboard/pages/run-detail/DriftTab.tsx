@@ -18,7 +18,7 @@ export function DriftTab() {
             description="prompt drift is computed by comparing prompts across invocations"
           />
         ) : (
-          <DriftBlock dataInvocations={invocations.data} runId={runId} defaultOpen />
+          <DriftBlock dataInvocations={invocations.data} runId={runId} />
         )}
       </div>
     </div>

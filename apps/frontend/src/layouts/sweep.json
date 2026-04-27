@@ -27,69 +27,93 @@
       },
 
       "t-overview": {
-        "type": "Col",
-        "props": { "gap": 12 },
-        "children": ["kpis", "best-card", "cost-card", "meta-card"]
+        "type": "Stack",
+        "props": { "gap": 16 },
+        "children": ["kpiSection", "bestSection"]
+      },
+      "kpiSection": {
+        "type": "PanelSection",
+        "props": { "label": "Summary" },
+        "children": ["kpis"]
       },
       "kpis": {
-        "type": "Row",
-        "props": { "gap": 12 },
-        "children": ["k-events", "k-tokens", "k-cost"]
+        "type": "PanelGrid",
+        "props": { "cols": 4, "gap": "md" },
+        "children": ["k-events", "k-tokens", "k-cost", "k-best"]
       },
       "k-events": {
-        "type": "KPI",
-        "props": { "label": "events", "source": "$queries.summary.event_total", "format": "int" }
+        "type": "PanelCard",
+        "props": { "eyebrow": "Events", "surface": "inset", "bare": true },
+        "children": ["k-events-stat"]
+      },
+      "k-events-stat": {
+        "type": "StatTile",
+        "props": { "label": "events", "value": 0, "size": "sm" }
       },
       "k-tokens": {
+        "type": "PanelCard",
+        "props": { "eyebrow": "Tokens", "surface": "inset", "bare": true },
+        "children": ["k-tokens-stat"]
+      },
+      "k-tokens-stat": {
         "type": "KPI",
-        "props": {
-          "label": "tokens",
-          "source": "$queries.summary.prompt_tokens",
-          "format": "tokens"
-        }
+        "props": { "label": "tokens", "source": "$queries.summary.prompt_tokens", "format": "tokens" }
       },
       "k-cost": {
+        "type": "PanelCard",
+        "props": { "eyebrow": "Cost", "surface": "inset", "bare": true },
+        "children": ["k-cost-stat"]
+      },
+      "k-cost-stat": {
         "type": "KPI",
         "props": { "label": "cost", "source": "$queries.summary.cost.cost_usd", "format": "cost" }
       },
+      "k-best": {
+        "type": "PanelCard",
+        "props": { "eyebrow": "Best", "surface": "inset", "bare": true },
+        "children": ["k-best-stat"]
+      },
+      "k-best-stat": {
+        "type": "KPI",
+        "props": {
+          "label": "score",
+          "source": "$queries.summary.algorithm_terminal_score",
+          "format": "number"
+        }
+      },
+
+      "bestSection": {
+        "type": "PanelSection",
+        "props": { "label": "Sweep" },
+        "children": ["bestGrid"]
+      },
+      "bestGrid": {
+        "type": "PanelGrid",
+        "props": { "cols": 2 },
+        "children": ["best-card", "cost-card"]
+      },
       "best-card": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "best cell" },
         "children": ["best-cell"]
       },
-      "best-cell": {
-        "type": "SweepBestCellCard",
-        "props": { "source": "$queries.sweep" }
-      },
+      "best-cell": { "type": "SweepBestCellCard", "props": { "source": "$queries.sweep" } },
       "cost-card": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "cell progress" },
         "children": ["cost-total"]
       },
-      "cost-total": {
-        "type": "SweepCostTotalizer",
-        "props": { "source": "$queries.sweep" }
-      },
-      "meta-card": {
-        "type": "Card",
-        "props": { "title": "meta" },
-        "children": ["meta", "langfuse"]
-      },
-      "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
-      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
+      "cost-total": { "type": "SweepCostTotalizer", "props": { "source": "$queries.sweep" } },
 
       "t-heatmap": {
-        "type": "Card",
-        "props": { "title": "parameter grid" },
+        "type": "PanelCard",
+        "props": { "title": "parameter grid", "bodyMinHeight": 320 },
         "children": ["heatmap"]
       },
-      "heatmap": {
-        "type": "SweepHeatmap",
-        "props": { "source": "$queries.sweep" }
-      },
+      "heatmap": { "type": "SweepHeatmap", "props": { "source": "$queries.sweep" } },
 
       "t-cells": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "all cells" },
         "children": ["cells-timeline"]
       },
@@ -99,7 +123,7 @@
       },
 
       "t-graph": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "agent graph" },
         "children": ["graph"]
       },

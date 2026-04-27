@@ -1,4 +1,4 @@
-import { Section } from "@/components/ui";
+import { PanelCard } from "@/components/ui";
 import { dashboardApi } from "@/lib/api/dashboard";
 import { RunInvocationsResponse } from "@/lib/types";
 import { useQuery } from "@tanstack/react-query";
@@ -7,7 +7,6 @@ export interface DriftBlockProps {
   dataInvocations?: unknown;
   invocations?: unknown;
   runId?: string;
-  defaultOpen?: boolean;
 }
 
 export function DriftBlock(props: DriftBlockProps) {
@@ -25,24 +24,17 @@ export function DriftBlock(props: DriftBlockProps) {
   const drift = driftQuery.data ?? [];
   const promptHashes = new Set(invocations.map((r) => r.hash_prompt).filter(Boolean));
   const driftCount = drift.length;
-  const summary =
+  const titleText =
     invocations.length < 2
       ? "needs 2+ invocations"
       : driftCount > 0
-        ? `${driftCount} prompt change${driftCount === 1 ? "" : "s"} recorded`
+        ? `${driftCount} prompt change${driftCount === 1 ? "" : "s"}`
         : promptHashes.size > 1
           ? `${promptHashes.size} unique prompts across ${invocations.length} invocations`
-          : "no drift — single prompt across all invocations";
-
-  const disabled = invocations.length < 2;
+          : "no drift — single prompt";
 
   return (
-    <Section
-      title="Prompt drift"
-      summary={summary}
-      disabled={disabled}
-      defaultOpen={props.defaultOpen ?? false}
-    >
+    <PanelCard eyebrow="Prompt drift" title={titleText}>
       {drift.length === 0 ? (
         <div className="text-[12px] text-muted">
           {promptHashes.size > 1
@@ -70,7 +62,7 @@ export function DriftBlock(props: DriftBlockProps) {
                   {c.path ? (
                     <div className="font-mono text-[10px] text-muted-2">{c.path}</div>
                   ) : null}
-                  <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
+                  <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
                     <div className="rounded bg-[--color-err-dim]/40 p-2 text-[--color-err]">
                       − {c.before_text}
                     </div>
@@ -84,6 +76,6 @@ export function DriftBlock(props: DriftBlockProps) {
           ))}
         </ol>
       )}
-    </Section>
+    </PanelCard>
   );
 }

@@ -1,4 +1,4 @@
-import { Pill, Section } from "@/components/ui";
+import { PanelCard, Pill } from "@/components/ui";
 import { dashboardApi } from "@/lib/api/dashboard";
 import { RunSummary } from "@/lib/types";
 import { useQuery } from "@tanstack/react-query";
@@ -35,42 +35,37 @@ export function TrainableParamsBlock(props: TrainableParamsBlockProps) {
 
   const params = paramsQuery.data?.parameters ?? [];
   const trainable = params.filter((p) => p.requires_grad);
-  const summaryText = paramsQuery.isLoading
+  const titleText = paramsQuery.isLoading
     ? "loading parameters…"
     : trainable.length === 0
       ? "no parameters marked trainable"
       : `${trainable.length} trainable parameter${trainable.length === 1 ? "" : "s"}`;
 
-  const disabled = trainable.length === 0;
-
   return (
-    <Section
-      title="Trainable parameters"
-      summary={summaryText}
-      disabled={disabled}
-      defaultOpen={props.defaultOpen ?? false}
-    >
-      <ul className="grid gap-2">
-        {trainable.map((p) => (
-          <li
-            key={p.path}
-            className="flex items-center gap-3 rounded-lg border border-[--color-warn-dim] bg-[--color-warn-dim]/30 px-3 py-2"
-          >
-            <Flame size={14} className="flex-shrink-0 text-[--color-warn]" />
-            <div className="min-w-0 flex-1">
-              <div className="font-mono text-[12px] text-text">{p.path}</div>
-              <div className="text-[11px] text-muted-2">
-                {p.type} · {valuePreview(p.value)}
+    <PanelCard eyebrow="Trainable parameters" title={titleText}>
+      {trainable.length === 0 ? null : (
+        <ul className="grid gap-2">
+          {trainable.map((p) => (
+            <li
+              key={p.path}
+              className="flex items-center gap-3 rounded-lg border border-[--color-warn-dim] bg-[--color-warn-dim]/30 px-3 py-2"
+            >
+              <Flame size={14} className="flex-shrink-0 text-[--color-warn]" />
+              <div className="min-w-0 flex-1">
+                <div className="font-mono text-[12px] text-text">{p.path}</div>
+                <div className="text-[11px] text-muted-2">
+                  {p.type} · {valuePreview(p.value)}
+                </div>
               </div>
-            </div>
-            {p.grad && p.grad.severity > 0 ? (
-              <Pill tone="warn" size="sm">
-                grad {p.grad.severity.toFixed(1)}
-              </Pill>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-    </Section>
+              {p.grad && p.grad.severity > 0 ? (
+                <Pill tone="warn" size="sm">
+                  grad {p.grad.severity.toFixed(1)}
+                </Pill>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </PanelCard>
   );
 }

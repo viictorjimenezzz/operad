@@ -64,14 +64,12 @@ describe("Agent overview sparse states", () => {
       />,
     );
 
-    expect(screen.getByText(/1 hash captured/)).toBeTruthy();
-    expect(screen.getByText(/need 2\+ invocations for drift/)).toBeTruthy();
+    expect(screen.getByText(/1 baseline hash/)).toBeTruthy();
   });
 
   it("shows single-invocation latency while marking missing usage unavailable", () => {
     render(
       <CostLatencyBlock
-        defaultOpen
         dataInvocations={{
           agent_path: "Root",
           invocations: [
@@ -104,7 +102,7 @@ describe("Agent overview sparse states", () => {
 
     render(<ConfigBlock dataSummary={summary} runId="run-1" />);
 
-    expect(screen.getByText("configuration lives on leaf agents")).toBeTruthy();
+    expect(screen.getByText("lives on leaf agents")).toBeTruthy();
   });
 
   it("hides empty role and task rows for composites", () => {
@@ -125,6 +123,8 @@ describe("Agent overview sparse states", () => {
 
     render(<IdentityBlock dataSummary={summary} runId="run-1" />);
 
+    // The Field wrapper renders the label; without a role or task, it should
+    // never show "role" or "task" as a label.
     expect(screen.queryByText("role")).toBeNull();
     expect(screen.queryByText("task")).toBeNull();
   });

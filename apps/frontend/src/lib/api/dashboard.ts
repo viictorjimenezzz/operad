@@ -1,6 +1,8 @@
 import {
   AgentEventsResponse,
   AgentGraphResponse,
+  AgentGroupDetail,
+  AgentGroupSummary,
   AgentInvocationDiffResponse,
   AgentInvocationsResponse,
   type AgentInvokeRequest,
@@ -9,6 +11,7 @@ import {
   AgentParametersResponse,
   AgentPromptsResponse,
   AgentValuesResponse,
+  AlgorithmGroup,
   ArchivedRunRecord,
   BenchmarkDetailResponse,
   BenchmarkIngestResponse,
@@ -33,6 +36,7 @@ import {
   RunInvocationsResponse,
   RunSummary,
   StatsResponse,
+  TrainingGroup,
 } from "@/lib/types";
 /**
  * Typed fetch wrappers for the dashboard FastAPI. Every response is
@@ -121,6 +125,13 @@ export const dashboardApi = {
   runLayout: (runId: string, tab: "overview" | "graph" | "invocations") =>
     getJson(`/runs/${runId}/layout/${tab}`, z.unknown()),
   runChildren: (runId: string) => getJson(`/runs/${runId}/children`, z.array(RunSummary)),
+  agentGroups: () => getJson("/api/agents", z.array(AgentGroupSummary)),
+  agentGroup: (hashContent: string) =>
+    getJson(`/api/agents/${encodeURIComponent(hashContent)}`, AgentGroupDetail),
+  agentGroupRuns: (hashContent: string) =>
+    getJson(`/api/agents/${encodeURIComponent(hashContent)}/runs`, z.array(RunSummary)),
+  algorithmGroups: () => getJson("/api/algorithms", z.array(AlgorithmGroup)),
+  trainingGroups: () => getJson("/api/trainings", z.array(TrainingGroup)),
   runSummary: (runId: string) => getJson(`/runs/${runId}/summary`, RunSummary),
   runInvocations: (runId: string) => getJson(`/runs/${runId}/invocations`, RunInvocationsResponse),
   runIoGraph: (runId: string) => getJson(`/runs/${runId}/io_graph`, IoGraphResponse),

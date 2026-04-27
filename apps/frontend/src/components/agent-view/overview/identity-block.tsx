@@ -1,4 +1,4 @@
-import { HashTag, Pill, Section } from "@/components/ui";
+import { HashTag, PanelCard, Pill } from "@/components/ui";
 import { useAgentMeta } from "@/hooks/use-runs";
 import { RunSummary } from "@/lib/types";
 
@@ -12,74 +12,46 @@ export function IdentityBlock(props: IdentityBlockProps) {
   const summaryParsed = RunSummary.safeParse(props.dataSummary ?? props.summary);
   if (!summaryParsed.success || !props.runId || !summaryParsed.data.root_agent_path) {
     return (
-      <Section title="Identity" summary="not available" disabled>
-        <span />
-      </Section>
+      <PanelCard eyebrow="Identity" title="not available">
+        <span className="text-[12px] text-muted-2">no agent metadata yet</span>
+      </PanelCard>
     );
   }
   const meta = useAgentMeta(props.runId, summaryParsed.data.root_agent_path);
   if (!meta.data) {
     return (
-      <Section title="Identity" summary="loading…" disabled>
+      <PanelCard eyebrow="Identity" title="loading…">
         <span />
-      </Section>
+      </PanelCard>
     );
   }
 
   const { class_name, kind, hash_content, role, task, rules, examples } = meta.data;
   const roleText = role?.trim() ? role : null;
   const taskText = task?.trim() ? task : null;
-  const summaryText = `${class_name} · ${kind} · ${rules.length} rules · ${examples.length} examples`;
-
-  const succinct = (
-    <div className="space-y-1.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-[12px] text-text">{class_name}</span>
-        <Pill tone={kind === "composite" ? "algo" : "default"}>{kind}</Pill>
-        <HashTag hash={hash_content} mono size="sm" />
-        {meta.data.forward_in_overridden ? (
-          <Pill tone="accent" title="leaf has a custom forward_in hook">
-            forward_in
-          </Pill>
-        ) : null}
-        {meta.data.forward_out_overridden ? (
-          <Pill tone="accent" title="leaf has a custom forward_out hook">
-            forward_out
-          </Pill>
-        ) : null}
-      </div>
-      {roleText || taskText ? (
-        <div className="grid grid-cols-[60px_1fr] items-baseline gap-x-3 gap-y-1 text-[12px]">
-          {roleText ? (
-            <>
-              <span className="text-[10px] uppercase tracking-[0.06em] text-muted-2">role</span>
-              <span className="truncate text-muted">{roleText}</span>
-            </>
-          ) : null}
-          {taskText ? (
-            <>
-              <span className="text-[10px] uppercase tracking-[0.06em] text-muted-2">task</span>
-              <span className="truncate text-muted">{taskText}</span>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
 
   return (
-    <Section title="Identity" summary={summaryText} succinct={succinct}>
+    <PanelCard
+      eyebrow="Identity"
+      title={
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="font-mono">{class_name}</span>
+          <Pill tone={kind === "composite" ? "algo" : "default"} size="sm">
+            {kind}
+          </Pill>
+          <HashTag hash={hash_content} mono size="sm" />
+          {meta.data.forward_in_overridden ? (
+            <Pill tone="accent" size="sm">forward_in</Pill>
+          ) : null}
+          {meta.data.forward_out_overridden ? (
+            <Pill tone="accent" size="sm">forward_out</Pill>
+          ) : null}
+        </span>
+      }
+    >
       <div className="space-y-3 text-[13px]">
-        {roleText ? (
-          <Field label="role">
-            <span className="text-text">{roleText}</span>
-          </Field>
-        ) : null}
-        {taskText ? (
-          <Field label="task">
-            <span className="text-text">{taskText}</span>
-          </Field>
-        ) : null}
+        {roleText ? <Field label="role">{roleText}</Field> : null}
+        {taskText ? <Field label="task">{taskText}</Field> : null}
         {rules.length > 0 ? (
           <Field label={`rules (${rules.length})`}>
             <ol className="ml-4 list-decimal space-y-0.5 text-text marker:text-muted-2">
@@ -91,9 +63,7 @@ export function IdentityBlock(props: IdentityBlockProps) {
         ) : null}
         {examples.length > 0 ? (
           <Field label={`examples (${examples.length})`}>
-            <span className="text-muted">
-              See the Examples section below for full input/output payloads.
-            </span>
+            <span className="text-muted">See the Examples panel below for full payloads.</span>
           </Field>
         ) : null}
         {meta.data.forward_in_overridden && meta.data.forward_in_doc ? (
@@ -107,7 +77,7 @@ export function IdentityBlock(props: IdentityBlockProps) {
           </Field>
         ) : null}
       </div>
-    </Section>
+    </PanelCard>
   );
 }
 

@@ -52,7 +52,26 @@
         ]
       },
 
-      "t-loss": { "type": "Card", "props": { "title": "loss curve" }, "children": ["loss", "lr"] },
+      "t-loss": {
+        "type": "Stack",
+        "props": { "gap": 16 },
+        "children": ["lossSection"]
+      },
+      "lossSection": {
+        "type": "PanelSection",
+        "props": { "label": "Loss" },
+        "children": ["lossGrid"]
+      },
+      "lossGrid": {
+        "type": "PanelGrid",
+        "props": { "cols": 2 },
+        "children": ["loss-card", "lr-card"]
+      },
+      "loss-card": {
+        "type": "PanelCard",
+        "props": { "title": "loss curve", "bodyMinHeight": 260 },
+        "children": ["loss"]
+      },
       "loss": {
         "type": "TrainingLossCurve",
         "props": {
@@ -61,23 +80,32 @@
           "height": 240
         }
       },
+      "lr-card": {
+        "type": "PanelCard",
+        "props": { "title": "learning rate", "bodyMinHeight": 200 },
+        "children": ["lr"]
+      },
       "lr": {
         "type": "LrScheduleCurve",
-        "props": { "source": "$queries.fitness", "height": 160 }
+        "props": { "source": "$queries.fitness", "height": 180 }
       },
 
-      "t-drift": { "type": "Card", "props": { "title": "prompt drift" }, "children": ["drift"] },
+      "t-drift": {
+        "type": "PanelCard",
+        "props": { "title": "prompt drift" },
+        "children": ["drift"]
+      },
       "drift": { "type": "DriftTimeline", "props": { "source": "$queries.drift" } },
 
       "t-gradients": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "gradient log" },
         "children": ["gradients"]
       },
       "gradients": { "type": "GradientLog", "props": { "source": "$queries.gradients" } },
 
       "t-checkpoints": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "checkpoints" },
         "children": ["checkpoints"]
       },
@@ -87,25 +115,34 @@
       },
 
       "t-progress": {
-        "type": "Col",
-        "props": { "gap": 12 },
+        "type": "Stack",
+        "props": { "gap": 16 },
+        "children": ["progressGrid"]
+      },
+      "progressGrid": {
+        "type": "PanelGrid",
+        "props": { "cols": 2 },
         "children": ["meta-card", "progress-card"]
       },
       "meta-card": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "meta" },
         "children": ["meta", "langfuse"]
       },
       "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
       "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
       "progress-card": {
-        "type": "Card",
+        "type": "PanelCard",
         "props": { "title": "training progress" },
         "children": ["progress"]
       },
       "progress": { "type": "TrainingProgress", "props": { "source": "$queries.progress" } },
 
-      "t-graph": { "type": "Card", "props": { "title": "agent graph" }, "children": ["graph"] },
+      "t-graph": {
+        "type": "PanelCard",
+        "props": { "title": "agent graph" },
+        "children": ["graph"]
+      },
       "graph": { "type": "AgentGraph", "props": { "source": "$queries.graph" } },
 
       "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } }

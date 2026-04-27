@@ -1,7 +1,6 @@
-import { KeyValueGrid, Metric, Section } from "@/components/ui";
+import { KeyValueGrid, Metric, PanelCard } from "@/components/ui";
 import { useAgentMeta } from "@/hooks/use-runs";
 import { RunInvocationsResponse, RunSummary } from "@/lib/types";
-import { useMemo } from "react";
 
 export interface BackendBlockProps {
   dataSummary?: unknown;
@@ -31,53 +30,54 @@ export function BackendBlock(props: BackendBlockProps) {
   const host =
     (meta.data?.config?.runtime as Record<string, unknown> | null)?.host as string | undefined;
 
-  const summaryText = useMemo(() => {
-    const parts: string[] = [];
-    if (backend) parts.push(backend);
-    if (model) parts.push(model);
-    if (renderer) parts.push(renderer);
-    return parts.length === 0 ? "no backend captured yet" : parts.join(" · ");
-  }, [backend, model, renderer]);
-
-  const disabled = !backend && !model && !renderer;
-
   const sampling = (meta.data?.config?.sampling as Record<string, unknown> | undefined) ?? {};
   const resilience = (meta.data?.config?.resilience as Record<string, unknown> | undefined) ?? {};
   const io = (meta.data?.config?.io as Record<string, unknown> | undefined) ?? {};
 
-  const succinct = disabled ? null : (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-      {backend ? <Metric label="backend" value={backend} /> : null}
-      {model ? <Metric label="model" value={<span className="font-mono">{model}</span>} /> : null}
-      {renderer ? <Metric label="renderer" value={renderer} /> : null}
-      {host ? <Metric label="host" value={<span className="font-mono">{host}</span>} /> : null}
-    </div>
-  );
+  const empty = !backend && !model && !renderer;
 
   return (
-    <Section
-      title="Backend"
-      summary={summaryText}
-      {...(succinct ? { succinct } : {})}
-      disabled={disabled}
+    <PanelCard
+      eyebrow="Backend"
+      title={
+        empty ? (
+          "no backend captured yet"
+        ) : (
+          <span className="font-mono">{[backend, model, renderer].filter(Boolean).join(" · ")}</span>
+        )
+      }
     >
-      {meta.data ? (
-        <KeyValueGrid
-          density="compact"
-          rows={[
-            { key: "agent path", value: meta.data.agent_path, mono: true },
-            { key: "kind", value: meta.data.kind },
-            ...(backend ? [{ key: "backend", value: backend, mono: true }] : []),
-            ...(model ? [{ key: "model", value: model, mono: true }] : []),
-            ...(host ? [{ key: "host", value: host, mono: true }] : []),
-            ...(renderer ? [{ key: "renderer", value: renderer, mono: true }] : []),
-            ...kvRows(sampling, "sampling"),
-            ...kvRows(resilience, "resilience"),
-            ...kvRows(io, "io"),
-          ]}
-        />
-      ) : null}
-    </Section>
+      {empty ? null : (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+            {backend ? <Metric label="backend" value={backend} /> : null}
+            {model ? (
+              <Metric label="model" value={<span className="font-mono">{model}</span>} />
+            ) : null}
+            {renderer ? <Metric label="renderer" value={renderer} /> : null}
+            {host ? (
+              <Metric label="host" value={<span className="font-mono">{host}</span>} />
+            ) : null}
+          </div>
+          {meta.data ? (
+            <KeyValueGrid
+              density="compact"
+              rows={[
+                { key: "agent path", value: meta.data.agent_path, mono: true },
+                { key: "kind", value: meta.data.kind },
+                ...(backend ? [{ key: "backend", value: backend, mono: true }] : []),
+                ...(model ? [{ key: "model", value: model, mono: true }] : []),
+                ...(host ? [{ key: "host", value: host, mono: true }] : []),
+                ...(renderer ? [{ key: "renderer", value: renderer, mono: true }] : []),
+                ...kvRows(sampling, "sampling"),
+                ...kvRows(resilience, "resilience"),
+                ...kvRows(io, "io"),
+              ]}
+            />
+          ) : null}
+        </div>
+      )}
+    </PanelCard>
   );
 }
 
