@@ -1,5 +1,5 @@
-import dagre from "@dagrejs/dagre";
 import type { AgentFlowEdge, AgentFlowNode } from "@/lib/types";
+import dagre from "@dagrejs/dagre";
 
 const LEAF_W = 168;
 const LEAF_H = 56;
@@ -78,6 +78,7 @@ export function layoutAgentFlow({ nodes, edges, rootPath, expanded }: LayoutInpu
   // composite that represents it on the canvas). Returns the original path
   // if the node itself is visible.
   function visibleAncestor(path: string): string {
+    if (visibleNodePaths.has(path)) return path;
     let curr = path;
     while (curr) {
       const node = nodeByPath.get(curr);
@@ -134,6 +135,19 @@ export function layoutAgentFlow({ nodes, edges, rootPath, expanded }: LayoutInpu
     }
   }
 
+  function isContainmentEdge(a: string, b: string): boolean {
+    return isAncestorOf(a, b) || isAncestorOf(b, a);
+  }
+
+  function isAncestorOf(ancestor: string, path: string): boolean {
+    let curr = nodeByPath.get(path)?.parent_path ?? null;
+    while (curr) {
+      if (curr === ancestor) return true;
+      curr = nodeByPath.get(curr)?.parent_path ?? null;
+    }
+    return false;
+  }
+
   // Edge routing: each original edge, after collapse, connects two
   // visible-ancestor paths.
   const remappedEdges = new Map<string, { caller: string; callee: string; type: string }>();
@@ -141,6 +155,7 @@ export function layoutAgentFlow({ nodes, edges, rootPath, expanded }: LayoutInpu
     const a = visibleAncestor(e.caller);
     const b = visibleAncestor(e.callee);
     if (a === b) continue; // self-loop after collapse
+    if (isContainmentEdge(a, b)) continue;
     if (!visibleNodePaths.has(a) || !visibleNodePaths.has(b)) continue;
     const key = `${a}::${b}::${e.type}`;
     if (!remappedEdges.has(key)) {
@@ -151,7 +166,19 @@ export function layoutAgentFlow({ nodes, edges, rootPath, expanded }: LayoutInpu
     g.setEdge(e.caller, e.callee);
   }
 
-  dagre.layout(g);
+  try {
+    dagre.layout(g);
+  } catch {
+    return fallbackLayout({
+      nodes,
+      rootPath,
+      expanded,
+      visibleNodePaths,
+      visibleAncestor,
+      isContainmentEdge,
+      edges,
+    });
+  }
 
   const positioned: PositionedNode[] = [];
   for (const n of nodes) {
@@ -182,9 +209,79 @@ export function layoutAgentFlow({ nodes, edges, rootPath, expanded }: LayoutInpu
       caller: a,
       callee: b,
       type: e.type,
-      visible: a !== b && visibleNodePaths.has(a) && visibleNodePaths.has(b),
+      visible:
+        a !== b && visibleNodePaths.has(a) && visibleNodePaths.has(b) && !isContainmentEdge(a, b),
     });
   }
 
   return { nodes: positioned, edges: edgesOut };
+}
+
+function fallbackLayout({
+  nodes,
+  rootPath,
+  expanded,
+  visibleNodePaths,
+  visibleAncestor,
+  isContainmentEdge,
+  edges,
+}: {
+  nodes: AgentFlowNode[];
+  rootPath: string | null;
+  expanded: Set<string>;
+  visibleNodePaths: Set<string>;
+  visibleAncestor: (path: string) => string;
+  isContainmentEdge: (a: string, b: string) => boolean;
+  edges: AgentFlowEdge[];
+}): LayoutResult {
+  let row = 0;
+  const positioned: PositionedNode[] = [];
+  for (const n of nodes) {
+    if (n.path === rootPath) continue;
+    const visible = visibleNodePaths.has(n.path);
+    const depth = visible ? pathDepth(n.path, nodes) : 0;
+    const isExpandedComposite = n.kind === "composite" && expanded.has(n.path);
+    const width = isExpandedComposite ? COMPOSITE_W_MIN : LEAF_W;
+    const height = isExpandedComposite ? COMPOSITE_H_MIN : LEAF_H;
+    positioned.push({
+      path: n.path,
+      parent_path: n.parent_path,
+      kind: n.kind,
+      className: n.class_name,
+      inputLabel: n.input_label,
+      outputLabel: n.output_label,
+      width,
+      height,
+      x: visible ? 32 + depth * 240 : 0,
+      y: visible ? 32 + row++ * 96 : 0,
+      expanded: isExpandedComposite,
+      hidden: !visible,
+    });
+  }
+
+  return {
+    nodes: positioned,
+    edges: edges.map((e) => {
+      const a = visibleAncestor(e.caller);
+      const b = visibleAncestor(e.callee);
+      return {
+        caller: a,
+        callee: b,
+        type: e.type,
+        visible:
+          a !== b && visibleNodePaths.has(a) && visibleNodePaths.has(b) && !isContainmentEdge(a, b),
+      };
+    }),
+  };
+}
+
+function pathDepth(path: string, nodes: AgentFlowNode[]): number {
+  const nodeByPath = new Map(nodes.map((n) => [n.path, n]));
+  let depth = 0;
+  let curr = nodeByPath.get(path)?.parent_path ?? null;
+  while (curr) {
+    depth += 1;
+    curr = nodeByPath.get(curr)?.parent_path ?? null;
+  }
+  return depth;
 }

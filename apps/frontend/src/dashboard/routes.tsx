@@ -13,7 +13,7 @@ import { InvocationsTab } from "@/dashboard/pages/run-detail/InvocationsTab";
 import { OverviewTab } from "@/dashboard/pages/run-detail/OverviewTab";
 import { RunDetailLayout } from "@/dashboard/pages/run-detail/RunDetailLayout";
 import { TrainTab } from "@/dashboard/pages/run-detail/TrainTab";
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, useRouteError } from "react-router-dom";
 
 export const dashboardRoutes = [
   {
@@ -26,7 +26,7 @@ export const dashboardRoutes = [
         element: <RunDetailLayout />,
         children: [
           { index: true, element: <OverviewTab /> },
-          { path: "graph", element: <GraphTab /> },
+          { path: "graph", element: <GraphTab />, errorElement: <GraphRouteErrorBoundary /> },
           { path: "invocations", element: <InvocationsTab /> },
           { path: "train", element: <TrainTab /> },
           { path: "cost", element: <CostTab /> },
@@ -44,3 +44,23 @@ export const dashboardRoutes = [
 ];
 
 export const dashboardRouter = createBrowserRouter(dashboardRoutes);
+
+function GraphRouteErrorBoundary() {
+  const error = useRouteError();
+  const message = error instanceof Error ? error.message : "unknown graph rendering error";
+
+  return (
+    <div className="flex h-full items-center justify-center p-6">
+      <div className="max-w-md rounded-lg border border-[--color-err-dim] bg-bg-1 p-5">
+        <div className="text-[14px] font-medium text-text">Graph failed to render</div>
+        <div className="mt-2 text-[12px] leading-5 text-muted">
+          The rest of the run is still available. Collapse the graph or reload after fixing the
+          graph payload.
+        </div>
+        <pre className="mt-3 max-h-32 overflow-auto rounded-md bg-bg-inset p-2 font-mono text-[11px] text-[--color-err]">
+          {message}
+        </pre>
+      </div>
+    </div>
+  );
+}

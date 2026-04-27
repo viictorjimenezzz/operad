@@ -19,8 +19,12 @@ export function CompositeFlowNode({ data }: NodeProps) {
     // Group container — children are nested inside via React Flow parentId.
     return (
       <div
+        onClick={(e) => {
+          e.stopPropagation();
+          d.onSelect();
+        }}
         className={cn(
-          "flex h-full w-full flex-col rounded-md border border-dashed bg-bg-1/40 transition-colors",
+          "nodrag nopan flex h-full w-full cursor-pointer flex-col rounded-md border border-dashed bg-bg-1/40 transition-colors",
           d.selected ? "border-accent" : "border-[--color-algo]/40",
           d.dimmed ? "opacity-30" : "opacity-100",
         )}
@@ -50,6 +54,10 @@ export function CompositeFlowNode({ data }: NodeProps) {
       type="button"
       onClick={(e) => {
         e.stopPropagation();
+        d.onSelect();
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
         d.onToggle();
       }}
       onAuxClick={(e) => {
@@ -78,7 +86,7 @@ export function CompositeFlowNode({ data }: NodeProps) {
         </span>
       </div>
       <div className="font-mono text-[10px] text-muted">
-        {d.childCount} child{d.childCount === 1 ? "" : "ren"} · click to expand
+        {d.childCount} child{d.childCount === 1 ? "" : "ren"} · click to inspect · double-click to expand
       </div>
       <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-0 !bg-muted-2" />
     </button>

@@ -187,7 +187,7 @@ example-observed: ensure-bundles ensure-docker-dashboard
 	bash scripts/check_dashboard_contract.sh "$(DASHBOARD_HOST)" "$(DASHBOARD_PORT)" && \
 	OPERAD_OTEL=1 \
 	OTEL_EXPORTER_OTLP_ENDPOINT="$${OTEL_EXPORTER_OTLP_ENDPOINT:-$${LANGFUSE_PUBLIC_URL:-$(LANGFUSE_PUBLIC_URL)}/api/public/otel}" \
-	uv run --extra otel python "examples/$(EXAMPLE)" --dashboard
+	uv run --extra gemini --extra otel python "examples/$(EXAMPLE)" --dashboard
 
 # ------------------------------------------------------------------
 # Tests

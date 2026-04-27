@@ -400,6 +400,38 @@ def test_values_wrong_side_returns_clear_404(app_and_obs) -> None:
         assert r.json()["error"] == "not_found"
 
 
+def test_runs_by_hash_returns_live_matches(app_and_obs) -> None:
+    app, _ = app_and_obs
+    with TestClient(app) as client:
+        _seed_live(client)
+        r = client.get("/runs/by-hash?hash_content=deadbeef")
+        assert r.status_code == 200
+        body = r.json()
+        assert isinstance(body.get("matches"), list)
+        assert any(m.get("run_id") == "run-live" for m in body["matches"])
+
+
+def test_runs_by_hash_skips_malformed_live_runs(app_and_obs, monkeypatch) -> None:
+    app, obs = app_and_obs
+    with TestClient(app) as client:
+        _seed_live(client)
+        good_runs = obs.registry.list()
+
+        class BadRun:
+            @staticmethod
+            def summary() -> dict:
+                raise RuntimeError("bad summary")
+
+            @property
+            def events(self) -> list[dict]:
+                raise RuntimeError("bad events")
+
+        monkeypatch.setattr(obs.registry, "list", lambda: [BadRun(), *good_runs])
+        r = client.get("/runs/by-hash?hash_content=deadbeef")
+        assert r.status_code == 200
+        assert any(m.get("run_id") == "run-live" for m in r.json()["matches"])
+
+
 def test_io_graph_empty_when_graph_missing(app_and_obs) -> None:
     app, _ = app_and_obs
     with TestClient(app) as client:

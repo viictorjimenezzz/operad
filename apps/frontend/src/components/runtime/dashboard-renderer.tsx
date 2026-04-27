@@ -40,8 +40,9 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
   const queries = useQueries({
     queries: entries.map(([name, src]) => {
       const url = resolvePath(src.endpoint, context);
+      const queryKey = dataSourceQueryKey(name, url, src.queryKey);
       return {
-        queryKey: src.queryKey ?? (["layout", name, url] as readonly unknown[]),
+        queryKey,
         queryFn: async () => {
           const r = await fetch(url);
           if (!r.ok) throw new Error(`${r.status} ${r.statusText} <- ${url}`);
@@ -58,7 +59,7 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
       if (!src.stream) continue;
       const streamUrl = resolvePath(src.stream, context);
       const endpointUrl = resolvePath(src.endpoint, context);
-      const queryKey = src.queryKey ?? (["layout", name, endpointUrl] as readonly unknown[]);
+      const queryKey = dataSourceQueryKey(name, endpointUrl, src.queryKey);
 
       const d = new SSEDispatcher({
         url: streamUrl,
@@ -118,3 +119,18 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
 }
 
 const EMPTY_EVENTS: EventEnvelope[] = [];
+
+function dataSourceQueryKey(
+  name: string,
+  url: string,
+  explicit: readonly unknown[] | undefined,
+): readonly unknown[] {
+  if (explicit) return explicit;
+  const summary = url.match(/^\/runs\/([^/]+)\/summary$/);
+  if (summary?.[1]) return ["run", "summary", summary[1]] as const;
+  const invocations = url.match(/^\/runs\/([^/]+)\/invocations$/);
+  if (invocations?.[1]) return ["run", "invocations", invocations[1]] as const;
+  const events = url.match(/^\/runs\/([^/]+)\/events(?:\?limit=(\d+))?$/);
+  if (events?.[1]) return ["run", "events", events[1], Number(events[2] ?? 500)] as const;
+  return ["layout", name, url] as const;
+}

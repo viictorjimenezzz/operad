@@ -13,6 +13,8 @@ export interface FieldTreeProps {
   preview?: boolean;
   /** Optional descriptions keyed by field path (dotted). */
   descriptions?: Record<string, string>;
+  /** Full inspectors can disable string truncation while compact previews keep it on. */
+  truncateStrings?: boolean;
 }
 
 type NodeProps = {
@@ -23,17 +25,18 @@ type NodeProps = {
   path: string;
   hideCopy: boolean;
   descriptions?: Record<string, string> | undefined;
+  truncateStrings: boolean;
 };
 
 function isObj(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-function valueLabel(v: unknown): string {
+function valueLabel(v: unknown, truncateStrings = true): string {
   if (v === null) return "null";
   if (v === undefined) return "undefined";
   if (typeof v === "string") {
-    const s = v.length > 80 ? `${v.slice(0, 80)}…` : v;
+    const s = truncateStrings && v.length > 80 ? `${v.slice(0, 80)}…` : v;
     return JSON.stringify(s);
   }
   if (typeof v === "number" || typeof v === "boolean") return String(v);
@@ -63,7 +66,16 @@ function CopyButton({ value }: { value: unknown }) {
   );
 }
 
-function Node({ label, value, depth, defaultDepth, path, hideCopy, descriptions }: NodeProps) {
+function Node({
+  label,
+  value,
+  depth,
+  defaultDepth,
+  path,
+  hideCopy,
+  descriptions,
+  truncateStrings,
+}: NodeProps) {
   const isContainer = isObj(value) || Array.isArray(value);
   const [open, setOpen] = useState(depth < defaultDepth);
   const desc = descriptions?.[path];
@@ -80,7 +92,9 @@ function Node({ label, value, depth, defaultDepth, path, hideCopy, descriptions 
     return (
       <div className="group flex items-baseline gap-2 py-0.5 font-mono text-[12px]">
         <span className="flex-shrink-0 text-muted">{label}:</span>
-        <span className={cn("min-w-0 break-all", valueClass)}>{valueLabel(value)}</span>
+        <span className={cn("min-w-0 break-all", valueClass)}>
+          {valueLabel(value, truncateStrings)}
+        </span>
         {hideCopy ? null : <CopyButton value={value} />}
         {desc ? <span className="ml-2 truncate text-[11px] text-muted-2">— {desc}</span> : null}
       </div>
@@ -102,7 +116,7 @@ function Node({ label, value, depth, defaultDepth, path, hideCopy, descriptions 
           )}
         />
         <span className="text-muted">{label}</span>
-        <span className="text-muted-2">{valueLabel(value)}</span>
+        <span className="text-muted-2">{valueLabel(value, truncateStrings)}</span>
         {hideCopy ? null : <CopyButton value={value} />}
       </button>
       {open ? (
@@ -118,6 +132,7 @@ function Node({ label, value, depth, defaultDepth, path, hideCopy, descriptions 
                   path={`${path}[${i}]`}
                   hideCopy={hideCopy}
                   descriptions={descriptions}
+                  truncateStrings={truncateStrings}
                 />
               ))
             : Object.entries(value as Record<string, unknown>).map(([k, v]) => (
@@ -130,6 +145,7 @@ function Node({ label, value, depth, defaultDepth, path, hideCopy, descriptions 
                   path={path ? `${path}.${k}` : k}
                   hideCopy={hideCopy}
                   descriptions={descriptions}
+                  truncateStrings={truncateStrings}
                 />
               ))}
         </div>
@@ -145,6 +161,7 @@ export function FieldTree({
   hideCopy = false,
   preview = false,
   descriptions,
+  truncateStrings = true,
 }: FieldTreeProps) {
   if (data === null || data === undefined) {
     return <span className="text-[12px] text-muted-2">—</span>;
@@ -182,6 +199,7 @@ export function FieldTree({
                 path={`[${i}]`}
                 hideCopy={hideCopy}
                 descriptions={descriptions}
+                truncateStrings={truncateStrings}
               />
             ))
           : Object.entries(data as Record<string, unknown>).map(([k, v]) => (
@@ -194,10 +212,13 @@ export function FieldTree({
                 path={k}
                 hideCopy={hideCopy}
                 descriptions={descriptions}
+                truncateStrings={truncateStrings}
               />
             ))}
       </div>
     );
   }
-  return <span className="font-mono text-[12px] text-text">{valueLabel(data)}</span>;
+  return (
+    <span className="font-mono text-[12px] text-text">{valueLabel(data, truncateStrings)}</span>
+  );
 }

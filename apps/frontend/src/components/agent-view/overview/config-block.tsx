@@ -20,15 +20,19 @@ export function ConfigBlock(props: ConfigBlockProps) {
   }
   const meta = useAgentMeta(props.runId, summaryParsed.data.root_agent_path);
   const config = meta.data?.config ?? null;
+  const isComposite = meta.data?.kind === "composite";
 
   const summary = useMemo(() => {
-    if (!config) return "no configuration captured";
+    if (!meta.data) return "loading…";
+    if (!config) {
+      return isComposite ? "configuration lives on leaf agents" : "no configuration captured";
+    }
     const parts: string[] = [];
     const sampling = (config.sampling as Record<string, unknown>) ?? {};
     if (sampling.temperature !== undefined) parts.push(`temp ${sampling.temperature}`);
     if (sampling.max_tokens !== undefined) parts.push(`max_tokens ${sampling.max_tokens}`);
     return parts.length > 0 ? parts.join(" · ") : "configuration available";
-  }, [config]);
+  }, [config, isComposite, meta.data]);
 
   const succinct =
     config !== null ? (
@@ -49,9 +53,7 @@ export function ConfigBlock(props: ConfigBlockProps) {
             items.push({ label: "retries", value: String(resilience.max_retries) });
           if (resilience.timeout !== undefined)
             items.push({ label: "timeout", value: `${resilience.timeout}s` });
-          return items.map((it) => (
-            <Metric key={it.label} label={it.label} value={it.value} />
-          ));
+          return items.map((it) => <Metric key={it.label} label={it.label} value={it.value} />);
         })()}
       </div>
     ) : null;

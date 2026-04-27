@@ -1,7 +1,7 @@
+import { layoutAgentFlow } from "@/components/agent-view/graph/agent-flow-layout";
 import { AgentNodeCard } from "@/components/agent-view/graph/agent-node-card";
 import { CompositeFlowNode } from "@/components/agent-view/graph/composite-flow-node";
 import { TypedEdge } from "@/components/agent-view/graph/typed-edge";
-import { layoutAgentFlow } from "@/components/agent-view/graph/agent-flow-layout";
 import { useActiveAgents } from "@/components/agent-view/graph/use-active-agents";
 import { Button, EmptyState, IconButton } from "@/components/ui";
 import { dashboardApi } from "@/lib/api/dashboard";
@@ -16,10 +16,11 @@ import {
   type Node,
   ReactFlow,
   ReactFlowProvider,
+  useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Copy, Maximize2, Minimize2 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface AgentFlowGraphProps {
   agentGraph: AgentGraphResponse;
@@ -34,6 +35,7 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
   const setSelection = useUIStore((s) => s.setGraphSelection);
   const clearSelection = useUIStore((s) => s.clearGraphSelection);
   const activeAgents = useActiveAgents(runId);
+  const { fitView } = useReactFlow();
 
   const composites = useMemo(
     () => agentGraph.nodes.filter((n) => n.kind === "composite" && n.path !== agentGraph.root),
@@ -72,9 +74,7 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
 
   // Per-leaf invocation stats (latency / count).
   const visibleLeafPaths = useMemo(() => {
-    return layout.nodes
-      .filter((n) => n.kind === "leaf" && !n.hidden)
-      .map((n) => n.path);
+    return layout.nodes.filter((n) => n.kind === "leaf" && !n.hidden).map((n) => n.path);
   }, [layout.nodes]);
 
   const invocationQueries = useQueries({
@@ -125,8 +125,7 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
   }, [agentGraph]);
 
   const nodes: Node[] = useMemo(() => {
-    const selectedAgentPath =
-      selection?.kind === "edge" ? selection.agentPath : null;
+    const selectedAgentPath = selection?.kind === "edge" ? selection.agentPath : null;
 
     return layout.nodes
       .filter((n) => !n.hidden)
@@ -172,7 +171,7 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
             hashContent: stats?.hashContent ?? null,
             invocationCount: stats?.invocationCount ?? 0,
             onSelect: () =>
-              sel ? clearSelection() : setSelection({ kind: "node", nodeKey: n.path }),
+              sel ? clearSelection() : setSelection({ kind: "edge", agentPath: n.path }),
           },
         } satisfies Node;
       });
@@ -217,13 +216,27 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
           type: e.type,
           selected: false,
           dimmed,
-          active:
-            activeAgents.has(e.caller) &&
-            activeAgents.has(e.callee),
+          active: activeAgents.has(e.caller) && activeAgents.has(e.callee),
         },
       } satisfies Edge;
     });
   }, [visibleEdges, selection, activeAgents]);
+
+  const fitViewTrigger = `${selection?.kind ?? "none"}:${selection?.kind === "edge" ? selection.agentPath : ""}:${expanded.size}:${nodes.length}:${edges.length}`;
+
+  useEffect(() => {
+    void fitViewTrigger;
+    const id = window.setTimeout(() => {
+      fitView({ padding: 0.18, duration: 180 });
+    }, 240);
+    return () => window.clearTimeout(id);
+  }, [fitView, fitViewTrigger]);
+
+  useEffect(() => {
+    const onResize = () => fitView({ padding: 0.18, duration: 120 });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [fitView]);
 
   const copyMermaid = useCallback(async () => {
     try {

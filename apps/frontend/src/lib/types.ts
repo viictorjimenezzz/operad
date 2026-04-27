@@ -846,8 +846,9 @@ export type TrainingEvent = z.infer<typeof TrainingEvent>;
 // --- Manifest ---------------------------------------------------------------
 
 export const Manifest = z.object({
-  mode: z.enum(["dashboard", "studio"]),
+  mode: z.enum(["dashboard", "studio", "development", "production"]),
   langfuseUrl: z.string().nullable().optional(),
+  allowExperiment: z.boolean().optional().default(false),
   dashboardPort: z.number().nullable().optional(),
   dataDir: z.string().optional(),
   version: z.string().optional(),

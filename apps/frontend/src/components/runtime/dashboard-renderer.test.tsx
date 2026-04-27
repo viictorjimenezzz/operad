@@ -127,6 +127,28 @@ describe("DashboardRenderer", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/runs/r1/fitness.json"));
   });
 
+  it("reuses standard run query keys for summary and invocations data sources", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ invocations: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const qc = makeQC();
+    const layout = makeLayout({
+      summary: { endpoint: "/runs/$context.runId/summary" },
+      invocations: { endpoint: "/runs/$context.runId/invocations" },
+    });
+    render(
+      <Wrapper qc={qc}>
+        <DashboardRenderer layout={layout} context={{ runId: "r1" }} />
+      </Wrapper>,
+    );
+
+    await waitFor(() => expect(qc.getQueryData(["run", "summary", "r1"])).toBeDefined());
+    expect(qc.getQueryData(["run", "invocations", "r1"])).toEqual({ invocations: [] });
+  });
+
   it("opens an SSE stream for data sources that have a stream field", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
 
