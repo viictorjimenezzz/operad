@@ -29,7 +29,7 @@ from operad import evaluate
 from operad.agents import Reasoner
 from operad.core.agent import Agent
 from operad.core.config import Resilience, Sampling
-from operad.optim import EvoGradient
+from operad.optim.optimizers.evo import EvoGradient
 from operad.runtime import set_limit
 from operad.runtime.events import AlgorithmEvent
 from operad.runtime.observers.base import Event, registry

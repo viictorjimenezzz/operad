@@ -1,4 +1,4 @@
-"""Offline tests for `operad.optim.sgd.TextualGradientDescent`.
+"""Offline tests for `operad.optim.optimizers.tgd.TextualGradientDescent`.
 
 Every rewriter is stubbed via the same subclass-and-override pattern
 used in `tests/optim/test_rewrite.py`; no provider is ever contacted.
@@ -12,13 +12,15 @@ from typing import Any
 
 import pytest
 
-from operad.optim import (
+from operad.optim.backprop.rewrite import (
     RewriteRequest,
     RewriteResponse,
-    TextParameter,
     TextRewriter,
+)
+from operad.optim.optimizers.tgd import TextualGradientDescent
+from operad.optim.parameter import (
+    TextParameter,
     TextualGradient,
-    TextualGradientDescent,
 )
 from tests._helpers.fake_leaf import A, B, FakeLeaf
 

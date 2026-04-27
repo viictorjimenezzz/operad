@@ -19,7 +19,7 @@ from operad.benchmark.evaluate import EvalReport
 from operad.core.freeze import thaw_agent
 from operad.data.loader import DataLoader
 from operad.metrics.base import MetricBase
-from operad.optim.optimizer import Optimizer, ParamGroup
+from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import Parameter, TextualGradient
 from operad.runtime.events import AlgorithmEvent, get_current_epoch
 from operad.runtime.observers import registry as obs_registry

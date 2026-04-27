@@ -1,4 +1,4 @@
-"""Offline tests for `operad.optim.grad_agent`.
+"""Offline tests for `operad.optim.backprop.grad`.
 
 Covers construction, class contract, factory helpers (`propagate`,
 `parameter_grad`), null-gradient short-circuit, registry coverage,
@@ -13,7 +13,7 @@ from typing import get_args
 import pytest
 from pydantic import BaseModel
 
-from operad.optim import (
+from operad.optim.backprop.grad import (
     PARAMETER_GRAD_AGENTS,
     BackpropAgent,
     CategoricalParameterGrad,
@@ -22,18 +22,16 @@ from operad.optim import (
     ParameterGradAgent,
     ParameterGradInput,
     ParameterGradOutput,
-    ParameterKind,
     PropagateInput,
     PropagateOutput,
     RuleListParameterGrad,
-    TextParameter,
     TextParameterGrad,
-    TextualGradient,
     parameter_grad,
     parameter_grad_for,
     propagate,
 )
-from operad.optim.grad_agent import _dump, _truncate
+from operad.optim.backprop.grad import _dump, _truncate
+from operad.optim.parameter import ParameterKind, TextParameter, TextualGradient
 from tests._helpers.fake_leaf import A, B, FakeLeaf
 
 

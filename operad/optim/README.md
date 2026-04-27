@@ -28,8 +28,9 @@ If you've used PyTorch, the following should feel familiar:
 
 ```python
 import operad
-from operad.optim import TextualGradientDescent, CriticLoss
-from operad.optim.lr_scheduler import CosineExplorationLR
+from operad.optim.losses import JudgeLoss
+from operad.optim.optimizers.tgd import TextualGradientDescent
+from operad.optim.schedulers.lr import CosineExplorationLR
 from operad.train import Trainer
 from operad.data import DataLoader, random_split
 
@@ -40,7 +41,7 @@ await agent.abuild()
 train, val = random_split(dataset, [0.8, 0.2])
 loader     = DataLoader(train, batch_size=8, shuffle=True)
 
-loss_fn   = CriticLoss(rubric_critic)
+loss_fn   = JudgeLoss(rubric_critic)
 optimizer = TextualGradientDescent(agent.parameters(), lr=1.0)
 scheduler = CosineExplorationLR(optimizer, T_max=10)
 
@@ -90,13 +91,13 @@ A Pydantic structured critique:
 
 Protocol that extends `Metric` with a `compute()` returning
 `(score, TextualGradient)`. Any existing `Metric` lifts for free via
-`LossFromMetric(metric)`. LLM judges (the existing `Critic`) become
-losses via `CriticLoss(critic)`: `Score.score` → float, `Score.rationale`
+`MetricLoss(metric)`. LLM judges (the existing `Critic`) become
+losses via `JudgeLoss(critic)`: `Score.score` → float, `Score.rationale`
 → gradient text.
 
 ### `Tape` and `backward()`
 
-`operad.optim.tape()` is a context manager that installs a
+`operad.optim.backprop.tape()` is a context manager that installs a
 `TapeObserver` on the existing observer registry. Every `Agent.invoke`
 call inside the context records a `TapeEntry` (agent reference,
 input, output, rendered prompt). The tape is an ordered list of
@@ -150,7 +151,7 @@ train/val slicing.
 - `agent.register_forward_hook(fn)`, `register_forward_pre_hook(fn)`,
   `register_backward_hook(fn)` — per-agent instrumentation handles
   with `handle.remove()`.
-- `async with operad.no_grad(): ...` disables tape recording, speeds
+- `async with operad.optim.gradmode.no_grad(): ...` disables tape recording, speeds
   up inference.
 - `agent.state_dict()` / `load_state_dict(sd)` are PyTorch-muscle
   aliases for `state()` / `load_state()`.
@@ -170,7 +171,7 @@ train/val slicing.
                                       ├──> 2-5 Tape (independent)
                                       │
    2-{1..5} ──────────────────────────┼──> 3-1 backward() (uses Tape, Loss, BackpropAgent)
-                                      └──> 3-2 Optimizer base + SGD (uses Parameter, RewriteAgent)
+                                      └──> 3-2 Optimizer base + TGD (uses Parameter, RewriteAgent)
 
    3-{1,2} ──────────────────────────┬──> 4-1 Optimizer fleet (Momentum, Evo, OPRO, APE)
                                      ├──> 4-2 LR schedulers

@@ -29,15 +29,20 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from operad.optim.backward import _rule_for
+from operad.optim.backprop.backward import _rule_for
+from operad.optim.backprop.tape import Tape, TapeEntry
 from operad.optim.parameter import TextualGradient
-from operad.optim.tape import Tape, TapeEntry
 
 __all__ = ["PromptTraceback", "TracebackFrame", "traceback"]
 
 
 _MAX_VALUE_CHARS = 2048
 _WRAP_COLS = 120
+
+
+# ---------------------------------------------------------------------------
+# Domain schemas.
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -51,6 +56,11 @@ class TracebackFrame:
     output_dump: Any
     rendered_prompt: str | list[dict[str, str]] | None
     gradient: TextualGradient | None
+
+
+# ---------------------------------------------------------------------------
+# Prompt traceback.
+# ---------------------------------------------------------------------------
 
 
 class PromptTraceback:
@@ -91,7 +101,7 @@ class PromptTraceback:
         wrap_cols: int = _WRAP_COLS,
     ) -> PromptTraceback:
         """Seed ``loss`` at the root and distribute it via the structural
-        split rules in ``operad.optim.backward``.
+        split rules in ``operad.optim.backprop.backward``.
 
         This mirrors ``backward()``'s pass-1 split step, minus the LLM
         refinement performed by ``propagate``. The result is the raw
@@ -271,6 +281,11 @@ class PromptTraceback:
                 }
                 fh.write(json.dumps(record, ensure_ascii=False, default=str))
                 fh.write("\n")
+
+
+# ---------------------------------------------------------------------------
+# Factory.
+# ---------------------------------------------------------------------------
 
 
 def traceback(

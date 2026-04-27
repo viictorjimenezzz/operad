@@ -1,6 +1,6 @@
 """Reverse-pass gradient propagation over a recorded `Tape`.
 
-``backward(tape, loss)`` walks a tape produced by ``operad.optim.tape()``
+``backward(tape, loss)`` walks a tape produced by ``operad.optim.backprop.tape()``
 and writes a ``TextualGradient`` onto every trainable ``Parameter``'s
 ``.grad`` slot. The walk is two-pass:
 
@@ -50,15 +50,15 @@ from collections.abc import Awaitable, Callable, Iterable
 from typing import Any
 
 from operad.core.agent import Agent
-from operad.optim.grad_agent import (
+from operad.optim.backprop.grad import (
     BackpropAgent,
     ParameterGradAgent,
     parameter_grad,
     parameter_grad_for,
     propagate,
 )
+from operad.optim.backprop.tape import Tape, TapeEntry
 from operad.optim.parameter import Parameter, ParameterKind, TextualGradient
-from operad.optim.tape import Tape, TapeEntry
 from operad.runtime.observers.base import AgentEvent, registry
 
 

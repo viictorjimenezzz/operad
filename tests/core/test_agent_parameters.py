@@ -9,7 +9,7 @@ import pytest
 from operad import Configuration
 from operad.core.flow import Sequential
 from operad.core.config import Sampling
-from operad.optim import (
+from operad.optim.parameter import (
     CategoricalParameter,
     ConfigurationConstraint,
     ConfigurationParameter,

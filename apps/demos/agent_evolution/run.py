@@ -25,7 +25,7 @@ from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from operad.optim.evo import EvoGradient  # noqa: E402
+from operad.optim.optimizers.evo import EvoGradient  # noqa: E402
 from operad.runtime.observers.base import registry  # noqa: E402
 from operad.utils.ops import default_mutations  # noqa: E402
 

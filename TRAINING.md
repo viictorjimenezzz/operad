@@ -93,18 +93,18 @@ A `Loss` produces `(score: float, gradient: TextualGradient)`. The
 you four standard ways to get a gradient as well:
 
 ```python
-from operad.optim import (
-    CriticLoss, LossFromMetric, JSONShapeLoss, CompositeLoss,
+from operad.optim.losses import (
+    JudgeLoss, MetricLoss, SchemaLoss, CompositeLoss,
 )
 
 # Deterministic metric → auto-generated critique
-loss_exact = LossFromMetric(ExactMatch())
+loss_exact = MetricLoss(ExactMatch())
 
 # LLM rubric judge → the judge's rationale becomes the critique
-loss_rubric = CriticLoss(rubric_critic)
+loss_rubric = JudgeLoss(rubric_critic)
 
 # Shape-conformance check
-loss_shape = JSONShapeLoss(expected=Answer)
+loss_shape = SchemaLoss(Answer)
 
 # Weighted combination
 loss_fn = CompositeLoss([
@@ -113,7 +113,7 @@ loss_fn = CompositeLoss([
 ])
 ```
 
-`CriticLoss` is the most common choice — wrap any
+`JudgeLoss` is the most common choice — wrap any
 `Agent[Candidate[In, Out], Score]` and the judge's
 `Score.rationale` becomes the gradient's `message`.
 
@@ -126,8 +126,9 @@ Every training run has the same shape:
 ```python
 import operad
 from operad import Sequential
-from operad.optim import CriticLoss, TextualGradientDescent
-from operad.optim.lr_scheduler import CosineExplorationLR
+from operad.optim.losses import JudgeLoss
+from operad.optim.optimizers.tgd import TextualGradientDescent
+from operad.optim.schedulers.lr import CosineExplorationLR
 from operad.train import Trainer, EarlyStopping, BestCheckpoint
 from operad.data import DataLoader, random_split
 
@@ -141,7 +142,7 @@ train, val = random_split(dataset, [0.8, 0.2], seed=0)
 loader = DataLoader(train, batch_size=8, shuffle=True)
 
 # 3. Loss, optimizer, scheduler.
-loss_fn   = CriticLoss(rubric_critic)
+loss_fn   = JudgeLoss(rubric_critic)
 optimizer = TextualGradientDescent(agent.parameters(), lr=1.0)
 scheduler = CosineExplorationLR(optimizer, T_max=10)
 
@@ -287,7 +288,9 @@ instrumentation without subclassing. Hooks are skipped during
 For inference-only passes that should not record gradients:
 
 ```python
-async with operad.no_grad():
+from operad.optim.gradmode import no_grad
+
+async with no_grad():
     out = await agent(x)           # no tape entries written
 ```
 
@@ -295,7 +298,8 @@ For a structured view of *which* parameter took blame for *which*
 sample, use `PromptTraceback`:
 
 ```python
-from operad.optim import tape, traceback as ptb
+from operad.optim.backprop.tape import tape
+from operad.optim.backprop import traceback as ptb
 
 async with tape() as t:
     out = await agent(x)
@@ -309,7 +313,7 @@ tb.save("traceback.ndjson")     # NDJSON, one frame per line
 Each frame carries the agent path, depth, leaf-or-composite flag,
 input/output payloads, the rendered prompt, and the per-node
 gradient. See [INVENTORY.md §22](INVENTORY.md#22-prompttraceback) and
-[`operad/optim/traceback.py`](operad/optim/traceback.py).
+[`operad/optim/backprop/traceback.py`](operad/optim/backprop/traceback.py).
 
 ---
 

@@ -22,9 +22,14 @@ from pydantic import BaseModel, Field
 from operad.core.agent import Agent
 from operad.core.config import Configuration
 from operad.core.agent import Example
-from operad.optim.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import Parameter
-from operad.optim.rewrite import _describe_constraint, _parse, _serialize
+from operad.optim.backprop.rewrite import _describe_constraint, _parse, _serialize
+from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
+
+
+# ---------------------------------------------------------------------------
+# Domain schemas.
+# ---------------------------------------------------------------------------
 
 
 class APEInput(BaseModel):
@@ -55,6 +60,11 @@ class APEOutput(BaseModel):
             "Candidate value in the same serialization as `current_value`."
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Candidate generator.
+# ---------------------------------------------------------------------------
 
 
 class CandidateGenerator(Agent[APEInput, APEOutput]):
@@ -95,6 +105,11 @@ Evaluator = Callable[[Parameter[Any], Any], Awaitable[float]]
 GeneratorFactory = Callable[
     [], CandidateGenerator | Awaitable[CandidateGenerator]
 ]
+
+
+# ---------------------------------------------------------------------------
+# Optimizer.
+# ---------------------------------------------------------------------------
 
 
 class APEOptimizer(Optimizer):

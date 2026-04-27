@@ -14,14 +14,19 @@ from collections.abc import Awaitable
 from typing import Any, Callable, Iterable
 
 from operad.core.config import Configuration
-from operad.optim.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import Parameter, ParameterKind
-from operad.optim.rewrite import RewriteAgent, apply_rewrite, rewriter_for
+from operad.optim.backprop.rewrite import RewriteAgent, apply_rewrite, rewriter_for
+from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
 
 
 RewriterFactory = Callable[
     [ParameterKind], RewriteAgent | Awaitable[RewriteAgent]
 ]
+
+
+# ---------------------------------------------------------------------------
+# Optimizer.
+# ---------------------------------------------------------------------------
 
 
 class TextualGradientDescent(Optimizer):

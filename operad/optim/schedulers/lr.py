@@ -1,4 +1,4 @@
-"""`operad.optim.lr_scheduler` — PyTorch-style LR scheduler zoo.
+"""`operad.optim.schedulers.lr` — PyTorch-style LR scheduler zoo.
 
 In operad an optimizer's "learning rate" is the knob a `RewriteAgent`
 reads to decide how aggressive an edit to make on a `Parameter`. Low
@@ -21,7 +21,12 @@ import math
 from abc import ABC, abstractmethod
 from typing import Any, Literal, Sequence
 
-from operad.optim.optimizer import Optimizer
+from operad.optim.optimizers.optimizer import Optimizer
+
+
+# ---------------------------------------------------------------------------
+# Base scheduler.
+# ---------------------------------------------------------------------------
 
 
 class LRScheduler(ABC):
@@ -74,6 +79,11 @@ class ConstantLR(LRScheduler):
 
     def get_lr(self) -> list[float]:
         return list(self.base_lrs)
+
+
+# ---------------------------------------------------------------------------
+# Epoch schedulers.
+# ---------------------------------------------------------------------------
 
 
 class StepLR(LRScheduler):
@@ -194,6 +204,11 @@ class WarmupLR(LRScheduler):
         return [self.final_lr] * n
 
 
+# ---------------------------------------------------------------------------
+# Metric scheduler.
+# ---------------------------------------------------------------------------
+
+
 class ReduceLROnPlateau:
     """Reduce lr when a monitored metric stops improving.
 
@@ -267,6 +282,11 @@ class ReduceLROnPlateau:
             self.patience = int(sd["patience"])
         if "threshold" in sd:
             self.threshold = float(sd["threshold"])
+
+
+# ---------------------------------------------------------------------------
+# Scheduler composition.
+# ---------------------------------------------------------------------------
 
 
 class ChainedScheduler:

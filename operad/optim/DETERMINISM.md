@@ -14,7 +14,7 @@ user-facing seed surface in the training stack. Pin all of them, and a
 - **`random_split(dataset, ratios, seed=...)`** — pin the train/val
   partition; the split ordering feeds straight into the shuffled
   loader.
-- **`EvoGradient(rng=random.Random(seed))`** — `operad/optim/evo.py`.
+- **`EvoGradient(rng=random.Random(seed))`** — `operad/optim/optimizers/evo.py`.
   Mutation choice is drawn from this RNG. Default is a fresh
   unseeded `random.Random`; construct with an explicit seeded `rng`.
 - **`Configuration.sampling.seed`** — `operad/core/config.py`. The seed

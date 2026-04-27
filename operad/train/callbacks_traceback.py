@@ -17,7 +17,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from operad.optim.traceback import PromptTraceback
+from operad.optim.backprop.traceback import PromptTraceback
 from operad.train.callbacks import Callback
 
 if TYPE_CHECKING:

@@ -30,13 +30,13 @@ from ..core.freeze import freeze_agent, thaw_pair
 from ..core.output import OPERAD_VERSION_HASH, PYTHON_VERSION_HASH, OperadOutput
 from ..data.loader import Batch, DataLoader
 from ..metrics.base import Metric
-from ..optim.backward import backward
-from ..optim.context import no_grad
-from ..optim.loss import Loss
-from ..optim.lr_scheduler import LRScheduler
-from ..optim.optimizer import Optimizer
+from ..optim.backprop.backward import backward
+from ..optim.backprop.tape import tape
+from ..optim.gradmode import no_grad
+from ..optim.losses.loss import Loss
+from ..optim.optimizers.optimizer import Optimizer
 from ..optim.parameter import Parameter, TextualGradient
-from ..optim.tape import tape
+from ..optim.schedulers.lr import LRScheduler
 from ..runtime.events import set_current_epoch
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 from ..utils.cassette import (

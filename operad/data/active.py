@@ -15,7 +15,7 @@ from typing import Any, Callable, Iterator
 from ..benchmark.dataset import Dataset
 from ..core.agent import Agent
 from ..core.output import OperadOutput
-from ..optim.context import no_grad
+from ..optim.gradmode import no_grad
 
 
 class UncertaintySampler:

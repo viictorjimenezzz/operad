@@ -41,8 +41,9 @@ from operad.train import (
 
 ```python
 from operad import Sequential
-from operad.optim import CriticLoss, TextualGradientDescent
-from operad.optim.lr_scheduler import CosineExplorationLR
+from operad.optim.losses import JudgeLoss
+from operad.optim.optimizers.tgd import TextualGradientDescent
+from operad.optim.schedulers.lr import CosineExplorationLR
 from operad.train import Trainer, EarlyStopping, BestCheckpoint
 from operad.data import DataLoader, random_split
 
@@ -56,7 +57,7 @@ loader = DataLoader(train, batch_size=8, shuffle=True)
 trainer = Trainer(
     agent,
     TextualGradientDescent(agent.parameters(), lr=1.0),
-    CriticLoss(rubric_critic),
+    JudgeLoss(rubric_critic),
     scheduler=CosineExplorationLR(... , T_max=10),
     callbacks=[
         BestCheckpoint(monitor="val_loss", mode="min"),
@@ -115,7 +116,7 @@ training is visible wherever inference already is:
 | What                | Where                                                                   |
 | ------------------- | ----------------------------------------------------------------------- |
 | A new callback      | `callbacks.py` — subclass `Callback`; override the lifecycle hook(s).   |
-| A new loss          | [`../optim/loss.py`](../optim/loss.py).                                 |
+| A new loss          | [`../optim/losses/`](../optim/losses/).                                 |
 | A new optimizer     | [`../optim/`](../optim/README.md).                                      |
 | A new progress UI   | `progress.py` — register on the observer registry.                      |
 

@@ -18,13 +18,12 @@ import pytest
 from pydantic import BaseModel
 
 from operad.core.flow import Sequential
-from operad.optim import (
+from operad.optim.backprop.tape import Tape, tape
+from operad.optim.backprop.traceback import (
     PromptTraceback,
-    Tape,
-    TextualGradient,
-    tape,
     traceback,
 )
+from operad.optim.parameter import TextualGradient
 from operad.runtime.observers import registry as obs_registry
 from operad.train.callbacks_traceback import TracebackOnFailure
 

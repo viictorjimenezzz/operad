@@ -25,7 +25,7 @@ from operad import Configuration
 from operad.benchmark.dataset import Dataset
 from operad.benchmark.entry import Entry
 from operad.data.loader import DataLoader
-from operad.optim.optimizer import Optimizer, ParamGroup
+from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import Parameter, TextualGradient
 from operad.train import Trainer
 from operad.utils.cassette import TrainCassetteMiss, training_cassette_context

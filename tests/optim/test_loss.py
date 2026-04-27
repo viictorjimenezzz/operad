@@ -1,7 +1,7 @@
-"""Offline tests for `operad.optim.loss`.
+"""Offline tests for `operad.optim.losses`.
 
-Covers `LossFromMetric` (match, mismatch, custom hooks), `CriticLoss`
-(via a FakeLeaf critic), `JSONShapeLoss` (missing / wrong-typed /
+Covers `MetricLoss` (match, mismatch, custom hooks), `JudgeLoss`
+(via a FakeLeaf critic), `SchemaLoss` (missing / wrong-typed /
 perfect), `CompositeLoss` (aggregation, target_paths), and the
 isinstance semantics of the `Loss` protocol vs. a pure `Metric`.
 """
@@ -14,14 +14,14 @@ from pydantic import BaseModel
 from operad.agents.reasoning.schemas import Candidate, Score
 from operad.metrics.base import Metric
 from operad.metrics.deterministic import ExactMatch
-from operad.optim import (
+from operad.optim.losses import (
     CompositeLoss,
-    CriticLoss,
-    JSONShapeLoss,
+    JudgeLoss,
     Loss,
-    LossFromMetric,
-    TextualGradient,
+    MetricLoss,
+    SchemaLoss,
 )
+from operad.optim.parameter import TextualGradient
 from tests._helpers.fake_leaf import A, B, FakeLeaf
 
 
@@ -33,12 +33,12 @@ class _RequiredFields(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# LossFromMetric
+# MetricLoss
 # ---------------------------------------------------------------------------
 
 
 async def test_loss_from_metric_exact_match_match():
-    loss = LossFromMetric(ExactMatch())
+    loss = MetricLoss(ExactMatch())
     predicted = A(text="hello")
     expected = A(text="hello")
 
@@ -50,7 +50,7 @@ async def test_loss_from_metric_exact_match_match():
 
 
 async def test_loss_from_metric_exact_match_mismatch():
-    loss = LossFromMetric(ExactMatch())
+    loss = MetricLoss(ExactMatch())
     predicted = A(text="wrong")
     expected = A(text="right")
 
@@ -72,7 +72,7 @@ async def test_loss_from_metric_custom_formatter_and_severity_fn():
     def sev(s: float) -> float:
         return 0.25
 
-    loss = LossFromMetric(
+    loss = MetricLoss(
         ExactMatch(), gradient_formatter=fmt, severity_fn=sev
     )
     score, grad = await loss.compute(A(text="x"), A(text="y"))
@@ -84,21 +84,21 @@ async def test_loss_from_metric_custom_formatter_and_severity_fn():
 
 
 async def test_loss_from_metric_rejects_none_expected():
-    loss = LossFromMetric(ExactMatch())
+    loss = MetricLoss(ExactMatch())
     with pytest.raises(ValueError):
         await loss.compute(A(text="x"), None)
 
 
 async def test_loss_from_metric_name_passthrough():
-    loss = LossFromMetric(ExactMatch())
+    loss = MetricLoss(ExactMatch())
     assert loss.name == "exact_match"
 
-    named = LossFromMetric(ExactMatch(), name="custom")
+    named = MetricLoss(ExactMatch(), name="custom")
     assert named.name == "custom"
 
 
 # ---------------------------------------------------------------------------
-# CriticLoss
+# JudgeLoss
 # ---------------------------------------------------------------------------
 
 
@@ -113,9 +113,9 @@ async def _build_fake_critic(cfg, score: float, rationale: str):
     return critic
 
 
-async def test_critic_loss_with_fake_critic(cfg):
+async def test_judge_loss_with_fake_critic(cfg):
     critic = await _build_fake_critic(cfg, 0.7, "close but not quite")
-    loss = CriticLoss(critic)
+    loss = JudgeLoss(critic)
 
     score, grad = await loss.compute(B(value=1), None)
 
@@ -124,9 +124,9 @@ async def test_critic_loss_with_fake_critic(cfg):
     assert grad.severity == pytest.approx(0.3)
 
 
-async def test_critic_loss_null_at_perfect_score(cfg):
+async def test_judge_loss_null_at_perfect_score(cfg):
     critic = await _build_fake_critic(cfg, 1.0, "perfect")
-    loss = CriticLoss(critic)
+    loss = JudgeLoss(critic)
 
     score, grad = await loss.compute(B(value=1), None)
 
@@ -135,9 +135,9 @@ async def test_critic_loss_null_at_perfect_score(cfg):
     assert grad.message == ""
 
 
-async def test_critic_loss_severity_from_rationale(cfg):
+async def test_judge_loss_severity_from_rationale(cfg):
     critic = await _build_fake_critic(cfg, 0.2, "bad output")
-    loss = CriticLoss(critic, severity_from="rationale")
+    loss = JudgeLoss(critic, severity_from="rationale")
 
     score, grad = await loss.compute(B(value=1), None)
 
@@ -146,21 +146,21 @@ async def test_critic_loss_severity_from_rationale(cfg):
     assert grad.message == "bad output"
 
 
-async def test_critic_loss_score_delegation(cfg):
+async def test_judge_loss_score_delegation(cfg):
     critic = await _build_fake_critic(cfg, 0.55, "mediocre")
-    loss = CriticLoss(critic)
+    loss = JudgeLoss(critic)
 
     s = await loss.score(B(value=1), B(value=2))
     assert s == pytest.approx(0.55)
 
 
 # ---------------------------------------------------------------------------
-# JSONShapeLoss
+# SchemaLoss
 # ---------------------------------------------------------------------------
 
 
-async def test_json_shape_loss_missing_field():
-    loss = JSONShapeLoss(_RequiredFields)
+async def test_schema_loss_missing_field():
+    loss = SchemaLoss(_RequiredFields)
     # Construct an object lacking `count`.
     predicted = _RequiredFields.model_construct(title="hello")
 
@@ -171,12 +171,12 @@ async def test_json_shape_loss_missing_field():
     assert grad.severity > 0.0
 
 
-async def test_json_shape_loss_wrong_type():
+async def test_schema_loss_wrong_type():
     class _Wrong(BaseModel):
         title: str = "x"
         count: str = "not a number"
 
-    loss = JSONShapeLoss(_RequiredFields)
+    loss = SchemaLoss(_RequiredFields)
     predicted = _Wrong()
 
     score, grad = await loss.compute(predicted, None)
@@ -185,8 +185,8 @@ async def test_json_shape_loss_wrong_type():
     assert "count" in grad.by_field
 
 
-async def test_json_shape_loss_perfect():
-    loss = JSONShapeLoss(_RequiredFields)
+async def test_schema_loss_perfect():
+    loss = SchemaLoss(_RequiredFields)
     predicted = _RequiredFields(title="ok", count=3)
 
     score, grad = await loss.compute(predicted, None)
@@ -278,7 +278,7 @@ async def test_composite_loss_rejects_empty():
 
 async def test_composite_loss_rejects_negative_weight():
     with pytest.raises(ValueError):
-        CompositeLoss([(LossFromMetric(ExactMatch()), -0.5)])
+        CompositeLoss([(MetricLoss(ExactMatch()), -0.5)])
 
 
 # ---------------------------------------------------------------------------
@@ -291,9 +291,9 @@ def test_pure_metric_is_not_a_loss():
 
 
 def test_lifted_metric_is_a_loss():
-    assert isinstance(LossFromMetric(ExactMatch()), Loss)
+    assert isinstance(MetricLoss(ExactMatch()), Loss)
 
 
 def test_loss_is_a_metric():
-    assert isinstance(LossFromMetric(ExactMatch()), Metric)
-    assert isinstance(JSONShapeLoss(_RequiredFields), Metric)
+    assert isinstance(MetricLoss(ExactMatch()), Metric)
+    assert isinstance(SchemaLoss(_RequiredFields), Metric)

@@ -131,7 +131,7 @@ async def test_refresh_every_elides_work(cfg: Any) -> None:
 
 async def test_trainer_invokes_sampler_refresh(cfg: Any) -> None:
     """Smoke: Trainer.fit with an UncertaintySampler-backed loader completes."""
-    from operad.optim.optimizer import Optimizer, ParamGroup
+    from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
     from operad.optim.parameter import Parameter, TextualGradient
     from operad.metrics.base import MetricBase
     from operad.train import Trainer

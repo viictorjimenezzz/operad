@@ -9,7 +9,7 @@ errors into an `ExceptionGroup` so one bad parameter does not tank a
 batched step.
 
 Default concrete subclass: `TextualGradientDescent` in
-`operad/optim/sgd.py`.
+`operad/optim/optimizers/tgd.py`.
 """
 
 from __future__ import annotations
@@ -42,6 +42,11 @@ class ParamGroup:
 _RESERVED_GROUP_KEYS = frozenset(
     {"params", "lr", "momentum", "constraint_override"}
 )
+
+
+# ---------------------------------------------------------------------------
+# Base optimizer.
+# ---------------------------------------------------------------------------
 
 
 class Optimizer(ABC):

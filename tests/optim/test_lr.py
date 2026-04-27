@@ -1,4 +1,4 @@
-"""Offline tests for `operad.optim.lr_scheduler` — PyTorch-style LR schedulers.
+"""Offline tests for `operad.optim.schedulers.lr` — PyTorch-style LR schedulers.
 
 Each scheduler is exercised over a 10-epoch run against a `StubOptimizer`
 (minimal `Optimizer` subclass) to verify formulas, state_dict round-trip,
@@ -12,8 +12,9 @@ from typing import Any
 
 import pytest
 
-from operad.optim import Optimizer, ParamGroup, Parameter, TextParameter
-from operad.optim.lr_scheduler import (
+from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
+from operad.optim.parameter import Parameter, TextParameter
+from operad.optim.schedulers.lr import (
     ChainedScheduler,
     ConstantLR,
     CosineExplorationLR,

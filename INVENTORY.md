@@ -243,7 +243,7 @@ best = await beam.run(Question(text="…"))
 ```
 
 Population-search over agent prompts now lives in
-[`operad.optim.EvoGradient`](operad/optim/evo.py) as a first-class
+[`operad.optim.optimizers.evo.EvoGradient`](operad/optim/optimizers/evo.py) as a first-class
 optimizer (rewrites agents from textual gradients within a
 `Trainer.fit` loop). The previous `Evolutionary` algorithm has been
 absorbed there.
@@ -616,21 +616,21 @@ attribute-insertion order. `Agent.trainable_parameters()` is the
 | Class / protocol      | Shape                                                            |
 | --------------------- | ---------------------------------------------------------------- |
 | `Loss` (protocol)     | `compute(pred, expected) -> (score, TextualGradient)`.           |
-| `LossFromMetric`      | Lift any `Metric`; the gradient's `message` is auto-generated.   |
-| `CriticLoss(critic)`  | Wrap an `Agent[Candidate, Score]`; rationale ⇒ gradient.         |
-| `JSONShapeLoss`       | 0.0 if `pred` matches the expected Pydantic shape, 1.0 otherwise.|
+| `MetricLoss`      | Lift any `Metric`; the gradient's `message` is auto-generated.   |
+| `JudgeLoss(critic)`  | Wrap an `Agent[Candidate, Score]`; rationale ⇒ gradient.         |
+| `SchemaLoss`       | Scores whether `pred` matches the expected Pydantic shape.       |
 | `CompositeLoss`       | Weighted sum of child losses; merges each child's gradient.      |
 
 ### Tape + `backward()`
 
-`operad.optim.tape()` is an async context manager that installs a
+`operad.optim.backprop.tape()` is an async context manager that installs a
 `TapeObserver` on the observer registry; every `Agent.invoke` inside
 the context records a `TapeEntry`. `backward()` walks the tape in
 reverse, propagating a `TextualGradient` through each node via the
 registered `BackpropAgent`s and populating `Parameter.grad`.
 
 ```python
-async with operad.optim.tape() as t:
+async with operad.optim.backprop.tape() as t:
     out = await agent(x)
 score, grad = await loss_fn.compute(out.response, y)
 await t.backward(grad, parameters=list(agent.parameters()))
@@ -645,9 +645,9 @@ handle = agent.register_forward_hook(lambda a, x, y: print(a.name, y))
 
 `register_forward_pre_hook`, `register_forward_hook`,
 `register_backward_hook` all return a `Handle` with `.remove()`. An
-`async with operad.no_grad():` block disables tape recording for
-inference-speed runs. `operad.inference_mode()` is the same thing
-with hooks also suppressed.
+`async with operad.optim.gradmode.no_grad():` disables tape recording
+for inference-speed runs. `operad.optim.gradmode.inference_mode()` is
+the same thing with hooks also suppressed.
 
 ### Optimizer fleet
 
@@ -770,7 +770,8 @@ renders each recorded node in reverse call order so a user can debug
 a bad training batch the same way they debug a bad call.
 
 ```python
-from operad.optim import tape, traceback as ptb
+from operad.optim.backprop.tape import tape
+from operad.optim.backprop import traceback as ptb
 async with tape() as t:
     out = await agent(x)
 score, loss = await loss_fn.compute(out.response, expected)
@@ -780,7 +781,7 @@ print(tb.to_markdown())        # PR-body friendly
 tb.save("traceback.ndjson")    # NDJSON, one frame per line
 ```
 
-Lives in [`operad/optim/traceback.py`](operad/optim/traceback.py) —
+Lives in [`operad/optim/backprop/traceback.py`](operad/optim/backprop/traceback.py) —
 exports `PromptTraceback`, `TracebackFrame`, and `traceback`.
 
 ### Planned

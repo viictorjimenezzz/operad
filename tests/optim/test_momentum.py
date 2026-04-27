@@ -1,4 +1,4 @@
-"""Offline tests for `operad.optim.momentum.MomentumTextGrad`."""
+"""Offline tests for `operad.optim.optimizers.momentum.MomentumTextGrad`."""
 
 from __future__ import annotations
 
@@ -6,16 +6,17 @@ from typing import Any
 
 import pytest
 
-from operad.optim import (
+from operad.optim.backprop.rewrite import (
+    RewriteRequest,
+    RewriteResponse,
+    TextRewriter,
+)
+from operad.optim.optimizers.momentum import (
     GradSummarizer,
     MomentumInput,
     MomentumTextGrad,
-    RewriteRequest,
-    RewriteResponse,
-    TextParameter,
-    TextRewriter,
-    TextualGradient,
 )
+from operad.optim.parameter import TextParameter, TextualGradient
 from tests._helpers.fake_leaf import A, B, FakeLeaf
 
 

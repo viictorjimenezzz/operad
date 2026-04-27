@@ -23,9 +23,14 @@ from operad.core.agent import Agent
 from operad.core.config import Configuration
 from operad.core.agent import Example
 from operad.metrics.base import Metric
-from operad.optim.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import Parameter
-from operad.optim.rewrite import _describe_constraint, _parse, _serialize
+from operad.optim.backprop.rewrite import _describe_constraint, _parse, _serialize
+from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
+
+
+# ---------------------------------------------------------------------------
+# Domain schemas.
+# ---------------------------------------------------------------------------
 
 
 class OPROHistoryEntry(BaseModel):
@@ -79,6 +84,11 @@ class OPROOutput(BaseModel):
     )
 
 
+# ---------------------------------------------------------------------------
+# Optimizer agent.
+# ---------------------------------------------------------------------------
+
+
 class OPROAgent(Agent[OPROInput, OPROOutput]):
     """Propose the next value for a parameter given its score history."""
 
@@ -127,6 +137,11 @@ class OPROAgent(Agent[OPROInput, OPROOutput]):
 
 Evaluator = Callable[[Parameter[Any], Any], Awaitable[float]]
 OPROFactory = Callable[[], OPROAgent | Awaitable[OPROAgent]]
+
+
+# ---------------------------------------------------------------------------
+# Optimizer.
+# ---------------------------------------------------------------------------
 
 
 class OPROOptimizer(Optimizer):

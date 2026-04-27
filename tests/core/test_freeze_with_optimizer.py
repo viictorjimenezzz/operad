@@ -9,7 +9,7 @@ import pytest
 
 from operad import BuildError, Configuration
 from operad.core.freeze import freeze_agent, thaw_agent, thaw_pair
-from operad.optim.optimizer import Optimizer, ParamGroup
+from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import NumericConstraint, Parameter
 
 from ..conftest import A, B, FakeLeaf

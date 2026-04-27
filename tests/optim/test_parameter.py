@@ -14,7 +14,7 @@ import gc
 import pytest
 
 from operad.core.agent import Example
-from operad.optim import (
+from operad.optim.parameter import (
     CategoricalParameter,
     ConfigurationConstraint,
     ConfigurationParameter,

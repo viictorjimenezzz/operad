@@ -1,4 +1,4 @@
-"""Offline tests for `operad.optim.rewrite`.
+"""Offline tests for `operad.optim.backprop.rewrite`.
 
 Every test stubs the rewriter's `forward` so no real model is contacted.
 Covers: constructor deferral, one happy path per rewriter kind, the
@@ -14,31 +14,33 @@ from typing import get_args
 import pytest
 
 from operad.core.agent import Example
-from operad.optim import (
-    CategoricalParameter,
-    CategoricalRewriter,
-    ConfigurationConstraint,
-    ConfigurationParameter,
-    ConfigurationRewriter,
-    ExampleListParameter,
-    ExampleListRewriter,
-    FloatParameter,
-    FloatRewriter,
-    NumericConstraint,
-    ParameterKind,
+from operad.optim.backprop.rewrite import (
     REWRITE_AGENTS,
+    CategoricalRewriter,
+    ConfigurationRewriter,
+    ExampleListRewriter,
+    FloatRewriter,
     RewriteAgent,
     RewriteRequest,
     RewriteResponse,
-    RuleListParameter,
     RuleListRewriter,
-    TextConstraint,
-    TextParameter,
     TextRewriter,
-    TextualGradient,
-    VocabConstraint,
     apply_rewrite,
     rewriter_for,
+)
+from operad.optim.parameter import (
+    CategoricalParameter,
+    ConfigurationConstraint,
+    ConfigurationParameter,
+    ExampleListParameter,
+    FloatParameter,
+    NumericConstraint,
+    ParameterKind,
+    RuleListParameter,
+    TextConstraint,
+    TextParameter,
+    TextualGradient,
+    VocabConstraint,
 )
 from tests._helpers.fake_leaf import A, B, FakeLeaf
 
