@@ -868,11 +868,158 @@ def from_json(
     return AgentGraph(root=data["root"], nodes=nodes, edges=edges)
 
 
+def to_agent_graph(graph: AgentGraph) -> dict[str, Any]:
+    """Render an `AgentGraph` in agent-flow shape: agents as nodes, types as edges.
+
+    This is the dual of :func:`to_io_graph`. Where the IO view treats data
+    types as nodes and agents as edges (a dataflow projection), the
+    agent-flow view treats agents as nodes (each leaf and composite gets a
+    node) and the type that flows along each invocation edge becomes the
+    edge label. Composites carry ``parent_path`` so callers can render a
+    nested hierarchy with composite groups containing their children.
+
+    Output shape:
+        {
+          "root": "<root agent path>",
+          "nodes": [
+            {
+              "path": "Root.stage_0.reason",
+              "class_name": "Reasoner",
+              "kind": "leaf" | "composite",
+              "parent_path": "Root.stage_0" | None,
+              "input": "module.qualname",
+              "output": "module.qualname",
+              "input_label": "Question",
+              "output_label": "Answer",
+            },
+            ...
+          ],
+          "edges": [
+            {
+              "caller": "Root.stage_0.reason",
+              "callee": "Root.stage_0.act",
+              "type": "Thought",
+              "input": "module.qualname",
+              "output": "module.qualname",
+            },
+            ...
+          ]
+        }
+    """
+    composite_paths = {n.path for n in graph.nodes if n.kind == "composite"}
+
+    def _parent(path: str) -> str | None:
+        if path == graph.root:
+            return None
+        # walk up via dot-segments and pick the closest enclosing composite
+        parts = path.split(".")
+        for i in range(len(parts) - 1, 0, -1):
+            prefix = ".".join(parts[:i])
+            if prefix in composite_paths:
+                return prefix
+        return None
+
+    nodes_out = [
+        {
+            "path": n.path,
+            "class_name": n.class_name or n.path.rsplit(".", 1)[-1],
+            "kind": n.kind,
+            "parent_path": _parent(n.path),
+            "input": _qualified_name(n.input_type),
+            "output": _qualified_name(n.output_type),
+            "input_label": _type_label(n.input_type),
+            "output_label": _type_label(n.output_type),
+        }
+        for n in _dedupe_nodes(graph.nodes)
+    ]
+
+    edges_out = [
+        {
+            "caller": e.caller,
+            "callee": e.callee,
+            "type": _type_label(e.input_type),
+            "input": _qualified_name(e.input_type),
+            "output": _qualified_name(e.output_type),
+        }
+        for e in _dedupe_edges(graph.edges)
+    ]
+
+    return {"root": graph.root, "nodes": nodes_out, "edges": edges_out}
+
+
+def to_agent_graph_from_json(graph_json: dict[str, Any]) -> dict[str, Any]:
+    """JSON-only equivalent of :func:`to_agent_graph` for out-of-process consumers."""
+    nodes = [n for n in graph_json.get("nodes") or [] if isinstance(n, dict)]
+    edges = [e for e in graph_json.get("edges") or [] if isinstance(e, dict)]
+    composite_paths = {
+        n["path"] for n in nodes if n.get("kind") == "composite" and "path" in n
+    }
+    root = str(graph_json.get("root") or "")
+
+    def _parent(path: str) -> str | None:
+        if path == root:
+            return None
+        parts = path.split(".")
+        for i in range(len(parts) - 1, 0, -1):
+            prefix = ".".join(parts[:i])
+            if prefix in composite_paths:
+                return prefix
+        return None
+
+    def _short(qual: str) -> str:
+        return qual.rsplit(".", 1)[-1] if qual else ""
+
+    nodes_out: list[dict[str, Any]] = []
+    seen_paths: set[str] = set()
+    for n in nodes:
+        path = n.get("path")
+        if not isinstance(path, str) or path in seen_paths:
+            continue
+        seen_paths.add(path)
+        nodes_out.append(
+            {
+                "path": path,
+                "class_name": n.get("class_name") or path.rsplit(".", 1)[-1],
+                "kind": n.get("kind") or "leaf",
+                "parent_path": _parent(path),
+                "input": str(n.get("input") or ""),
+                "output": str(n.get("output") or ""),
+                "input_label": _short(str(n.get("input") or "")),
+                "output_label": _short(str(n.get("output") or "")),
+            }
+        )
+
+    edges_out: list[dict[str, Any]] = []
+    seen_edges: set[tuple[str, str, str, str]] = set()
+    for e in edges:
+        caller = str(e.get("caller") or "")
+        callee = str(e.get("callee") or "")
+        in_q = str(e.get("input") or "")
+        out_q = str(e.get("output") or "")
+        key = (caller, callee, in_q, out_q)
+        if key in seen_edges:
+            continue
+        seen_edges.add(key)
+        edges_out.append(
+            {
+                "caller": caller,
+                "callee": callee,
+                "type": _short(in_q),
+                "input": in_q,
+                "output": out_q,
+            }
+        )
+
+    return {"root": root or None, "nodes": nodes_out, "edges": edges_out}
+
+
 __all__ = [
     "IOView",
     "MermaidView",
     "TypeRegistry",
     "from_json",
+    "to_agent_graph",
+    "to_agent_graph_from_json",
     "to_io_graph",
     "to_io_graph_from_json",
     "to_json",

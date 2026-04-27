@@ -19,7 +19,7 @@ from pydantic import BaseModel, ValidationError
 from operad.core.config import Configuration
 from operad.core.agent import Example
 from operad.core.diff import diff_states
-from operad.core.view import to_io_graph_from_json
+from operad.core.view import to_agent_graph_from_json, to_io_graph_from_json
 from operad.core.state import AgentState
 from operad.runtime.observers.base import suppress_notifications
 
@@ -406,6 +406,47 @@ async def io_graph(request: Request, run_id: str) -> JSONResponse:
     if ctx is None:
         return _not_found("unknown run_id")
     return JSONResponse(_io_graph_payload(ctx))
+
+
+@router.get("/runs/{run_id}/agent_graph")
+async def agent_graph(request: Request, run_id: str) -> JSONResponse:
+    """Return the agent-flow graph: agents as nodes, types as edge labels."""
+    ctx = _resolve_run_context(request, run_id)
+    if ctx is None:
+        return _not_found("unknown run_id")
+    graph_json = ctx.graph_json
+    if graph_json is None:
+        for env in ctx.events:
+            metadata = env.get("metadata")
+            if isinstance(metadata, dict):
+                graph = metadata.get("graph")
+                if isinstance(graph, dict):
+                    graph_json = graph
+                    break
+    if graph_json is None:
+        return JSONResponse({"root": None, "nodes": [], "edges": []})
+    payload = to_agent_graph_from_json(graph_json)
+
+    # Backfill class_name on agents using runtime metadata from end events,
+    # mirroring _enrich_io_graph_with_events.
+    runtime_class: dict[str, str] = {}
+    for env in ctx.events:
+        if env.get("type") != "agent_event" or env.get("kind") != "end":
+            continue
+        path = env.get("agent_path")
+        if not isinstance(path, str):
+            continue
+        meta = env.get("metadata")
+        if not isinstance(meta, dict):
+            continue
+        cls = meta.get("class_name")
+        if isinstance(cls, str) and cls:
+            runtime_class.setdefault(path, cls)
+    for node in payload.get("nodes") or []:
+        rt = runtime_class.get(node.get("path"))
+        if rt:
+            node["class_name"] = rt
+    return JSONResponse(payload)
 
 
 @router.get("/runs/{run_id}/invocations")

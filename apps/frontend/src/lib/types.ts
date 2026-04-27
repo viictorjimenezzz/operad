@@ -530,6 +530,34 @@ export const IoAgentEdge = z.object({
 });
 export type IoAgentEdge = z.infer<typeof IoAgentEdge>;
 
+export const AgentFlowNode = z.object({
+  path: z.string(),
+  class_name: z.string().default("Agent"),
+  kind: z.enum(["leaf", "composite"]).default("leaf"),
+  parent_path: z.string().nullable().default(null),
+  input: z.string().default(""),
+  output: z.string().default(""),
+  input_label: z.string().default(""),
+  output_label: z.string().default(""),
+});
+export type AgentFlowNode = z.infer<typeof AgentFlowNode>;
+
+export const AgentFlowEdge = z.object({
+  caller: z.string(),
+  callee: z.string(),
+  type: z.string().default(""),
+  input: z.string().default(""),
+  output: z.string().default(""),
+});
+export type AgentFlowEdge = z.infer<typeof AgentFlowEdge>;
+
+export const AgentGraphResponse = z.object({
+  root: z.string().nullable().default(null),
+  nodes: z.array(AgentFlowNode).default([]),
+  edges: z.array(AgentFlowEdge).default([]),
+});
+export type AgentGraphResponse = z.infer<typeof AgentGraphResponse>;
+
 export const IoComposite = z.object({
   path: z.string(),
   class_name: z.string().default("Composite"),

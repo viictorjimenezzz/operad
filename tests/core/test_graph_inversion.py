@@ -333,6 +333,46 @@ async def test_to_io_graph_from_json_composites_match_live(cfg) -> None:
     assert _norm(live["composites"]) == _norm(rehydrated["composites"])
 
 
+async def test_to_agent_graph_renders_agents_as_nodes(cfg) -> None:
+    """`to_agent_graph` returns the agent-flow shape: agents are nodes, types are edge labels."""
+    from operad.core.view import to_agent_graph, to_agent_graph_from_json
+
+    inner = Sequential(
+        FakeLeaf(config=cfg, input=A, output=B),
+        FakeLeaf(config=cfg, input=B, output=C),
+        input=A,
+        output=C,
+    )
+    outer = Sequential(
+        inner,
+        FakeLeaf(config=cfg, input=C, output=D),
+        input=A,
+        output=D,
+    )
+    await outer.abuild()
+
+    live = to_agent_graph(outer._graph)
+    rehydrated = to_agent_graph_from_json(to_json(outer._graph))
+
+    # Agents-as-nodes: every Node from the AgentGraph appears as a node here.
+    assert {n["path"] for n in live["nodes"]} == {n.path for n in outer._graph.nodes}
+    # parent_path is computed for descendants of composites (excluding root).
+    inner_kids = [n for n in live["nodes"] if n["parent_path"] == "Sequential.stage_0"]
+    assert {n["path"] for n in inner_kids} == {
+        "Sequential.stage_0.stage_0",
+        "Sequential.stage_0.stage_1",
+    }
+    # Edges carry the type that flowed (input_type label).
+    edge_types = {(e["caller"], e["callee"], e["type"]) for e in live["edges"]}
+    assert any(callee == "Sequential.stage_0" and t == "A" for _, callee, t in edge_types)
+
+    # JSON path matches.
+    assert {n["path"] for n in rehydrated["nodes"]} == {n["path"] for n in live["nodes"]}
+    assert {(e["caller"], e["callee"]) for e in rehydrated["edges"]} == {
+        (e["caller"], e["callee"]) for e in live["edges"]
+    }
+
+
 async def test_to_mermaid_emits_subgraphs_for_composites(cfg) -> None:
     """`to_mermaid` wraps composites in `subgraph` blocks."""
     from operad.core.view import to_mermaid
