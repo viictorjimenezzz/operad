@@ -1,0 +1,7 @@
+{
+  "desired_behavior": "Use a larger UI font.",
+  "final_answer_critique": "I prefer a different font in the chat UI.",
+  "severity": 0.0,
+  "target_path": null,
+  "trace_id": "fixture"
+}

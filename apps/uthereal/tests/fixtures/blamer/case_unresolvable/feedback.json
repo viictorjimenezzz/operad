@@ -1,0 +1,7 @@
+{
+  "desired_behavior": "Use only citation markers that resolve to emitted references.",
+  "final_answer_critique": "The citation marker does not resolve in the reference panel.",
+  "severity": 0.8,
+  "target_path": null,
+  "trace_id": "fixture"
+}

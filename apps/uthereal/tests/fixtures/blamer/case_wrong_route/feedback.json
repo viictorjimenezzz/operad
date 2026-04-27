@@ -1,0 +1,7 @@
+{
+  "desired_behavior": "Treat greetings as direct answers.",
+  "final_answer_critique": "This was just a greeting. It should have answered directly instead of searching.",
+  "severity": 0.9,
+  "target_path": null,
+  "trace_id": "fixture"
+}
