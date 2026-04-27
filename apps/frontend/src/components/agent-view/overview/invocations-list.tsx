@@ -8,7 +8,7 @@ import { ChevronDown, ExternalLink, GitCompare } from "lucide-react";
 import { useMemo, useState } from "react";
 
 export interface InvocationsListProps {
-  /** When true, exclude the most recent invocation (the LatestInvocationCard renders it). */
+  /** When true, exclude the most recent invocation from this list. */
   skipLatest?: boolean;
   /** When true and the list ends up empty, render nothing. */
   hideIfEmpty?: boolean;
@@ -31,7 +31,7 @@ interface InternalProps {
 }
 
 function parsePayload(props: InvocationsListProps): InternalProps | null {
-  // Path 1: invocation array provided directly via Phase 2 InvocationsTab.
+  // Path 1: invocation array provided directly by the route tab.
   if (Array.isArray(props.invocations)) {
     return {
       rows: props.invocations as RunInvocation[],

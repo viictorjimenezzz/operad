@@ -1,14 +1,19 @@
 import { BackendBlock } from "@/components/agent-view/overview/backend-block";
 import { ConfigBlock } from "@/components/agent-view/overview/config-block";
-import { CostLatencyBlock } from "@/components/agent-view/overview/cost-latency-block";
+import {
+  DefinitionSection,
+  ReproducibilitySection,
+} from "@/components/agent-view/overview/definition-section";
 import { DriftBlock } from "@/components/agent-view/overview/drift-block";
 import { ExamplesBlock } from "@/components/agent-view/overview/examples-block";
 import { IdentityBlock } from "@/components/agent-view/overview/identity-block";
 import { InvocationsBanner } from "@/components/agent-view/overview/invocations-banner";
 import { InvocationsList } from "@/components/agent-view/overview/invocations-list";
-import { LatestInvocationCard } from "@/components/agent-view/overview/latest-invocation-card";
+import { IOHero } from "@/components/agent-view/overview/io-hero";
+import { MetricsValueTable } from "@/components/agent-view/overview/metrics-value-table";
+import { NotesSection } from "@/components/agent-view/overview/notes-section";
 import { ReproducibilityBlock } from "@/components/agent-view/overview/reproducibility-block";
-import { SisterRunsBlock } from "@/components/agent-view/overview/sister-runs-block";
+import { RunStatusStrip } from "@/components/agent-view/overview/run-status-strip";
 import { TrainableParamsBlock } from "@/components/agent-view/overview/trainable-params-block";
 import type { ComponentRegistry } from "@json-render/react";
 
@@ -31,23 +36,17 @@ export const overviewRegistry: ComponentRegistry = {
   IdentityBlock: ({ element }) => {
     const p = element.props as Record<string, unknown>;
     return (
-      <IdentityBlock dataSummary={p.dataSummary} {...defined({ runId: strProp(p, "runId") })} />
+      <IdentityBlock
+        dataSummary={p.dataSummary}
+        flat={Boolean(p.flat)}
+        {...defined({ runId: strProp(p, "runId") })}
+      />
     );
   },
   InvocationsBanner: ({ element }) => {
     const p = element.props as Record<string, unknown>;
     return (
       <InvocationsBanner
-        dataSummary={p.dataSummary}
-        dataInvocations={p.dataInvocations}
-        {...defined({ runId: strProp(p, "runId") })}
-      />
-    );
-  },
-  LatestInvocationCard: ({ element }) => {
-    const p = element.props as Record<string, unknown>;
-    return (
-      <LatestInvocationCard
         dataSummary={p.dataSummary}
         dataInvocations={p.dataInvocations}
         {...defined({ runId: strProp(p, "runId") })}
@@ -69,7 +68,7 @@ export const overviewRegistry: ComponentRegistry = {
   },
   ReproducibilityBlock: ({ element }) => {
     const p = element.props as Record<string, unknown>;
-    return <ReproducibilityBlock dataInvocations={p.dataInvocations} />;
+    return <ReproducibilityBlock dataInvocations={p.dataInvocations} flat={Boolean(p.flat)} />;
   },
   BackendBlock: ({ element }) => {
     const p = element.props as Record<string, unknown>;
@@ -77,18 +76,29 @@ export const overviewRegistry: ComponentRegistry = {
       <BackendBlock
         dataSummary={p.dataSummary}
         dataInvocations={p.dataInvocations}
+        flat={Boolean(p.flat)}
         {...defined({ runId: strProp(p, "runId") })}
       />
     );
   },
   ConfigBlock: ({ element }) => {
     const p = element.props as Record<string, unknown>;
-    return <ConfigBlock dataSummary={p.dataSummary} {...defined({ runId: strProp(p, "runId") })} />;
+    return (
+      <ConfigBlock
+        dataSummary={p.dataSummary}
+        flat={Boolean(p.flat)}
+        {...defined({ runId: strProp(p, "runId") })}
+      />
+    );
   },
   ExamplesBlock: ({ element }) => {
     const p = element.props as Record<string, unknown>;
     return (
-      <ExamplesBlock dataSummary={p.dataSummary} {...defined({ runId: strProp(p, "runId") })} />
+      <ExamplesBlock
+        dataSummary={p.dataSummary}
+        flat={Boolean(p.flat)}
+        {...defined({ runId: strProp(p, "runId") })}
+      />
     );
   },
   DriftBlock: ({ element }) => {
@@ -100,16 +110,62 @@ export const overviewRegistry: ComponentRegistry = {
       />
     );
   },
-  CostLatencyBlock: ({ element }) => {
-    const p = element.props as Record<string, unknown>;
-    return <CostLatencyBlock dataInvocations={p.dataInvocations} />;
-  },
-  SisterRunsBlock: ({ element }) => {
+  RunStatusStrip: ({ element }) => {
     const p = element.props as Record<string, unknown>;
     return (
-      <SisterRunsBlock
+      <RunStatusStrip
+        dataSummary={p.dataSummary}
         dataInvocations={p.dataInvocations}
         {...defined({ runId: strProp(p, "runId") })}
+      />
+    );
+  },
+  IOHero: ({ element }) => {
+    const p = element.props as Record<string, unknown>;
+    return (
+      <IOHero
+        dataSummary={p.dataSummary}
+        dataInvocations={p.dataInvocations}
+        {...defined({ runId: strProp(p, "runId") })}
+      />
+    );
+  },
+  NotesSection: ({ element }) => {
+    const p = element.props as Record<string, unknown>;
+    return (
+      <NotesSection dataSummary={p.dataSummary} {...defined({ runId: strProp(p, "runId") })} />
+    );
+  },
+  DefinitionSection: ({ element }) => {
+    const p = element.props as Record<string, unknown>;
+    return (
+      <DefinitionSection
+        dataSummary={p.dataSummary}
+        dataInvocations={p.dataInvocations}
+        {...defined({ runId: strProp(p, "runId") })}
+      />
+    );
+  },
+  ReproducibilitySection: ({ element }) => {
+    const p = element.props as Record<string, unknown>;
+    return (
+      <ReproducibilitySection
+        dataSummary={p.dataSummary}
+        dataInvocations={p.dataInvocations}
+        {...defined({ runId: strProp(p, "runId") })}
+      />
+    );
+  },
+  MetricsValueTable: ({ element }) => {
+    const p = element.props as Record<string, unknown>;
+    return (
+      <MetricsValueTable
+        dataSummary={p.dataSummary}
+        sourceGroupMetrics={p.dataGroupMetrics}
+        {...defined({
+          runId: strProp(p, "runId"),
+          hashContent: strProp(p, "hashContent"),
+        })}
       />
     );
   },

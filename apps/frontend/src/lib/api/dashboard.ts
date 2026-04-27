@@ -2,6 +2,8 @@ import {
   AgentEventsResponse,
   AgentGraphResponse,
   AgentGroupDetail,
+  AgentGroupMetricsResponse,
+  AgentGroupParametersResponse,
   AgentGroupSummary,
   AgentInvocationDiffResponse,
   AgentInvocationsResponse,
@@ -34,6 +36,7 @@ import {
   ProgressSnapshot,
   RunEventsResponse,
   RunInvocationsResponse,
+  RunNotesResponse,
   RunSummary,
   StatsResponse,
   TrainingGroup,
@@ -60,7 +63,7 @@ async function getJson<T extends z.ZodTypeAny>(url: string, schema: T): Promise<
 }
 
 async function sendJson<T extends z.ZodTypeAny>(
-  method: "POST" | "DELETE",
+  method: "POST" | "PATCH" | "DELETE",
   url: string,
   schema: T,
   body?: unknown,
@@ -130,10 +133,21 @@ export const dashboardApi = {
     getJson(`/api/agents/${encodeURIComponent(hashContent)}`, AgentGroupDetail),
   agentGroupRuns: (hashContent: string) =>
     getJson(`/api/agents/${encodeURIComponent(hashContent)}/runs`, z.array(RunSummary)),
+  agentGroupMetrics: (hashContent: string) =>
+    getJson(`/api/agents/${encodeURIComponent(hashContent)}/metrics`, AgentGroupMetricsResponse),
+  agentGroupParameters: (hashContent: string) =>
+    getJson(
+      `/api/agents/${encodeURIComponent(hashContent)}/parameters`,
+      AgentGroupParametersResponse,
+    ),
   algorithmGroups: () => getJson("/api/algorithms", z.array(AlgorithmGroup)),
   trainingGroups: () => getJson("/api/trainings", z.array(TrainingGroup)),
   runSummary: (runId: string) => getJson(`/runs/${runId}/summary`, RunSummary),
   runInvocations: (runId: string) => getJson(`/runs/${runId}/invocations`, RunInvocationsResponse),
+  patchRunNotes: (runId: string, markdown: string) =>
+    sendJson("PATCH", `/api/runs/${encodeURIComponent(runId)}/notes`, RunNotesResponse, {
+      markdown,
+    }),
   runIoGraph: (runId: string) => getJson(`/runs/${runId}/io_graph`, IoGraphResponse),
   runAgentGraph: (runId: string) => getJson(`/runs/${runId}/agent_graph`, AgentGraphResponse),
   agentInvocations: (runId: string, agentPath: string) =>

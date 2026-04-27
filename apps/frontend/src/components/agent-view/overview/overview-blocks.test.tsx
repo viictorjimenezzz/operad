@@ -1,15 +1,19 @@
 import { ConfigBlock } from "@/components/agent-view/overview/config-block";
-import { CostLatencyBlock } from "@/components/agent-view/overview/cost-latency-block";
 import { IdentityBlock } from "@/components/agent-view/overview/identity-block";
 import { IOFieldPreview } from "@/components/agent-view/overview/io-field-preview";
+import { MetricsValueTable } from "@/components/agent-view/overview/metrics-value-table";
 import { ReproducibilityBlock } from "@/components/agent-view/overview/reproducibility-block";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockUseAgentMeta = vi.fn();
+const mockUseAgentGroup = vi.fn();
+const mockUseAgentGroupMetrics = vi.fn();
 
 vi.mock("@/hooks/use-runs", () => ({
   useAgentMeta: () => mockUseAgentMeta(),
+  useAgentGroup: () => mockUseAgentGroup(),
+  useAgentGroupMetrics: () => mockUseAgentGroupMetrics(),
 }));
 
 const summary = {
@@ -33,6 +37,18 @@ const summary = {
   batches: [],
   prompt_tokens: 0,
   completion_tokens: 0,
+  metrics: {},
+  notes_markdown: "",
+  hash_content: "abc123",
+  hash_model: null,
+  hash_prompt: null,
+  hash_graph: null,
+  hash_input: null,
+  hash_output_schema: null,
+  hash_config: null,
+  backend: null,
+  model: null,
+  sampling: {},
   error: null,
   algorithm_terminal_score: null,
   synthetic: false,
@@ -43,6 +59,9 @@ const summary = {
 describe("Agent overview sparse states", () => {
   beforeEach(() => {
     mockUseAgentMeta.mockReset();
+    mockUseAgentGroup.mockReset();
+    mockUseAgentGroupMetrics.mockReset();
+    mockUseAgentGroupMetrics.mockReturnValue({ data: undefined });
   });
 
   it("does not count blank hashes as reproducibility stability", () => {
@@ -67,29 +86,43 @@ describe("Agent overview sparse states", () => {
     expect(screen.getByText(/1 baseline hash/)).toBeTruthy();
   });
 
-  it("shows single-invocation latency while marking missing usage unavailable", () => {
+  it("shows single-invocation metrics with custom values", () => {
+    mockUseAgentGroup.mockReturnValue({
+      data: {
+        runs: [
+          {
+            ...summary,
+            run_id: "run-0",
+            duration_ms: 80,
+            cost: { cost_usd: 0.002, prompt_tokens: 1, completion_tokens: 1 },
+          },
+          {
+            ...summary,
+            run_id: "run-1",
+            duration_ms: 100,
+            cost: { cost_usd: 0.004, prompt_tokens: 1, completion_tokens: 1 },
+          },
+        ],
+      },
+    });
+
     render(
-      <CostLatencyBlock
-        dataInvocations={{
-          agent_path: "Root",
-          invocations: [
-            {
-              id: "Root:0",
-              started_at: 1,
-              latency_ms: 42,
-              prompt_tokens: null,
-              completion_tokens: null,
-              cost_usd: null,
-              status: "ok",
-            },
-          ],
+      <MetricsValueTable
+        dataSummary={{
+          ...summary,
+          duration_ms: 100,
+          prompt_tokens: 12,
+          completion_tokens: 8,
+          cost: { prompt_tokens: 12, completion_tokens: 8, cost_usd: 0.004 },
+          metrics: { exact_match: 1 },
         }}
+        hashContent="abc123"
       />,
     );
 
-    expect(screen.getByText("42ms")).toBeTruthy();
-    expect(screen.getAllByText("unavailable").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("needs 2+")).toBeTruthy();
+    expect(screen.getByText("latency_ms")).toBeTruthy();
+    expect(screen.getByText("exact_match")).toBeTruthy();
+    expect(screen.getByText("12")).toBeTruthy();
   });
 
   it("shows composite configuration as leaf-owned instead of missing", () => {

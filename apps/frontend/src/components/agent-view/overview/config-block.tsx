@@ -5,12 +5,16 @@ import { RunSummary } from "@/lib/types";
 export interface ConfigBlockProps {
   dataSummary?: unknown;
   summary?: unknown;
-  runId?: string;
+  runId?: string | undefined;
+  flat?: boolean | undefined;
 }
 
 export function ConfigBlock(props: ConfigBlockProps) {
   const summaryParsed = RunSummary.safeParse(props.dataSummary ?? props.summary);
   if (!summaryParsed.success || !props.runId || !summaryParsed.data.root_agent_path) {
+    if (props.flat) {
+      return <span className="text-[12px] text-muted-2">no agent metadata yet</span>;
+    }
     return (
       <PanelCard eyebrow="Configuration" title="not available">
         <span className="text-[12px] text-muted-2">no agent metadata yet</span>
@@ -22,6 +26,7 @@ export function ConfigBlock(props: ConfigBlockProps) {
   const isComposite = meta.data?.kind === "composite";
 
   if (!meta.data) {
+    if (props.flat) return <span className="text-[12px] text-muted-2">loading...</span>;
     return (
       <PanelCard eyebrow="Configuration" title="loading…">
         <span />
@@ -29,6 +34,13 @@ export function ConfigBlock(props: ConfigBlockProps) {
     );
   }
   if (!config) {
+    if (props.flat) {
+      return (
+        <span className="text-[12px] text-muted-2">
+          {isComposite ? "lives on leaf agents" : "no configuration captured"}
+        </span>
+      );
+    }
     return (
       <PanelCard
         eyebrow="Configuration"
@@ -55,20 +67,28 @@ export function ConfigBlock(props: ConfigBlockProps) {
   if (resilience.timeout !== undefined)
     items.push({ label: "timeout", value: `${resilience.timeout}s` });
 
+  const body = (
+    <div className="space-y-3">
+      {items.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+          {items.map((it) => (
+            <Metric key={it.label} label={it.label} value={it.value} />
+          ))}
+        </div>
+      ) : null}
+      <div className={props.flat ? "" : "rounded-md bg-bg-inset px-3 py-2"}>
+        <FieldTree data={config} defaultDepth={2} hideCopy />
+      </div>
+    </div>
+  );
+
+  if (props.flat) {
+    return body;
+  }
+
   return (
     <PanelCard eyebrow="Configuration" title="model + sampling">
-      <div className="space-y-3">
-        {items.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-            {items.map((it) => (
-              <Metric key={it.label} label={it.label} value={it.value} />
-            ))}
-          </div>
-        ) : null}
-        <div className="rounded-md bg-bg-inset px-3 py-2">
-          <FieldTree data={config} defaultDepth={2} hideCopy />
-        </div>
-      </div>
+      {body}
     </PanelCard>
   );
 }
