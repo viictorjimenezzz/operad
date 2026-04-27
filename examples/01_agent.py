@@ -22,6 +22,9 @@ from operad import Configuration, Sequential
 from operad.agents import Parallel, Planner, ReAct, Reasoner
 from operad.agents.reasoning.schemas import Answer, Task
 from operad.core.config import Resilience, Sampling
+from operad.metrics import CostObserver, cost_estimate
+from operad.runtime.observers.base import registry
+from operad.runtime.trace import TraceObserver
 
 from _config import local_config, server_reachable
 from utils import (
@@ -282,6 +285,10 @@ async def main(args: argparse.Namespace) -> None:
         "Input",
         f"question: {request.question}\naudience: {request.audience}",
     )
+    trace_obs = TraceObserver()
+    cost_obs = CostObserver()
+    registry.register(trace_obs)
+    registry.register(cost_obs)
     out = await agent(request)
 
     print_rule("Stage 5 — final report + envelope")
@@ -299,6 +306,32 @@ async def main(args: argparse.Namespace) -> None:
             f"agent.hash_content: {agent.hash_content}"
         ),
     )
+
+    print_rule("Stage 6 — metrics")
+    trace = trace_obs.last()
+    cost_report = cost_estimate(trace) if trace is not None else None
+    registry.unregister(trace_obs)
+    registry.unregister(cost_obs)
+
+    if cost_report is not None:
+        per_step_lines = "\n".join(
+            f"  {s['agent_path']}: "
+            f"prompt={s['prompt_tokens']} compl={s['completion_tokens']} "
+            f"cost=${s['cost_usd']:.6f}"
+            for s in cost_report.per_step
+        )
+        print_panel(
+            "Metrics",
+            (
+                f"latency_ms:        {out.latency_ms:.1f}\n"
+                f"prompt_tokens:     {cost_report.prompt_tokens}\n"
+                f"completion_tokens: {cost_report.completion_tokens}\n"
+                f"cost_usd:          ${cost_report.cost_usd:.6f}\n"
+                f"\nper-step cost breakdown:\n{per_step_lines}"
+            ),
+        )
+    else:
+        print_panel("Metrics", f"latency_ms: {out.latency_ms:.1f}\n(no trace captured)")
 
     if attached:
         host, port = parse_dashboard_target(args.dashboard, default=DEFAULT_DASHBOARD)

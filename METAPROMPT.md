@@ -14,7 +14,7 @@ then follow `AGENTS.md` for repo-wide working rules.
 2. `README.md` - current status, public surface, install, and test commands.
 3. `VISION.md` - architecture, component boundaries, and the library's direction.
 4. `ISSUES.md` - known risks, gaps, and footguns.
-5. Any active task brief in `.conductor/` or `.context/` - scope and acceptance criteria.
+5. Any active task brief in `.conductor/` (e.g. `.conductor/dashboard-redesign/`) — scope and acceptance criteria.
 
 ## Subsystem map
 
