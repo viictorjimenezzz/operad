@@ -1,18 +1,16 @@
-"""Example 3 - training: evolve `config.sampling.temperature` with EvoGradient.
+"""Example 3 - training: optimize a task prompt with OPRO.
 
 What this script illustrates:
 
-* a reference-free metric (length-band) used as the optimisation signal,
-* `EvoGradient` applying typed mutations on a single allowed op
-  (`set_temperature`) and writing the winner back onto the seed in place,
-* live observer output: per-generation candidate proposals, their LLM
-  rationales, metric and judge scores, plus the temperature actually
-  carried into the next generation,
-* `agent.hash_content` shifting once the seed's config has been mutated.
+* a reference-free metric (length-band) used as the optimization signal,
+* `OPROOptimizer` rewriting one task prompt from metric score history,
+* live per-step candidate prompts, their scores, and answer lengths,
+* `agent.hash_content` shifting once the accepted task prompt changes.
 
 Run modes:
 
     uv run python examples/03_training.py
+    uv run python examples/03_training.py --epochs 2 --candidates 3
     uv run python examples/03_training.py --offline
 """
 
@@ -27,13 +25,9 @@ from pydantic import BaseModel, Field
 
 from operad import evaluate
 from operad.agents import Reasoner
-from operad.core.agent import Agent
 from operad.core.config import Resilience, Sampling
-from operad.optim.optimizers.evo import EvoGradient
+from operad.optim.optimizers.opro import OPROAgent, OPROOptimizer
 from operad.runtime import set_limit
-from operad.runtime.events import AlgorithmEvent
-from operad.runtime.observers.base import Event, registry
-from operad.utils.ops import SetTemperature
 
 from _config import local_config, server_reachable
 from utils import (
@@ -53,6 +47,7 @@ _RICH = rich_available()
 _SCRIPT = "03_training"
 DEFAULT_DASHBOARD = "127.0.0.1:7860"
 _TARGET_LO, _TARGET_HI = 200, 450
+_OVER_DECAY = 1500
 
 
 class Question(BaseModel):
@@ -63,31 +58,64 @@ class Answer(BaseModel):
     text: str = Field(default="", description="The answer body.")
 
 
-class _LiveLogger:
-    """Print each generation's candidate detail as soon as it is emitted."""
+class LengthTaskOPRO(OPROAgent):
+    """OPRO agent specialized for the length-band training objective."""
 
-    def __init__(self, seed: Agent[Any, Any]) -> None:
-        self._seed = seed
-        self.history: list[dict[str, Any]] = []
+    role = "You optimize one task prompt for a science question-answering agent."
+    task = (
+        "Propose a replacement task instruction that improves the metric score. "
+        "The metric rewards final answers whose `text` is 200 to 450 characters "
+        "while remaining clear, factual, and useful to a general reader."
+    )
+    rules = OPROAgent.rules + (
+        "Return only the replacement task instruction in `new_value`.",
+        "Prefer explicit brevity controls such as 2-3 sentences or 200-450 characters.",
+        "Do not change the domain; this remains science question answering.",
+    )
+    default_sampling = {"temperature": 0.8, "max_tokens": 1024}
 
-    async def on_event(self, event: Event) -> None:
-        if not isinstance(event, AlgorithmEvent) or event.kind != "generation":
-            return
-        gen_idx = int(event.payload.get("gen_index", -1))
-        scores = [float(s) for s in event.payload.get("population_scores", [])]
-        selected = list(event.payload.get("survivor_indices", []))
-        temp_after = float(self._seed.config.sampling.temperature)
-        print_panel(
-            f"EvoGradient generation {gen_idx}",
-            (
-                f"population_scores: {scores}\n"
-                f"survivor_indices:  {selected}\n"
-                f"seed temperature:  {temp_after:.2f}"
-            ),
+
+def _task_parameter(seed: Any) -> Any:
+    for name, param in seed.named_parameters(recurse=False):
+        if name == "task":
+            return param
+    raise RuntimeError("Reasoner task parameter was not found")
+
+
+def _one_line(value: Any, limit: int = 110) -> str:
+    text = " ".join(str(value).split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
+
+
+def _candidate_body(
+    *,
+    step: int,
+    before_task: str,
+    after_task: str,
+    records: list[dict[str, Any]],
+    history_size: int,
+) -> str:
+    lines = [
+        f"step:          {step}",
+        f"history size:  {history_size}",
+        f"before task:   {_one_line(before_task)}",
+        f"after task:    {_one_line(after_task)}",
+        f"accepted:      {after_task != before_task}",
+        "",
+        "candidates:",
+    ]
+    if not records:
+        lines.append("  (no valid candidates reached evaluation)")
+    for i, record in enumerate(records):
+        selected = "*" if record["task"] == after_task else " "
+        lines.append(
+            f" {selected} #{i} score={record['score']:.3f} "
+            f"lengths={record['lengths']}"
         )
-        self.history.append(
-            {"gen": gen_idx, "selected": selected, "temperature": temp_after}
-        )
+        lines.append(f"      task={_one_line(record['task'])}")
+    return "\n".join(lines)
 
 
 async def main(args: argparse.Namespace) -> None:
@@ -135,7 +163,11 @@ async def main(args: argparse.Namespace) -> None:
     await seed.abuild()
     print_agent_card(seed, title="Seed agent")
 
-    metric = LengthBandMetric(lo=_TARGET_LO, hi=_TARGET_HI, over_decay=300)
+    metric = LengthBandMetric(
+        lo=_TARGET_LO,
+        hi=_TARGET_HI,
+        over_decay=_OVER_DECAY,
+    )
     dataset = [
         (Question(text="Why is the sky blue?"), Answer()),
         (Question(text="What causes ocean tides?"), Answer()),
@@ -153,15 +185,15 @@ async def main(args: argparse.Namespace) -> None:
 
     seed_report = await evaluate(seed, dataset, [metric])
     seed_score = float(seed_report.summary[metric.name])
-    seed_temp = seed.config.sampling.temperature
     seed_hash = seed.hash_content
     sample_question = Question(text="Why is the sky blue?")
     seed_answer = (await seed(sample_question)).response.text
+    seed_task = seed.task
 
     print_panel(
         "Seed evaluation",
         (
-            f"seed temperature:   {seed_temp:.2f}\n"
+            f"seed task:          {_one_line(seed_task)}\n"
             f"seed length:        {len(seed_answer)} chars (target [{_TARGET_LO}, {_TARGET_HI}])\n"
             f"seed score:         {seed_score:.3f}\n"
             f"seed hash:          {seed_hash}\n"
@@ -170,60 +202,101 @@ async def main(args: argparse.Namespace) -> None:
         ),
     )
 
-    print_rule("Stage 2 - EvoGradient (typed temperature mutations)")
-    optimizer = EvoGradient(
-        seed.parameters(),
-        mutations=[
-            SetTemperature(path="", temperature=t)
-            for t in (0.1, 0.3, 0.6, 0.9, 1.2)
-        ],
-        metric=metric,
-        dataset=dataset,
-        population_size=args.branches,
+    print_rule("Stage 2 - OPRO (metric-feedback task rewrites)")
+    task_param = _task_parameter(seed)
+    task_param.momentum_state["opro"] = [(str(task_param.value), seed_score)]
+    candidate_records: list[dict[str, Any]] = []
+    eval_lock = asyncio.Lock()
+
+    async def evaluate_task_candidate(param: Any, candidate: Any) -> float:
+        async with eval_lock:
+            old = param.read()
+            candidate_text = str(candidate)
+            param.write(candidate_text)
+            try:
+                await seed.abuild()
+                report = await evaluate(seed, dataset, [metric])
+                score = float(report.summary[metric.name])
+                lengths = [
+                    len(str((row.get("predicted") or {}).get("text", "")))
+                    for row in report.rows
+                ]
+                candidate_records.append(
+                    {"task": candidate_text, "score": score, "lengths": lengths}
+                )
+                return score
+            finally:
+                param.write(old)
+                await seed.abuild()
+
+    optimizer_cfg = cfg.model_copy(
+        deep=True,
+        update={"sampling": Sampling(temperature=0.8, max_tokens=1024)},
+    )
+
+    async def opro_factory() -> LengthTaskOPRO:
+        return await LengthTaskOPRO(config=optimizer_cfg).abuild()
+
+    optimizer = OPROOptimizer(
+        [task_param],
+        objective_metric=metric,
+        evaluator=evaluate_task_candidate,
+        opro_factory=opro_factory,
+        max_retries=args.candidates,
     )
     print_panel(
         "Optimizer",
         (
             f"class:             {type(optimizer).__name__}\n"
-            "mutations:         set_temperature over [0.1, 0.3, 0.6, 0.9, 1.2]\n"
-            f"generations:       {args.generations}\n"
-            f"population_size:   {args.branches}\n"
-            "selection:         metric-ranked survivors"
+            "parameter:         task\n"
+            f"steps:             {args.epochs}\n"
+            f"candidate retries: {args.candidates}\n"
+            "selection:         accept only candidates that beat history best"
         ),
     )
 
-    print_rule("Stage 3 - fit (live per-generation candidate detail)")
-    logger = _LiveLogger(seed)
-    registry.register(logger)
-    try:
-        async with optimizer.session():
-            for _ in range(args.generations):
-                await optimizer.step()
-    finally:
-        registry.unregister(logger)
+    print_rule("Stage 3 - fit (live per-step candidate detail)")
+    for step in range(args.epochs):
+        before_task = str(task_param.value)
+        start = len(candidate_records)
+        await optimizer.step()
+        await seed.abuild()
+        after_task = str(task_param.value)
+        records = candidate_records[start:]
+        history = task_param.momentum_state.get("opro", [])
+        print_panel(
+            f"OPRO step {step}",
+            _candidate_body(
+                step=step,
+                before_task=before_task,
+                after_task=after_task,
+                records=records,
+                history_size=len(history),
+            ),
+        )
 
     print_rule("Stage 4 - final evaluation")
     final_report = await evaluate(seed, dataset, [metric])
     final_score = float(final_report.summary[metric.name])
-    final_temp = seed.config.sampling.temperature
     final_hash = seed.hash_content
     final_answer = (await seed(sample_question)).response.text
+    final_task = seed.task
     delta = final_score - seed_score
     delta_arrow = "+" if delta >= 0 else ""
 
     print_panel(
         "Result",
         (
-            f"temperature:   {seed_temp:.2f}  ->  {final_temp:.2f}  "
-            f"(delta {final_temp - seed_temp:+.2f})\n"
+            f"task before:   {_one_line(seed_task)}\n"
+            f"task after:    {_one_line(final_task)}\n"
             f"answer length: {len(seed_answer)} chars  ->  {len(final_answer)} chars\n"
             f"score:         {seed_score:.3f}  ->  {final_score:.3f}  "
             f"({delta_arrow}{delta:.3f})\n"
             f"hash:          {seed_hash}\n"
             f"               -> {final_hash}\n"
             f"hash changed:  {seed_hash != final_hash} "
-            f"(only `config.sampling.temperature` was mutated)\n\n"
-            f"sample answer at final temperature:\n  {final_answer[:_TARGET_HI + 50]}"
+            f"(only `task` was optimized)\n\n"
+            f"sample answer after training:\n  {final_answer[:_TARGET_HI + 50]}"
             + ("..." if len(final_answer) > _TARGET_HI + 50 else "")
         ),
     )
@@ -238,8 +311,18 @@ async def main(args: argparse.Namespace) -> None:
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--generations", type=int, default=2)
-    p.add_argument("--branches", type=int, default=4)
+    p.add_argument(
+        "--epochs",
+        type=int,
+        default=2,
+        help="Number of OPRO optimization steps.",
+    )
+    p.add_argument(
+        "--candidates",
+        type=int,
+        default=3,
+        help="Maximum candidate attempts per OPRO step.",
+    )
     p.add_argument(
         "--offline",
         action="store_true",
