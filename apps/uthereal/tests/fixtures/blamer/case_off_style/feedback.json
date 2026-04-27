@@ -1,0 +1,7 @@
+{
+  "desired_behavior": "Use a concise, professional tone without flattery.",
+  "final_answer_critique": "The routing was fine, but the answer is off-style and starts with flattery.",
+  "severity": 0.6,
+  "target_path": null,
+  "trace_id": "fixture"
+}

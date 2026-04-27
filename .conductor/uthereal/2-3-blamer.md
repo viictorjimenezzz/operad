@@ -232,3 +232,14 @@ You author the fixture content. The reviewer will sanity-check.
 (Append discoveries here as you implement. Especially: which heuristics
 in `rules` you tested via offline replay and how robust they were on the
 fixtures.)
+
+- Implemented exact target paths from `KNOWN_LEAF_PATHS`; no dotted aliases
+  were added because the batch-2 API surface names direct runner paths.
+- Offline fixture coverage is structural: wrong route, wrong refusal,
+  off-style direct answer, unresolved citation, and no-fault critique all
+  load and validate deterministically. The live Blamer behavioral test skips
+  until a Blamer LLM cassette is recorded.
+- `Blamer().abuild()` succeeds when run with the locked `gemini` extra
+  installed. The base workspace without that extra cannot build default
+  Gemini-backed agents, which is dependency/environment setup rather than
+  Blamer API behavior.
