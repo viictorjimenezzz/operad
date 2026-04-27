@@ -1,5 +1,6 @@
 import {
   AgentEventsResponse,
+  AgentGraphResponse,
   AgentInvocationDiffResponse,
   AgentInvocationsResponse,
   type AgentInvokeRequest,
@@ -123,6 +124,7 @@ export const dashboardApi = {
   runSummary: (runId: string) => getJson(`/runs/${runId}/summary`, RunSummary),
   runInvocations: (runId: string) => getJson(`/runs/${runId}/invocations`, RunInvocationsResponse),
   runIoGraph: (runId: string) => getJson(`/runs/${runId}/io_graph`, IoGraphResponse),
+  runAgentGraph: (runId: string) => getJson(`/runs/${runId}/agent_graph`, AgentGraphResponse),
   agentInvocations: (runId: string, agentPath: string) =>
     getJson(
       `/runs/${runId}/agent/${encodeURIComponent(agentPath)}/invocations`,

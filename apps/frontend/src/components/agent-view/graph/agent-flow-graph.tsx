@@ -1,0 +1,314 @@
+import { AgentNodeCard } from "@/components/agent-view/graph/agent-node-card";
+import { CompositeFlowNode } from "@/components/agent-view/graph/composite-flow-node";
+import { TypedEdge } from "@/components/agent-view/graph/typed-edge";
+import { layoutAgentFlow } from "@/components/agent-view/graph/agent-flow-layout";
+import { useActiveAgents } from "@/components/agent-view/graph/use-active-agents";
+import { Button, EmptyState, IconButton } from "@/components/ui";
+import { dashboardApi } from "@/lib/api/dashboard";
+import type { AgentGraphResponse } from "@/lib/types";
+import { useUIStore } from "@/stores";
+import { useQueries } from "@tanstack/react-query";
+import {
+  Background,
+  Controls,
+  type Edge,
+  MiniMap,
+  type Node,
+  ReactFlow,
+  ReactFlowProvider,
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
+import { Copy, Maximize2, Minimize2 } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+
+interface AgentFlowGraphProps {
+  agentGraph: AgentGraphResponse;
+  runId: string;
+}
+
+const nodeTypes = { agent: AgentNodeCard, composite: CompositeFlowNode };
+const edgeTypes = { typed: TypedEdge };
+
+function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
+  const selection = useUIStore((s) => s.graphSelection);
+  const setSelection = useUIStore((s) => s.setGraphSelection);
+  const clearSelection = useUIStore((s) => s.clearGraphSelection);
+  const activeAgents = useActiveAgents(runId);
+
+  const composites = useMemo(
+    () => agentGraph.nodes.filter((n) => n.kind === "composite" && n.path !== agentGraph.root),
+    [agentGraph.nodes, agentGraph.root],
+  );
+
+  // Composite-path → expanded? Default: every composite collapsed.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+
+  const toggleComposite = useCallback((path: string) => {
+    setExpanded((curr) => {
+      const next = new Set(curr);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }, []);
+
+  const expandAll = useCallback(() => {
+    setExpanded(new Set(composites.map((c) => c.path)));
+  }, [composites]);
+  const collapseAll = useCallback(() => {
+    setExpanded(new Set());
+  }, []);
+
+  const layout = useMemo(
+    () =>
+      layoutAgentFlow({
+        nodes: agentGraph.nodes,
+        edges: agentGraph.edges,
+        rootPath: agentGraph.root,
+        expanded,
+      }),
+    [agentGraph, expanded],
+  );
+
+  // Per-leaf invocation stats (latency / count).
+  const visibleLeafPaths = useMemo(() => {
+    return layout.nodes
+      .filter((n) => n.kind === "leaf" && !n.hidden)
+      .map((n) => n.path);
+  }, [layout.nodes]);
+
+  const invocationQueries = useQueries({
+    queries: visibleLeafPaths.map((path) => ({
+      queryKey: ["graph", "agent-invocations", runId, path] as const,
+      queryFn: () => dashboardApi.agentInvocations(runId, path),
+      staleTime: 30_000,
+      retry: false,
+    })),
+  });
+
+  const metaQueries = useQueries({
+    queries: visibleLeafPaths.map((path) => ({
+      queryKey: ["graph", "agent-meta", runId, path] as const,
+      queryFn: () => dashboardApi.agentMeta(runId, path),
+      staleTime: 60_000,
+      retry: false,
+    })),
+  });
+
+  const statsByPath = useMemo(() => {
+    const out: Record<
+      string,
+      { invocationCount: number; hashContent: string | null; trainable: boolean }
+    > = {};
+    visibleLeafPaths.forEach((path, i) => {
+      const inv = invocationQueries[i]?.data;
+      const meta = metaQueries[i]?.data;
+      const rows = inv?.invocations ?? [];
+      const last = rows[rows.length - 1] ?? null;
+      out[path] = {
+        invocationCount: rows.length,
+        hashContent: last?.hash_content ?? null,
+        trainable: meta?.trainable_paths ? meta.trainable_paths.length > 0 : false,
+      };
+    });
+    return out;
+  }, [visibleLeafPaths, invocationQueries, metaQueries]);
+
+  const childCounts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const n of agentGraph.nodes) {
+      if (n.parent_path && n.parent_path !== agentGraph.root) {
+        out[n.parent_path] = (out[n.parent_path] ?? 0) + 1;
+      }
+    }
+    return out;
+  }, [agentGraph]);
+
+  const nodes: Node[] = useMemo(() => {
+    const selectedAgentPath =
+      selection?.kind === "edge" ? selection.agentPath : null;
+
+    return layout.nodes
+      .filter((n) => !n.hidden)
+      .map((n) => {
+        const isComposite = n.kind === "composite";
+        const sel = selectedAgentPath === n.path;
+        const dimmed = selectedAgentPath != null && !sel;
+
+        if (isComposite) {
+          return {
+            id: n.path,
+            type: "composite",
+            position: { x: n.x, y: n.y },
+            style: { width: n.width, height: n.height },
+            data: {
+              path: n.path,
+              className: n.className,
+              expanded: n.expanded,
+              selected: sel,
+              dimmed,
+              childCount: childCounts[n.path] ?? 0,
+              onSelect: () =>
+                sel ? clearSelection() : setSelection({ kind: "edge", agentPath: n.path }),
+              onToggle: () => toggleComposite(n.path),
+            },
+          } satisfies Node;
+        }
+        const stats = statsByPath[n.path];
+        return {
+          id: n.path,
+          type: "agent",
+          position: { x: n.x, y: n.y },
+          style: { width: n.width, height: n.height },
+          data: {
+            path: n.path,
+            className: n.className,
+            inputLabel: n.inputLabel,
+            outputLabel: n.outputLabel,
+            selected: sel,
+            dimmed,
+            active: activeAgents.has(n.path),
+            trainable: stats?.trainable ?? false,
+            hashContent: stats?.hashContent ?? null,
+            invocationCount: stats?.invocationCount ?? 0,
+            onSelect: () =>
+              sel ? clearSelection() : setSelection({ kind: "node", nodeKey: n.path }),
+          },
+        } satisfies Node;
+      });
+  }, [
+    layout.nodes,
+    selection,
+    activeAgents,
+    statsByPath,
+    childCounts,
+    toggleComposite,
+    setSelection,
+    clearSelection,
+  ]);
+
+  // Filter and dedupe edges from layout.
+  const visibleEdges = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ caller: string; callee: string; type: string }> = [];
+    for (const e of layout.edges) {
+      if (!e.visible) continue;
+      const key = `${e.caller}::${e.callee}::${e.type}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(e);
+    }
+    return out;
+  }, [layout.edges]);
+
+  const edges: Edge[] = useMemo(() => {
+    const selectedAgentPath = selection?.kind === "edge" ? selection.agentPath : null;
+    return visibleEdges.map((e, i) => {
+      const dimmed =
+        selectedAgentPath != null &&
+        selectedAgentPath !== e.caller &&
+        selectedAgentPath !== e.callee;
+      return {
+        id: `${e.caller}-->${e.callee}-${e.type}-${i}`,
+        source: e.caller,
+        target: e.callee,
+        type: "typed",
+        data: {
+          type: e.type,
+          selected: false,
+          dimmed,
+          active:
+            activeAgents.has(e.caller) &&
+            activeAgents.has(e.callee),
+        },
+      } satisfies Edge;
+    });
+  }, [visibleEdges, selection, activeAgents]);
+
+  const copyMermaid = useCallback(async () => {
+    try {
+      const res = await dashboardApi.graph(runId);
+      await navigator.clipboard.writeText(res.mermaid);
+    } catch {
+      // silent
+    }
+  }, [runId]);
+
+  return (
+    <div className="relative h-full w-full">
+      <div className="absolute right-4 top-4 z-10 flex items-center gap-1 rounded-md border border-border bg-bg-1/95 p-1 shadow-[var(--shadow-card-soft)] backdrop-blur-md">
+        <IconButton
+          aria-label="expand all composites"
+          onClick={expandAll}
+          title="expand all composites"
+          size="sm"
+        >
+          <Maximize2 size={13} />
+        </IconButton>
+        <IconButton
+          aria-label="collapse all composites"
+          onClick={collapseAll}
+          title="collapse all composites"
+          size="sm"
+        >
+          <Minimize2 size={13} />
+        </IconButton>
+        <span className="mx-0.5 h-4 w-px bg-border" />
+        <Button size="sm" variant="ghost" onClick={copyMermaid} className="gap-1.5">
+          <Copy size={12} />
+          mermaid
+        </Button>
+      </div>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        fitView
+        fitViewOptions={{ padding: 0.18, duration: 220 }}
+        panOnDrag
+        zoomOnScroll
+        minZoom={0.2}
+        maxZoom={2.4}
+        proOptions={{ hideAttribution: true }}
+        onPaneClick={() => clearSelection()}
+        nodesDraggable={false}
+        nodesConnectable={false}
+      >
+        <Background color="var(--color-border)" gap={24} />
+        <MiniMap
+          pannable
+          zoomable
+          maskColor="rgba(7, 9, 16, 0.65)"
+          nodeColor={() => "var(--color-bg-3)"}
+          nodeStrokeColor={() => "var(--color-border)"}
+          nodeStrokeWidth={1}
+          style={{
+            background: "var(--color-bg-1)",
+            border: "1px solid var(--color-border)",
+            borderRadius: 6,
+          }}
+        />
+        <Controls
+          showInteractive
+          className="!rounded-md !border-border !bg-bg-1 [&>button]:!border-border [&>button]:!bg-bg-1 [&>button]:!text-muted hover:[&>button]:!bg-bg-3"
+        />
+      </ReactFlow>
+    </div>
+  );
+}
+
+export function AgentFlowGraph({ agentGraph, runId }: AgentFlowGraphProps) {
+  if (!agentGraph || agentGraph.nodes.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <EmptyState title="waiting for first invocation" description="graph not ready yet" />
+      </div>
+    );
+  }
+  return (
+    <ReactFlowProvider>
+      <GraphCanvas agentGraph={agentGraph} runId={runId} />
+    </ReactFlowProvider>
+  );
+}
