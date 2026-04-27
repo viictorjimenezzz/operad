@@ -1,11 +1,10 @@
 import { Shell } from "@/dashboard/Shell";
-import { AgentGroupOverviewTab, AgentGroupPage } from "@/dashboard/pages/AgentGroupPage";
-import {
-  AgentGroupGraphTab,
-  AgentGroupMetricsTab,
-  AgentGroupRunsTab,
-  AgentGroupTrainTab,
-} from "@/dashboard/pages/AgentGroupSubpages";
+import { AgentGroupGraphTab } from "@/dashboard/pages/AgentGroupGraphTab";
+import { AgentGroupMetricsTab } from "@/dashboard/pages/AgentGroupMetricsTab";
+import { AgentGroupOverviewTab } from "@/dashboard/pages/AgentGroupOverviewTab";
+import { AgentGroupPage } from "@/dashboard/pages/AgentGroupPage";
+import { AgentGroupRunsTab } from "@/dashboard/pages/AgentGroupRunsTab";
+import { AgentGroupTrainTab } from "@/dashboard/pages/AgentGroupTrainTab";
 import { AgentsIndexPage } from "@/dashboard/pages/AgentsIndexPage";
 import { AlgorithmsIndexPage } from "@/dashboard/pages/AlgorithmsIndexPage";
 import { BenchmarkDetailPage } from "@/dashboard/pages/BenchmarkDetailPage";
@@ -19,10 +18,10 @@ import { TrainingIndexPage } from "@/dashboard/pages/TrainingIndexPage";
 import { PrimitivesGallery } from "@/dashboard/pages/__dev/PrimitivesGallery";
 import { AgentRunDetailLayout } from "@/dashboard/pages/run-detail/AgentRunDetailLayout";
 import { AlgorithmDetailLayout } from "@/dashboard/pages/run-detail/AlgorithmDetailLayout";
-import { DriftTab } from "@/dashboard/pages/run-detail/DriftTab";
-import { GraphTab } from "@/dashboard/pages/run-detail/GraphTab";
-import { MetricsTab } from "@/dashboard/pages/run-detail/MetricsTab";
-import { OverviewTab } from "@/dashboard/pages/run-detail/OverviewTab";
+import { SingleInvocationDriftTab } from "@/dashboard/pages/run-detail/SingleInvocationDriftTab";
+import { SingleInvocationGraphTab } from "@/dashboard/pages/run-detail/SingleInvocationGraphTab";
+import { SingleInvocationMetricsTab } from "@/dashboard/pages/run-detail/SingleInvocationMetricsTab";
+import { SingleInvocationOverviewTab } from "@/dashboard/pages/run-detail/SingleInvocationOverviewTab";
 import { TrainingDetailLayout } from "@/dashboard/pages/run-detail/TrainingDetailLayout";
 import { Navigate, createBrowserRouter, useRouteError } from "react-router-dom";
 
@@ -51,10 +50,14 @@ export const dashboardRoutes = [
         path: "agents/:hashContent/runs/:runId",
         element: <AgentRunDetailLayout />,
         children: [
-          { index: true, element: <OverviewTab /> },
-          { path: "graph", element: <GraphTab />, errorElement: <GraphRouteErrorBoundary /> },
-          { path: "metrics", element: <MetricsTab /> },
-          { path: "drift", element: <DriftTab /> },
+          { index: true, element: <SingleInvocationOverviewTab /> },
+          {
+            path: "graph",
+            element: <SingleInvocationGraphTab />,
+            errorElement: <GraphRouteErrorBoundary />,
+          },
+          { path: "metrics", element: <SingleInvocationMetricsTab /> },
+          { path: "drift", element: <SingleInvocationDriftTab /> },
         ],
       },
 

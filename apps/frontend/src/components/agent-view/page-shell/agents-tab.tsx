@@ -1,6 +1,8 @@
 import { Button, EmptyState, type RunRow, RunTable, type RunTableColumn } from "@/components/ui";
 import { type ChildRunSummary, useChildren } from "@/hooks/use-children";
+import { SweepSnapshot } from "@/lib/types";
 import { formatDurationMs, truncateMiddle } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
 interface AgentsTabProps {
@@ -72,6 +74,19 @@ export function AgentsTab({
   emptyDescription = "this algorithm has not spawned synthetic children yet; the first algo_emit lands as soon as the algorithm enters its main loop",
 }: AgentsTabProps) {
   const children = useChildren(runId);
+  const sweep = useQuery({
+    queryKey: ["run", "sweep", runId] as const,
+    queryFn: async () => {
+      const response = await fetch(`/runs/${runId}/sweep.json`);
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText} <- /runs/${runId}/sweep.json`);
+      }
+      return SweepSnapshot.parse(await response.json());
+    },
+    enabled:
+      runId.length > 0 && (extraColumns.includes("axisValues") || extraColumns.includes("score")),
+    staleTime: 30_000,
+  });
   const [grouped, setGrouped] = useState(groupBy !== "none");
 
   useEffect(() => {
@@ -80,8 +95,11 @@ export function AgentsTab({
 
   const columns = useMemo(() => buildColumns(extraColumns), [extraColumns]);
   const rows = useMemo(
-    () => (children.data ?? []).map((child) => childToRow(child, extraColumns)),
-    [children.data, extraColumns],
+    () =>
+      (children.data ?? []).map((child, index) =>
+        childToRow(child, extraColumns, index, sweep.data),
+      ),
+    [children.data, extraColumns, sweep.data],
   );
   const groupLabels = useMemo(() => buildGroupLabels(rows), [rows]);
 
@@ -134,10 +152,16 @@ function buildColumns(extraColumns: string[]): RunTableColumn[] {
   return [...defaultColumns, ...extras];
 }
 
-function childToRow(child: ChildRunSummary, extraColumns: string[]): RunRow {
+function childToRow(
+  child: ChildRunSummary,
+  extraColumns: string[],
+  index: number,
+  sweep: SweepSnapshot | undefined,
+): RunRow {
   const hash = childHash(child);
   const className = child.algorithm_class ?? child.root_agent_path?.split(".").at(-1) ?? "Agent";
   const totalTokens = child.prompt_tokens + child.completion_tokens;
+  const sweepCell = sweep?.cells[index] ?? null;
   const fields: RunRow["fields"] = {
     agent: { kind: "text", value: className, mono: true },
     hash: { kind: "hash", value: hash },
@@ -150,7 +174,7 @@ function childToRow(child: ChildRunSummary, extraColumns: string[]): RunRow {
   };
 
   for (const key of extraColumns) {
-    const value = extraField(child, key);
+    const value = extraField(child, key, sweepCell);
     if (value !== null) fields[key] = value;
   }
 
@@ -206,14 +230,23 @@ function childHash(child: ChildRunSummary): string {
   );
 }
 
-function extraField(child: ChildRunSummary, key: string): RunRow["fields"][string] | null {
+function extraField(
+  child: ChildRunSummary,
+  key: string,
+  sweepCell: SweepSnapshot["cells"][number] | null,
+): RunRow["fields"][string] | null {
   if (key === "score") {
-    const score = numberAt(child.metrics, "score") ?? child.algorithm_terminal_score;
-    return { kind: "num", value: score, format: "score" };
+    const score = numberAt(child.metrics, "score") ?? child.algorithm_terminal_score ?? sweepCell?.score;
+    return { kind: "num", value: score ?? null, format: "score" };
   }
   if (key === "axisValues") {
     const values =
-      valueAt(child.metadata, "algorithm_axis_values") ?? valueAt(child, "axis_values");
+      valueAt(child.metadata, "algorithm_axis_values") ??
+      valueAt(child.algorithm_metadata, "algorithm_axis_values") ??
+      valueAt(child.parent_run_metadata, "algorithm_axis_values") ??
+      valueAt(child.metadata, "axis_values") ??
+      valueAt(child, "axis_values") ??
+      sweepCell?.parameters;
     return values == null ? null : { kind: "text", value: shortValue(values), mono: true };
   }
   if (key === "attempt_index") {

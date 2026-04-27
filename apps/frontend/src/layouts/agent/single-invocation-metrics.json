@@ -1,0 +1,25 @@
+{
+  "algorithm": "agent.single-invocation.metrics",
+  "version": 1,
+  "dataSources": {
+    "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "invocations": { "endpoint": "/runs/$context.runId/invocations" }
+  },
+  "spec": {
+    "root": "page",
+    "elements": {
+      "page": {
+        "type": "Stack",
+        "props": { "gap": 16 },
+        "children": ["table"]
+      },
+      "table": {
+        "type": "MetricsValueTable",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "runId": "$context.runId"
+        }
+      }
+    }
+  }
+}

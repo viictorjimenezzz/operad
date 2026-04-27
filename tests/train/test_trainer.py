@@ -316,6 +316,41 @@ async def test_fit_emits_batch_gradient_and_checkpoint_payloads(
     assert isinstance(epoch_end[0].payload["parameter_snapshot"], dict)
 
 
+async def test_traceback_dir_persists_prompt_traceback(
+    cfg: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    leaf = await _built_leaf(cfg)
+    loss = StubLoss(severities=[1.0])
+    opt = StubOptimizer(list(leaf.parameters()))
+    trainer = Trainer(leaf, opt, loss, traceback_dir=tmp_path)
+    monkeypatch.setattr(
+        "operad.train.trainer.backward",
+        _stub_backward_severity_one,
+    )
+
+    col = _AlgoEventCollector()
+    obs_registry.register(col)
+    try:
+        await trainer.fit(_loader(_dataset(n=1)), epochs=1)
+    finally:
+        obs_registry.unregister(col)
+
+    traceback_events = [
+        e
+        for e in col.events
+        if e.algorithm_path == "Trainer"
+        and e.kind == "iteration"
+        and e.payload.get("phase") == "traceback"
+    ]
+    assert traceback_events
+    path = Path(traceback_events[0].payload["path"])
+    assert path.is_file()
+    assert path.parent.parent == tmp_path
+    assert "agent_path" in path.read_text(encoding="utf-8")
+
+
 async def test_validation_runs_when_val_ds_supplied(cfg: Any) -> None:
     leaf = await _built_leaf(cfg)
     loss = StubLoss(scores=[0.7])

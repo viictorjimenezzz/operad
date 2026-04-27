@@ -114,12 +114,25 @@ describe("resolveLayout integration (real layouts/)", () => {
     const selfrefine = resolveLayout("SelfRefine");
 
     expect(beam.dataSources.iterations?.endpoint).toContain("/iterations.json");
-    expect(beam.spec.elements.candidates?.type).toBe("BeamCandidateChart");
-    expect(verifier.spec.elements.curve?.type).toBe("ConvergenceCurve");
-    expect(verifier.spec.elements.progression?.type).toBe("IterationProgression");
-    const refinements = selfrefine.spec.elements["refinements-view"];
-    const refinementProps = refinements?.props as Record<string, unknown> | undefined;
-    expect(refinements?.type).toBe("IterationProgression");
-    expect(refinementProps?.showDiff).toBe(true);
+    expect(beam.spec.elements["candidate-leaderboard"]?.type).toBe("BeamLeaderboard");
+    expect(beam.spec.elements["histogram-view"]?.type).toBe("BeamScoreHistogram");
+    expect(verifier.spec.elements.overview?.type).toBe("VerifierDetailOverview");
+    expect(verifier.spec.elements["iterations-view"]?.type).toBe("VerifierIterations");
+    expect(selfrefine.dataSources.iterations?.endpoint).toContain("/iterations.json");
+    expect(selfrefine.spec.elements.iterations?.type).toBe("IterationLadder");
+    expect(selfrefine.spec.elements["convergence-view"]?.type).toBe("SelfRefineConvergence");
+  });
+
+  it("debate and autoresearcher layouts expose their algorithm-specific tabs", async () => {
+    const { resolveLayout } = await import("./index");
+    const debate = resolveLayout("Debate");
+    const autoResearcher = resolveLayout("AutoResearcher");
+
+    expect(debate.spec.elements.rounds?.type).toBe("DebateRoundsTab");
+    expect(debate.spec.elements.consensus?.type).toBe("DebateConsensusTab");
+    expect(autoResearcher.dataSources.iterations?.endpoint).toContain("/iterations.json");
+    expect(autoResearcher.dataSources.runEvents?.endpoint).toContain("/events");
+    expect(autoResearcher.spec.elements.plan?.type).toBe("AutoResearcherPlanTab");
+    expect(autoResearcher.spec.elements.attempts?.type).toBe("AutoResearcherAttemptsTab");
   });
 });

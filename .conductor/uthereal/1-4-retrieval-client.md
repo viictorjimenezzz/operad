@@ -212,4 +212,11 @@ spinning up a real server. Choose one approach and document it.
 
 ## Notes
 
-(Append discoveries here as you implement.)
+- This checkout does not yet contain the parallel 1-1/1-2 `apps/uthereal`
+  skeleton or vendored schema modules. To keep this slice mergeable without
+  owning schema files, `client.py`, `cassette.py`, and `keys.py` lazy-load
+  `apps_uthereal.schemas.*` at call time and the tests install tiny in-test
+  schema modules.
+- I used a small `httpx.AsyncClient` test double instead of `respx` because
+  `respx` is not present in the root dev dependencies in this checkout. This
+  keeps the tests offline without adding a new dependency.

@@ -7,7 +7,8 @@ export interface BackendBlockProps {
   dataInvocations?: unknown;
   summary?: unknown;
   invocations?: unknown;
-  runId?: string;
+  runId?: string | undefined;
+  flat?: boolean | undefined;
 }
 
 export function BackendBlock(props: BackendBlockProps) {
@@ -27,8 +28,9 @@ export function BackendBlock(props: BackendBlockProps) {
   const backend = lastInv?.backend ?? meta.data?.config?.backend ?? null;
   const model = lastInv?.model ?? meta.data?.config?.model ?? null;
   const renderer = lastInv?.renderer ?? null;
-  const host =
-    (meta.data?.config?.runtime as Record<string, unknown> | null)?.host as string | undefined;
+  const host = (meta.data?.config?.runtime as Record<string, unknown> | null)?.host as
+    | string
+    | undefined;
 
   const sampling = (meta.data?.config?.sampling as Record<string, unknown> | undefined) ?? {};
   const resilience = (meta.data?.config?.resilience as Record<string, unknown> | undefined) ?? {};
@@ -36,47 +38,50 @@ export function BackendBlock(props: BackendBlockProps) {
 
   const empty = !backend && !model && !renderer;
 
+  const title = empty ? (
+    "no backend captured yet"
+  ) : (
+    <span className="font-mono">{[backend, model, renderer].filter(Boolean).join(" · ")}</span>
+  );
+  const body = empty ? null : (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+        {backend ? <Metric label="backend" value={backend} /> : null}
+        {model ? <Metric label="model" value={<span className="font-mono">{model}</span>} /> : null}
+        {renderer ? <Metric label="renderer" value={renderer} /> : null}
+        {host ? <Metric label="host" value={<span className="font-mono">{host}</span>} /> : null}
+      </div>
+      {meta.data ? (
+        <KeyValueGrid
+          density="compact"
+          rows={[
+            { key: "agent path", value: meta.data.agent_path, mono: true },
+            { key: "kind", value: meta.data.kind },
+            ...(backend ? [{ key: "backend", value: backend, mono: true }] : []),
+            ...(model ? [{ key: "model", value: model, mono: true }] : []),
+            ...(host ? [{ key: "host", value: host, mono: true }] : []),
+            ...(renderer ? [{ key: "renderer", value: renderer, mono: true }] : []),
+            ...kvRows(sampling, "sampling"),
+            ...kvRows(resilience, "resilience"),
+            ...kvRows(io, "io"),
+          ]}
+        />
+      ) : null}
+    </div>
+  );
+
+  if (props.flat) {
+    return (
+      <div className="space-y-3">
+        <div className="text-[13px] font-medium text-text">{title}</div>
+        {body}
+      </div>
+    );
+  }
+
   return (
-    <PanelCard
-      eyebrow="Backend"
-      title={
-        empty ? (
-          "no backend captured yet"
-        ) : (
-          <span className="font-mono">{[backend, model, renderer].filter(Boolean).join(" · ")}</span>
-        )
-      }
-    >
-      {empty ? null : (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-            {backend ? <Metric label="backend" value={backend} /> : null}
-            {model ? (
-              <Metric label="model" value={<span className="font-mono">{model}</span>} />
-            ) : null}
-            {renderer ? <Metric label="renderer" value={renderer} /> : null}
-            {host ? (
-              <Metric label="host" value={<span className="font-mono">{host}</span>} />
-            ) : null}
-          </div>
-          {meta.data ? (
-            <KeyValueGrid
-              density="compact"
-              rows={[
-                { key: "agent path", value: meta.data.agent_path, mono: true },
-                { key: "kind", value: meta.data.kind },
-                ...(backend ? [{ key: "backend", value: backend, mono: true }] : []),
-                ...(model ? [{ key: "model", value: model, mono: true }] : []),
-                ...(host ? [{ key: "host", value: host, mono: true }] : []),
-                ...(renderer ? [{ key: "renderer", value: renderer, mono: true }] : []),
-                ...kvRows(sampling, "sampling"),
-                ...kvRows(resilience, "resilience"),
-                ...kvRows(io, "io"),
-              ]}
-            />
-          ) : null}
-        </div>
-      )}
+    <PanelCard eyebrow="Backend" title={title}>
+      {body}
     </PanelCard>
   );
 }

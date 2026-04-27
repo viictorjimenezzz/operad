@@ -18,67 +18,35 @@
         "props": {
           "tabs": [
             { "id": "overview", "label": "Overview" },
-            { "id": "transcript", "label": "Transcript" },
+            { "id": "rounds", "label": "Rounds" },
+            { "id": "consensus", "label": "Consensus" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
             { "id": "graph", "label": "Graph" }
           ]
         },
-        "children": ["overview", "transcript", "agents", "events", "graph"]
+        "children": ["overview", "rounds", "consensus", "agents", "events", "graph"]
       },
 
       "overview": {
-        "type": "Stack",
-        "props": { "gap": 16 },
-        "children": ["overviewSection"]
-      },
-      "overviewSection": {
-        "type": "PanelSection",
-        "props": { "label": "Overview" },
-        "children": ["overviewGrid"]
-      },
-      "overviewGrid": {
-        "type": "PanelGrid",
-        "props": { "cols": 2 },
-        "children": ["meta-card", "rounds-card", "consensus-card"]
-      },
-      "meta-card": {
-        "type": "PanelCard",
-        "props": { "title": "meta" },
-        "children": ["meta", "langfuse"]
-      },
-      "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
-      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
-      "rounds-card": {
-        "type": "PanelCard",
-        "props": { "title": "round scores" },
-        "children": ["rounds"]
+        "type": "DebateDetailOverview",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceDebate": "$queries.debate",
+          "sourceChildren": "$queries.children",
+          "runId": "$context.runId"
+        }
       },
       "rounds": {
-        "type": "DebateRoundView",
-        "props": { "source": "$queries.summary.rounds" }
-      },
-      "consensus-card": {
-        "type": "PanelCard",
-        "props": { "title": "consensus over rounds" },
-        "children": ["consensus"]
+        "type": "DebateRoundsTab",
+        "props": { "source": "$queries.debate" }
       },
       "consensus": {
-        "type": "DebateConsensusTracker",
+        "type": "DebateConsensusTab",
         "props": { "source": "$queries.debate" }
       },
 
-      "transcript": {
-        "type": "PanelCard",
-        "props": { "title": "transcript" },
-        "children": ["transcript-view"]
-      },
-      "transcript-view": {
-        "type": "DebateTranscript",
-        "props": { "source": "$queries.debate" }
-      },
-
-      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
+      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId", "groupBy": "hash" } },
       "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
       "graph": {
         "type": "PanelCard",

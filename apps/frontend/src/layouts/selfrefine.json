@@ -18,78 +18,42 @@
         "props": {
           "tabs": [
             { "id": "overview", "label": "Overview" },
-            { "id": "refinements", "label": "Refinements" },
-            { "id": "reflections", "label": "Reflections" },
+            { "id": "iterations", "label": "Iterations" },
+            { "id": "convergence", "label": "Convergence" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
             { "id": "graph", "label": "Graph" }
           ]
         },
-        "children": ["overview", "refinements", "reflections", "agents", "events", "graph"]
+        "children": ["overview", "iterations", "convergence", "agents", "events", "graph"]
       },
 
       "overview": {
-        "type": "Stack",
-        "props": { "gap": 16 },
-        "children": ["section"]
+        "type": "SelfRefineDetailOverview",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceIterations": "$queries.iterations",
+          "sourceChildren": "$queries.children"
+        }
       },
-      "section": {
-        "type": "PanelSection",
-        "props": { "label": "Overview" },
-        "children": ["grid"]
+      "iterations": {
+        "type": "IterationLadder",
+        "props": {
+          "source": "$queries.iterations",
+          "sourceChildren": "$queries.children"
+        }
       },
-      "grid": {
-        "type": "PanelGrid",
-        "props": { "cols": 2 },
-        "children": ["meta-card", "curve-card", "progression-card"]
-      },
-      "meta-card": {
+      "convergence": {
         "type": "PanelCard",
-        "props": { "title": "meta" },
-        "children": ["meta", "langfuse"]
+        "props": { "title": "convergence", "bodyMinHeight": 320 },
+        "children": ["convergence-view"]
       },
-      "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
-      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
-      "curve-card": {
-        "type": "PanelCard",
-        "props": { "title": "convergence", "bodyMinHeight": 260 },
-        "children": ["curve"]
-      },
-      "curve": {
-        "type": "ConvergenceCurve",
-        "props": { "source": "$queries.iterations", "height": 240 }
-      },
-      "progression-card": {
-        "type": "PanelCard",
-        "props": { "title": "iterations" },
-        "children": ["progression"]
-      },
-      "progression": {
-        "type": "IterationProgression",
-        "props": { "source": "$queries.iterations" }
+      "convergence-view": {
+        "type": "SelfRefineConvergence",
+        "props": { "source": "$queries.iterations", "height": 300 }
       },
 
-      "refinements": {
-        "type": "PanelCard",
-        "props": { "title": "refine cycles" },
-        "children": ["refinements-view"]
-      },
-      "refinements-view": {
-        "type": "IterationProgression",
-        "props": { "source": "$queries.iterations", "phaseFilter": "refine", "showDiff": true }
-      },
-
-      "reflections": {
-        "type": "PanelCard",
-        "props": { "title": "reflection critiques" },
-        "children": ["reflections-view"]
-      },
-      "reflections-view": {
-        "type": "IterationProgression",
-        "props": { "source": "$queries.iterations", "phaseFilter": "reflect" }
-      },
-
-      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
+      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId", "groupBy": "hash" } },
       "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
       "graph": {
         "type": "PanelCard",

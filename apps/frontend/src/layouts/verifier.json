@@ -18,66 +18,31 @@
         "props": {
           "tabs": [
             { "id": "overview", "label": "Overview" },
-            { "id": "feedback", "label": "Verifier feedback" },
+            { "id": "iterations", "label": "Iterations" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
             { "id": "graph", "label": "Graph" }
           ]
         },
-        "children": ["overview", "feedback", "agents", "events", "graph"]
+        "children": ["overview", "iterations", "agents", "events", "graph"]
       },
-
       "overview": {
-        "type": "Stack",
-        "props": { "gap": 16 },
-        "children": ["section"]
+        "type": "VerifierDetailOverview",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceIterations": "$queries.iterations",
+          "runId": "$context.runId"
+        }
       },
-      "section": {
-        "type": "PanelSection",
-        "props": { "label": "Overview" },
-        "children": ["grid"]
-      },
-      "grid": {
-        "type": "PanelGrid",
-        "props": { "cols": 2 },
-        "children": ["meta-card", "curve-card", "progression-card"]
-      },
-      "meta-card": {
+      "iterations": {
         "type": "PanelCard",
-        "props": { "title": "meta" },
-        "children": ["meta", "langfuse"]
+        "props": { "title": "iterations", "bodyMinHeight": 320 },
+        "children": ["iterations-view"]
       },
-      "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
-      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
-      "curve-card": {
-        "type": "PanelCard",
-        "props": { "title": "convergence", "bodyMinHeight": 260 },
-        "children": ["curve"]
-      },
-      "curve": {
-        "type": "ConvergenceCurve",
-        "props": { "source": "$queries.iterations", "height": 240 }
-      },
-      "progression-card": {
-        "type": "PanelCard",
-        "props": { "title": "iterations" },
-        "children": ["progression"]
-      },
-      "progression": {
-        "type": "IterationProgression",
+      "iterations-view": {
+        "type": "VerifierIterations",
         "props": { "source": "$queries.iterations" }
       },
-
-      "feedback": {
-        "type": "PanelCard",
-        "props": { "title": "verifier feedback" },
-        "children": ["feedback-view"]
-      },
-      "feedback-view": {
-        "type": "IterationProgression",
-        "props": { "source": "$queries.iterations", "phaseFilter": "verify" }
-      },
-
       "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
       "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
       "graph": {

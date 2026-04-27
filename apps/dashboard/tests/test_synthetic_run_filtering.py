@@ -128,3 +128,40 @@ def test_algorithm_class_in_summary(app_and_obs) -> None:
     parent = obs.registry.get("parent7")
     assert parent is not None
     assert parent.summary()["algorithm_class"] == "EvoGradient"
+
+
+def test_synthetic_algorithm_child_stays_on_algorithms_rail(app_and_obs) -> None:
+    app, obs = app_and_obs
+    obs.registry.record_envelope(
+        {
+            "type": "algo_event",
+            "run_id": "trainer-parent",
+            "algorithm_path": "Trainer",
+            "kind": "algo_start",
+            "payload": {},
+            "started_at": 1.0,
+            "finished_at": None,
+            "metadata": {},
+        }
+    )
+    obs.registry.record_envelope(
+        {
+            "type": "algo_event",
+            "run_id": "opro-child",
+            "algorithm_path": "OPROOptimizer",
+            "kind": "algo_start",
+            "payload": {},
+            "started_at": 2.0,
+            "finished_at": None,
+            "metadata": {"parent_run_id": "trainer-parent"},
+        }
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/algorithms")
+
+    assert response.status_code == 200
+    groups = response.json()
+    assert groups[0]["class_name"] == "OPROOptimizer"
+    assert groups[0]["runs"][0]["run_id"] == "opro-child"
+    assert groups[0]["runs"][0]["synthetic"] is True

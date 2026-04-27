@@ -1,0 +1,1 @@
+ALTER TABLE runs ADD COLUMN notes_markdown TEXT NOT NULL DEFAULT '';

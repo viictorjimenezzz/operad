@@ -123,7 +123,11 @@ _ALGO_RUN_ID: ContextVar[str | None] = ContextVar("_ALGO_RUN_ID", default=None)
 
 
 @contextmanager
-def _enter_algorithm_run(rid: str | None = None) -> Iterator[str]:
+def _enter_algorithm_run(
+    rid: str | None = None,
+    *,
+    reuse_existing: bool = True,
+) -> Iterator[str]:
     """Reuse the enclosing run_id if one is set; otherwise mint or adopt
     one for the duration of the scope so nested `AgentEvent`s share it.
 
@@ -133,7 +137,7 @@ def _enter_algorithm_run(rid: str | None = None) -> Iterator[str]:
     `Optimizer.session()`) pin a stable id across multiple entries.
     """
     existing = _RUN_ID.get()
-    if existing is not None:
+    if existing is not None and reuse_existing:
         yield existing
         return
     rid = rid or uuid4().hex
@@ -162,6 +166,7 @@ async def emit_algorithm_event(
     payload: dict[str, Any],
     started_at: float | None = None,
     finished_at: float | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> None:
     """Fire one `AlgorithmEvent` on the global registry using the current run_id.
 
@@ -176,5 +181,6 @@ async def emit_algorithm_event(
             payload=payload,
             started_at=started_at if started_at is not None else now,
             finished_at=finished_at,
+            metadata=dict(metadata or {}),
         )
     )

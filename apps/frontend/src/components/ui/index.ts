@@ -68,6 +68,8 @@ export type {
   MultiSeriesPoint,
   MultiSeriesChartProps,
 } from "@/components/ui/multi-series-chart";
+export { MetricSeriesChart } from "@/components/ui/metric-series-chart";
+export type { MetricSeriesChartProps } from "@/components/ui/metric-series-chart";
 export { StatusDot } from "@/components/ui/status-dot";
 export type { StatusDotProps, StatusDotState } from "@/components/ui/status-dot";
 export { Breadcrumb } from "@/components/ui/breadcrumb";

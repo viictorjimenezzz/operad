@@ -180,6 +180,18 @@ export const RunSummary = z.object({
   synthetic: z.boolean().default(false),
   parent_run_id: stringOrNull.default(null),
   algorithm_class: stringOrNull.default(null),
+  metrics: z.record(z.number()).optional(),
+  notes_markdown: z.string().optional(),
+  hash_content: stringOrNull.optional(),
+  hash_model: stringOrNull.optional(),
+  hash_prompt: stringOrNull.optional(),
+  hash_graph: stringOrNull.optional(),
+  hash_input: stringOrNull.optional(),
+  hash_output_schema: stringOrNull.optional(),
+  hash_config: stringOrNull.optional(),
+  backend: stringOrNull.optional(),
+  model: stringOrNull.optional(),
+  sampling: z.record(z.unknown()).optional(),
 });
 export type RunSummary = z.infer<typeof RunSummary>;
 
@@ -624,6 +636,40 @@ export const AgentParametersResponse = z.object({
 });
 export type AgentParametersResponse = z.infer<typeof AgentParametersResponse>;
 
+export const AgentGroupMetricsResponse = z.object({
+  hash_content: z.string(),
+  metrics: z.record(
+    z.object({
+      unit: stringOrNull.default(null),
+      series: z
+        .array(
+          z.object({
+            run_id: z.string(),
+            started_at: z.number(),
+            value: z.number().nullable(),
+          }),
+        )
+        .default([]),
+    }),
+  ),
+});
+export type AgentGroupMetricsResponse = z.infer<typeof AgentGroupMetricsResponse>;
+
+export const AgentGroupParametersResponse = z.object({
+  hash_content: z.string(),
+  paths: z.array(z.string()).default([]),
+  series: z
+    .array(
+      z.object({
+        run_id: z.string(),
+        started_at: z.number(),
+        values: z.record(z.object({ value: z.unknown(), hash: z.string() })).default({}),
+      }),
+    )
+    .default([]),
+});
+export type AgentGroupParametersResponse = z.infer<typeof AgentGroupParametersResponse>;
+
 export const AgentDiffChange = z.object({
   path: z.string(),
   kind: z.string(),
@@ -860,6 +906,7 @@ export const AgentGroupSummary = z.object({
   cost_usd: z.number().default(0),
   run_ids: z.array(z.string()).default([]),
   is_trainer: z.boolean().default(false),
+  notes_markdown_count: z.number().default(0),
 });
 export type AgentGroupSummary = z.infer<typeof AgentGroupSummary>;
 
@@ -877,9 +924,17 @@ export const AgentGroupDetail = z.object({
   completion_tokens: z.number().default(0),
   cost_usd: z.number().default(0),
   is_trainer: z.boolean().default(false),
+  notes_markdown_count: z.number().default(0),
   runs: z.array(RunSummary).default([]),
 });
 export type AgentGroupDetail = z.infer<typeof AgentGroupDetail>;
+
+export const RunNotesResponse = z.object({
+  run_id: z.string(),
+  notes_markdown: z.string(),
+  updated_at: z.number(),
+});
+export type RunNotesResponse = z.infer<typeof RunNotesResponse>;
 
 export const AlgorithmGroup = z.object({
   algorithm_path: z.string(),
@@ -912,6 +967,7 @@ export const Manifest = z.object({
   mode: z.enum(["dashboard", "studio", "development", "production"]),
   langfuseUrl: z.string().nullable().optional(),
   allowExperiment: z.boolean().optional().default(false),
+  cassetteMode: z.boolean().optional().default(false),
   dashboardPort: z.number().nullable().optional(),
   dataDir: z.string().optional(),
   version: z.string().optional(),

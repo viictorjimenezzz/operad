@@ -15,6 +15,8 @@ from operad.optim.optimizers.opro import (
     OPROOutput,
 )
 from operad.optim.parameter import TextParameter
+from operad.runtime.events import AlgorithmEvent
+from operad.runtime.observers import registry as obs_registry
 from tests._helpers.fake_leaf import A, B, FakeLeaf
 
 
@@ -59,7 +61,7 @@ async def _built_opro(cfg: Any, canned: list[str]) -> StubOPROAgent:
 
 
 async def test_accepts_first_candidate_when_history_empty(cfg: Any) -> None:
-    leaf, p = _make_role_param(cfg, "start")
+    _leaf, p = _make_role_param(cfg, "start")
     opro = await _built_opro(cfg, ["cand-1"])
     scores = {"cand-1": 0.5}
 
@@ -158,3 +160,39 @@ async def test_history_truncates_to_k(cfg: Any) -> None:
     history = p.momentum_state["opro"]
     # 5 prior + 1 new = 6 total, truncated to history_k=3.
     assert [v for v, _ in history] == ["v3", "v4", "new-1"]
+
+
+async def test_opro_session_emits_algorithm_events(cfg: Any) -> None:
+    _leaf, p = _make_role_param(cfg, "start")
+    opro = await _built_opro(cfg, ["cand-1"])
+    events: list[AlgorithmEvent] = []
+
+    class _Collector:
+        async def on_event(self, event: object) -> None:
+            if isinstance(event, AlgorithmEvent):
+                events.append(event)
+
+    async def evaluator(param: TextParameter, candidate: str) -> float:
+        return 0.8
+
+    opt = OPROOptimizer(
+        [p],
+        objective_metric=_DummyMetric(),
+        evaluator=evaluator,
+        opro_factory=lambda: opro,
+    )
+    obs_registry.clear()
+    obs_registry.register(_Collector())
+    try:
+        async with opt.session():
+            await opt.step()
+    finally:
+        obs_registry.clear()
+
+    kinds = [event.kind for event in events]
+    assert kinds == ["algo_start", "iteration", "iteration", "algo_end"]
+    assert events[1].payload["phase"] == "propose"
+    assert events[2].payload["phase"] == "evaluate"
+    assert events[2].payload["accepted"] is True
+    assert len({event.run_id for event in events}) == 1
+    assert events[-1].payload["final_values"] == {"role": "cand-1"}
