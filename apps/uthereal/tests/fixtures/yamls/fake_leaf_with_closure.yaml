@@ -1,0 +1,16 @@
+agent_name: FakeLeaf
+config:
+  llm_tier: "fast"
+prompt:
+  role: "You are a closure tester."
+  task: |
+    Do closure-sensitive things.
+  rules:
+    - "Keep the closure separate on dump."
+  examples:
+    - input: "<question>What is closure?</question>"
+      output:
+        answer: "A trailing output section."
+  closure: |
+    Return an answer field.
+    Do not include extra keys.

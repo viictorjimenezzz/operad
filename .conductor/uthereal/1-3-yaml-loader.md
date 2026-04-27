@@ -221,4 +221,11 @@ class FakeLeaf(Agent[FakeLeafIn, FakeLeafOut]):
 
 ## Notes
 
-(Append discoveries here as you implement.)
+- This checkout did not yet contain the task 1-1 `apps/uthereal/`
+  scaffold, `apps_uthereal.errors`, or `apps_uthereal.tiers`. The loader
+  imports those modules when present and uses narrow local fallbacks only
+  when they are absent, so the integrated branch should naturally prefer
+  the scaffold-owned implementations.
+- The root project in this checkout did not declare `ruamel.yaml`, though
+  the contract requires it. Verification was run with `uv run --with
+  ruamel.yaml ...`.
