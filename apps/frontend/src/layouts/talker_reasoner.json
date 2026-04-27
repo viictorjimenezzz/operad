@@ -3,6 +3,7 @@
   "version": 1,
   "dataSources": {
     "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "events": { "endpoint": "/runs/$context.runId/events?limit=1000" },
     "children": { "endpoint": "/runs/$context.runId/children" },
     "graph": { "endpoint": "/graph/$context.runId" }
   },
@@ -15,41 +16,46 @@
           "tabs": [
             { "id": "overview", "label": "Overview" },
             { "id": "tree", "label": "Tree" },
+            { "id": "transcript", "label": "Transcript" },
+            { "id": "decisions", "label": "Decisions" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
             { "id": "graph", "label": "Graph" }
           ]
         },
-        "children": ["overview", "tree", "agents", "events", "graph"]
+        "children": ["overview", "tree", "transcript", "decisions", "agents", "events", "graph"]
       },
       "overview": {
-        "type": "PanelCard",
+        "type": "TalkerDetailOverview",
         "props": {
-          "title": "TalkerReasoner overview",
-          "bodyMinHeight": 220
-        },
-        "children": ["overview-empty"]
-      },
-      "overview-empty": {
-        "type": "EmptyState",
-        "props": {
-          "title": "overview pending",
-          "description": "TalkerReasoner-specific overview panels are owned by Brief 09"
+          "sourceSummary": "$queries.summary",
+          "sourceEvents": "$queries.events"
         }
       },
       "tree": {
-        "type": "PanelCard",
-        "props": { "title": "scenario tree", "bodyMinHeight": 320 },
-        "children": ["tree-empty"]
-      },
-      "tree-empty": {
-        "type": "EmptyState",
+        "type": "TalkerTreeTab",
         "props": {
-          "title": "tree view pending",
-          "description": "interactive scenario-tree rendering is owned by Brief 09"
+          "sourceSummary": "$queries.summary",
+          "sourceEvents": "$queries.events"
         }
       },
-      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
+      "transcript": {
+        "type": "TranscriptView",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceEvents": "$queries.events"
+        }
+      },
+      "decisions": {
+        "type": "DecisionsView",
+        "props": {
+          "runId": "$context.runId",
+          "sourceSummary": "$queries.summary",
+          "sourceEvents": "$queries.events",
+          "sourceChildren": "$queries.children"
+        }
+      },
+      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId", "groupBy": "hash" } },
       "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
       "graph": {
         "type": "PanelCard",

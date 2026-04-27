@@ -11,6 +11,7 @@
       "endpoint": "/runs/$context.runId/mutations.json",
       "stream": "/runs/$context.runId/mutations.sse"
     },
+    "events": { "endpoint": "/runs/$context.runId/events?limit=1000" },
     "children": { "endpoint": "/runs/$context.runId/children" },
     "graph": { "endpoint": "/graph/$context.runId" }
   },
@@ -23,142 +24,84 @@
           "tabs": [
             { "id": "overview", "label": "Overview" },
             { "id": "evolution", "label": "Evolution" },
+            { "id": "population", "label": "Population" },
+            { "id": "operators", "label": "Operators" },
+            { "id": "lineage", "label": "Lineage" },
+            { "id": "best-diff", "label": "Best diff" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
             { "id": "graph", "label": "Graph" }
           ]
         },
-        "children": ["overview", "evolution", "agents", "events", "graph"]
+        "children": [
+          "overview",
+          "evolution",
+          "population",
+          "operators",
+          "lineage",
+          "best-diff",
+          "agents",
+          "events",
+          "graph"
+        ]
       },
       "overview": {
-        "type": "Stack",
-        "props": { "gap": 16 },
-        "children": ["kpiSection", "fitnessSection"]
-      },
-      "kpiSection": {
-        "type": "PanelSection",
-        "props": { "label": "Summary" },
-        "children": ["kpis"]
-      },
-      "kpis": {
-        "type": "PanelGrid",
-        "props": { "cols": 4, "gap": "md" },
-        "children": ["k-events-card", "k-tokens-card", "k-cost-card", "k-score-card"]
-      },
-      "k-events-card": {
-        "type": "PanelCard",
-        "props": { "eyebrow": "Events", "surface": "inset", "bare": true },
-        "children": ["k-events"]
-      },
-      "k-events": {
-        "type": "KPI",
-        "props": { "label": "events", "source": "$queries.summary.event_total", "format": "int" }
-      },
-      "k-tokens-card": {
-        "type": "PanelCard",
-        "props": { "eyebrow": "Tokens", "surface": "inset", "bare": true },
-        "children": ["k-tokens"]
-      },
-      "k-tokens": {
-        "type": "KPI",
+        "type": "EvoDetailOverview",
         "props": {
-          "label": "tokens",
-          "source": "$queries.summary.prompt_tokens",
-          "format": "tokens"
+          "sourceSummary": "$queries.summary",
+          "sourceFitness": "$queries.fitness",
+          "sourceMutations": "$queries.mutations",
+          "sourceEvents": "$queries.events"
         }
       },
-      "k-cost-card": {
-        "type": "PanelCard",
-        "props": { "eyebrow": "Cost", "surface": "inset", "bare": true },
-        "children": ["k-cost"]
-      },
-      "k-cost": {
-        "type": "KPI",
-        "props": { "label": "cost", "source": "$queries.summary.cost.cost_usd", "format": "cost" }
-      },
-      "k-score-card": {
-        "type": "PanelCard",
-        "props": { "eyebrow": "Best", "surface": "inset", "bare": true },
-        "children": ["k-score"]
-      },
-      "k-score": {
-        "type": "KPI",
-        "props": {
-          "label": "best",
-          "source": "$queries.summary.algorithm_terminal_score",
-          "format": "number"
-        }
-      },
-      "fitnessSection": {
-        "type": "PanelSection",
-        "props": { "label": "Fitness" },
-        "children": ["fitnessGrid"]
-      },
-      "fitnessGrid": {
-        "type": "PanelGrid",
-        "props": { "cols": 2 },
-        "children": ["fitness-card", "meta-card"]
-      },
-      "fitness-card": {
-        "type": "PanelCard",
-        "props": { "title": "fitness", "bodyMinHeight": 260 },
-        "children": ["fitness"]
-      },
-      "fitness": {
-        "type": "FitnessCurve",
-        "props": { "source": "$queries.fitness", "height": 240 }
-      },
-      "meta-card": {
-        "type": "PanelCard",
-        "props": { "title": "meta" },
-        "children": ["meta", "langfuse"]
-      },
-      "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
-      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
-
       "evolution": {
-        "type": "Stack",
-        "props": { "gap": 16 },
-        "children": ["popSection", "opsSection"]
+        "type": "EvoEvolutionTab",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceFitness": "$queries.fitness",
+          "sourceEvents": "$queries.events"
+        }
       },
-      "popSection": {
-        "type": "PanelSection",
-        "props": { "label": "Population" },
-        "children": ["scatter-card"]
+      "population": {
+        "type": "EvoPopulationTab",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceFitness": "$queries.fitness",
+          "sourceEvents": "$queries.events"
+        }
       },
-      "scatter-card": {
-        "type": "PanelCard",
-        "props": { "title": "population", "bodyMinHeight": 240 },
-        "children": ["scatter"]
+      "operators": {
+        "type": "EvoOperatorsTab",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceMutations": "$queries.mutations",
+          "sourceEvents": "$queries.events"
+        }
       },
-      "scatter": {
-        "type": "PopulationScatter",
-        "props": { "source": "$queries.fitness", "height": 220 }
+      "lineage": {
+        "type": "EvoLineageTab",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceFitness": "$queries.fitness",
+          "sourceEvents": "$queries.events"
+        }
       },
-      "opsSection": {
-        "type": "PanelSection",
-        "props": { "label": "Mutation operators" },
-        "children": ["opsGrid"]
+      "best-diff": {
+        "type": "EvoBestDiffTab",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceFitness": "$queries.fitness",
+          "sourceEvents": "$queries.events"
+        }
       },
-      "opsGrid": {
-        "type": "PanelGrid",
-        "props": { "cols": 2 },
-        "children": ["ops-card", "heat-card"]
+      "agents": {
+        "type": "AgentsTab",
+        "props": {
+          "runId": "$context.runId",
+          "groupBy": "hash",
+          "extraColumns": ["gen", "individual_id"]
+        }
       },
-      "ops-card": {
-        "type": "PanelCard",
-        "props": { "title": "operator success" },
-        "children": ["ops-table"]
-      },
-      "ops-table": { "type": "OpSuccessTable", "props": { "source": "$queries.mutations" } },
-      "heat-card": {
-        "type": "PanelCard",
-        "props": { "title": "per-op success rate per generation" },
-        "children": ["heat"]
-      },
-      "heat": { "type": "MutationHeatmap", "props": { "source": "$queries.mutations" } },
-
-      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
       "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
       "graph": {
         "type": "PanelCard",
@@ -167,7 +110,10 @@
       },
       "graph-view": {
         "type": "AgentGraph",
-        "props": { "source": "$queries.graph", "sourceMutations": "$queries.mutations" }
+        "props": {
+          "source": "$queries.graph",
+          "sourceMutations": "$queries.mutations"
+        }
       }
     }
   }
