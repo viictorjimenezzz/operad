@@ -137,4 +137,17 @@ later commands import from when not yet implemented.
 
 ## Notes
 
-(Append discoveries here as you implement.)
+- The task file says `apps_uthereal/__init__.py` should expose only
+  `__version__`, but the acceptance command imports
+  `tier_to_config` from the package root. I exported only
+  `tier_to_config` in addition to `__version__` so the acceptance
+  command works.
+- The task requires all six CLI subcommands to exist now, but per-command
+  modules would belong to later task owners. I kept the frozen parser
+  structure in `cli.py` and left `commands/` ready for later modules to
+  be discovered by importlib without creating later-owned files.
+- `operad.Configuration` validates Gemini auth at construction time. To
+  keep offline tests and the smoke-import command independent of a local
+  `GOOGLE_API_KEY`, `tier_to_config` inserts a placeholder API key only
+  when neither `GOOGLE_API_KEY` nor `GOOGLE_VERTEX_AI_SERVICE_ACCOUNT`
+  is present.
