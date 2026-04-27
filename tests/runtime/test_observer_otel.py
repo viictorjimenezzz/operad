@@ -24,6 +24,7 @@ from opentelemetry.trace import StatusCode
 from operad import Agent, Sequential
 from operad.runtime.observers import AgentEvent, OtelObserver
 from operad.runtime.observers import registry as obs_registry
+from operad.runtime.observers.base import _RUN_ID
 
 from ..conftest import A, B, C, FakeLeaf
 
@@ -166,7 +167,7 @@ async def test_chunk_counter_direct() -> None:
             )
         )
     # The span is live; we can read its recorded attribute set after end.
-    span = obs._spans[("r1", "X")]
+    span = obs._spans[("r1", "X", "")]
     await obs.on_event(
         AgentEvent(
             run_id="r1",
@@ -198,6 +199,30 @@ async def test_concurrent_runs_keyed_by_run_id(cfg, exporter) -> None:
     assert len(spans) == 2
     run_ids = {_attrs(s)["operad.run_id"] for s in spans}
     assert len(run_ids) == 2
+
+
+async def test_concurrent_same_run_and_path_do_not_collide(cfg, exporter) -> None:
+    class SlowLeaf(Agent[A, B]):
+        input = A
+        output = B
+
+        async def forward(self, x: A) -> B:  # type: ignore[override]
+            await asyncio.sleep(0.01)
+            return B(value=1)
+
+    leaf = await SlowLeaf(config=cfg, input=A, output=B).abuild()
+    obs_registry.register(OtelObserver())
+
+    tok = _RUN_ID.set("d" * 32)
+    try:
+        await asyncio.gather(leaf(A(text="x")), leaf(A(text="y")))
+    finally:
+        _RUN_ID.reset(tok)
+
+    spans = exporter.get_finished_spans()
+    assert len(spans) == 2
+    run_ids = {_attrs(s)["operad.run_id"] for s in spans}
+    assert run_ids == {"d" * 32}
 
 
 async def test_root_span_trace_id_matches_run_id(cfg, exporter) -> None:
