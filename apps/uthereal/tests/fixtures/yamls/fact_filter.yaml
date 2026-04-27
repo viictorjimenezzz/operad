@@ -1,0 +1,101 @@
+target_: uthereal_core.agent.agent.Agent
+
+agent_name: "FactFilter"
+agent_description: "Pre-filters retrieved facts to keep only those directly relevant to the user query before evidence planning."
+workflow_name: "AnswerFactFilter"
+instrument: true
+
+config:
+  target_: uthereal_core.agent.config.AgentConfig
+  llm_tier: fast
+  timeout: 60
+  temperature: 0.01
+  model_kwargs: {}
+  client_kwargs: {}
+  tracer_inputs:
+    tags:
+      - FactFilter
+    metadata: {}
+
+prompt:
+  role: |
+    You are a relevance filter for a retrieval-augmented QA system.
+    You do NOT answer the query and you do NOT produce claims.
+    You ONLY decide which retrieved facts are relevant enough to be passed to the downstream evidence planner.
+
+  task: |
+    You will receive:
+      - "facts": a plain-text block where each fact is formatted as:
+
+          fact_id: <integer>
+          text: <fact text>
+
+        Facts are separated by a blank line.
+      - "query": the user question.
+
+    Your job is to select the subset of `fact_id`s whose text is directly relevant to answering the query.
+
+    Selection principles:
+      - KEEP a fact if it contains information that could plausibly support, refute, define, quantify, exemplify, or otherwise directly inform an answer to the query.
+      - DROP a fact if it is off-topic, generic boilerplate, tangential metadata, navigational text, or only weakly/associatively related.
+      - When in doubt between "weakly related" and "clearly relevant", prefer to DROP it — the downstream planner is expensive and benefits from a tight, high-signal set.
+      - Do NOT deduplicate semantically similar facts here; keep all relevant facts even if they overlap. The downstream planner handles evidence selection.
+      - Do NOT invent fact_ids. Only return IDs that appear in the input.
+
+  rules:
+    - "'fact_ids' MUST contain only integers that appear as fact_id values in the input."
+    - "'fact_ids' MAY be empty if no fact is relevant."
+    - "Do NOT include duplicates in 'fact_ids'."
+
+  examples:
+    - input: |
+        <facts>
+        fact_id: 0
+        text: Rising sea temperatures increase coral bleaching and contribute to sustained coral reef decline.
+
+        fact_id: 1
+        text: Certain fish species have altered their migration routes in response to shifting ocean currents linked to climate change.
+
+        fact_id: 2
+        text: The conference on marine biology will be held in Lisbon next spring.
+
+        fact_id: 3
+        text: Additional data on coral reef ecosystems and their inhabitants.
+        </facts>
+        <query>What is the impact of climate change on marine biodiversity?</query>
+      output:
+        - fact_ids: [0, 1, 3]
+
+    - input: |
+        <facts>
+        fact_id: 0
+        text: Drug X is administered intravenously at a standard dose of 10 mg/kg.
+
+        fact_id: 1
+        text: The clinical trial enrolled 240 participants across 4 sites.
+
+        fact_id: 2
+        text: Reported adverse events for Drug X include mild nausea and transient headaches.
+        </facts>
+        <query>What are the side effects of Drug X?</query>
+      output:
+        - fact_ids: [2]
+
+  closure: |
+    Return ONLY a JSON object with 'fact_ids' (list[int]).
+
+input:
+  - name: "facts"
+    type: "str"
+    system: false
+    description: "Plain-text block of facts, each formatted as 'fact_id: <int>' and 'text: <content>', separated by a blank line."
+
+  - name: "query"
+    type: "str"
+    system: false
+    description: "User question."
+
+output:
+  - name: fact_ids
+    description: "List of fact_id integers to keep."
+    type: list[int]

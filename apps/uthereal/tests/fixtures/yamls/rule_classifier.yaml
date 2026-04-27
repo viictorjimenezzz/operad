@@ -1,0 +1,71 @@
+agent_name: RuleClassifier
+
+config:
+  llm_tier: "fast"
+  model_kwargs: {}
+  client_kwargs: null
+  tracer_inputs:
+    tags:
+    - RuleClassifier
+    metadata: {}
+
+input:
+  - name: rules_list
+    description: "A list of available rules. Each rule has an 'id', 'intent_description'."
+    type: str
+  - name: query
+    description: "The actual natural language input from the user."
+    type: str
+
+output:
+  - name: reason
+    description: reason field
+    type: str
+  - name: rule_ids
+    description: "List of rule IDs that match the query."
+    type: list[str]
+
+prompt:
+  role: >
+    You are a Semantic Routing Engine. Your goal is to map a user 'query' to the most
+    appropriate 'rule' (or rules) from a provided list based on its 'intent_description'.
+
+  task: >
+    Analyze the user's intent and compare it against the 'rules_list'.
+    Select the minimal subset of rules that best match the underlying goal of the query.
+
+  rules:
+    - "EXACT MATCH PRIORITY: If a query explicitly mentions terms defined in a rule's intent, prioritize that rule."
+    - "SEMANTIC MAPPING: If no exact match exists, use the 'intent_description' to find the closest conceptual match."
+    - "MINIMAL SUBSET: Prefer selecting a single best rule. Only select multiple rules if the query distinctly covers multiple disparate intents/topics."
+    - "CONFIDENCE THRESHOLD: Only match a rule when the query expresses a clear, identifiable intent that aligns with the rule's 'intent_description'."
+    - "FALLBACK: If the query is completely unrelated to any rule OR too vague/underspecified to determine a specific intent, return an empty list for 'rule_ids' and explain why. Generic words like 'help', 'hi', or 'question' do not carry enough signal to match any rule."
+    - "AMBIGUITY: If two rules are equally likely but cover the same intent, choose the one with the most specific 'intent_description'."
+    - "OUTPUT FORMAT: Return a JSON object with 'rule_ids' (list[str]) and 'reasoning' (str)."
+
+examples:
+  - input: |
+      <rules_list>
+        [
+          {"id": "R-001",  "intent_description": "User wants to get their money back for a purchase"},
+          {"id": "R-002",  "intent_description": "User is experiencing errors, bugs, or login issues"}
+        ]
+      </rules_list>
+      <query>I can't access my account, it says wrong password.</query>
+    output:
+      - reasoning : "The query mentions a login issue ('wrong password'), which directly maps to the Technical Support intent."
+      - rule_ids : ["R-002"]
+  - input: |
+      <rules_list>
+        [
+          {"id": "R-001",  "intent_description": "Security best practices"},
+          {"id": "R-002",  "intent_description": "Performance optimization tips"},
+          {"id": "R-003",  "intent_description": "Database schema design"}
+        ]
+      </rules_list>
+      <query>How do I secure my database and make it faster?</query>
+    output:
+      - reasoning: "The query explicitly asks for both security ('secure my database') and performance ('make it faster')."
+      - rule_ids: ["R-001", "R-002"]
+
+closure: "Return a object with 'reasoning' and 'rule_ids' based on the analysis."

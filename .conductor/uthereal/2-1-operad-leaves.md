@@ -181,3 +181,10 @@ fixtures.
 (Append discoveries here as you implement. Particularly: any YAMLs
 whose `input:` block doesn't cleanly map to a Pydantic schema field,
 and how you resolved that.)
+
+- `retrieval/agents/agent_talker.yaml` contains Jinja block directives
+  under `prompt.examples` (`[% for ... %]`, `[% if ... %]`) that are not
+  valid plain YAML until rendered by uthereal's current `RAGPipelineState`.
+  The test fixture comments only those control lines so `load_yaml` can
+  parse the concrete fallback example without introducing a new templating
+  dependency in this task.
