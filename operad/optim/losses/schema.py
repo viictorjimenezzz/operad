@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ValidationError
 
-from operad.metrics.base import MetricBase
+from operad.metrics.metric import MetricBase
 from operad.optim.losses.loss import _clamp01
 from operad.optim.parameter import TextualGradient
 

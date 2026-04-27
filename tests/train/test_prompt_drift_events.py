@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from operad.benchmark.dataset import Dataset
 from operad.benchmark.entry import Entry
 from operad.data.loader import DataLoader
-from operad.metrics.base import MetricBase
+from operad.metrics.metric import MetricBase
 from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import Parameter, TextualGradient
 from operad.runtime.events import AlgorithmEvent

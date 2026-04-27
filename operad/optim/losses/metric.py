@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 from pydantic import BaseModel
 
-from operad.metrics.base import Metric, MetricBase
+from operad.metrics.metric import Metric, MetricBase
 from operad.optim.losses.loss import _clamp01
 from operad.optim.parameter import TextualGradient
 

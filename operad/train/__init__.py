@@ -13,14 +13,13 @@ from .callbacks import (
     Callback,
     Curriculum,
     EarlyStopping,
-    EarlyStoppingSpec,
     GradClip,
     HumanFeedbackCallback,
-    LearningRateLogger,
+    LRLogger,
     MemoryRotation,
     PromptDrift,
+    TracebackOnFailure,
 )
-from .losses_hf import HumanFeedbackLoss
 from .progress import TrainerProgressObserver
 from .report import EpochReport, TrainingReport
 from .trainer import Trainer
@@ -31,14 +30,13 @@ __all__ = [
     "Callback",
     "Curriculum",
     "EarlyStopping",
-    "EarlyStoppingSpec",
     "EpochReport",
     "GradClip",
     "HumanFeedbackCallback",
-    "HumanFeedbackLoss",
-    "LearningRateLogger",
+    "LRLogger",
     "MemoryRotation",
     "PromptDrift",
+    "TracebackOnFailure",
     "Trainer",
     "TrainerProgressObserver",
     "TrainingReport",

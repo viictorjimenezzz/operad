@@ -18,7 +18,7 @@ from pydantic import BaseModel
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent / "apps" / "demos" / "agent_evolution"))
 
 from operad import Agent
-from operad.metrics.base import MetricBase
+from operad.metrics.metric import MetricBase
 from operad.optim.optimizers.evo import EvoGradient
 from operad.runtime.events import AlgorithmEvent
 from operad.runtime.observers import registry as obs_registry

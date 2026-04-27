@@ -7,9 +7,16 @@ from operad import Configuration
 from pathlib import Path
 import yaml
 from operad.agents.reasoning.react import ReAct
-from operad.configs import ConfigError, RunConfig, instantiate, load
-from operad.configs.loader import _import_by_path
-from operad.core.config import Resilience, Runtime, Sampling
+from operad.core.config import (
+    ConfigError,
+    Resilience,
+    RunConfig,
+    Runtime,
+    Sampling,
+    _import_by_path,
+    instantiate,
+    load,
+)
 
 
 # --- from test_configuration.py ---

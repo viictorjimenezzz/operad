@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from operad.core.agent import _TRACER
-from operad.metrics.base import MetricBase
+from operad.metrics.metric import MetricBase
 from operad.optim.optimizers.opro import (
     OPROAgent,
     OPROInput,

@@ -16,9 +16,7 @@ the same way the *inference* surface mirrors `torch.nn`.
 | File                        | Role                                                                              |
 | --------------------------- | --------------------------------------------------------------------------------- |
 | `trainer.py`                | `Trainer.fit / evaluate / predict`. The orchestrator.                             |
-| `callbacks.py`              | `Callback` base + `EarlyStopping`, `BestCheckpoint`, `GradClip`, `PromptDrift`, `LearningRateLogger`, `MemoryRotation`, `HumanFeedbackCallback`. |
-| `callbacks_traceback.py`    | `PromptTraceback`-emitting callback wired to `train`.                             |
-| `losses_hf.py`              | `HumanFeedbackLoss` — replays NDJSON ratings as the loss.                         |
+| `callbacks/`                | `Callback` base + `EarlyStopping`, `BestCheckpoint`, `GradClip`, `PromptDrift`, `LRLogger`, `MemoryRotation`, `HumanFeedbackCallback`, `TracebackOnFailure`. |
 | `progress.py`               | `TrainerProgressObserver` — Rich nested progress bars.                            |
 | `report.py`                 | `EpochReport`, `TrainingReport` — structured outputs.                             |
 
@@ -28,13 +26,14 @@ the same way the *inference* surface mirrors `torch.nn`.
 from operad.train import (
     Trainer,
     Callback,
-    EarlyStopping, EarlyStoppingSpec,
+    EarlyStopping,
     BestCheckpoint, GradClip, PromptDrift,
-    LearningRateLogger, MemoryRotation,
-    HumanFeedbackCallback, HumanFeedbackLoss,
+    LRLogger, MemoryRotation,
+    HumanFeedbackCallback,
     TrainerProgressObserver,
     EpochReport, TrainingReport,
 )
+from operad.optim.losses import HumanFeedbackLoss
 ```
 
 ## Smallest meaningful example
@@ -57,7 +56,7 @@ loader = DataLoader(train, batch_size=8, shuffle=True)
 trainer = Trainer(
     agent,
     TextualGradientDescent(agent.parameters(), lr=1.0),
-    JudgeLoss(rubric_critic),
+    JudgeLoss(judge),
     scheduler=CosineExplorationLR(... , T_max=10),
     callbacks=[
         BestCheckpoint(monitor="val_loss", mode="min"),
@@ -87,7 +86,7 @@ validation, scheduler step, callback fan-out.
 | `BestCheckpoint`        | Tracks the best epoch's `hash_content`.                                      |
 | `GradClip`              | Caps `TextualGradient.severity` per step.                                    |
 | `PromptDrift`           | Per-epoch prompt-hash delta + changed param paths; emits dashboard events.   |
-| `LearningRateLogger`    | Records each group's `lr` at every epoch boundary.                           |
+| `LRLogger`              | Records each group's `lr` at every epoch boundary.                           |
 | `MemoryRotation`        | Bounds tape memory growth on long runs by rotating old entries.              |
 | `HumanFeedbackCallback` | Dumps per-validation `(input, predicted)` rows to NDJSON for human rating.   |
 
@@ -115,7 +114,7 @@ training is visible wherever inference already is:
 
 | What                | Where                                                                   |
 | ------------------- | ----------------------------------------------------------------------- |
-| A new callback      | `callbacks.py` — subclass `Callback`; override the lifecycle hook(s).   |
+| A new callback      | `callbacks/` — subclass `Callback`; override the lifecycle hook(s).     |
 | A new loss          | [`../optim/losses/`](../optim/losses/).                                 |
 | A new optimizer     | [`../optim/`](../optim/README.md).                                      |
 | A new progress UI   | `progress.py` — register on the observer registry.                      |

@@ -57,7 +57,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _load_and_instantiate(path: Path) -> Any:
-    from .configs.loader import apply_runtime, instantiate, load
+    from .core.config import apply_runtime, instantiate, load
 
     rc = load(path)
     apply_runtime(rc)
@@ -67,7 +67,7 @@ def _load_and_instantiate(path: Path) -> Any:
 def _run(args: argparse.Namespace) -> int:
     import asyncio
 
-    from .configs.loader import ConfigError
+    from .core.config import ConfigError
 
     agent = _load_and_instantiate(args.config)
 
@@ -112,7 +112,7 @@ def _graph(args: argparse.Namespace) -> int:
 def _tail(args: argparse.Namespace) -> int:
     import time
 
-    from .configs.loader import ConfigError
+    from .core.config import ConfigError
 
     path: Path = args.path
     speed: float = args.speed
@@ -163,7 +163,7 @@ _DISPATCH = {"run": _run, "trace": _trace, "graph": _graph, "tail": _tail}
 
 
 def main(argv: list[str] | None = None) -> int:
-    from .configs.loader import ConfigError
+    from .core.config import ConfigError
 
     args = _parser().parse_args(argv)
     handler = _DISPATCH[args.command]

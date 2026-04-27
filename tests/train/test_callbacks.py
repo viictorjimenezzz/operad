@@ -14,7 +14,7 @@ from operad.train import (
     Callback,
     EarlyStopping,
     GradClip,
-    LearningRateLogger,
+    LRLogger,
     MemoryRotation,
     PromptDrift,
 )
@@ -206,14 +206,14 @@ def test_prompt_drift_rejects_negative_threshold() -> None:
 
 
 # ---------------------------------------------------------------------------
-# LearningRateLogger
+# LRLogger
 # ---------------------------------------------------------------------------
 
 
 async def test_learning_rate_logger_emits_info(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    cb = LearningRateLogger()
+    cb = LRLogger()
     t = _FakeTrainer()
     caplog.set_level("INFO", logger="operad.train")
 

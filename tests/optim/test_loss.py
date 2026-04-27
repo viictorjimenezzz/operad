@@ -12,8 +12,8 @@ import pytest
 from pydantic import BaseModel
 
 from operad.agents.reasoning.schemas import Candidate, Score
-from operad.metrics.base import Metric
-from operad.metrics.deterministic import ExactMatch
+from operad.metrics.metric import Metric
+from operad.metrics.metric import ExactMatch
 from operad.optim.losses import (
     CompositeLoss,
     JudgeLoss,

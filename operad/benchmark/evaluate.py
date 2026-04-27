@@ -11,7 +11,7 @@ The harness is intentionally small:
 - Bounds per-input concurrency with a local `asyncio.Semaphore`; the
   slot registry separately bounds the backend.
 - Metrics declare `score_batch` via `MetricBase`; LLM-judge metrics
-  like `RubricCritic` override it for parallel fan-out.
+  like `LLMAAJ` override it for parallel fan-out.
 - `metrics=None` scores each row by its `Entry.metric` (if set).
   Passing an explicit list overrides per-entry policies for every row.
 """
@@ -25,7 +25,7 @@ from typing import Any, Iterable
 from pydantic import BaseModel
 
 from ..core.agent import Agent, In, Out, _compute_graph_hash
-from ..metrics.base import Metric
+from ..metrics.metric import Metric
 from ..utils.errors import BuildError
 from .dataset import Dataset
 from .entry import Entry

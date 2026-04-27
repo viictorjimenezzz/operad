@@ -1,30 +1,25 @@
-"""Metrics: deterministic scorers and LLM-judge wrappers.
-
-A `Metric` is anything with an async `score(predicted, expected) -> float`
-method. `RubricCritic` wraps an `Agent[Candidate, Score]` so an LLM
-judge can stand in as a metric. `CostTracker` is an observer-style
-aggregator rather than a per-row scorer; it lives here because it
-summarises evaluation runs.
-"""
+"""Metrics: deterministic scorers, regex scorers, cost, and LLM judges."""
 
 from __future__ import annotations
 
-from .base import Metric
-from .contains import Contains
-from .cost import CostTracker
-from .deterministic import ExactMatch, JsonValid, Latency
-from .regex_match import RegexMatch
-from .rouge import Rouge1
-from .rubric_critic import RubricCritic
+from .cost import CostObserver, CostTracker, Pricing, cost_estimate
+from .judge import LLMAAJ
+from .latency import Latency
+from .metric import ExactMatch, JsonValid, Metric, MetricBase
+from .regex import RegexMetric
+from .rouge import Rouge
 
 __all__ = [
-    "Contains",
+    "CostObserver",
     "CostTracker",
     "ExactMatch",
     "JsonValid",
     "Latency",
+    "LLMAAJ",
     "Metric",
-    "RegexMatch",
-    "Rouge1",
-    "RubricCritic",
+    "MetricBase",
+    "Pricing",
+    "RegexMetric",
+    "Rouge",
+    "cost_estimate",
 ]

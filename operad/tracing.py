@@ -29,7 +29,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from .runtime.cost import CostObserver
+from .metrics.cost import CostObserver
 from .runtime.observers import JsonlObserver, registry
 
 

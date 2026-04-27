@@ -64,5 +64,5 @@ uv run operad trace examples/config-react.yaml
 uv run operad graph examples/config-react.yaml --format json
 ```
 
-See [`operad/configs/README.md`](../operad/configs/README.md) for the
+See [`operad/core/config.py`](../operad/core/config.py) for the
 full schema.

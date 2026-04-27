@@ -27,7 +27,7 @@ from typing import Any, AsyncIterator, Iterable
 
 from operad.benchmark.evaluate import evaluate
 from operad.core.agent import Agent
-from operad.metrics.base import Metric
+from operad.metrics.metric import Metric
 from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import Parameter
 from operad.runtime.observers.base import (

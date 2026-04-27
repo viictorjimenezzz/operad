@@ -4,14 +4,10 @@ from __future__ import annotations
 import asyncio
 import pytest
 from operad import Metric
-from operad.metrics import ExactMatch, JsonValid, Latency
-from ..conftest import A, B
+from operad.metrics import ExactMatch, JsonValid, Latency, RegexMetric, Rouge
 from dataclasses import dataclass
-from operad.metrics.base import MetricBase
-from ..conftest import A
-from operad.metrics import Contains
-from operad.metrics import RegexMatch
-from operad.metrics import Rouge1
+from operad.metrics.metric import MetricBase
+from ..conftest import A, B
 
 
 # --- from test_metrics_deterministic.py ---
@@ -126,67 +122,89 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_contains_substring_match() -> None:
-    m = Contains(field="text")
+    m = RegexMetric(field="text", mode="contains")
     assert await m.score(A(text="hello world"), A(text="hello")) == 1.0
 
 
 async def test_contains_substring_mismatch() -> None:
-    m = Contains(field="text")
+    m = RegexMetric(field="text", mode="contains")
     assert await m.score(A(text="hello world"), A(text="goodbye")) == 0.0
 
 
 async def test_contains_identical_strings() -> None:
-    m = Contains(field="text")
+    m = RegexMetric(field="text", mode="contains")
     assert await m.score(A(text="same"), A(text="same")) == 1.0
 
 
 async def test_contains_empty_expected_always_matches() -> None:
-    m = Contains(field="text")
+    m = RegexMetric(field="text", mode="contains")
     assert await m.score(A(text="anything"), A(text="")) == 1.0
 
 
 async def test_contains_is_runtime_checkable() -> None:
-    assert isinstance(Contains(field="text"), Metric)
+    assert isinstance(RegexMetric(field="text", mode="contains"), Metric)
 
 # --- from test_metrics_regex.py ---
 pytestmark = pytest.mark.asyncio
 
 
 async def test_regex_match_hits() -> None:
-    m = RegexMatch(field="text", pattern=r"\d{3}")
+    m = RegexMetric(field="text", mode="matches", pattern=r"\d{3}")
     assert await m.score(A(text="call 555 now"), A()) == 1.0
 
 
 async def test_regex_match_misses() -> None:
-    m = RegexMatch(field="text", pattern=r"\d{3}")
+    m = RegexMetric(field="text", mode="matches", pattern=r"\d{3}")
     assert await m.score(A(text="no numbers"), A()) == 0.0
 
 
 async def test_regex_match_caches_compiled_pattern() -> None:
-    m = RegexMatch(field="text", pattern=r"foo")
+    m = RegexMetric(field="text", mode="matches", pattern=r"foo")
     await m.score(A(text="foo"), A())
     assert m._compiled is not None
 
 
 async def test_regex_match_is_runtime_checkable() -> None:
-    assert isinstance(RegexMatch(field="text", pattern="x"), Metric)
+    assert isinstance(RegexMetric(field="text", mode="matches", pattern="x"), Metric)
+
+
+async def test_regex_metric_count_mode_returns_match_count() -> None:
+    m = RegexMetric(field="text", mode="count", pattern=r"\d+")
+    assert await m.score(A(text="12 cats and 34 dogs"), A()) == 2.0
+
+
+async def test_regex_metric_contains_accepts_literal_pattern() -> None:
+    m = RegexMetric(field="text", mode="contains", pattern="cat")
+    assert await m.score(A(text="concatenate"), A(text="ignored")) == 1.0
+
+
+async def test_regex_metric_rejects_invalid_mode() -> None:
+    with pytest.raises(ValueError):
+        RegexMetric(field="text", mode="bad")  # type: ignore[arg-type]
+
+
+async def test_regex_metric_requires_pattern_for_regex_modes() -> None:
+    with pytest.raises(ValueError):
+        RegexMetric(field="text", mode="matches")
+    with pytest.raises(ValueError):
+        RegexMetric(field="text", mode="count")
 
 # --- from test_metrics_rouge.py ---
 pytestmark = pytest.mark.asyncio
 
 
 async def test_rouge1_exact_match() -> None:
-    m = Rouge1(field="text")
+    m = Rouge(field="text")
     assert await m.score(A(text="the cat sat"), A(text="the cat sat")) == 1.0
 
 
 async def test_rouge1_disjoint() -> None:
-    m = Rouge1(field="text")
+    m = Rouge(field="text")
     assert await m.score(A(text="alpha beta"), A(text="gamma delta")) == 0.0
 
 
 async def test_rouge1_partial_overlap() -> None:
-    m = Rouge1(field="text")
+    m = Rouge(field="text")
     # pred unigrams: {a, b, c}, ref: {b, c, d}, overlap=2
     # P = 2/3, R = 2/3, F1 = 2/3
     s = await m.score(A(text="a b c"), A(text="b c d"))
@@ -194,10 +212,10 @@ async def test_rouge1_partial_overlap() -> None:
 
 
 async def test_rouge1_empty_side_returns_zero() -> None:
-    m = Rouge1(field="text")
+    m = Rouge(field="text")
     assert await m.score(A(text=""), A(text="hi")) == 0.0
     assert await m.score(A(text="hi"), A(text="")) == 0.0
 
 
 async def test_rouge1_is_runtime_checkable() -> None:
-    assert isinstance(Rouge1(field="text"), Metric)
+    assert isinstance(Rouge(field="text"), Metric)

@@ -14,8 +14,8 @@ from operad.benchmark import (
     RegressionReport,
     regression_check,
 )
-from operad.metrics.base import MetricBase
-from operad.metrics.deterministic import ExactMatch
+from operad.metrics.metric import MetricBase
+from operad.metrics.metric import ExactMatch
 from operad.runtime.observers import base as _obs
 from operad.runtime.trace import TraceObserver
 

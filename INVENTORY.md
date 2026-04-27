@@ -259,12 +259,11 @@ absorbed there.
 | Metric          | Shape                                                     |
 | --------------- | --------------------------------------------------------- |
 | `ExactMatch`    | 1.0 if `predicted == expected`, else 0.0.                 |
-| `Contains`      | 1.0 if `expected` substring is in `predicted`.            |
-| `RegexMatch`    | 1.0 if the pattern matches the predicted field.           |
+| `RegexMetric`   | Substring, regex match, or regex count over a field.      |
 | `JsonValid`     | 1.0 if predicted parses as the target schema.             |
 | `Latency`       | Read `latency_ms` off the envelope (observer-friendly).   |
-| `Rouge1`        | ROUGE-1 F1 over text fields.                              |
-| `RubricCritic`  | LLM judge: an `Agent[Candidate, Score]` used as a Metric. |
+| `Rouge`        | ROUGE-1 F1 over text fields.                              |
+| `LLMAAJ`  | LLM judge: an `Agent[Candidate, Score]` used as a Metric. |
 | `CostTracker`   | Aggregator; sums per-run cost across observers.           |
 
 ## 9. Benchmark — `operad.benchmark`
@@ -710,7 +709,7 @@ with a residual flush at epoch end.
 | `BestCheckpoint`        | Snapshots the agent's `hash_content` at the best epoch.           |
 | `GradClip`              | Clamps `TextualGradient.severity` per step.                       |
 | `PromptDrift`           | Per-epoch hash diff; also emits `AlgorithmEvent` rows for the dashboard's drift timeline. |
-| `LearningRateLogger`    | Records each group's lr at every epoch boundary.                  |
+| `LRLogger`    | Records each group's lr at every epoch boundary.                  |
 | `MemoryRotation`        | Guards tape growth on long runs by rotating old entries.          |
 | `HumanFeedbackCallback` | Appends per-validation `(input, predicted)` rows to an NDJSON file for human rating. |
 

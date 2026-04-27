@@ -12,7 +12,7 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
-from operad.metrics.base import MetricBase
+from operad.metrics.metric import MetricBase
 from operad.optim.parameter import TextualGradient
 
 

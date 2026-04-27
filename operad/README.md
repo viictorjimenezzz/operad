@@ -113,8 +113,8 @@ layer; the same idea formalized into a fit loop lives in `optim/` +
 
 ### `metrics/` — pluggable scorers
 
-Deterministic (`ExactMatch`, `Contains`, `RegexMatch`, `JsonValid`,
-`Rouge1`, `Latency`) and LLM-driven (`RubricCritic` wraps an
+Deterministic (`ExactMatch`, `RegexMetric`, `JsonValid`, `Rouge`,
+`Latency`) and LLM-driven (`LLMAAJ` wraps an
 `Agent[Candidate, Score]` so the judge's rationale becomes both score
 and gradient text). `CostTracker` aggregates token+dollar cost across
 runs.
@@ -151,8 +151,9 @@ not floats.
 ### `train/` — the fit loop
 
 `Trainer.fit/evaluate/predict`, callbacks (`EarlyStopping`,
-`BestCheckpoint`, `GradClip`, `PromptDrift`, `LearningRateLogger`,
-`MemoryRotation`, `HumanFeedbackCallback`), `HumanFeedbackLoss`,
+`BestCheckpoint`, `GradClip`, `PromptDrift`, `LRLogger`,
+`MemoryRotation`, `HumanFeedbackCallback`), `HumanFeedbackLoss`
+under `operad.optim.losses`,
 `EpochReport`/`TrainingReport`, `TrainerProgressObserver`. The
 PyTorch-Lightning analog — one entry point glues optimizer + loss +
 scheduler + metrics + callbacks.

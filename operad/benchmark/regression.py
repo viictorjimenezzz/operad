@@ -16,7 +16,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict
 
 from ..core.agent import Agent
-from ..metrics.base import Metric
+from ..metrics.metric import Metric
 from ..runtime.observers import base as _obs
 from ..runtime.trace import Trace, TraceObserver, TraceStep
 from ..runtime.trace_diff import TraceDiff, trace_diff

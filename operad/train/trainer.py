@@ -29,7 +29,7 @@ from ..core.agent import Agent, In, Out
 from ..core.freeze import freeze_agent, thaw_pair
 from ..core.output import OPERAD_VERSION_HASH, PYTHON_VERSION_HASH, OperadOutput
 from ..data.loader import Batch, DataLoader
-from ..metrics.base import Metric
+from ..metrics.metric import Metric
 from ..optim.backprop.backward import backward
 from ..optim.backprop.tape import tape
 from ..optim.gradmode import no_grad

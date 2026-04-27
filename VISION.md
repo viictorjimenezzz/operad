@@ -139,7 +139,7 @@ legal configurations from the constraint pool.
 
 **Trainer.** `operad.train.Trainer.fit/evaluate/predict` glues the
 spine together with callbacks (`EarlyStopping`, `BestCheckpoint`,
-`GradClip`, `PromptDrift`, `LearningRateLogger`, `MemoryRotation`,
+`GradClip`, `PromptDrift`, `LRLogger`, `MemoryRotation`,
 `HumanFeedbackCallback`) and LR schedulers. Full walkthrough in
 [TRAINING.md](TRAINING.md).
 
@@ -179,7 +179,7 @@ rationale of every submodule and links to per-submodule READMEs.
 | `runtime/`        | concurrency slots, traces, observer registry (Rich/JSONL/OTel/Web), cost, retry, sandbox launcher |
 | `agents/`         | the component library: `reasoning/`, `coding/`, `conversational/`, `memory/`, `retrieval/`, `safeguard/`, `debate/` + `Sequential` / `Parallel` |
 | `algorithms/`     | `Beam`, `Debate`, `Sweep`, `SelfRefine`, `AutoResearcher`                         |
-| `metrics/`        | deterministic scorers + `RubricCritic` + `CostTracker`                            |
+| `metrics/`        | deterministic scorers + `LLMAAJ` + `CostTracker`                            |
 | `benchmark/`      | `Dataset`, `Entry`, `evaluate`, `Experiment`, `SensitivityReport`, `RegressionReport` |
 | `data/`           | `DataLoader`, samplers (incl. `UncertaintySampler`), `random_split`               |
 | `optim/`          | `Parameter` + `tape`/`backward` + `Optimizer` fleet + LR schedulers + `BackpropAgent` / `RewriteAgent` |
@@ -232,7 +232,7 @@ Items not yet in code, ordered by priority:
   in by overriding `Agent.format_system_message` — the foundations do
   not change.
 - **No agent DSL or YAML/JSON blueprint system in the foundations.**
-  The CLI's YAML loader (`operad/configs/`) is a thin deserializer
+  The CLI's YAML loader (`operad/core/config.py`) is a thin deserializer
   over the Python API, not a separate language.
 - **No hidden model-provider fallbacks.** `Configuration.backend` is
   the single source of truth. Provider resolution happens explicitly

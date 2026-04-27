@@ -25,7 +25,7 @@ from operad.optim.backprop.traceback import (
 )
 from operad.optim.parameter import TextualGradient
 from operad.runtime.observers import registry as obs_registry
-from operad.train.callbacks_traceback import TracebackOnFailure
+from operad.train.callbacks import TracebackOnFailure
 
 from tests._helpers.fake_leaf import A, B, C, D, FakeLeaf
 

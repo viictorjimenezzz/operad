@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
-from operad.runtime.cost import CostObserver
+from operad.metrics.cost import CostObserver
 from operad.runtime.observers.base import registry as operad_registry
 from operad.runtime.slots import registry as slot_registry
 

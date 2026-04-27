@@ -11,7 +11,7 @@ Mirrors `examples/talker_evolution.py::TalkerQualityMetric`'s shape.
 
 from __future__ import annotations
 
-from operad.metrics.base import MetricBase
+from operad.metrics.metric import MetricBase
 
 from schemas import Reply
 

@@ -34,7 +34,7 @@ from ..core.freeze import (
 )
 from ..core.view import to_json as _graph_to_json
 from ..core.state import AgentState
-from ..metrics.base import Metric
+from ..metrics.metric import Metric
 from ..runtime.observers.base import registry
 from ..runtime.trace import Trace, TraceObserver
 from ..utils.errors import BuildError

@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 
 from ..core.agent import Agent
 from ..data import random_split
-from ..metrics.base import Metric
+from ..metrics.metric import Metric
 from ..runtime.observers.base import registry
 from ..utils.ops import AppendRule, EditTask, SetTemperature
 from ..utils.paths import set_path
