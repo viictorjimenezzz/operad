@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import os
 import socket
+from urllib.parse import urlparse
 
 from operad import Configuration
 
 DEFAULT_HOST = "127.0.0.1:9000"
 DEFAULT_MODEL = "google/gemma-4-e2b"
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_PORT = int(DEFAULT_HOST.rsplit(":", 1)[1])
 
 
 def local_config(**overrides) -> Configuration:
@@ -45,11 +47,38 @@ def local_config(**overrides) -> Configuration:
     return Configuration(**base)
 
 
-def server_reachable(host: str, timeout: float = 0.5) -> bool:
-    """Return True if a TCP connection to ``host`` (``h:p``) succeeds."""
-    h, _, p = host.partition(":")
+def _host_port(host: str) -> tuple[str, int] | None:
+    raw = host.strip()
+    if not raw:
+        return None
+
+    if "://" in raw:
+        parsed = urlparse(raw)
+        if parsed.hostname is None:
+            return None
+        try:
+            return parsed.hostname, parsed.port or DEFAULT_PORT
+        except ValueError:
+            return None
+
+    h, sep, p = raw.rpartition(":")
+    if not sep:
+        return raw, DEFAULT_PORT
+    if not h:
+        return None
     try:
-        with socket.create_connection((h, int(p)), timeout=timeout):
+        return h, int(p) if p else DEFAULT_PORT
+    except ValueError:
+        return None
+
+
+def server_reachable(host: str, timeout: float = 0.5) -> bool:
+    """Return True if a TCP connection to ``host`` succeeds."""
+    target = _host_port(host)
+    if target is None:
+        return False
+    try:
+        with socket.create_connection(target, timeout=timeout):
             return True
     except OSError:
         return False
