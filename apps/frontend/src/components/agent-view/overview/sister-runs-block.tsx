@@ -40,13 +40,30 @@ export function SisterRunsBlock(props: SisterRunsBlockProps) {
 
   const disabled = !hashContent || otherRuns.length === 0;
 
+  const succinct =
+    !disabled && otherRuns.length > 0 ? (
+      <div className="text-[12px] text-muted">
+        {otherRuns.length} other run{otherRuns.length === 1 ? "" : "s"} share this fingerprint
+        {hashContent ? (
+          <span className="ml-2">
+            <HashTag hash={hashContent} mono size="sm" />
+          </span>
+        ) : null}
+      </div>
+    ) : null;
+
   return (
-    <Section title="Sister runs" summary={summary} disabled={disabled}>
+    <Section
+      title="Sister runs"
+      summary={summary}
+      {...(succinct ? { succinct } : {})}
+      disabled={disabled}
+    >
       <ul className="space-y-1.5">
         {otherRuns.slice(0, 8).map((run) => (
           <li
             key={run.run_id}
-            className="flex items-center gap-3 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-bg-3"
+            className="flex items-center gap-3 rounded-md border border-border px-3 py-2 transition-colors hover:bg-bg-3"
           >
             <HashTag hash={run.run_id} dotOnly />
             <div className="min-w-0 flex-1">

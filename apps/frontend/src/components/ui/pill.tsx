@@ -27,7 +27,7 @@ const SIZE: Record<NonNullable<PillProps["size"]>, string> = {
 
 export function Pill({
   tone = "default",
-  size = "md",
+  size = "sm",
   pulse,
   icon,
   className,

@@ -3,6 +3,8 @@ import { ConfigBlock } from "@/components/agent-view/overview/config-block";
 import { CostLatencyBlock } from "@/components/agent-view/overview/cost-latency-block";
 import { DriftBlock } from "@/components/agent-view/overview/drift-block";
 import { ExamplesBlock } from "@/components/agent-view/overview/examples-block";
+import { IdentityBlock } from "@/components/agent-view/overview/identity-block";
+import { InvocationsBanner } from "@/components/agent-view/overview/invocations-banner";
 import { InvocationsList } from "@/components/agent-view/overview/invocations-list";
 import { LatestInvocationCard } from "@/components/agent-view/overview/latest-invocation-card";
 import { ReproducibilityBlock } from "@/components/agent-view/overview/reproducibility-block";
@@ -26,6 +28,22 @@ function strProp(p: Record<string, unknown>, key: string): string | undefined {
 }
 
 export const overviewRegistry: ComponentRegistry = {
+  IdentityBlock: ({ element }) => {
+    const p = element.props as Record<string, unknown>;
+    return (
+      <IdentityBlock dataSummary={p.dataSummary} {...defined({ runId: strProp(p, "runId") })} />
+    );
+  },
+  InvocationsBanner: ({ element }) => {
+    const p = element.props as Record<string, unknown>;
+    return (
+      <InvocationsBanner
+        dataSummary={p.dataSummary}
+        dataInvocations={p.dataInvocations}
+        {...defined({ runId: strProp(p, "runId") })}
+      />
+    );
+  },
   LatestInvocationCard: ({ element }) => {
     const p = element.props as Record<string, unknown>;
     return (

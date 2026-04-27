@@ -270,3 +270,89 @@ async def test_to_io_graph_from_json_handles_unimportable_types() -> None:
     )
     assert text_field["name"] == "text"
     assert text_field["description"] == "the question"
+
+
+async def test_to_io_graph_emits_composites_with_children(cfg) -> None:
+    """`composites` array carries class_name, parent_path, and children paths."""
+    inner = Sequential(
+        FakeLeaf(config=cfg, input=A, output=B),
+        FakeLeaf(config=cfg, input=B, output=C),
+        input=A,
+        output=C,
+    )
+    outer = Sequential(
+        inner,
+        FakeLeaf(config=cfg, input=C, output=D),
+        input=A,
+        output=D,
+    )
+    await outer.abuild()
+
+    data = to_io_graph(outer._graph)
+    assert "composites" in data
+    composites = {c["path"]: c for c in data["composites"]}
+
+    # Root (outer Sequential) is excluded; only inner Sequential remains.
+    assert "Sequential" not in composites
+    assert "Sequential.stage_0" in composites
+
+    inner_entry = composites["Sequential.stage_0"]
+    assert inner_entry["class_name"] == "Sequential"
+    assert inner_entry["kind"] == "composite"
+    # Inner's parent is the root (excluded), so parent_path is None.
+    assert inner_entry["parent_path"] is None
+    # Inner's children are its two FakeLeaf stages.
+    assert set(inner_entry["children"]) == {
+        "Sequential.stage_0.stage_0",
+        "Sequential.stage_0.stage_1",
+    }
+
+
+async def test_to_io_graph_from_json_composites_match_live(cfg) -> None:
+    """JSON-only IO graph emits the same composites as the live walker."""
+    inner = Sequential(
+        FakeLeaf(config=cfg, input=A, output=B),
+        FakeLeaf(config=cfg, input=B, output=C),
+        input=A,
+        output=C,
+    )
+    outer = Sequential(
+        inner,
+        FakeLeaf(config=cfg, input=C, output=D),
+        input=A,
+        output=D,
+    )
+    await outer.abuild()
+
+    live = to_io_graph(outer._graph)
+    rehydrated = to_io_graph_from_json(to_json(outer._graph))
+
+    def _norm(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return sorted(rows, key=lambda c: c["path"])
+
+    assert _norm(live["composites"]) == _norm(rehydrated["composites"])
+
+
+async def test_to_mermaid_emits_subgraphs_for_composites(cfg) -> None:
+    """`to_mermaid` wraps composites in `subgraph` blocks."""
+    from operad.core.view import to_mermaid
+
+    inner = Sequential(
+        FakeLeaf(config=cfg, input=A, output=B),
+        FakeLeaf(config=cfg, input=B, output=C),
+        input=A,
+        output=C,
+    )
+    outer = Sequential(
+        inner,
+        FakeLeaf(config=cfg, input=C, output=D),
+        input=A,
+        output=D,
+    )
+    await outer.abuild()
+
+    text = to_mermaid(outer._graph)
+    # Root composite is flat (no subgraph), inner composite gets a subgraph block.
+    assert "subgraph Sequential_stage_0" in text
+    assert "    end" in text
+    assert text.startswith("flowchart LR")

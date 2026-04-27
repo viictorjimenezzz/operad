@@ -207,30 +207,140 @@ def _nearest_composite_path(
     return None
 
 
+def _build_composites(
+    *,
+    composite_paths: set[str],
+    leaf_paths: set[str],
+    composite_class_names: dict[str, str],
+    root_path: str,
+) -> list[dict[str, Any]]:
+    """Return composite hierarchy for IO graph payloads (excludes the root).
+
+    Each entry carries the composite's own ``parent_path`` (the nearest
+    enclosing composite, or ``None`` if the immediate parent is the root)
+    and ``children`` (paths of immediate composite or leaf descendants).
+    """
+    all_paths = composite_paths | leaf_paths
+    out: list[dict[str, Any]] = []
+    for c_path in sorted(composite_paths):
+        if c_path == root_path:
+            continue
+        children: list[str] = []
+        for p in all_paths:
+            if p == c_path:
+                continue
+            np = _nearest_composite_path(
+                p, composite_paths=composite_paths, root_path=root_path
+            )
+            if np == c_path:
+                children.append(p)
+        parent = _nearest_composite_path(
+            c_path, composite_paths=composite_paths, root_path=root_path
+        )
+        out.append(
+            {
+                "path": c_path,
+                "class_name": composite_class_names.get(c_path, "Composite"),
+                "kind": "composite",
+                "parent_path": parent,
+                "children": sorted(children),
+            }
+        )
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Mermaid view.
 # ---------------------------------------------------------------------------
 
 
 def _render_mermaid(graph: AgentGraph) -> str:
-    """Render an `AgentGraph` as a Mermaid `flowchart LR`."""
+    """Render an `AgentGraph` as a Mermaid `flowchart LR`.
+
+    Composite nodes (Sequential/Parallel/ReAct/etc., except the root) are
+    emitted as Mermaid ``subgraph`` blocks containing their leaf descendants
+    and any nested composite subgraphs. The root composite renders flat at
+    the top level.
+    """
     lines: list[str] = ["flowchart LR"]
     nodes = _dedupe_nodes(graph.nodes)
     edges = _dedupe_edges(graph.edges)
     classes: dict[str, list[str]] = {}
 
+    composite_paths = {n.path for n in nodes if n.kind == "composite"}
+    leaf_paths = {n.path for n in nodes if n.kind == "leaf"}
+    nodes_by_path = {n.path: n for n in nodes}
+
+    def _parent_of(path: str) -> str | None:
+        return _nearest_composite_path(
+            path, composite_paths=composite_paths, root_path=graph.root
+        )
+
+    children_by_parent: dict[str | None, list[str]] = {}
     for n in nodes:
+        if n.path == graph.root:
+            continue
+        parent = _parent_of(n.path)
+        children_by_parent.setdefault(parent, []).append(n.path)
+
+    def _node_class(n: Node) -> str:
+        if n.kind == "leaf":
+            return "leafNode"
+        if n.class_name in _PIPELINE_KINDS:
+            return f"pipeline{n.class_name}"
+        return "compositeNode"
+
+    def _emit_node(n: Node, indent: str) -> None:
         nid = _mermaid_id(n.path)
         label = _mermaid_node_label(n)
         shape_open, shape_close = ("((", "))") if n.kind == "leaf" else ("[", "]")
-        lines.append(f'    {nid}{shape_open}"{label}"{shape_close}')
+        lines.append(f'{indent}{nid}{shape_open}"{label}"{shape_close}')
+        classes.setdefault(_node_class(n), []).append(nid)
 
-        cls = "compositeNode"
-        if n.kind == "leaf":
-            cls = "leafNode"
-        elif n.class_name in _PIPELINE_KINDS:
-            cls = f"pipeline{n.class_name}"
-        classes.setdefault(cls, []).append(nid)
+    def _emit_subgraph(composite_path: str, indent: str) -> None:
+        n = nodes_by_path.get(composite_path)
+        if n is None:
+            return
+        gid = _mermaid_id(composite_path)
+        title = (n.class_name or composite_path).replace('"', "")
+        lines.append(f'{indent}subgraph {gid}["{title}"]')
+        # composite header: emit the composite itself as a small node so
+        # callers/callees referencing the composite path resolve cleanly.
+        _emit_node(n, indent + "    ")
+        for child_path in children_by_parent.get(composite_path, []):
+            child = nodes_by_path.get(child_path)
+            if child is None:
+                continue
+            if child_path in composite_paths:
+                _emit_subgraph(child_path, indent + "    ")
+            else:
+                _emit_node(child, indent + "    ")
+        lines.append(f"{indent}end")
+
+    # Emit root: render its node first, then its direct children (composites
+    # become subgraphs, leaves stay flat at the root level).
+    root_node = nodes_by_path.get(graph.root)
+    if root_node is not None:
+        _emit_node(root_node, "    ")
+    for child_path in children_by_parent.get(None, []):
+        child = nodes_by_path.get(child_path)
+        if child is None:
+            continue
+        if child_path in composite_paths:
+            _emit_subgraph(child_path, "    ")
+        else:
+            _emit_node(child, "    ")
+
+    # Orphans: nodes that don't reach via the root traversal (defensive — e.g.
+    # graphs without an explicit root entry). Emit them flat.
+    rendered = {
+        graph.root,
+        *(p for p in composite_paths if p != graph.root),
+        *leaf_paths,
+    }
+    for n in nodes:
+        if n.path not in rendered:
+            _emit_node(n, "    ")
 
     for e in edges:
         caller_id = _mermaid_id(e.caller)
@@ -478,10 +588,23 @@ def _render_io_graph(graph: AgentGraph) -> dict[str, Any]:
                 "fields": _type_fields(t),
             }
 
+    composite_class_names = {
+        n.path: n.class_name or "Composite"
+        for n in graph.nodes
+        if n.kind == "composite"
+    }
+    composites = _build_composites(
+        composite_paths=composite_paths,
+        leaf_paths=leaf_paths,
+        composite_class_names=composite_class_names,
+        root_path=graph.root,
+    )
+
     return {
         "root": graph.root,
         "nodes": list(type_nodes.values()),
         "edges": io_edges,
+        "composites": composites,
     }
 
 
@@ -568,7 +691,24 @@ def _render_io_graph_from_json(graph_json: dict[str, Any]) -> dict[str, Any]:
                 "fields": chosen_fields,
             }
 
-    return {"root": root or None, "nodes": list(type_nodes.values()), "edges": io_edges}
+    composite_class_names = {
+        str(n["path"]): str(n.get("class_name") or "Composite")
+        for n in nodes
+        if n.get("kind") == "composite" and "path" in n
+    }
+    composites = _build_composites(
+        composite_paths=composite_paths,
+        leaf_paths=leaf_paths,
+        composite_class_names=composite_class_names,
+        root_path=root,
+    )
+
+    return {
+        "root": root or None,
+        "nodes": list(type_nodes.values()),
+        "edges": io_edges,
+        "composites": composites,
+    }
 
 
 # ---------------------------------------------------------------------------

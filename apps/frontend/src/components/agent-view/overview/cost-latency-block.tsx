@@ -6,6 +6,7 @@ import { useMemo } from "react";
 export interface CostLatencyBlockProps {
   dataInvocations?: unknown;
   invocations?: unknown;
+  defaultOpen?: boolean;
 }
 
 export function CostLatencyBlock(props: CostLatencyBlockProps) {
@@ -44,7 +45,12 @@ export function CostLatencyBlock(props: CostLatencyBlockProps) {
   const disabled = rows.length < 2;
 
   return (
-    <Section title="Cost & latency" summary={summary} disabled={disabled}>
+    <Section
+      title="Cost & latency"
+      summary={summary}
+      disabled={disabled}
+      defaultOpen={props.defaultOpen ?? false}
+    >
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatTile
           size="sm"

@@ -24,12 +24,41 @@ export function ExamplesBlock(props: ExamplesBlockProps) {
       ? "no canonical examples shipped"
       : `${examples.length} canonical example${examples.length === 1 ? "" : "s"}`;
 
+  const first = examples[0] ?? null;
+
+  const succinct =
+    first !== null ? (
+      <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+        <div>
+          <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.06em] text-muted-2">
+            in
+          </div>
+          <div className="rounded-md bg-bg-inset px-2 py-1.5">
+            <FieldTree data={first.input} preview />
+          </div>
+        </div>
+        <div>
+          <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.06em] text-muted-2">
+            out
+          </div>
+          <div className="rounded-md bg-bg-inset px-2 py-1.5">
+            <FieldTree data={first.output} preview />
+          </div>
+        </div>
+      </div>
+    ) : null;
+
   return (
-    <Section title="Examples" summary={summary} disabled={examples.length === 0}>
+    <Section
+      title="Examples"
+      summary={summary}
+      {...(succinct ? { succinct } : {})}
+      disabled={examples.length === 0}
+    >
       <div className="space-y-3">
         {examples.map((ex, i) => (
-          <div key={i} className="rounded-xl border border-border bg-bg-inset p-3">
-            <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-muted">
+          <div key={i} className="rounded-md border border-border bg-bg-inset p-3">
+            <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-2">
               example {i + 1}
             </div>
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">

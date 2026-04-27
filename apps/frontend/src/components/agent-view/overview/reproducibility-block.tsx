@@ -1,4 +1,4 @@
-import { HashTag, IconButton, Section } from "@/components/ui";
+import { HashTag, IconButton, Pill, Section } from "@/components/ui";
 import { RunInvocationsResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Check, Copy } from "lucide-react";
@@ -40,16 +40,37 @@ export function ReproducibilityBlock(props: ReproducibilityBlockProps) {
 
   const stableCount = HASH_KEYS.filter((h) => (hashSets[h.key]?.size ?? 0) === 1).length;
   const totalCount = HASH_KEYS.filter((h) => (hashSets[h.key]?.size ?? 0) >= 1).length;
+  const drifted = totalCount - stableCount;
+  const contentHash = hashSets.hash_content ? [...hashSets.hash_content][0] : null;
 
   const summary =
     totalCount === 0
       ? "no hashes captured yet"
       : stableCount === totalCount
-        ? `${stableCount}/${totalCount} hashes stable across ${rows.length} invocation${rows.length === 1 ? "" : "s"}`
-        : `${stableCount}/${totalCount} stable · ${totalCount - stableCount} drifted`;
+        ? `${stableCount}/${totalCount} stable across ${rows.length} invocation${rows.length === 1 ? "" : "s"}`
+        : `${stableCount}/${totalCount} stable · ${drifted} drifted`;
+
+  const succinct = totalCount === 0 ? null : (
+    <div className="flex items-center gap-3">
+      {contentHash ? <HashTag hash={contentHash} mono size="sm" /> : null}
+      {drifted === 0 ? (
+        <Pill tone="ok">{`${stableCount}/${totalCount} stable`}</Pill>
+      ) : (
+        <Pill tone="warn">{`${drifted}/${totalCount} drifted`}</Pill>
+      )}
+      <span className="text-[12px] text-muted-2">
+        across {rows.length} invocation{rows.length === 1 ? "" : "s"}
+      </span>
+    </div>
+  );
 
   return (
-    <Section title="Reproducibility" summary={summary} disabled={totalCount === 0}>
+    <Section
+      title="Reproducibility"
+      summary={summary}
+      {...(succinct ? { succinct } : {})}
+      disabled={totalCount === 0}
+    >
       <div className="grid gap-1.5">
         {HASH_KEYS.map(({ key, label, help }) => {
           const set = hashSets[key];
@@ -90,7 +111,7 @@ function HashRow({
   return (
     <div
       className={cn(
-        "grid grid-cols-[110px_1fr_auto_auto] items-center gap-3 rounded-lg px-3 py-1.5",
+        "grid grid-cols-[110px_1fr_auto_auto] items-center gap-3 rounded-md px-2 py-1",
         drifted ? "bg-[--color-warn-dim]/40" : "",
       )}
     >

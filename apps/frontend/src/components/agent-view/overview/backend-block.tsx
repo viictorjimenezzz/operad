@@ -1,4 +1,4 @@
-import { KeyValueGrid, Pill, Section } from "@/components/ui";
+import { KeyValueGrid, Metric, Section } from "@/components/ui";
 import { useAgentMeta } from "@/hooks/use-runs";
 import { RunInvocationsResponse, RunSummary } from "@/lib/types";
 import { useMemo } from "react";
@@ -28,6 +28,8 @@ export function BackendBlock(props: BackendBlockProps) {
   const backend = lastInv?.backend ?? meta.data?.config?.backend ?? null;
   const model = lastInv?.model ?? meta.data?.config?.model ?? null;
   const renderer = lastInv?.renderer ?? null;
+  const host =
+    (meta.data?.config?.runtime as Record<string, unknown> | null)?.host as string | undefined;
 
   const summaryText = useMemo(() => {
     const parts: string[] = [];
@@ -39,49 +41,53 @@ export function BackendBlock(props: BackendBlockProps) {
 
   const disabled = !backend && !model && !renderer;
 
+  const sampling = (meta.data?.config?.sampling as Record<string, unknown> | undefined) ?? {};
+  const resilience = (meta.data?.config?.resilience as Record<string, unknown> | undefined) ?? {};
+  const io = (meta.data?.config?.io as Record<string, unknown> | undefined) ?? {};
+
+  const succinct = disabled ? null : (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+      {backend ? <Metric label="backend" value={backend} /> : null}
+      {model ? <Metric label="model" value={<span className="font-mono">{model}</span>} /> : null}
+      {renderer ? <Metric label="renderer" value={renderer} /> : null}
+      {host ? <Metric label="host" value={<span className="font-mono">{host}</span>} /> : null}
+    </div>
+  );
+
   return (
-    <Section title="Backend" summary={summaryText} disabled={disabled}>
-      <div className="flex flex-wrap gap-2">
-        {backend ? <Pill tone="accent">{backend}</Pill> : null}
-        {model ? <Pill tone="default">{model}</Pill> : null}
-        {renderer ? <Pill tone="default">{renderer}</Pill> : null}
-      </div>
+    <Section
+      title="Backend"
+      summary={summaryText}
+      {...(succinct ? { succinct } : {})}
+      disabled={disabled}
+    >
       {meta.data ? (
-        <div className="mt-3">
-          <KeyValueGrid
-            density="compact"
-            rows={[
-              {
-                key: "agent path",
-                value: meta.data.agent_path,
-                mono: true,
-              },
-              {
-                key: "kind",
-                value: meta.data.kind,
-              },
-              ...(meta.data.config?.sampling
-                ? [
-                    {
-                      key: "temperature",
-                      value: String(
-                        (meta.data.config.sampling as Record<string, unknown>).temperature ?? "—",
-                      ),
-                      mono: true,
-                    },
-                    {
-                      key: "max_tokens",
-                      value: String(
-                        (meta.data.config.sampling as Record<string, unknown>).max_tokens ?? "—",
-                      ),
-                      mono: true,
-                    },
-                  ]
-                : []),
-            ]}
-          />
-        </div>
+        <KeyValueGrid
+          density="compact"
+          rows={[
+            { key: "agent path", value: meta.data.agent_path, mono: true },
+            { key: "kind", value: meta.data.kind },
+            ...(backend ? [{ key: "backend", value: backend, mono: true }] : []),
+            ...(model ? [{ key: "model", value: model, mono: true }] : []),
+            ...(host ? [{ key: "host", value: host, mono: true }] : []),
+            ...(renderer ? [{ key: "renderer", value: renderer, mono: true }] : []),
+            ...kvRows(sampling, "sampling"),
+            ...kvRows(resilience, "resilience"),
+            ...kvRows(io, "io"),
+          ]}
+        />
       ) : null}
     </Section>
   );
+}
+
+function kvRows(
+  obj: Record<string, unknown>,
+  prefix: string,
+): Array<{ key: string; value: string; mono: boolean }> {
+  return Object.entries(obj).map(([k, v]) => ({
+    key: `${prefix}.${k}`,
+    value: v === null || v === undefined ? "—" : String(v),
+    mono: true,
+  }));
 }

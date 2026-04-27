@@ -3,6 +3,7 @@ import {
   type CompositeGroup,
   applyCompositeCollapse,
   deriveCompositeGroups,
+  toggleComposite,
 } from "@/components/agent-view/graph/composite-grouping";
 import { IoTypeCard } from "@/components/agent-view/graph/io-type-card";
 import { applyDagreLayout } from "@/components/agent-view/graph/layout";
@@ -40,7 +41,10 @@ function GraphCanvas({ ioGraph, runId }: InteractiveGraphProps) {
   const activeAgents = useActiveAgents(runId);
 
   const allGroups = useMemo(
-    () => deriveCompositeGroups(ioGraph ?? { root: null, nodes: [], edges: [] }),
+    () =>
+      deriveCompositeGroups(
+        ioGraph ?? { root: null, nodes: [], edges: [], composites: [] },
+      ),
     [ioGraph],
   );
   const [groupState, setGroupState] = useState<CompositeGroup[]>(() => allGroups);
@@ -58,9 +62,13 @@ function GraphCanvas({ ioGraph, runId }: InteractiveGraphProps) {
   }, [allGroups]);
 
   const source = useMemo(() => {
-    const graph = ioGraph ?? { root: null, nodes: [], edges: [] };
+    const graph = ioGraph ?? { root: null, nodes: [], edges: [], composites: [] };
     return groupState.length === 0 ? graph : applyCompositeCollapse(graph, groupState);
   }, [groupState, ioGraph]);
+
+  const toggleCompositeAt = useCallback((path: string) => {
+    setGroupState((curr) => toggleComposite(curr, path));
+  }, []);
 
   // Per-edge invocation stats (latency / tokens / count).
   const edgeStatsQueries = useQueries({
@@ -121,6 +129,11 @@ function GraphCanvas({ ioGraph, runId }: InteractiveGraphProps) {
       const stats = edgeStats[i];
       const dimmed = Boolean(activeEdgePath && activeEdgePath !== edge.agent_path);
       const selected = activeEdgePath === edge.agent_path;
+      const compositePath = edge.kind === "composite" ? edge.composite_path : null;
+      const compositeGroup =
+        compositePath != null
+          ? groupState.find((g) => g.path === compositePath) ?? null
+          : null;
       return {
         id: edge.agent_path,
         source: edge.from,
@@ -140,6 +153,10 @@ function GraphCanvas({ ioGraph, runId }: InteractiveGraphProps) {
           latencyMs: stats?.latencyMs ?? null,
           tokens: stats?.tokens ?? null,
           invocationCount: stats?.invocationCount ?? 0,
+          expanded: compositeGroup ? !compositeGroup.collapsed : undefined,
+          onToggleExpand: compositePath
+            ? () => toggleCompositeAt(compositePath)
+            : undefined,
           onSelect: () => {
             if (selection?.kind === "edge" && selection.agentPath === edge.agent_path) {
               clearSelection();
@@ -150,7 +167,16 @@ function GraphCanvas({ ioGraph, runId }: InteractiveGraphProps) {
         },
       } satisfies Edge;
     });
-  }, [source.edges, edgeStats, selection, activeAgents, setSelection, clearSelection]);
+  }, [
+    source.edges,
+    edgeStats,
+    selection,
+    activeAgents,
+    setSelection,
+    clearSelection,
+    groupState,
+    toggleCompositeAt,
+  ]);
 
   const nodes: Node[] = useMemo(() => {
     const activeEdgePath = selection?.kind === "edge" ? selection.agentPath : null;

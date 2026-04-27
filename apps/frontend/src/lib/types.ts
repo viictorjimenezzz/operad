@@ -530,10 +530,20 @@ export const IoAgentEdge = z.object({
 });
 export type IoAgentEdge = z.infer<typeof IoAgentEdge>;
 
+export const IoComposite = z.object({
+  path: z.string(),
+  class_name: z.string().default("Composite"),
+  kind: z.literal("composite").default("composite"),
+  parent_path: z.string().nullable().default(null),
+  children: z.array(z.string()).default([]),
+});
+export type IoComposite = z.infer<typeof IoComposite>;
+
 export const IoGraphResponse = z.object({
   root: z.string().nullable().default(null),
   nodes: z.array(IoTypeNode).default([]),
   edges: z.array(IoAgentEdge).default([]),
+  composites: z.array(IoComposite).default([]),
 });
 export type IoGraphResponse = z.infer<typeof IoGraphResponse>;
 

@@ -7,6 +7,7 @@ export interface DriftBlockProps {
   dataInvocations?: unknown;
   invocations?: unknown;
   runId?: string;
+  defaultOpen?: boolean;
 }
 
 export function DriftBlock(props: DriftBlockProps) {
@@ -36,7 +37,12 @@ export function DriftBlock(props: DriftBlockProps) {
   const disabled = invocations.length < 2;
 
   return (
-    <Section title="Prompt drift" summary={summary} disabled={disabled}>
+    <Section
+      title="Prompt drift"
+      summary={summary}
+      disabled={disabled}
+      defaultOpen={props.defaultOpen ?? false}
+    >
       {drift.length === 0 ? (
         <div className="text-[12px] text-muted">
           {promptHashes.size > 1
