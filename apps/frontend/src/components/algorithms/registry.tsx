@@ -6,6 +6,7 @@ import { selfRefineRegistry } from "@/components/algorithms/selfrefine/registry"
 import { sweepRegistry } from "@/components/algorithms/sweep/registry";
 import { talkerReasonerRegistry } from "@/components/algorithms/talker_reasoner/registry";
 import { trainerRegistry } from "@/components/algorithms/trainer/registry";
+import { verifierRegistry } from "@/components/algorithms/verifier/registry";
 import type { ComponentRegistry } from "@json-render/react";
 
 export const algorithmsRegistry: ComponentRegistry = {
@@ -16,5 +17,6 @@ export const algorithmsRegistry: ComponentRegistry = {
   ...selfRefineRegistry,
   ...autoResearcherRegistry,
   ...sweepRegistry,
+  ...verifierRegistry,
   ...talkerReasonerRegistry,
 };
