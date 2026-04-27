@@ -196,5 +196,28 @@ Behavior:
 
 ## Notes
 
-(Append discoveries here as you implement. Especially: which approach
-for workspace metadata you settled on and why.)
+- Workspace metadata uses the task's option (1): the entry JSON may
+  include a top-level `workspace` object that validates as
+  `WorkspaceMetadata`. `DatasetEntry` itself remains unchanged; the CLI
+  reads the raw JSON first and passes `workspace` separately into
+  `ArtemisInput`. If the object is absent, the CLI uses minimal metadata
+  containing only `workspace_id`, which keeps direct-answer and safeguard
+  smoke runs usable without adding a second flag.
+- `apps_uthereal.paths.run_dir(entry_id)` was added as requested by this
+  task even though `paths.py` is marked `Owner: 1-1-skeleton`.
+- `apps_uthereal.retrieval.client` currently exports the Protocol and
+  `RetrievalError`, but not the concrete `LiveRetrievalClient` or
+  `CassetteRetrievalClient` named in C6. To keep this task scoped, the
+  run command owns small concrete wrappers locally instead of modifying
+  the 1-4 retrieval file.
+- `apps/uthereal/tests/test_cli.py` had a placeholder assertion for the
+  old run-command stub (`Owner: 4-1`). It was updated to assert the new
+  implemented missing-entry error.
+- `feedback --no-editor` leaves a newly-created commented template in
+  place so tests and humans can inspect/edit it. If `feedback.json`
+  already exists, `--no-editor` validates that file and rewrites
+  canonical JSON.
+- Full-suite verification currently has unrelated pre-existing loader
+  failures in `apps_uthereal/leaves/_common.py` / `errors.py`:
+  `LoaderError` attribute/constructor handling and config override
+  propagation. The command slice tests pass.
