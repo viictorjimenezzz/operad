@@ -14,7 +14,7 @@ exit cleanly with an error if the backend is not up.
 | - | --------------------------------------- | ------------- |
 | 1 | `01_agent.py`    | A single `await agent(x)` over four nested composition layers (Sequential ⊃ Parallel × 3 ⊃ Sequential ⊃ ReAct). 28 typed nodes, 27 edges, all checked at `build()` time. Every leaf is a vanilla `Planner(...)` / `Reasoner(...)` / `ReAct(...)` instance — no subclasses. |
 | 2 | `02_algorithm.py`          | `TalkerReasoner` over a four-stage scenario tree with two run paths: interactive REPL (`input()`) by default, or `--scripted` replay. Exercises stay/advance/branch/finish decisions. |
-| 3 | `03_training.py`        | Training loop with `EvoGradient`: typed `set_temperature` mutations and metric-ranked survivor selection. A reference-free length-band metric (no second LLM call) tracks progress. |
+| 3 | `03_training.py`        | Training loop with `OPROOptimizer`: metric-feedback task prompt rewrites against a reference-free length-band scorer. |
 | 4 | `04_evolutionary.py`          | Evolutionary loop with `EvoGradient` over prompt-rule mutations (`append_rule`, `replace_rule`, `drop_rule`) across generations. Real `Reasoner` agent + reference-free length-band metric. |
 
 Run them from the repo root:
@@ -25,6 +25,10 @@ uv run python examples/02_algorithm.py
 uv run python examples/03_training.py
 uv run python examples/04_evolutionary.py
 ```
+
+`03_training.py` uses `--epochs` and `--candidates` for OPRO steps and
+candidate attempts. `04_evolutionary.py` keeps `--generations` and
+`--branches` for EvoGradient.
 
 To stream runs into `operad-dashboard` from a separate process:
 
