@@ -43,7 +43,13 @@ const HELPERS: Record<string, Helper> = {
     if (Array.isArray(arg)) return arg.length;
     const obj = asObject(arg);
     if (obj && Array.isArray(obj.invocations)) return (obj.invocations as unknown[]).length;
+    if (obj && Array.isArray(obj.children)) return (obj.children as unknown[]).length;
     return 0;
+  },
+  length: (arg) => {
+    if (Array.isArray(arg)) return arg.length;
+    const obj = asObject(arg);
+    return obj ? Object.keys(obj).length : 0;
   },
   hashes: (arg) => {
     const rows = Array.isArray(arg) ? arg : (asObject(arg)?.invocations ?? []);

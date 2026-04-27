@@ -1,9 +1,10 @@
 import { Shell } from "@/dashboard/Shell";
 import { AgentGroupOverviewTab, AgentGroupPage } from "@/dashboard/pages/AgentGroupPage";
 import {
-  AgentGroupCostTab,
-  AgentGroupDriftTab,
+  AgentGroupGraphTab,
+  AgentGroupMetricsTab,
   AgentGroupRunsTab,
+  AgentGroupTrainTab,
 } from "@/dashboard/pages/AgentGroupSubpages";
 import { AgentsIndexPage } from "@/dashboard/pages/AgentsIndexPage";
 import { AlgorithmsIndexPage } from "@/dashboard/pages/AlgorithmsIndexPage";
@@ -13,25 +14,17 @@ import { CassetteDetailPage } from "@/dashboard/pages/CassetteDetailPage";
 import { CassettesPage } from "@/dashboard/pages/CassettesPage";
 import { ExperimentsPage } from "@/dashboard/pages/ExperimentsPage";
 import { NotFoundPage } from "@/dashboard/pages/NotFoundPage";
+import { OPROIndexPage } from "@/dashboard/pages/OPROIndexPage";
 import { TrainingIndexPage } from "@/dashboard/pages/TrainingIndexPage";
 import { PrimitivesGallery } from "@/dashboard/pages/__dev/PrimitivesGallery";
-import { CostTab } from "@/dashboard/pages/run-detail/CostTab";
+import { AgentRunDetailLayout } from "@/dashboard/pages/run-detail/AgentRunDetailLayout";
+import { AlgorithmDetailLayout } from "@/dashboard/pages/run-detail/AlgorithmDetailLayout";
 import { DriftTab } from "@/dashboard/pages/run-detail/DriftTab";
 import { GraphTab } from "@/dashboard/pages/run-detail/GraphTab";
-import { InvocationsTab } from "@/dashboard/pages/run-detail/InvocationsTab";
+import { MetricsTab } from "@/dashboard/pages/run-detail/MetricsTab";
 import { OverviewTab } from "@/dashboard/pages/run-detail/OverviewTab";
-import { RunDetailLayout } from "@/dashboard/pages/run-detail/RunDetailLayout";
-import { TrainTab } from "@/dashboard/pages/run-detail/TrainTab";
+import { TrainingDetailLayout } from "@/dashboard/pages/run-detail/TrainingDetailLayout";
 import { Navigate, createBrowserRouter, useRouteError } from "react-router-dom";
-
-const runDetailChildren = [
-  { index: true, element: <OverviewTab /> },
-  { path: "graph", element: <GraphTab />, errorElement: <GraphRouteErrorBoundary /> },
-  { path: "invocations", element: <InvocationsTab /> },
-  { path: "train", element: <TrainTab /> },
-  { path: "cost", element: <CostTab /> },
-  { path: "drift", element: <DriftTab /> },
-];
 
 export const dashboardRoutes = [
   {
@@ -49,38 +42,39 @@ export const dashboardRoutes = [
         children: [
           { index: true, element: <AgentGroupOverviewTab /> },
           { path: "runs", element: <AgentGroupRunsTab /> },
-          { path: "cost", element: <AgentGroupCostTab /> },
-          { path: "drift", element: <AgentGroupDriftTab /> },
+          { path: "metrics", element: <AgentGroupMetricsTab /> },
+          { path: "train", element: <AgentGroupTrainTab /> },
+          { path: "graph", element: <AgentGroupGraphTab /> },
         ],
       },
       {
         path: "agents/:hashContent/runs/:runId",
-        element: <RunDetailLayout />,
-        children: runDetailChildren,
+        element: <AgentRunDetailLayout />,
+        children: [
+          { index: true, element: <OverviewTab /> },
+          { path: "graph", element: <GraphTab />, errorElement: <GraphRouteErrorBoundary /> },
+          { path: "metrics", element: <MetricsTab /> },
+          { path: "drift", element: <DriftTab /> },
+        ],
       },
 
       // Algorithms rail.
       { path: "algorithms", element: <AlgorithmsIndexPage /> },
       {
         path: "algorithms/:runId",
-        element: <RunDetailLayout />,
-        children: runDetailChildren,
+        element: <AlgorithmDetailLayout />,
       },
 
       // Training rail.
       { path: "training", element: <TrainingIndexPage /> },
       {
         path: "training/:runId",
-        element: <RunDetailLayout />,
-        children: runDetailChildren,
+        element: <TrainingDetailLayout />,
       },
 
-      // Legacy: /runs/:runId still resolves through the same layout.
-      {
-        path: "runs/:runId",
-        element: <RunDetailLayout />,
-        children: runDetailChildren,
-      },
+      // OPRO rail.
+      { path: "opro", element: <OPROIndexPage /> },
+      { path: "opro/:runId", element: <AlgorithmDetailLayout /> },
 
       // Other rails.
       { path: "benchmarks", element: <BenchmarksPage /> },

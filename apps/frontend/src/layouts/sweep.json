@@ -7,6 +7,7 @@
       "endpoint": "/runs/$context.runId/sweep.json",
       "stream": "/runs/$context.runId/sweep.sse"
     },
+    "children": { "endpoint": "/runs/$context.runId/children" },
     "graph": { "endpoint": "/graph/$context.runId" }
   },
   "spec": {
@@ -16,17 +17,18 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "overview", "label": "overview" },
-            { "id": "heatmap", "label": "heatmap" },
-            { "id": "cells", "label": "cells" },
-            { "id": "graph", "label": "graph" },
-            { "id": "events", "label": "events" }
+            { "id": "overview", "label": "Overview" },
+            { "id": "heatmap", "label": "Heatmap" },
+            { "id": "cells", "label": "Cells" },
+            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
+            { "id": "graph", "label": "Graph" }
           ]
         },
-        "children": ["t-overview", "t-heatmap", "t-cells", "t-graph", "t-events"]
+        "children": ["overview", "heatmap", "cells", "agents", "events", "graph"]
       },
 
-      "t-overview": {
+      "overview": {
         "type": "Stack",
         "props": { "gap": 16 },
         "children": ["kpiSection", "bestSection"]
@@ -57,7 +59,11 @@
       },
       "k-tokens-stat": {
         "type": "KPI",
-        "props": { "label": "tokens", "source": "$queries.summary.prompt_tokens", "format": "tokens" }
+        "props": {
+          "label": "tokens",
+          "source": "$queries.summary.prompt_tokens",
+          "format": "tokens"
+        }
       },
       "k-cost": {
         "type": "PanelCard",
@@ -105,14 +111,14 @@
       },
       "cost-total": { "type": "SweepCostTotalizer", "props": { "source": "$queries.sweep" } },
 
-      "t-heatmap": {
+      "heatmap": {
         "type": "PanelCard",
         "props": { "title": "parameter grid", "bodyMinHeight": 320 },
-        "children": ["heatmap"]
+        "children": ["heatmap-view"]
       },
-      "heatmap": { "type": "SweepHeatmap", "props": { "source": "$queries.sweep" } },
+      "heatmap-view": { "type": "SweepHeatmap", "props": { "source": "$queries.sweep" } },
 
-      "t-cells": {
+      "cells": {
         "type": "PanelCard",
         "props": { "title": "all cells" },
         "children": ["cells-timeline"]
@@ -122,14 +128,14 @@
         "props": { "source": "$run.events", "kindFilter": "cell" }
       },
 
-      "t-graph": {
+      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
+      "graph": {
         "type": "PanelCard",
         "props": { "title": "agent graph" },
-        "children": ["graph"]
+        "children": ["graph-view"]
       },
-      "graph": { "type": "AgentGraph", "props": { "source": "$queries.graph" } },
-
-      "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } }
+      "graph-view": { "type": "AgentGraph", "props": { "source": "$queries.graph" } }
     }
   }
 }

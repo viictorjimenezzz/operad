@@ -7,6 +7,7 @@
       "endpoint": "/runs/$context.runId/iterations.json",
       "stream": "/runs/$context.runId/iterations.sse"
     },
+    "children": { "endpoint": "/runs/$context.runId/children" },
     "graph": { "endpoint": "/graph/$context.runId" }
   },
   "spec": {
@@ -16,17 +17,18 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "overview", "label": "overview" },
-            { "id": "refinements", "label": "refinements" },
-            { "id": "reflections", "label": "reflections" },
-            { "id": "graph", "label": "graph" },
-            { "id": "events", "label": "events" }
+            { "id": "overview", "label": "Overview" },
+            { "id": "refinements", "label": "Refinements" },
+            { "id": "reflections", "label": "Reflections" },
+            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
+            { "id": "graph", "label": "Graph" }
           ]
         },
-        "children": ["t-overview", "t-refinements", "t-reflections", "t-graph", "t-events"]
+        "children": ["overview", "refinements", "reflections", "agents", "events", "graph"]
       },
 
-      "t-overview": {
+      "overview": {
         "type": "Stack",
         "props": { "gap": 16 },
         "children": ["section"]
@@ -67,34 +69,34 @@
         "props": { "source": "$queries.iterations" }
       },
 
-      "t-refinements": {
+      "refinements": {
         "type": "PanelCard",
         "props": { "title": "refine cycles" },
-        "children": ["refinements"]
+        "children": ["refinements-view"]
       },
-      "refinements": {
+      "refinements-view": {
         "type": "IterationProgression",
         "props": { "source": "$queries.iterations", "phaseFilter": "refine", "showDiff": true }
       },
 
-      "t-reflections": {
+      "reflections": {
         "type": "PanelCard",
         "props": { "title": "reflection critiques" },
-        "children": ["reflections"]
+        "children": ["reflections-view"]
       },
-      "reflections": {
+      "reflections-view": {
         "type": "IterationProgression",
         "props": { "source": "$queries.iterations", "phaseFilter": "reflect" }
       },
 
-      "t-graph": {
+      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
+      "graph": {
         "type": "PanelCard",
         "props": { "title": "agent graph" },
-        "children": ["graph"]
+        "children": ["graph-view"]
       },
-      "graph": { "type": "AgentGraph", "props": { "source": "$queries.graph" } },
-
-      "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } }
+      "graph-view": { "type": "AgentGraph", "props": { "source": "$queries.graph" } }
     }
   }
 }

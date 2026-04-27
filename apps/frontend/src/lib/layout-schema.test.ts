@@ -1,5 +1,9 @@
-import { LayoutSpec, resolvePath } from "@/lib/layout-schema";
+import { LayoutSpec, type TabsElementSpec, resolvePath } from "@/lib/layout-schema";
 import { describe, expect, it } from "vitest";
+
+const layoutModules = import.meta.glob("../layouts/*.json", {
+  eager: true,
+}) as Record<string, { default?: unknown } | unknown>;
 
 const minimal = {
   algorithm: "*",
@@ -33,6 +37,18 @@ describe("LayoutSpec", () => {
         spec: { root: "page", elements: { page: { props: {} } } },
       }),
     ).toThrow();
+  });
+
+  it("accepts every per-algorithm layout with a Tabs root", () => {
+    for (const [path, mod] of Object.entries(layoutModules)) {
+      const raw = (mod as { default?: unknown }).default ?? mod;
+      const layout = LayoutSpec.parse(raw);
+      const root = layout.spec.elements[layout.spec.root];
+      expect(root, path).toBeDefined();
+      expect(root?.type, path).toBe("Tabs");
+      const tabsRoot = root as TabsElementSpec;
+      expect(tabsRoot.children, path).toEqual(tabsRoot.props.tabs.map((tab) => tab.id));
+    }
   });
 });
 

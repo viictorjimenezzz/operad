@@ -1,3 +1,5 @@
+import { AgentsTab } from "@/components/agent-view/page-shell/agents-tab";
+import { EventsTab } from "@/components/agent-view/page-shell/events-tab";
 import { agentViewRegistry } from "@/components/agent-view/registry";
 import { algorithmsRegistry } from "@/components/algorithms/registry";
 import { chartsRegistry } from "@/components/charts/registry";
@@ -11,4 +13,17 @@ export const registry: ComponentRegistry = {
   ...chartsRegistry,
   ...algorithmsRegistry,
   ...agentViewRegistry,
+  AgentsTab: ({ element }) => {
+    const props = element.props as { runId?: string };
+    return <AgentsTab runId={props.runId ?? ""} />;
+  },
+  EventsTab: ({ element }) => {
+    const props = element.props as { runId?: string; defaultKindFilter?: string[] };
+    return (
+      <EventsTab
+        runId={props.runId ?? ""}
+        {...(props.defaultKindFilter ? { defaultKindFilter: props.defaultKindFilter } : {})}
+      />
+    );
+  },
 };

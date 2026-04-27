@@ -93,23 +93,44 @@ export const uiRegistry: ComponentRegistry = {
     </div>
   ),
   Tabs: ({ element, children }) => {
-    const tabs = (element.props as { tabs: Array<{ id: string; label: string }> }).tabs;
+    const props = element.props as {
+      tabs: Array<{ id: string; label: string; badge?: string | number }>;
+      activeTab?: string;
+      onTabChange?: (tabId: string) => void;
+    };
+    const tabs = props.tabs;
     const firstTab = tabs[0]?.id ?? "tab-0";
+    const activeTab = props.activeTab ?? firstTab;
     const childArray = Array.isArray(children) ? children : [children];
+    const singleActiveChild = props.activeTab !== undefined && childArray.length <= 1;
+    const tabsRootProps = props.onTabChange
+      ? { value: activeTab, onValueChange: props.onTabChange }
+      : { defaultValue: activeTab };
     return (
-      <Tabs defaultValue={firstTab} className="flex h-full flex-col">
+      <Tabs {...tabsRootProps} className="flex h-full flex-col">
         <TabsList>
           {tabs.map((t) => (
             <TabsTrigger key={t.id} value={t.id}>
               {t.label}
+              {t.badge != null ? (
+                <span className="ml-1.5 rounded-full bg-bg-3 px-1.5 py-px text-[10px] tabular-nums text-muted">
+                  {t.badge}
+                </span>
+              ) : null}
             </TabsTrigger>
           ))}
         </TabsList>
-        {tabs.map((t, i) => (
-          <TabsContent key={t.id} value={t.id} className="flex-1 overflow-auto">
-            {childArray[i]}
+        {singleActiveChild ? (
+          <TabsContent value={activeTab} className="flex-1 overflow-auto">
+            {childArray[0]}
           </TabsContent>
-        ))}
+        ) : (
+          tabs.map((t, i) => (
+            <TabsContent key={t.id} value={t.id} className="flex-1 overflow-auto">
+              {childArray[i]}
+            </TabsContent>
+          ))
+        )}
       </Tabs>
     );
   },

@@ -12,7 +12,8 @@ export function agentGroupTabs(hashContent: string): GroupTabSpec[] {
   return [
     { to: base, label: "Overview", end: true },
     { to: `${base}/runs`, label: "Invocations" },
-    { to: `${base}/cost`, label: "Cost" },
-    { to: `${base}/drift`, label: "Drift" },
+    { to: `${base}/metrics`, label: "Metrics" },
+    { to: `${base}/train`, label: "Train" },
+    { to: `${base}/graph`, label: "Graph" },
   ];
 }

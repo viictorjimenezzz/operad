@@ -32,8 +32,9 @@ import { NavLink, Outlet, useParams } from "react-router-dom";
  * Routes:
  *   /agents/:hashContent          -> overview (this default tab)
  *   /agents/:hashContent/runs     -> table of runs
- *   /agents/:hashContent/cost     -> per-run cost / latency comparisons
- *   /agents/:hashContent/drift    -> drift across the group
+ *   /agents/:hashContent/metrics  -> per-run metric comparisons
+ *   /agents/:hashContent/train    -> trainable parameter series
+ *   /agents/:hashContent/graph    -> group graph
  */
 export function AgentGroupPage() {
   const { hashContent } = useParams<{ hashContent: string }>();
