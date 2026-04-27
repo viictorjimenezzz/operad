@@ -1,4 +1,4 @@
-"""Offline tests for `operad.optim.ape.APEOptimizer`."""
+"""Offline tests for `operad.optim.optimizers.ape.APEOptimizer`."""
 
 from __future__ import annotations
 
@@ -8,14 +8,13 @@ from typing import Any
 import pytest
 
 from operad.core.agent import _TRACER
-from operad.optim import (
+from operad.optim.optimizers.ape import (
     APEInput,
     APEOptimizer,
     APEOutput,
     CandidateGenerator,
-    TextParameter,
-    TextualGradient,
 )
+from operad.optim.parameter import TextParameter, TextualGradient
 from tests._helpers.fake_leaf import A, B, FakeLeaf
 
 

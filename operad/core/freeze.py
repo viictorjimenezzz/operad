@@ -38,7 +38,7 @@ from .output import OPERAD_VERSION_HASH, PYTHON_VERSION_HASH
 from .state import AgentState
 
 if TYPE_CHECKING:
-    from ..optim.optimizer import Optimizer
+    from ..optim.optimizers.optimizer import Optimizer
 
 
 _KNOWN_AGENT_ATTRS: frozenset[str] = frozenset(

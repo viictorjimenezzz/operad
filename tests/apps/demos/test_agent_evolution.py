@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent / "a
 
 from operad import Agent
 from operad.metrics.base import MetricBase
-from operad.optim import EvoGradient
+from operad.optim.optimizers.evo import EvoGradient
 from operad.runtime.events import AlgorithmEvent
 from operad.runtime.observers import registry as obs_registry
 from operad.utils.ops import AppendRule

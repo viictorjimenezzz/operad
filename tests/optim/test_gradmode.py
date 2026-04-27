@@ -1,4 +1,4 @@
-"""Offline tests for `operad.optim.context`.
+"""Offline tests for `operad.optim.gradmode`.
 
 Covers the two ContextVars (`_GRAD_ENABLED`, `_INFERENCE_MODE`), the
 `no_grad()` / `inference_mode()` async context managers, nested usage,
@@ -11,8 +11,12 @@ import asyncio
 
 import pytest
 
-from operad.optim import inference_mode, no_grad
-from operad.optim.context import _grad_enabled, _inference_mode_active
+from operad.optim.gradmode import (
+    _grad_enabled,
+    _inference_mode_active,
+    inference_mode,
+    no_grad,
+)
 
 
 @pytest.mark.asyncio
@@ -103,6 +107,7 @@ async def test_concurrent_tasks_are_isolated() -> None:
 
 
 def test_public_exports() -> None:
-    from operad.optim import inference_mode as im, no_grad as ng
+    from operad.optim.gradmode import inference_mode as im, no_grad as ng
+
     assert im is inference_mode
     assert ng is no_grad

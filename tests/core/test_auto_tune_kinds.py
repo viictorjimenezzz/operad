@@ -134,7 +134,7 @@ async def test_auto_tune_kind_textgrad_runs(
         return opt
 
     monkeypatch.setattr(
-        "operad.optim.sgd.TextualGradientDescent", _factory
+        "operad.optim.optimizers.tgd.TextualGradientDescent", _factory
     )
 
     seed = _seed(cfg)
@@ -162,7 +162,7 @@ async def test_auto_tune_kind_momentum_runs(
         return opt
 
     monkeypatch.setattr(
-        "operad.optim.momentum.MomentumTextGrad", _factory
+        "operad.optim.optimizers.momentum.MomentumTextGrad", _factory
     )
 
     seed = _seed(cfg)
@@ -196,7 +196,7 @@ async def test_auto_tune_kind_opro_runs(
         captured["evaluator"] = evaluator
         return opt
 
-    monkeypatch.setattr("operad.optim.opro.OPROOptimizer", _factory)
+    monkeypatch.setattr("operad.optim.optimizers.opro.OPROOptimizer", _factory)
 
     seed = _seed(cfg)
     await seed.abuild()
@@ -232,7 +232,7 @@ async def test_auto_tune_kind_ape_runs(
         captured["k"] = k
         return opt
 
-    monkeypatch.setattr("operad.optim.ape.APEOptimizer", _factory)
+    monkeypatch.setattr("operad.optim.optimizers.ape.APEOptimizer", _factory)
 
     seed = _seed(cfg)
     await seed.abuild()
@@ -257,7 +257,7 @@ async def test_auto_tune_kind_textgrad_ignores_mutations_kwarg(
         return _StubSGD(params, lr=lr)
 
     monkeypatch.setattr(
-        "operad.optim.sgd.TextualGradientDescent", _factory
+        "operad.optim.optimizers.tgd.TextualGradientDescent", _factory
     )
 
     seed = _seed(cfg)

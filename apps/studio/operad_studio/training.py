@@ -165,8 +165,8 @@ async def _default_runner(
     Exports the trained agent to ``data_dir / "{job_name}-trained.json"``
     so the Studio index lists it for the next round.
     """
-    from operad.optim.optimizer import Optimizer
-    from operad.optim.textgrad import TextualGradientDescent
+    from operad.optim.optimizers.optimizer import Optimizer
+    from operad.optim.optimizers.tgd import TextualGradientDescent
     from operad.train import HumanFeedbackLoss, Trainer
 
     # Dashboard forwarding — optional, scoped to this call.

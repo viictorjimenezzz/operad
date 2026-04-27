@@ -24,10 +24,15 @@ from pydantic import BaseModel, Field
 from operad.core.agent import Agent
 from operad.core.config import Configuration
 from operad.core.agent import Example
-from operad.optim.optimizer import ParamGroup
 from operad.optim.parameter import Parameter, TextualGradient
-from operad.optim.rewrite import apply_rewrite
-from operad.optim.sgd import RewriterFactory, TextualGradientDescent
+from operad.optim.backprop.rewrite import apply_rewrite
+from operad.optim.optimizers.optimizer import ParamGroup
+from operad.optim.optimizers.tgd import RewriterFactory, TextualGradientDescent
+
+
+# ---------------------------------------------------------------------------
+# Domain schemas.
+# ---------------------------------------------------------------------------
 
 
 class MomentumInput(BaseModel):
@@ -42,6 +47,11 @@ class MomentumInput(BaseModel):
             "entry is the current step's gradient."
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Summarizer agent.
+# ---------------------------------------------------------------------------
 
 
 class GradSummarizer(Agent[MomentumInput, TextualGradient]):
@@ -86,6 +96,11 @@ class GradSummarizer(Agent[MomentumInput, TextualGradient]):
 
 
 SummarizerFactory = Callable[[], GradSummarizer | Awaitable[GradSummarizer]]
+
+
+# ---------------------------------------------------------------------------
+# Optimizer.
+# ---------------------------------------------------------------------------
 
 
 class MomentumTextGrad(TextualGradientDescent):

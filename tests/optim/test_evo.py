@@ -1,4 +1,4 @@
-"""Tests for `operad.optim.EvoGradient`."""
+"""Tests for `operad.optim.optimizers.evo.EvoGradient`."""
 
 from __future__ import annotations
 
@@ -9,7 +9,8 @@ from pydantic import BaseModel
 
 from operad import Agent
 from operad.metrics.base import MetricBase
-from operad.optim import ConfigurationConstraint, EvoGradient
+from operad.optim.optimizers.evo import EvoGradient
+from operad.optim.parameter import ConfigurationConstraint
 from operad.runtime.events import AlgorithmEvent
 from operad.runtime.observers import registry as obs_registry
 from operad.utils.errors import BuildError

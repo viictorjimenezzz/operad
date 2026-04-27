@@ -11,7 +11,7 @@ from typing import Any
 from operad import Agent
 from operad.benchmark import BenchmarkTask
 from operad.metrics import Rouge1
-from operad.optim.loss import LossFromMetric
+from operad.optim.losses import MetricLoss
 
 from ._config import default_config
 from ._data import (
@@ -25,7 +25,7 @@ DATASET = make_summarization_dataset(n=50, seed=42)
 
 METRICS = [Rouge1(field="summary")]
 
-LOSS_FN = LossFromMetric(METRICS[0])
+LOSS_FN = MetricLoss(METRICS[0])
 
 
 # ---------------------------------------------------------------------------

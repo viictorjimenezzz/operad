@@ -1,4 +1,4 @@
-"""Offline tests for `operad.optim.optimizer` — `Optimizer` base class.
+"""Offline tests for `operad.optim.optimizers.optimizer` — `Optimizer` base class.
 
 Uses a minimal `StubOptimizer` that only implements the abstract hooks,
 so these tests focus on the base-class surface: parameter-group
@@ -12,13 +12,8 @@ from typing import Any
 
 import pytest
 
-from operad.optim import (
-    Optimizer,
-    ParamGroup,
-    Parameter,
-    TextParameter,
-    TextualGradient,
-)
+from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
+from operad.optim.parameter import Parameter, TextParameter, TextualGradient
 from tests._helpers.fake_leaf import A, B, FakeLeaf
 
 

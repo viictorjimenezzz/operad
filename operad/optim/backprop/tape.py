@@ -32,13 +32,12 @@ from operad.runtime.observers.base import (
 if TYPE_CHECKING:
     from operad.core.agent import Agent
 
-# Stream 2-1 will expose a gradient-enabled flag via
-# `operad.optim.context`. Until it lands, the fallback is "always
-# record"; when it lands, `on_event` gates recording on the flag.
-try:  # pragma: no cover - exercised once 2-1 merges
-    from operad.optim.context import _GRAD_ENABLED  # type: ignore[import-not-found]
-except ImportError:
-    _GRAD_ENABLED = None  # type: ignore[assignment]
+from operad.optim.gradmode import _GRAD_ENABLED
+
+
+# ---------------------------------------------------------------------------
+# Domain schemas.
+# ---------------------------------------------------------------------------
 
 
 @dataclass(eq=False)
@@ -119,7 +118,12 @@ class Tape:
 def _dump(model: BaseModel | None) -> Any:
     if model is None:
         return None
-    return model.model_dump(mode="json")
+        return model.model_dump(mode="json")
+
+
+# ---------------------------------------------------------------------------
+# Observer.
+# ---------------------------------------------------------------------------
 
 
 class TapeObserver:
@@ -132,7 +136,7 @@ class TapeObserver:
         self._root_path: str | None = None
 
     async def on_event(self, event: AgentEvent) -> None:
-        if _GRAD_ENABLED is not None and _GRAD_ENABLED.get() is False:
+        if _GRAD_ENABLED.get() is False:
             return
         if event.kind == "chunk":
             return
@@ -213,19 +217,26 @@ def _safe_render_prompt(
         return None
 
 
+# ---------------------------------------------------------------------------
+# Active state.
+# ---------------------------------------------------------------------------
+
+
 _ACTIVE_TAPE: TapeObserver | None = None
 
 
 def enabled() -> bool:
     """Whether a `tape()` would record events right now.
 
-    True when `operad.optim.context._GRAD_ENABLED` is unset (the 2-1
-    fallback) or set to True; False when an active gradient-disabling
-    context (e.g. `no_grad()`) has switched it off.
+    False when an active gradient-disabling context such as `no_grad()`
+    has switched recording off.
     """
-    if _GRAD_ENABLED is None:
-        return True
     return bool(_GRAD_ENABLED.get())
+
+
+# ---------------------------------------------------------------------------
+# Context manager.
+# ---------------------------------------------------------------------------
 
 
 @contextlib.asynccontextmanager

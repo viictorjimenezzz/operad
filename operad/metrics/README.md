@@ -57,8 +57,8 @@ score  = await metric.score(predicted, expected)   # judge.rationale captured se
 
 `RubricCritic` is the bridge between a metric and a `Loss`: the same
 critic that scores predictions also produces a `TextualGradient` when
-lifted into `CriticLoss(critic)` under
-[`../optim/loss.py`](../optim/loss.py).
+lifted into `JudgeLoss(critic)` under
+[`../optim/losses/`](../optim/losses/).
 
 ## How to extend
 
@@ -83,8 +83,8 @@ when you want a multi-row summary metric.
 
 - [`../benchmark/`](../benchmark/README.md) — `evaluate(agent, ds,
   metrics)` is the canonical entry point.
-- [`../optim/`](../optim/README.md) — `LossFromMetric(metric)` and
-  `CriticLoss(critic)` lift any metric into a textual-gradient loss.
+- [`../optim/`](../optim/README.md) — `MetricLoss(metric)` and
+  `JudgeLoss(critic)` lift any metric into a textual-gradient loss.
 - [`../algorithms/`](../algorithms/README.md) — algorithms take
   metrics as parameters for inner-loop selection.
 - Top-level [`../../INVENTORY.md`](../../INVENTORY.md) §8 — full

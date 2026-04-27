@@ -49,7 +49,7 @@ from ..utils.hashing import (
 )
 from .state import AgentState
 from . import render
-from .gradmode import _inference_mode_active
+from ..optim.gradmode import _inference_mode_active
 
 if TYPE_CHECKING:
     from .build import Tracer
@@ -1790,19 +1790,19 @@ class Agent(Generic[In, Out]):
         always had.
 
         - ``"evo"``: population-based mutation/selection via
-          ``operad.optim.EvoGradient``. Respects ``mutations``,
+          ``operad.optim.optimizers.evo.EvoGradient``. Respects ``mutations``,
           ``population_size``, ``generations``.
         - ``"textgrad"``: textual-gradient descent via
-          ``operad.optim.TextualGradientDescent`` inside a minimal
+          ``operad.optim.optimizers.tgd.TextualGradientDescent`` inside a minimal
           ``Trainer`` loop. Respects ``epochs``, ``lr``, ``batch_size``.
-        - ``"momentum"``: ``operad.optim.MomentumTextGrad`` instead.
+        - ``"momentum"``: ``operad.optim.optimizers.momentum.MomentumTextGrad`` instead.
         - ``"opro"``: LLM-as-optimizer over per-parameter history
-          (``operad.optim.OPROOptimizer``). Respects ``epochs``.
+          (``operad.optim.optimizers.opro.OPROOptimizer``). Respects ``epochs``.
         - ``"ape"``: sample-and-rank candidate rewrites
-          (``operad.optim.APEOptimizer``). Respects ``population_size``
+          (``operad.optim.optimizers.ape.APEOptimizer``). Respects ``population_size``
           (mapped to the per-step candidate budget) and ``epochs``.
 
-        ``loss`` overrides the default ``LossFromMetric(metric)`` used
+        ``loss`` overrides the default ``MetricLoss(metric)`` used
         by the trainer-backed kinds; it is ignored by ``kind="evo"``.
 
         `dataset` may be a `Dataset`, an iterable of `Entry` objects, or
@@ -1843,7 +1843,7 @@ class Agent(Generic[In, Out]):
         generations: int,
         rng: Any,
     ) -> "Agent[In, Out]":
-        from ..optim.evo import EvoGradient
+        from ..optim.optimizers.evo import EvoGradient
         from ..utils.ops import default_mutations
 
         seed = self.clone()
@@ -1876,11 +1876,11 @@ class Agent(Generic[In, Out]):
         loss: Any,
     ) -> "Agent[In, Out]":
         from ..data.loader import DataLoader
-        from ..optim.ape import APEOptimizer
-        from ..optim.loss import LossFromMetric
-        from ..optim.momentum import MomentumTextGrad
-        from ..optim.opro import OPROOptimizer
-        from ..optim.sgd import TextualGradientDescent
+        from ..optim.losses import MetricLoss
+        from ..optim.optimizers.ape import APEOptimizer
+        from ..optim.optimizers.momentum import MomentumTextGrad
+        from ..optim.optimizers.opro import OPROOptimizer
+        from ..optim.optimizers.tgd import TextualGradientDescent
         from ..train import Trainer
 
         seed = self.clone()
@@ -1889,7 +1889,7 @@ class Agent(Generic[In, Out]):
 
         ds = _coerce_eval_dataset(dataset)
         loader = DataLoader(ds, batch_size=max(1, int(batch_size)))
-        loss_fn = loss if loss is not None else LossFromMetric(metric)
+        loss_fn = loss if loss is not None else MetricLoss(metric)
         pairs = _coerce_eval_pairs(dataset)
 
         params = list(seed.parameters())

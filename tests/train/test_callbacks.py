@@ -158,7 +158,7 @@ def test_gradclip_rejects_nonpositive_max() -> None:
 
 
 async def test_gradclip_ignores_params_without_grad() -> None:
-    from operad.optim.optimizer import ParamGroup
+    from operad.optim.optimizers.optimizer import ParamGroup
 
     class _P:
         grad = None

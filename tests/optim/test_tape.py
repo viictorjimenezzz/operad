@@ -1,4 +1,4 @@
-"""Offline tests for `operad.optim.tape`.
+"""Offline tests for `operad.optim.backprop.tape`.
 
 Covers `Tape`, `TapeEntry`, `TapeObserver`, and the `tape()` async
 context manager: entry ordering (start-order), reverse iteration,
@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 from operad.core.flow import Parallel
 from operad.core.flow import Sequential
-from operad.optim import Tape, TapeEntry, TapeObserver, tape
+from operad.optim.backprop.tape import Tape, TapeEntry, TapeObserver, tape
 from operad.runtime.observers import registry as obs_registry
 
 from tests._helpers.fake_leaf import A, B, C, FakeLeaf
@@ -175,7 +175,7 @@ async def test_nested_tape_raises() -> None:
 
 async def test_no_grad_suppresses_recording(cfg) -> None:
     try:
-        from operad.optim.context import no_grad  # type: ignore[import-not-found]
+        from operad.optim.gradmode import no_grad  # type: ignore[import-not-found]
     except ImportError:
         pytest.skip("stream 2-1 (no_grad) has not landed yet")
 

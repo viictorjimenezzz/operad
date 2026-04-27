@@ -12,8 +12,8 @@ from operad.benchmark.dataset import Dataset
 from operad.benchmark.entry import Entry
 from operad.data.loader import DataLoader
 from operad.metrics.base import MetricBase
-from operad.optim.lr_scheduler import ConstantLR
-from operad.optim.optimizer import Optimizer, ParamGroup
+from operad.optim.schedulers.lr import ConstantLR
+from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import Parameter, TextualGradient
 from operad.train import Trainer, TrainingReport
 from tests._helpers.fake_leaf import A, B, FakeLeaf

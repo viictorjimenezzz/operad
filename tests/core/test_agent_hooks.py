@@ -10,7 +10,7 @@ import pytest
 
 from operad import Configuration
 from operad.core.flow import Sequential
-from operad.optim import inference_mode, no_grad
+from operad.optim.gradmode import inference_mode, no_grad
 
 from tests._helpers.fake_leaf import A, B, FakeLeaf
 

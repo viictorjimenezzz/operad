@@ -182,7 +182,7 @@ events to a running `apps/dashboard/` server.
 | A new algorithm                    | `operad/algorithms/<name>.py`                                           | Plain class; `run(...)` signature; takes `Agent`s + metrics as constructor args. |
 | A new metric                       | `operad/metrics/<name>.py`                                              | Implement `Metric.score(predicted, expected) -> float`.            |
 | A new optimizer                    | `operad/optim/<name>.py`                                                | Subclass `Optimizer`; implement `async step()`.                    |
-| A new loss                         | `operad/optim/loss.py` or sibling                                       | Implement `Loss.compute(pred, expected) -> (score, TextualGradient)`. |
+| A new loss                         | `operad/optim/losses/`                                                  | Implement `Loss.compute(pred, expected) -> (score, TextualGradient)`. |
 | A new sampler                      | `operad/data/<sampler>.py`                                              | Subclass `Sampler`; expose `__iter__`.                             |
 | A new observer                     | `operad/runtime/observers/<name>.py`                                    | Subclass `Observer`; register with `runtime.observers.registry`.   |
 | A new backend                      | `operad/core/models.py` (and a sibling adapter file)                    | Extend `resolve_model` dispatcher; honor `Configuration.backend`.  |

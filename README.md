@@ -66,7 +66,8 @@ with `run_id`, `agent_path`, `latency_ms`, token counts, and stable
 **Training — a fit loop in 10 lines.**
 
 ```python
-from operad.optim import CriticLoss, TextualGradientDescent
+from operad.optim.losses import JudgeLoss
+from operad.optim.optimizers.tgd import TextualGradientDescent
 from operad.train import Trainer
 from operad.data import DataLoader, random_split
 
@@ -78,7 +79,7 @@ loader     = DataLoader(train, batch_size=8, shuffle=True)
 
 trainer = Trainer(agent,
                   TextualGradientDescent(agent.parameters(), lr=1.0),
-                  CriticLoss(rubric_critic))
+                  JudgeLoss(rubric_critic))
 report  = await trainer.fit(loader, val_ds=val, epochs=5)
 ```
 

@@ -28,6 +28,11 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+# ---------------------------------------------------------------------------
+# Domain schemas.
+# ---------------------------------------------------------------------------
+
+
 ParameterKind = Literal[
     "role",
     "task",
@@ -195,6 +200,11 @@ ParameterConstraint = Annotated[
 ListConstraint.model_rebuild()
 
 
+# ---------------------------------------------------------------------------
+# Path helpers.
+# ---------------------------------------------------------------------------
+
+
 _INDEX_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\[(\d+)\]$")
 
 
@@ -215,6 +225,11 @@ def _write_path(root: Any, path: str, value: Any) -> None:
         getattr(parent, attr)[idx] = value
         return
     setattr(parent, last, value)
+
+
+# ---------------------------------------------------------------------------
+# Parameter handles.
+# ---------------------------------------------------------------------------
 
 
 class Parameter(BaseModel, Generic[T]):

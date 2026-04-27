@@ -1,4 +1,4 @@
-"""Offline tests for `operad.optim.backward`.
+"""Offline tests for `operad.optim.backprop.backward`.
 
 Every LLM call is stubbed via `BackpropAgent` / `ParameterGradAgent`
 subclasses with overridden `forward`. The tests cover the full
@@ -22,27 +22,26 @@ from operad.core.flow import Sequential
 from operad.agents.reasoning.components.router import RouteClassifier
 from operad.agents.reasoning.schemas import Choice
 from operad.core.agent import Agent
-from operad.optim import (
+from operad.optim.backprop.backward import backward, register_backward_rule
+from operad.optim.backprop.grad import (
     BackpropAgent,
     ParameterGradAgent,
     ParameterGradInput,
     ParameterGradOutput,
     PropagateInput,
     PropagateOutput,
-    TextualGradient,
-    backward,
-    register_backward_rule,
-    tape,
 )
+from operad.optim.backprop.tape import tape
 from operad.core.agent import _TRACER
-from operad.optim.backward import (
+from operad.optim.backprop.backward import (
     _RULES,
     _generic_composite_rule,
     _parallel_split,
     _pipeline_split,
     _router_split,
 )
-from operad.optim.tape import TapeEntry
+from operad.optim.backprop.tape import TapeEntry
+from operad.optim.parameter import TextualGradient
 from operad.runtime.observers import registry as obs_registry
 from tests._helpers.fake_leaf import A, B, C, FakeLeaf
 
@@ -556,7 +555,7 @@ async def test_two_backward_runs_produce_identical_grads(cfg) -> None:
 
 
 async def test_backward_on_empty_tape_is_noop(cfg) -> None:
-    from operad.optim.tape import Tape
+    from operad.optim.backprop.tape import Tape
 
     empty = Tape()
     bp = await _built_backprop()
@@ -696,7 +695,7 @@ async def test_router_split_no_match_gives_everyone_null() -> None:
 
 
 async def test_generic_composite_rule_warns_once_per_class() -> None:
-    from operad.optim.backward import _GENERIC_WARNED
+    from operad.optim.backprop.backward import _GENERIC_WARNED
 
     _GENERIC_WARNED.discard("FakeLeaf")  # reset for idempotent test run
 

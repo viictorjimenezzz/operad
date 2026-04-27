@@ -1,4 +1,4 @@
-"""Offline tests for `operad.optim.opro.OPROOptimizer`."""
+"""Offline tests for `operad.optim.optimizers.opro.OPROOptimizer`."""
 
 from __future__ import annotations
 
@@ -8,13 +8,13 @@ import pytest
 
 from operad.core.agent import _TRACER
 from operad.metrics.base import MetricBase
-from operad.optim import (
+from operad.optim.optimizers.opro import (
     OPROAgent,
     OPROInput,
     OPROOptimizer,
     OPROOutput,
-    TextParameter,
 )
+from operad.optim.parameter import TextParameter
 from tests._helpers.fake_leaf import A, B, FakeLeaf
 
 

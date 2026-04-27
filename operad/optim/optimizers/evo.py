@@ -28,7 +28,7 @@ from typing import Any, AsyncIterator, Iterable
 from operad.benchmark.evaluate import evaluate
 from operad.core.agent import Agent
 from operad.metrics.base import Metric
-from operad.optim.optimizer import Optimizer, ParamGroup
+from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import Parameter
 from operad.runtime.observers.base import (
     _enter_algorithm_run,
@@ -39,6 +39,11 @@ from operad.utils.ops import Op
 
 
 _IDENTITY_OP = "identity"
+
+
+# ---------------------------------------------------------------------------
+# Optimizer.
+# ---------------------------------------------------------------------------
 
 
 class EvoGradient(Optimizer):

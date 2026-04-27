@@ -12,7 +12,7 @@ from typing import Any
 from operad import Agent
 from operad.benchmark import BenchmarkTask
 from operad.metrics import Contains
-from operad.optim.loss import LossFromMetric
+from operad.optim.losses import MetricLoss
 
 from ._config import default_config
 from ._data import (
@@ -28,7 +28,7 @@ DATASET = make_tool_use_dataset(n=50, seed=42)
 
 METRICS = [ToolNameExactMatch(), Contains(field="tool_args")]
 
-LOSS_FN = LossFromMetric(METRICS[0])
+LOSS_FN = MetricLoss(METRICS[0])
 
 
 # ---------------------------------------------------------------------------
