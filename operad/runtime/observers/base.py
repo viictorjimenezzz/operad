@@ -94,6 +94,10 @@ registry = ObserverRegistry()
 # Root-run correlation: preserved across a whole invocation tree.
 _RUN_ID: ContextVar[str | None] = ContextVar("_RUN_ID", default=None)
 
+# Per-invocation correlation id. Distinguishes concurrent invocations
+# that share `(run_id, agent_path)`.
+_INVOKE_ID: ContextVar[str | None] = ContextVar("_INVOKE_ID", default=None)
+
 # Current parent (agent, dotted_path) so children can compute their path.
 _PATH_STACK: ContextVar[tuple["Agent[Any, Any]", str] | None] = ContextVar(
     "_PATH_STACK", default=None

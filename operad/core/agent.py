@@ -1231,13 +1231,17 @@ class Agent(Generic[In, Out]):
         from ..runtime.observers import base as _obs
 
         run_id = _obs._RUN_ID.get() or ""
+        invoke_id = _obs._INVOKE_ID.get() or ""
         entry = _obs._PATH_STACK.get()
         path = entry[1] if entry else self.name
+        meta: dict[str, Any] = {"chunk_index": i, "text": piece}
+        if invoke_id:
+            meta["invoke_id"] = invoke_id
         await _obs.registry.notify(
             _obs.AgentEvent(
                 run_id, path, "chunk", None, None, None,
                 time.time(), None,
-                {"chunk_index": i, "text": piece},
+                meta,
             )
         )
 
@@ -1333,18 +1337,19 @@ class Agent(Generic[In, Out]):
 
     def _enter_run(
         self, path: str, *, track_retry: bool
-    ) -> tuple[bool, str, float, float, str, dict[str, Any], dict[str, Any], tuple[Any, Any, Any, Any | None]]:
+    ) -> tuple[bool, str, float, float, str, dict[str, Any], dict[str, Any], tuple[Any, Any, Any, Any | None, Any]]:
         """Set up per-run ContextVars and return the run frame.
 
         Returns ``(is_root, run_id, started, started_wall, graph_hash,
         start_meta, retry_meta, tokens)`` where ``tokens`` is the tuple
-        ``(tok_r, tok_p, tok_g, tok_m)`` to be handed to `_exit_run`.
+        ``(tok_r, tok_p, tok_g, tok_m, tok_i)`` to be handed to `_exit_run`.
         ``tok_m`` is ``None`` when ``track_retry`` is False (streaming).
         """
         from ..runtime.observers import base as _obs
 
         is_root = _obs._RUN_ID.get() is None
         run_id = _obs._RUN_ID.get() or uuid.uuid4().hex
+        invoke_id = uuid.uuid4().hex
         started_wall = time.time()
         started = time.monotonic()
 
@@ -1357,23 +1362,25 @@ class Agent(Generic[In, Out]):
         tok_p = _obs._PATH_STACK.set((self, path))
         retry_meta: dict[str, Any] = {}
         tok_m = _obs._RETRY_META.set(retry_meta) if track_retry else None
+        tok_i = _obs._INVOKE_ID.set(invoke_id)
 
-        start_meta: dict[str, Any] = {}
+        start_meta: dict[str, Any] = {"invoke_id": invoke_id}
         if is_root:
             start_meta["graph"] = _graph_json_or_none(self)
             start_meta["is_root"] = True
             if sys.argv and sys.argv[0]:
                 start_meta["script"] = sys.argv[0]
-        return is_root, run_id, started, started_wall, graph_hash, start_meta, retry_meta, (tok_r, tok_p, tok_g, tok_m)
+        return is_root, run_id, started, started_wall, graph_hash, start_meta, retry_meta, (tok_r, tok_p, tok_g, tok_m, tok_i)
 
     def _exit_run(
-        self, tokens: tuple[Any, Any, Any, Any | None]
+        self, tokens: tuple[Any, Any, Any, Any | None, Any]
     ) -> None:
         from ..runtime.observers import base as _obs
 
-        tok_r, tok_p, tok_g, tok_m = tokens
+        tok_r, tok_p, tok_g, tok_m, tok_i = tokens
         if tok_m is not None:
             _obs._RETRY_META.reset(tok_m)
+        _obs._INVOKE_ID.reset(tok_i)
         _obs._RUN_ID.reset(tok_r)
         _obs._PATH_STACK.reset(tok_p)
         if tok_g is not None:
@@ -1442,6 +1449,7 @@ class Agent(Generic[In, Out]):
             start_meta, retry_meta, tokens,
         ) = self._enter_run(path, track_retry=True)
         algo_parent = _obs._ALGO_RUN_ID.get()
+        invoke_id = _obs._INVOKE_ID.get() or ""
         if algo_parent is not None and not is_root:
             start_meta["parent_run_id"] = algo_parent
         try:
@@ -1473,6 +1481,8 @@ class Agent(Generic[In, Out]):
                 started, started_wall, finished, finished_wall,
             )
             end_meta: dict[str, Any] = {}
+            if invoke_id:
+                end_meta["invoke_id"] = invoke_id
             if is_root:
                 end_meta["is_root"] = True
                 end_meta["output_type"] = _qualified(self.output)  # type: ignore[arg-type]
@@ -1488,6 +1498,8 @@ class Agent(Generic[In, Out]):
             return envelope
         except BaseException as e:
             err_meta: dict[str, Any] = {"is_root": True} if is_root else {}
+            if invoke_id:
+                err_meta["invoke_id"] = invoke_id
             err_meta.update(retry_meta)
             if algo_parent is not None and not is_root:
                 err_meta["parent_run_id"] = algo_parent
@@ -1608,6 +1620,7 @@ class Agent(Generic[In, Out]):
             start_meta, _retry_meta, tokens,
         ) = self._enter_run(path, track_retry=False)
         algo_parent_s = _obs._ALGO_RUN_ID.get()
+        invoke_id_s = _obs._INVOKE_ID.get() or ""
         if algo_parent_s is not None and not is_root:
             start_meta["parent_run_id"] = algo_parent_s
 
@@ -1628,11 +1641,14 @@ class Agent(Generic[In, Out]):
 
             async def on_chunk(i: int, piece: str) -> None:
                 await queue.put(ChunkEvent(piece, i, path, run_id))
+                chunk_meta: dict[str, Any] = {"chunk_index": i, "text": piece}
+                if invoke_id_s:
+                    chunk_meta["invoke_id"] = invoke_id_s
                 await _obs.registry.notify(
                     _obs.AgentEvent(
                         run_id, path, "chunk", None, None, None,
                         time.time(), None,
-                        {"chunk_index": i, "text": piece},
+                        chunk_meta,
                     )
                 )
 
@@ -1684,6 +1700,8 @@ class Agent(Generic[In, Out]):
                 raise final_error
 
             end_meta: dict[str, Any] = {}
+            if invoke_id_s:
+                end_meta["invoke_id"] = invoke_id_s
             if is_root:
                 end_meta["is_root"] = True
                 end_meta["output_type"] = _qualified(self.output)  # type: ignore[arg-type]
@@ -1699,6 +1717,8 @@ class Agent(Generic[In, Out]):
             )
         except BaseException as e:
             err_meta: dict[str, Any] = {"is_root": True} if is_root else {}
+            if invoke_id_s:
+                err_meta["invoke_id"] = invoke_id_s
             if algo_parent_s is not None and not is_root:
                 err_meta["parent_run_id"] = algo_parent_s
             await _obs.registry.notify(

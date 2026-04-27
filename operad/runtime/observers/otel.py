@@ -68,10 +68,10 @@ class OtelObserver:
         self._context = _ot_context
         self._tracer = _ot_trace.get_tracer(tracer_name)
         self._max_attr_length = max_attr_length
-        self._spans: dict[tuple[str, str], Any] = {}
-        self._chunks: dict[tuple[str, str], int] = {}
-        self._tokens: dict[tuple[str, str], Any] = {}
-        self._tool_inputs: dict[tuple[str, str], ToolCall] = {}
+        self._spans: dict[tuple[str, str, str], Any] = {}
+        self._chunks: dict[tuple[str, str, str], int] = {}
+        self._tokens: dict[tuple[str, str, str], Any] = {}
+        self._tool_inputs: dict[tuple[str, str, str], ToolCall] = {}
         self._algo_spans: dict[tuple[str, str], Any] = {}
         self._algo_tokens: dict[tuple[str, str], Any] = {}
 
@@ -79,7 +79,7 @@ class OtelObserver:
         if isinstance(event, AlgorithmEvent):
             self._on_algorithm_event(event)
             return
-        key = (event.run_id, event.agent_path)
+        key = self._agent_key(event)
         if event.kind == "start":
             self._on_start(key, event)
         elif event.kind == "chunk":
@@ -89,7 +89,14 @@ class OtelObserver:
         elif event.kind == "error":
             self._on_error(key, event)
 
-    def _on_start(self, key: tuple[str, str], event: AgentEvent) -> None:
+    def _agent_key(self, event: AgentEvent) -> tuple[str, str, str]:
+        meta = event.metadata or {}
+        invoke_id = meta.get("invoke_id", "")
+        if not isinstance(invoke_id, str):
+            invoke_id = str(invoke_id)
+        return (event.run_id, event.agent_path, invoke_id)
+
+    def _on_start(self, key: tuple[str, str, str], event: AgentEvent) -> None:
         meta = event.metadata or {}
         is_root = bool(meta.get("is_root"))
 
@@ -149,7 +156,7 @@ class OtelObserver:
         ctx = self._trace.set_span_in_context(parent)
         return self._tracer.start_span(agent_path, context=ctx)
 
-    def _on_end(self, key: tuple[str, str], event: AgentEvent) -> None:
+    def _on_end(self, key: tuple[str, str, str], event: AgentEvent) -> None:
         span = self._spans.pop(key, None)
         token = self._tokens.pop(key, None)
         chunks = self._chunks.pop(key, 0)
@@ -181,7 +188,7 @@ class OtelObserver:
                 self._context.detach(token)
             span.end()
 
-    def _on_error(self, key: tuple[str, str], event: AgentEvent) -> None:
+    def _on_error(self, key: tuple[str, str, str], event: AgentEvent) -> None:
         span = self._spans.pop(key, None)
         token = self._tokens.pop(key, None)
         chunks = self._chunks.pop(key, 0)
