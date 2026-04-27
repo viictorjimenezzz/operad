@@ -26,6 +26,8 @@ Per-backend handling of `Configuration` knobs:
 
 from __future__ import annotations
 
+import json
+import os
 import time
 import warnings
 from typing import TYPE_CHECKING, Any, Literal
@@ -281,6 +283,41 @@ def _build_gemini(cfg: Configuration) -> "GeminiModel":
     client_args: dict[str, Any] = {}
     if cfg.api_key is not None:
         client_args["api_key"] = cfg.api_key
+    else:
+        vertex_sa_json = os.environ.get("GOOGLE_VERTEX_AI_SERVICE_ACCOUNT")
+        if vertex_sa_json:
+            try:
+                from google.oauth2 import service_account
+            except ImportError as e:
+                raise ImportError(
+                    "Gemini Vertex auth requires google-auth; install the [gemini] extra: "
+                    "`pip install 'operad[gemini]'`."
+                ) from e
+
+            try:
+                sa_info = json.loads(vertex_sa_json)
+            except json.JSONDecodeError as e:
+                raise BuildError(
+                    "bad_config",
+                    "GOOGLE_VERTEX_AI_SERVICE_ACCOUNT must be valid JSON.",
+                ) from e
+
+            project = os.environ.get("GOOGLE_CLOUD_PROJECT") or sa_info.get("project_id")
+            location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+            if not project:
+                raise BuildError(
+                    "bad_config",
+                    "Vertex Gemini auth needs project id; set GOOGLE_CLOUD_PROJECT or include project_id in GOOGLE_VERTEX_AI_SERVICE_ACCOUNT.",
+                )
+            credentials = service_account.Credentials.from_service_account_info(sa_info)
+            client_args.update(
+                {
+                    "vertexai": True,
+                    "credentials": credentials,
+                    "project": project,
+                    "location": location,
+                }
+            )
     if cfg.resilience.timeout is not None:
         client_args["timeout"] = cfg.resilience.timeout
 
