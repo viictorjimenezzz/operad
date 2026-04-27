@@ -89,7 +89,7 @@ down:
 restart: down up
 
 rebuild:
-	docker compose up -d --build
+	docker compose up -d --build operad-dashboard
 
 logs:
 	docker compose logs -f $(SVC)
