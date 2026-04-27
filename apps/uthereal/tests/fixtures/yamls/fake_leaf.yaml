@@ -1,0 +1,23 @@
+# fixture comment: preserved by the round-trip loader
+agent_name: FakeLeaf
+instrument: true
+config:
+  llm_tier: "fast"
+  tracer_inputs:
+    tags:
+      - fake
+    metadata: {}
+prompt:
+  # prompt comment: also preserved
+  role: |
+    You are a fake.
+  task: "Do fake things."
+  rules:
+    - "Always be fake."
+    - "Never be real."
+  examples:
+    - input: "<question>What is fake?</question>"
+      output:
+        answer: "Everything fake."
+  closure: "Output a fake answer."
+output: uthereal_workflow.agentic_workflows.chat.selfserve.fake.FakeLeafOut
