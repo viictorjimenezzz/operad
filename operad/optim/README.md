@@ -28,7 +28,7 @@ If you've used PyTorch, the following should feel familiar:
 
 ```python
 import operad
-from operad.optim.losses import JudgeLoss
+from operad.optim.losses import LLMAAJ
 from operad.optim.optimizers.tgd import TextualGradientDescent
 from operad.optim.schedulers.lr import CosineExplorationLR
 from operad.train import Trainer
@@ -41,7 +41,7 @@ await agent.abuild()
 train, val = random_split(dataset, [0.8, 0.2])
 loader     = DataLoader(train, batch_size=8, shuffle=True)
 
-loss_fn   = JudgeLoss(judge)
+loss_fn   = LLMAAJ(judge)
 optimizer = TextualGradientDescent(agent.parameters(), lr=1.0)
 scheduler = CosineExplorationLR(optimizer, T_max=10)
 
@@ -92,7 +92,7 @@ A Pydantic structured critique:
 Protocol that extends `Metric` with a `compute()` returning
 `(score, TextualGradient)`. Any existing `Metric` lifts for free via
 `MetricLoss(metric)`. LLM judges (the existing `Critic`) become
-losses via `JudgeLoss(critic)`: `Score.score` → float, `Score.rationale`
+losses via `LLMAAJ(critic)`: `Score.score` → float, `Score.rationale`
 → gradient text.
 
 ### `Tape` and `backward()`

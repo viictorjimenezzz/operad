@@ -56,7 +56,7 @@ score  = await metric.score(predicted, expected)   # judge.rationale captured se
 
 `LLMAAJ` is the bridge between a metric and a `Loss`: the same
 judge that scores predictions also produces a `TextualGradient` when
-lifted into `JudgeLoss(judge)` under
+lifted into `LLMAAJ(judge)` under
 [`../optim/losses/`](../optim/losses/).
 
 ## How to extend
@@ -83,7 +83,7 @@ when you want a multi-row summary metric.
 - [`../benchmark/`](../benchmark/README.md) — `evaluate(agent, ds,
   metrics)` is the canonical entry point.
 - [`../optim/`](../optim/README.md) — `MetricLoss(metric)` and
-  `JudgeLoss(judge)` lift any metric into a textual-gradient loss.
+  `LLMAAJ(judge)` lift any metric into a textual-gradient loss.
 - [`../algorithms/`](../algorithms/README.md) — algorithms take
   metrics as parameters for inner-loop selection.
 - Top-level [`../../INVENTORY.md`](../../INVENTORY.md) §8 — full

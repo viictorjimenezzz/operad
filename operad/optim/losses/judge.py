@@ -18,7 +18,7 @@ from operad.optim.parameter import TextualGradient
 # ---------------------------------------------------------------------------
 
 
-class JudgeLoss(MetricBase):
+class LLMAAJ(MetricBase):
     """Wrap an `Agent[Candidate, Score-like]` judge as a loss.
 
     The judge's output is duck-typed on `.score` and `.rationale`, so
@@ -59,4 +59,4 @@ class JudgeLoss(MetricBase):
         return s, TextualGradient(message=message, severity=sev)
 
 
-__all__ = ["JudgeLoss"]
+__all__ = ["LLMAAJ"]

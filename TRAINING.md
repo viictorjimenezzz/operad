@@ -94,14 +94,14 @@ you four standard ways to get a gradient as well:
 
 ```python
 from operad.optim.losses import (
-    JudgeLoss, MetricLoss, SchemaLoss, CompositeLoss,
+    LLMAAJ, MetricLoss, SchemaLoss, CompositeLoss,
 )
 
 # Deterministic metric → auto-generated critique
 loss_exact = MetricLoss(ExactMatch())
 
 # LLM rubric judge → the judge's rationale becomes the critique
-loss_rubric = JudgeLoss(judge)
+loss_rubric = LLMAAJ(judge)
 
 # Shape-conformance check
 loss_shape = SchemaLoss(Answer)
@@ -113,7 +113,7 @@ loss_fn = CompositeLoss([
 ])
 ```
 
-`JudgeLoss` is the most common choice — wrap any
+`LLMAAJ` is the most common choice — wrap any
 `Agent[Candidate[In, Out], Score]` and the judge's
 `Score.rationale` becomes the gradient's `message`.
 
@@ -126,7 +126,7 @@ Every training run has the same shape:
 ```python
 import operad
 from operad import Sequential
-from operad.optim.losses import JudgeLoss
+from operad.optim.losses import LLMAAJ
 from operad.optim.optimizers.tgd import TextualGradientDescent
 from operad.optim.schedulers.lr import CosineExplorationLR
 from operad.train import Trainer, EarlyStopping, BestCheckpoint
@@ -142,7 +142,7 @@ train, val = random_split(dataset, [0.8, 0.2], seed=0)
 loader = DataLoader(train, batch_size=8, shuffle=True)
 
 # 3. Loss, optimizer, scheduler.
-loss_fn   = JudgeLoss(judge)
+loss_fn   = LLMAAJ(judge)
 optimizer = TextualGradientDescent(agent.parameters(), lr=1.0)
 scheduler = CosineExplorationLR(optimizer, T_max=10)
 

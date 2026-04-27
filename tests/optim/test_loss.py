@@ -1,6 +1,6 @@
 """Offline tests for `operad.optim.losses`.
 
-Covers `MetricLoss` (match, mismatch, custom hooks), `JudgeLoss`
+Covers `MetricLoss` (match, mismatch, custom hooks), `LLMAAJ`
 (via a FakeLeaf critic), `SchemaLoss` (missing / wrong-typed /
 perfect), `CompositeLoss` (aggregation, target_paths), and the
 isinstance semantics of the `Loss` protocol vs. a pure `Metric`.
@@ -16,7 +16,7 @@ from operad.metrics.metric import Metric
 from operad.metrics.metric import ExactMatch
 from operad.optim.losses import (
     CompositeLoss,
-    JudgeLoss,
+    LLMAAJ,
     Loss,
     MetricLoss,
     SchemaLoss,
@@ -98,7 +98,7 @@ async def test_loss_from_metric_name_passthrough():
 
 
 # ---------------------------------------------------------------------------
-# JudgeLoss
+# LLMAAJ
 # ---------------------------------------------------------------------------
 
 
@@ -115,7 +115,7 @@ async def _build_fake_critic(cfg, score: float, rationale: str):
 
 async def test_judge_loss_with_fake_critic(cfg):
     critic = await _build_fake_critic(cfg, 0.7, "close but not quite")
-    loss = JudgeLoss(critic)
+    loss = LLMAAJ(critic)
 
     score, grad = await loss.compute(B(value=1), None)
 
@@ -126,7 +126,7 @@ async def test_judge_loss_with_fake_critic(cfg):
 
 async def test_judge_loss_null_at_perfect_score(cfg):
     critic = await _build_fake_critic(cfg, 1.0, "perfect")
-    loss = JudgeLoss(critic)
+    loss = LLMAAJ(critic)
 
     score, grad = await loss.compute(B(value=1), None)
 
@@ -137,7 +137,7 @@ async def test_judge_loss_null_at_perfect_score(cfg):
 
 async def test_judge_loss_severity_from_rationale(cfg):
     critic = await _build_fake_critic(cfg, 0.2, "bad output")
-    loss = JudgeLoss(critic, severity_from="rationale")
+    loss = LLMAAJ(critic, severity_from="rationale")
 
     score, grad = await loss.compute(B(value=1), None)
 
@@ -148,7 +148,7 @@ async def test_judge_loss_severity_from_rationale(cfg):
 
 async def test_judge_loss_score_delegation(cfg):
     critic = await _build_fake_critic(cfg, 0.55, "mediocre")
-    loss = JudgeLoss(critic)
+    loss = LLMAAJ(critic)
 
     s = await loss.score(B(value=1), B(value=2))
     assert s == pytest.approx(0.55)

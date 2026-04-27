@@ -40,7 +40,7 @@ from operad.benchmark.dataset import Dataset
 from operad.benchmark.entry import Entry
 from operad.core.config import Sampling
 from operad.data.loader import DataLoader
-from operad.optim.losses import JudgeLoss
+from operad.optim.losses import LLMAAJ
 from operad.optim.optimizers.tgd import TextualGradientDescent
 from operad.train import Trainer
 from operad.utils.cassette import cassette_context
@@ -243,7 +243,7 @@ async def test_cassette_training_is_byte_deterministic() -> None:
     optimizer = TextualGradientDescent(
         agent.parameters(), lr=1.0, config=cfg
     )
-    loss_fn = JudgeLoss(critic, null_threshold=1.0)
+    loss_fn = LLMAAJ(critic, null_threshold=1.0)
     trainer = Trainer(agent, optimizer, loss_fn)
 
     with cassette_context(CASSETTE_PATH, mode=mode):

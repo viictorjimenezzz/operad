@@ -40,7 +40,7 @@ from operad.optim.losses import HumanFeedbackLoss
 
 ```python
 from operad import Sequential
-from operad.optim.losses import JudgeLoss
+from operad.optim.losses import LLMAAJ
 from operad.optim.optimizers.tgd import TextualGradientDescent
 from operad.optim.schedulers.lr import CosineExplorationLR
 from operad.train import Trainer, EarlyStopping, BestCheckpoint
@@ -56,7 +56,7 @@ loader = DataLoader(train, batch_size=8, shuffle=True)
 trainer = Trainer(
     agent,
     TextualGradientDescent(agent.parameters(), lr=1.0),
-    JudgeLoss(judge),
+    LLMAAJ(judge),
     scheduler=CosineExplorationLR(... , T_max=10),
     callbacks=[
         BestCheckpoint(monitor="val_loss", mode="min"),

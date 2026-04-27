@@ -616,7 +616,7 @@ attribute-insertion order. `Agent.trainable_parameters()` is the
 | --------------------- | ---------------------------------------------------------------- |
 | `Loss` (protocol)     | `compute(pred, expected) -> (score, TextualGradient)`.           |
 | `MetricLoss`      | Lift any `Metric`; the gradient's `message` is auto-generated.   |
-| `JudgeLoss(critic)`  | Wrap an `Agent[Candidate, Score]`; rationale ⇒ gradient.         |
+| `LLMAAJ(critic)`  | Wrap an `Agent[Candidate, Score]`; rationale ⇒ gradient.         |
 | `SchemaLoss`       | Scores whether `pred` matches the expected Pydantic shape.       |
 | `CompositeLoss`       | Weighted sum of child losses; merges each child's gradient.      |
 
