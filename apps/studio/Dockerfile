@@ -27,6 +27,7 @@ WORKDIR /workspace
 
 COPY pyproject.toml README.md LICENSE.txt ./
 COPY operad ./operad
+COPY apps/uthereal /workspace/apps/uthereal
 
 COPY apps/studio /workspace/apps/studio
 COPY --from=frontend /workspace/apps/frontend/dist-studio \
