@@ -1,0 +1,12 @@
+{
+  "workspace_id": "workspace-1",
+  "user_message": "Hi there",
+  "chat_history": "",
+  "session_memory_context": "",
+  "prior_beliefs_context": "[]",
+  "context": "You answer questions from the workspace.",
+  "workspace_guide": "The workspace contains implant protocol documents.",
+  "exit_strategy": "Stop when the user asks to end the conversation.",
+  "target_language": "en",
+  "character_limit": 10000
+}
