@@ -32,6 +32,7 @@ WORKDIR /workspace
 # 1. Copy operad core + utility files needed by the editable install.
 COPY pyproject.toml README.md LICENSE.txt ./
 COPY operad ./operad
+COPY apps/uthereal /workspace/apps/uthereal
 
 # 2. Copy the dashboard package.
 COPY apps/dashboard /workspace/apps/dashboard
