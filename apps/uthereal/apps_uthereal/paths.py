@@ -14,3 +14,11 @@ def runs_dir() -> Path:
     path = (Path.cwd() / ".uthereal-runs").resolve()
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def run_dir(entry_id: str) -> Path:
+    """Return the run directory for ``entry_id``, creating it lazily."""
+
+    path = runs_dir() / entry_id
+    path.mkdir(parents=True, exist_ok=True)
+    return path

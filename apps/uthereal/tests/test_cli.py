@@ -17,12 +17,12 @@ def test_cli_help_contains_all_subcommands(capsys) -> None:
         assert command in captured.out
 
 
-def test_cli_run_returns_2_with_owner_message(capsys) -> None:
+def test_cli_run_missing_entry_returns_2(capsys) -> None:
     rc = main(["run", "--entry", "/tmp/x"])
 
     captured = capsys.readouterr()
     assert rc == 2
-    assert "Owner: 4-1" in captured.err
+    assert "entry not found: /tmp/x" in captured.err
 
 
 def test_cli_show_with_no_args_returns_2(capsys) -> None:
