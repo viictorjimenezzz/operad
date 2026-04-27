@@ -91,7 +91,10 @@ export function MultiSeriesChart({
   if (!stats) {
     return (
       <div
-        className={cn("flex w-full items-center justify-center text-[11px] text-muted-2", className)}
+        className={cn(
+          "flex w-full items-center justify-center text-[11px] text-muted-2",
+          className,
+        )}
         style={{ height }}
       >
         no data
@@ -124,7 +127,7 @@ export function MultiSeriesChart({
     return series
       .map((s) => {
         let nearest: MultiSeriesPoint | null = null;
-        let bestDx = Infinity;
+        let bestDx = Number.POSITIVE_INFINITY;
         for (const p of s.points) {
           if (p.y == null || !Number.isFinite(p.x)) continue;
           const dx = Math.abs(p.x - hoverX);
@@ -217,19 +220,33 @@ export function MultiSeriesChart({
             .sort((a, b) => a.x - b.x);
           if (pts.length === 0) return null;
           const path = pts
-            .map((p, i) => `${i === 0 ? "M" : "L"} ${xToPx(p.x).toFixed(2)} ${yToPx(p.y as number).toFixed(2)}`)
+            .map(
+              (p, i) =>
+                `${i === 0 ? "M" : "L"} ${xToPx(p.x).toFixed(2)} ${yToPx(p.y as number).toFixed(2)}`,
+            )
             .join(" ");
+          const onlyPoint = pts[0];
           return (
             <g key={s.id}>
-              <path
-                d={path}
-                fill="none"
-                stroke={color}
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                opacity={hoverX == null ? 0.92 : 0.8}
-              />
+              {pts.length === 1 && onlyPoint ? (
+                <circle
+                  cx={xToPx(onlyPoint.x).toFixed(2)}
+                  cy={yToPx(onlyPoint.y as number).toFixed(2)}
+                  r={2.5}
+                  fill={color}
+                  opacity={0.92}
+                />
+              ) : (
+                <path
+                  d={path}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity={hoverX == null ? 0.92 : 0.8}
+                />
+              )}
             </g>
           );
         })}

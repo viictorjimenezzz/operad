@@ -29,6 +29,17 @@ export { Table } from "@/components/ui/table";
 export type { Column, TableProps } from "@/components/ui/table";
 export { Section, SectionVariantContext } from "@/components/ui/section";
 export type { SectionProps } from "@/components/ui/section";
+export { CollapsibleSection } from "@/components/ui/collapsible-section";
+export type { CollapsibleSectionProps } from "@/components/ui/collapsible-section";
+export { MarkdownEditor, MarkdownView } from "@/components/ui/markdown";
+export type { MarkdownViewProps } from "@/components/ui/markdown";
+export { RunTable } from "@/components/ui/run-table";
+export type {
+  RunFieldValue,
+  RunRow,
+  RunTableColumn,
+  RunTableProps,
+} from "@/components/ui/run-table";
 export { HashTag } from "@/components/ui/hash-tag";
 export type { HashTagProps } from "@/components/ui/hash-tag";
 export { Pill } from "@/components/ui/pill";

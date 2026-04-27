@@ -23,6 +23,19 @@
   --color-algo: #b794f4;
   --color-algo-dim: #311e4a;
   --color-chunk: #778bae;
+  /* Curated 12-hue qualitative palette, vivid on dark, legible on light. */
+  --qual-1: hsl(4, 78%, 60%); /* coral */
+  --qual-2: hsl(28, 90%, 58%); /* tangerine */
+  --qual-3: hsl(50, 88%, 56%); /* gold */
+  --qual-4: hsl(90, 60%, 50%); /* lime */
+  --qual-5: hsl(140, 55%, 48%); /* fern */
+  --qual-6: hsl(170, 60%, 45%); /* teal */
+  --qual-7: hsl(196, 78%, 56%); /* sky (matches existing accent) */
+  --qual-8: hsl(220, 70%, 62%); /* indigo */
+  --qual-9: hsl(255, 65%, 65%); /* lavender */
+  --qual-10: hsl(290, 60%, 60%); /* magenta */
+  --qual-11: hsl(330, 70%, 60%); /* pink */
+  --qual-12: hsl(355, 30%, 50%); /* rose-gray */
 
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;

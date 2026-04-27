@@ -1,15 +1,9 @@
-import { IOFieldPreview } from "@/components/agent-view/overview/io-field-preview";
-import { HashTag, Metric, PanelCard, PanelGrid, Pill, Sparkline, StatusDot } from "@/components/ui";
+import { Metric, PanelCard, PanelGrid, Pill, Sparkline, StatusDot } from "@/components/ui";
 import { hashColor } from "@/lib/hash-color";
 import { type RunInvocation, RunInvocationsResponse, RunSummary } from "@/lib/types";
-import {
-  formatCostOrUnavailable,
-  formatTokenPairOrUnavailable,
-  formatTokensOrUnavailable,
-  hasTokenUsage,
-} from "@/lib/usage";
-import { formatDurationMs, formatRelativeTime } from "@/lib/utils";
-import { ArrowRight, ExternalLink } from "lucide-react";
+import { formatCostOrUnavailable, formatTokensOrUnavailable } from "@/lib/usage";
+import { formatDurationMs } from "@/lib/utils";
+import { ArrowRight } from "lucide-react";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
@@ -34,11 +28,7 @@ export function InvocationsBanner(props: InvocationsBannerProps) {
   const rows = invocationsParsed.data.invocations;
 
   if (rows.length === 0) return <Empty />;
-  if (rows.length === 1) {
-    const row = rows[0];
-    if (!row) return <Empty />;
-    return <SingleInvocation row={row} runId={props.runId ?? null} />;
-  }
+  if (rows.length === 1) return null;
   return <MultiSummary rows={rows} runId={props.runId ?? null} />;
 }
 
@@ -56,61 +46,6 @@ function Empty() {
       <span className="text-[12px] text-muted">
         The agent is built but no invocation has produced output yet.
       </span>
-    </PanelCard>
-  );
-}
-
-function SingleInvocation({ row, runId }: { row: RunInvocation; runId: string | null }) {
-  const ok = row.status === "ok";
-  const ident = row.hash_content ?? runId ?? "row";
-  return (
-    <PanelCard
-      flush
-      eyebrow={
-        <span className="flex items-center gap-1.5">
-          <StatusDot identity={ident} state={ok ? "ended" : "error"} size="sm" />
-          <span>Latest invocation</span>
-        </span>
-      }
-      title={
-        <span className="flex flex-wrap items-center gap-2">
-          {ok ? <Pill tone="ok" size="sm">ok</Pill> : <Pill tone="error" size="sm">error</Pill>}
-          {row.hash_content ? <HashTag hash={row.hash_content} mono size="sm" /> : null}
-          <Metric label="ago" value={formatRelativeTime(row.started_at)} />
-          <Metric label="latency" value={formatDurationMs(row.latency_ms ?? null)} />
-          <Metric
-            label="tokens"
-            value={formatTokenPairOrUnavailable(row.prompt_tokens, row.completion_tokens)}
-            {...(hasTokenUsage(row.prompt_tokens, row.completion_tokens)
-              ? { sub: "in / out" }
-              : {})}
-          />
-          <Metric label="cost" value={formatCostOrUnavailable(row.cost_usd)} />
-        </span>
-      }
-      toolbar={
-        row.langfuse_url ? (
-          <a
-            href={row.langfuse_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-[12px] text-accent transition-colors hover:text-[--color-accent-strong]"
-          >
-            Langfuse
-            <ExternalLink size={11} />
-          </a>
-        ) : null
-      }
-    >
-      {!ok && row.error ? (
-        <div className="border-b border-border bg-[--color-err-dim]/30 px-3 py-2 font-mono text-[11px] text-[--color-err]">
-          {row.error}
-        </div>
-      ) : null}
-      <div className="grid grid-cols-1 gap-3 p-3 lg:grid-cols-2">
-        <IOFieldPreview label="Input" data={row.input} defaultExpanded />
-        <IOFieldPreview label="Output" data={row.output} defaultExpanded={!ok} />
-      </div>
     </PanelCard>
   );
 }
@@ -155,7 +90,9 @@ function MultiSummary({ rows, runId }: { rows: RunInvocation[]; runId: string | 
               {stats.errors} error{stats.errors === 1 ? "" : "s"}
             </Pill>
           ) : (
-            <Pill tone="ok" size="sm">all ok</Pill>
+            <Pill tone="ok" size="sm">
+              all ok
+            </Pill>
           )}
         </span>
       }
