@@ -14,6 +14,7 @@ import { CassettesPage } from "@/dashboard/pages/CassettesPage";
 import { ExperimentsPage } from "@/dashboard/pages/ExperimentsPage";
 import { NotFoundPage } from "@/dashboard/pages/NotFoundPage";
 import { TrainingIndexPage } from "@/dashboard/pages/TrainingIndexPage";
+import { PrimitivesGallery } from "@/dashboard/pages/__dev/PrimitivesGallery";
 import { CostTab } from "@/dashboard/pages/run-detail/CostTab";
 import { DriftTab } from "@/dashboard/pages/run-detail/DriftTab";
 import { GraphTab } from "@/dashboard/pages/run-detail/GraphTab";
@@ -87,6 +88,9 @@ export const dashboardRoutes = [
       { path: "cassettes", element: <CassettesPage /> },
       { path: "cassettes/*", element: <CassetteDetailPage /> },
       { path: "experiments", element: <ExperimentsPage /> },
+      ...(import.meta.env.DEV
+        ? [{ path: "__dev/primitives", element: <PrimitivesGallery /> }]
+        : []),
       { path: "*", element: <NotFoundPage /> },
     ],
   },

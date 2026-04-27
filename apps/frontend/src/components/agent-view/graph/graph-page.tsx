@@ -52,19 +52,18 @@ export function GraphPage({ runId }: { runId: string }) {
     <SplitPane
       open={selection !== null}
       left={<AgentFlowGraph agentGraph={agentGraphQuery.data} runId={runId} />}
-      right={
-        <InspectorShell runId={runId} ioGraph={ioGraphAdapter} onClose={clearSelection} />
-      }
+      right={<InspectorShell runId={runId} ioGraph={ioGraphAdapter} onClose={clearSelection} />}
     />
   );
 }
 
 function adaptAgentGraphForInspector(ag: AgentGraphResponse): IoGraphResponse {
+  const includeRoot = ag.nodes.length === 1 && ag.edges.length === 0;
   return {
     root: ag.root,
     nodes: [],
     edges: ag.nodes
-      .filter((n) => n.path !== ag.root)
+      .filter((n) => includeRoot || n.path !== ag.root)
       .map((n) => ({
         agent_path: n.path,
         class_name: n.class_name,

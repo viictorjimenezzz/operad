@@ -3,16 +3,20 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  CollapsibleSection,
   Divider,
   EmptyState,
   Eyebrow,
   HashTag,
   KeyValueGrid,
+  MarkdownEditor,
+  MarkdownView,
   PanelCard,
   PanelGrid,
   PanelGridItem,
   PanelSection,
   Pill,
+  RunTable,
   Section,
   SectionVariantContext,
   Sparkline,
@@ -23,6 +27,7 @@ import {
   TabsTrigger,
 } from "@/components/ui";
 import type { ComponentRegistry } from "@json-render/react";
+import type { ComponentProps } from "react";
 
 /** Strip undefined keys; resulting type drops `undefined` from value unions. */
 function defined<T extends Record<string, unknown>>(
@@ -133,6 +138,36 @@ export const uiRegistry: ComponentRegistry = {
       </Section>
     );
   },
+  CollapsibleSection: ({ element, children }) => {
+    const p = element.props as {
+      id: string;
+      label: string;
+      preview?: string;
+      defaultOpen?: boolean;
+    };
+    return (
+      <CollapsibleSection
+        id={p.id}
+        label={p.label}
+        preview={p.preview ?? ""}
+        {...defined({ defaultOpen: p.defaultOpen })}
+      >
+        {children}
+      </CollapsibleSection>
+    );
+  },
+  MarkdownView: ({ element }) => {
+    const p = element.props as { value?: string };
+    return <MarkdownView value={p.value ?? ""} />;
+  },
+  MarkdownEditor: ({ element }) => {
+    const p = element.props as { value?: string };
+    return <MarkdownEditor value={p.value ?? ""} />;
+  },
+  RunTable: ({ element }) => {
+    const p = element.props as ComponentProps<typeof RunTable>;
+    return <RunTable {...p} />;
+  },
   Eyebrow: ({ element }) => {
     const p = element.props as { text: string; tone?: "default" | "muted" | "accent" };
     return <Eyebrow {...defined({ tone: p.tone })}>{p.text}</Eyebrow>;
@@ -212,9 +247,7 @@ export const uiRegistry: ComponentRegistry = {
   },
   PanelGrid: ({ element, children }) => {
     const p = element.props as { cols?: 1 | 2 | 3 | 4; gap?: "sm" | "md" | "lg" };
-    return (
-      <PanelGrid {...defined({ cols: p.cols, gap: p.gap })}>{children}</PanelGrid>
-    );
+    return <PanelGrid {...defined({ cols: p.cols, gap: p.gap })}>{children}</PanelGrid>;
   },
   PanelGridItem: ({ element, children }) => {
     const p = element.props as { colSpan?: 1 | 2 | 3 | 4; rowSpan?: 1 | 2 };

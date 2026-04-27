@@ -311,12 +311,137 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
   );
 }
 
+function SingleLeafCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
+  const single = agentGraph.nodes[0];
+  if (!single) return null;
+
+  const selection = useUIStore((s) => s.graphSelection);
+  const setSelection = useUIStore((s) => s.setGraphSelection);
+  const clearSelection = useUIStore((s) => s.clearGraphSelection);
+  const activeAgents = useActiveAgents(runId);
+  const { fitView } = useReactFlow();
+  const [didAutoSelect, setDidAutoSelect] = useState(false);
+
+  const invocationQueries = useQueries({
+    queries: [
+      {
+        queryKey: ["graph", "agent-invocations", runId, single.path] as const,
+        queryFn: () => dashboardApi.agentInvocations(runId, single.path),
+        staleTime: 30_000,
+        retry: false,
+      },
+    ],
+  });
+  const metaQueries = useQueries({
+    queries: [
+      {
+        queryKey: ["graph", "agent-meta", runId, single.path] as const,
+        queryFn: () => dashboardApi.agentMeta(runId, single.path),
+        staleTime: 60_000,
+        retry: false,
+      },
+    ],
+  });
+
+  useEffect(() => {
+    if (!single || didAutoSelect) return;
+    if (selection?.kind === "edge" && selection.agentPath === single.path) {
+      setDidAutoSelect(true);
+      return;
+    }
+    if (selection == null) {
+      setSelection({ kind: "edge", agentPath: single.path });
+      setDidAutoSelect(true);
+    }
+  }, [didAutoSelect, selection, setSelection, single]);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      fitView({ padding: 0.45, duration: 180 });
+    }, 120);
+    return () => window.clearTimeout(id);
+  }, [fitView]);
+
+  const nodes: Node[] = useMemo(() => {
+    if (!single) return [];
+    const inv = invocationQueries[0]?.data;
+    const meta = metaQueries[0]?.data;
+    const rows = inv?.invocations ?? [];
+    const last = rows[rows.length - 1] ?? null;
+    const selected = selection?.kind === "edge" && selection.agentPath === single.path;
+
+    return [
+      {
+        id: single.path,
+        type: "agent",
+        position: { x: 0, y: 0 },
+        style: { width: 260, height: 76 },
+        data: {
+          path: single.path,
+          className: single.class_name,
+          inputLabel: single.input_label,
+          outputLabel: single.output_label,
+          selected,
+          dimmed: false,
+          active: activeAgents.has(single.path),
+          trainable: meta?.trainable_paths ? meta.trainable_paths.length > 0 : false,
+          hashContent: last?.hash_content ?? null,
+          invocationCount: rows.length,
+          onSelect: () =>
+            selected ? clearSelection() : setSelection({ kind: "edge", agentPath: single.path }),
+        },
+      } satisfies Node,
+    ];
+  }, [
+    single,
+    invocationQueries,
+    metaQueries,
+    selection,
+    activeAgents,
+    setSelection,
+    clearSelection,
+  ]);
+
+  return (
+    <div className="relative h-full w-full">
+      <ReactFlow
+        nodes={nodes}
+        edges={[]}
+        nodeTypes={nodeTypes}
+        fitView
+        fitViewOptions={{ padding: 0.45, duration: 180 }}
+        panOnDrag
+        zoomOnScroll
+        minZoom={0.4}
+        maxZoom={2.4}
+        proOptions={{ hideAttribution: true }}
+        onPaneClick={() => clearSelection()}
+        nodesDraggable={false}
+        nodesConnectable={false}
+      >
+        <Background color="var(--color-border)" gap={24} />
+        <Controls
+          showInteractive
+          className="!rounded-md !border-border !bg-bg-1 [&>button]:!border-border [&>button]:!bg-bg-1 [&>button]:!text-muted hover:[&>button]:!bg-bg-3"
+        />
+      </ReactFlow>
+    </div>
+  );
+}
+
 export function AgentFlowGraph({ agentGraph, runId }: AgentFlowGraphProps) {
   if (!agentGraph || agentGraph.nodes.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
         <EmptyState title="waiting for first invocation" description="graph not ready yet" />
       </div>
+    );
+  }
+  if (agentGraph.nodes.length === 1 && agentGraph.edges.length === 0) {
+    return (
+      <ReactFlowProvider>
+        <SingleLeafCanvas agentGraph={agentGraph} runId={runId} />
+      </ReactFlowProvider>
     );
   }
   return (
