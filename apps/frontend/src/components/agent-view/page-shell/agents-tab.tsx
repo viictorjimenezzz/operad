@@ -1,5 +1,5 @@
 import { Button, EmptyState, type RunRow, RunTable, type RunTableColumn } from "@/components/ui";
-import { RunSummary as RunSummarySchema } from "@/lib/types";
+import { RunSummary as RunSummarySchema, SweepSnapshot } from "@/lib/types";
 import { truncateMiddle } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -7,6 +7,8 @@ import { z } from "zod";
 
 interface AgentsTabProps {
   runId: string;
+  groupBy?: "hash" | "none";
+  extraColumns?: string[];
 }
 
 const ChildRunSummary = RunSummarySchema.passthrough().extend({
@@ -26,7 +28,7 @@ const columns: RunTableColumn[] = [
   { id: "started", label: "Started", source: "_started", sortable: true, width: 110 },
 ];
 
-export function AgentsTab({ runId }: AgentsTabProps) {
+export function AgentsTab({ runId, groupBy = "hash", extraColumns = [] }: AgentsTabProps) {
   const children = useQuery({
     queryKey: ["run", "children", runId] as const,
     queryFn: async () => {
@@ -38,9 +40,26 @@ export function AgentsTab({ runId }: AgentsTabProps) {
     },
     enabled: runId.length > 0,
   });
-  const [grouped, setGrouped] = useState(true);
+  const sweep = useQuery({
+    queryKey: ["run", "sweep", runId] as const,
+    queryFn: async () => {
+      const response = await fetch(`/runs/${runId}/sweep.json`);
+      if (!response.ok) {
+        throw new Error(`${response.status} ${response.statusText} <- /runs/${runId}/sweep.json`);
+      }
+      return SweepSnapshot.parse(await response.json());
+    },
+    enabled:
+      runId.length > 0 && (extraColumns.includes("score") || extraColumns.includes("axisValues")),
+    staleTime: 30_000,
+  });
+  const [grouped, setGrouped] = useState(groupBy !== "none");
 
-  const rows = useMemo(() => (children.data ?? []).map(childToRow), [children.data]);
+  const rows = useMemo(
+    () => (children.data ?? []).map((child, index) => childToRow(child, index, sweep.data)),
+    [children.data, sweep.data],
+  );
+  const tableColumns = useMemo(() => extendColumns(columns, extraColumns), [extraColumns]);
 
   if (children.isLoading) {
     return <div className="p-4 text-xs text-muted">loading child agents...</div>;
@@ -66,7 +85,7 @@ export function AgentsTab({ runId }: AgentsTabProps) {
       </div>
       <RunTable
         rows={rows}
-        columns={columns}
+        columns={tableColumns}
         storageKey={`algorithm-agents.${runId}`}
         rowHref={(row) => childHref(row)}
         {...(grouped ? { groupBy: groupByAgent } : {})}
@@ -77,10 +96,15 @@ export function AgentsTab({ runId }: AgentsTabProps) {
   );
 }
 
-function childToRow(child: ChildRunSummary): RunRow {
+function childToRow(
+  child: ChildRunSummary,
+  index: number,
+  sweep: SweepSnapshot | undefined,
+): RunRow {
   const hash = child.hash_content ?? child.root_agent_path ?? child.run_id;
   const className = child.algorithm_class ?? child.root_agent_path?.split(".").at(-1) ?? "Agent";
   const totalTokens = child.prompt_tokens + child.completion_tokens;
+  const sweepCell = sweep?.cells[index] ?? null;
   return {
     id: child.run_id,
     identity: hash,
@@ -95,8 +119,49 @@ function childToRow(child: ChildRunSummary): RunRow {
       tokens: { kind: "num", value: totalTokens, format: "tokens" },
       cost: { kind: "num", value: child.cost?.cost_usd ?? null, format: "cost" },
       score: { kind: "num", value: child.algorithm_terminal_score, format: "score" },
+      cellScore: { kind: "num", value: sweepCell?.score ?? null, format: "score" },
+      axisValues: {
+        kind: "text",
+        value: sweepCell ? axisValuesLabel(sweepCell.parameters) : "-",
+        mono: true,
+      },
     },
   };
+}
+
+function extendColumns(base: RunTableColumn[], extraColumns: string[]): RunTableColumn[] {
+  const extras: RunTableColumn[] = [];
+  if (extraColumns.includes("score")) {
+    extras.push({
+      id: "cellScore",
+      label: "Cell score",
+      source: "cellScore",
+      sortable: true,
+      align: "right",
+      width: 88,
+    });
+  }
+  if (extraColumns.includes("axisValues")) {
+    extras.push({
+      id: "axisValues",
+      label: "Axis values",
+      source: "axisValues",
+      sortable: true,
+      width: "1fr",
+    });
+  }
+  if (extras.length === 0) return base;
+  const insertAt = Math.max(
+    0,
+    base.findIndex((column) => column.id === "started"),
+  );
+  return [...base.slice(0, insertAt), ...extras, ...base.slice(insertAt)];
+}
+
+function axisValuesLabel(parameters: Record<string, unknown>): string {
+  return Object.entries(parameters)
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join(", ");
 }
 
 function groupByAgent(row: RunRow): { key: string; label: string } {

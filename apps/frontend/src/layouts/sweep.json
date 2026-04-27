@@ -20,115 +20,56 @@
             { "id": "overview", "label": "Overview" },
             { "id": "heatmap", "label": "Heatmap" },
             { "id": "cells", "label": "Cells" },
+            { "id": "cost", "label": "Cost" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
             { "id": "graph", "label": "Graph" }
           ]
         },
-        "children": ["overview", "heatmap", "cells", "agents", "events", "graph"]
+        "children": ["overview", "heatmap", "cells", "cost", "agents", "events", "graph"]
       },
-
       "overview": {
-        "type": "Stack",
-        "props": { "gap": 16 },
-        "children": ["kpiSection", "bestSection"]
-      },
-      "kpiSection": {
-        "type": "PanelSection",
-        "props": { "label": "Summary" },
-        "children": ["kpis"]
-      },
-      "kpis": {
-        "type": "PanelGrid",
-        "props": { "cols": 4, "gap": "md" },
-        "children": ["k-events", "k-tokens", "k-cost", "k-best"]
-      },
-      "k-events": {
-        "type": "PanelCard",
-        "props": { "eyebrow": "Events", "surface": "inset", "bare": true },
-        "children": ["k-events-stat"]
-      },
-      "k-events-stat": {
-        "type": "StatTile",
-        "props": { "label": "events", "value": 0, "size": "sm" }
-      },
-      "k-tokens": {
-        "type": "PanelCard",
-        "props": { "eyebrow": "Tokens", "surface": "inset", "bare": true },
-        "children": ["k-tokens-stat"]
-      },
-      "k-tokens-stat": {
-        "type": "KPI",
+        "type": "SweepDetailOverview",
         "props": {
-          "label": "tokens",
-          "source": "$queries.summary.prompt_tokens",
-          "format": "tokens"
+          "source": "$queries.sweep",
+          "sourceSummary": "$queries.summary",
+          "sourceChildren": "$queries.children"
         }
       },
-      "k-cost": {
-        "type": "PanelCard",
-        "props": { "eyebrow": "Cost", "surface": "inset", "bare": true },
-        "children": ["k-cost-stat"]
-      },
-      "k-cost-stat": {
-        "type": "KPI",
-        "props": { "label": "cost", "source": "$queries.summary.cost.cost_usd", "format": "cost" }
-      },
-      "k-best": {
-        "type": "PanelCard",
-        "props": { "eyebrow": "Best", "surface": "inset", "bare": true },
-        "children": ["k-best-stat"]
-      },
-      "k-best-stat": {
-        "type": "KPI",
-        "props": {
-          "label": "score",
-          "source": "$queries.summary.algorithm_terminal_score",
-          "format": "number"
-        }
-      },
-
-      "bestSection": {
-        "type": "PanelSection",
-        "props": { "label": "Sweep" },
-        "children": ["bestGrid"]
-      },
-      "bestGrid": {
-        "type": "PanelGrid",
-        "props": { "cols": 2 },
-        "children": ["best-card", "cost-card"]
-      },
-      "best-card": {
-        "type": "PanelCard",
-        "props": { "title": "best cell" },
-        "children": ["best-cell"]
-      },
-      "best-cell": { "type": "SweepBestCellCard", "props": { "source": "$queries.sweep" } },
-      "cost-card": {
-        "type": "PanelCard",
-        "props": { "title": "cell progress" },
-        "children": ["cost-total"]
-      },
-      "cost-total": { "type": "SweepCostTotalizer", "props": { "source": "$queries.sweep" } },
-
       "heatmap": {
         "type": "PanelCard",
         "props": { "title": "parameter grid", "bodyMinHeight": 320 },
         "children": ["heatmap-view"]
       },
-      "heatmap-view": { "type": "SweepHeatmap", "props": { "source": "$queries.sweep" } },
-
+      "heatmap-view": {
+        "type": "SweepHeatmapTab",
+        "props": { "source": "$queries.sweep", "sourceChildren": "$queries.children" }
+      },
       "cells": {
         "type": "PanelCard",
-        "props": { "title": "all cells" },
-        "children": ["cells-timeline"]
+        "props": { "title": "cells", "bodyMinHeight": 320 },
+        "children": ["cells-view"]
       },
-      "cells-timeline": {
-        "type": "EventTimeline",
-        "props": { "source": "$run.events", "kindFilter": "cell" }
+      "cells-view": {
+        "type": "SweepCellsTab",
+        "props": {
+          "source": "$queries.sweep",
+          "sourceChildren": "$queries.children",
+          "runId": "$context.runId"
+        }
       },
-
-      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
+      "cost": {
+        "type": "SweepCostTab",
+        "props": { "source": "$queries.sweep", "sourceChildren": "$queries.children" }
+      },
+      "agents": {
+        "type": "AgentsTab",
+        "props": {
+          "runId": "$context.runId",
+          "groupBy": "none",
+          "extraColumns": ["score", "axisValues"]
+        }
+      },
       "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
       "graph": {
         "type": "PanelCard",

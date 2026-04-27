@@ -125,6 +125,56 @@ export const catalog = createCatalog({
     SweepHeatmap: { props: z.object({ source: sourceExpr }) },
     SweepBestCellCard: { props: z.object({ source: sourceExpr }) },
     SweepCostTotalizer: { props: z.object({ source: sourceExpr }) },
+    SweepDetailOverview: {
+      props: z.object({
+        source: sourceExpr,
+        sourceSummary: sourceExpr,
+        sourceChildren: sourceExpr,
+      }),
+    },
+    SweepHeatmapTab: { props: z.object({ source: sourceExpr, sourceChildren: sourceExpr }) },
+    SweepCellsTab: {
+      props: z.object({
+        source: sourceExpr,
+        sourceChildren: sourceExpr,
+        runId: z.string().optional(),
+      }),
+    },
+    SweepCostTab: {
+      props: z.object({
+        source: sourceExpr,
+        sourceChildren: sourceExpr,
+      }),
+    },
+    BeamDetailOverview: {
+      props: z.object({
+        sourceSummary: sourceExpr,
+        sourceIterations: sourceExpr,
+        sourceChildren: sourceExpr,
+      }),
+    },
+    BeamLeaderboard: {
+      props: z.object({
+        source: sourceExpr,
+        sourceIterations: sourceExpr,
+        sourceChildren: sourceExpr,
+        runId: z.string().optional(),
+      }),
+    },
+    BeamScoreHistogram: {
+      props: z.object({
+        source: sourceExpr,
+        sourceIterations: sourceExpr,
+      }),
+    },
+    VerifierDetailOverview: {
+      props: z.object({
+        sourceSummary: sourceExpr,
+        sourceIterations: sourceExpr,
+        runId: z.string().optional(),
+      }),
+    },
+    VerifierIterations: { props: z.object({ source: sourceExpr }) },
     AgentGraph: {
       props: z.object({
         source: sourceExpr,
@@ -175,6 +225,19 @@ export const catalog = createCatalog({
     },
     IODetail: { props: z.object({ source: sourceExpr }) },
     RawEnvelope: { props: z.object({}) },
+    AgentsTab: {
+      props: z.object({
+        runId: z.string().optional(),
+        groupBy: z.enum(["hash", "none"]).optional(),
+        extraColumns: z.array(z.string()).optional(),
+      }),
+    },
+    EventsTab: {
+      props: z.object({
+        runId: z.string().optional(),
+        defaultKindFilter: z.array(z.string()).optional(),
+      }),
+    },
   },
   actions: {},
 });

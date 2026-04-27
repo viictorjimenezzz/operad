@@ -19,74 +19,46 @@
           "tabs": [
             { "id": "overview", "label": "Overview" },
             { "id": "candidates", "label": "Candidates" },
+            { "id": "histogram", "label": "Histogram" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
             { "id": "graph", "label": "Graph" }
           ]
         },
-        "children": ["overview", "candidates", "agents", "events", "graph"]
+        "children": ["overview", "candidates", "histogram", "agents", "events", "graph"]
       },
       "overview": {
-        "type": "Stack",
-        "props": { "gap": 16 },
-        "children": ["overviewSection"]
-      },
-      "overviewSection": {
-        "type": "PanelSection",
-        "props": { "label": "Overview" },
-        "children": ["overviewGrid"]
-      },
-      "overviewGrid": {
-        "type": "PanelGrid",
-        "props": { "cols": 2 },
-        "children": ["meta-card", "curve-card"]
-      },
-      "meta-card": {
-        "type": "PanelCard",
-        "props": { "eyebrow": "Run", "title": "meta" },
-        "children": ["meta", "langfuse"]
-      },
-      "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
-      "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
-      "curve-card": {
-        "type": "PanelCard",
-        "props": { "eyebrow": "Algorithm", "title": "convergence", "bodyMinHeight": 240 },
-        "children": ["curve"]
-      },
-      "curve": {
-        "type": "ConvergenceCurve",
-        "props": { "source": "$queries.iterations", "height": 220 }
-      },
-      "candidatesSection": {
-        "type": "PanelSection",
-        "props": { "label": "Candidates" },
-        "children": ["progression-card", "candidates-card"]
+        "type": "BeamDetailOverview",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceIterations": "$queries.iterations",
+          "sourceChildren": "$queries.children"
+        }
       },
       "candidates": {
-        "type": "Stack",
-        "props": { "gap": 16 },
-        "children": ["candidatesSection"]
-      },
-      "progression-card": {
         "type": "PanelCard",
-        "props": { "title": "iterations" },
-        "children": ["progression"]
+        "props": { "title": "candidate leaderboard", "bodyMinHeight": 320 },
+        "children": ["candidate-leaderboard"]
       },
-      "progression": {
-        "type": "IterationProgression",
-        "props": { "source": "$queries.iterations" }
-      },
-      "candidates-card": {
-        "type": "PanelCard",
-        "props": { "title": "candidate scores", "bodyMinHeight": 240 },
-        "children": ["candidates"]
-      },
-      "candidates": {
-        "type": "BeamCandidateChart",
+      "candidate-leaderboard": {
+        "type": "BeamLeaderboard",
         "props": {
           "source": "$queries.summary.candidates",
-          "iterationsSource": "$queries.iterations",
-          "height": 240
+          "sourceIterations": "$queries.iterations",
+          "sourceChildren": "$queries.children",
+          "runId": "$context.runId"
+        }
+      },
+      "histogram": {
+        "type": "PanelCard",
+        "props": { "title": "score distribution", "bodyMinHeight": 320 },
+        "children": ["histogram-view"]
+      },
+      "histogram-view": {
+        "type": "BeamScoreHistogram",
+        "props": {
+          "source": "$queries.summary.candidates",
+          "sourceIterations": "$queries.iterations"
         }
       },
       "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
