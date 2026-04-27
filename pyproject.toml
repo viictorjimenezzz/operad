@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 operad = "operad.cli:main"
+apps-uthereal = "apps_uthereal.cli:main"
 
 [project.optional-dependencies]
 observers = ["rich>=13.0"]
@@ -30,6 +31,7 @@ otel = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "apps-uthereal",
 ]
 
 [tool.pytest.ini_options]
@@ -41,6 +43,10 @@ markers = [
 
 [tool.uv.sources]
 operad-dashboard = { path = "apps/dashboard", editable = true }
+apps-uthereal = { workspace = true }
+
+[tool.uv.workspace]
+members = ["apps/uthereal"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["operad"]
