@@ -1,16 +1,13 @@
 import { IOFieldPreview } from "@/components/agent-view/overview/io-field-preview";
 import { HashTag, Metric, Pill, Sparkline } from "@/components/ui";
+import { type RunInvocation, RunInvocationsResponse, RunSummary } from "@/lib/types";
 import {
-  type RunInvocation,
-  RunInvocationsResponse,
-  RunSummary,
-} from "@/lib/types";
-import {
-  formatCost,
-  formatDurationMs,
-  formatRelativeTime,
-  formatTokens,
-} from "@/lib/utils";
+  formatCostOrUnavailable,
+  formatTokenPairOrUnavailable,
+  formatTokensOrUnavailable,
+  hasTokenUsage,
+} from "@/lib/usage";
+import { formatDurationMs, formatRelativeTime } from "@/lib/utils";
 import { ArrowRight, ExternalLink } from "lucide-react";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
@@ -78,10 +75,10 @@ function SingleInvocation({ row }: { row: RunInvocation }) {
           <Metric label="latency" value={formatDurationMs(row.latency_ms ?? null)} />
           <Metric
             label="tokens"
-            value={`${formatTokens(row.prompt_tokens)} / ${formatTokens(row.completion_tokens)}`}
-            sub="in / out"
+            value={formatTokenPairOrUnavailable(row.prompt_tokens, row.completion_tokens)}
+            sub={hasTokenUsage(row.prompt_tokens, row.completion_tokens) ? "in / out" : undefined}
           />
-          <Metric label="cost" value={formatCost(row.cost_usd)} />
+          <Metric label="cost" value={formatCostOrUnavailable(row.cost_usd)} />
         </div>
         {row.langfuse_url ? (
           <a
@@ -120,10 +117,13 @@ function MultiSummary({ rows, runId }: { rows: RunInvocation[]; runId: string | 
     const totals = rows.reduce(
       (acc, r) => {
         acc.tokens += (r.prompt_tokens ?? 0) + (r.completion_tokens ?? 0);
-        acc.cost += r.cost_usd ?? 0;
+        if (typeof r.cost_usd === "number") {
+          acc.cost += r.cost_usd;
+          acc.costCount += 1;
+        }
         return acc;
       },
-      { tokens: 0, cost: 0 },
+      { tokens: 0, cost: 0, costCount: 0 },
     );
     const avgLatency =
       latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : null;
@@ -133,6 +133,7 @@ function MultiSummary({ rows, runId }: { rows: RunInvocation[]; runId: string | 
       avgLatency,
       tokens: totals.tokens,
       cost: totals.cost,
+      costCount: totals.costCount,
       errors,
     };
   }, [rows]);
@@ -152,8 +153,11 @@ function MultiSummary({ rows, runId }: { rows: RunInvocation[]; runId: string | 
         )}
         <div className="ml-auto flex items-center gap-4">
           <Metric label="avg latency" value={formatDurationMs(stats.avgLatency)} />
-          <Metric label="total tokens" value={formatTokens(stats.tokens)} />
-          <Metric label="total cost" value={formatCost(stats.cost)} />
+          <Metric label="total tokens" value={formatTokensOrUnavailable(stats.tokens)} />
+          <Metric
+            label="total cost"
+            value={stats.costCount > 0 ? formatCostOrUnavailable(stats.cost) : "unavailable"}
+          />
         </div>
       </header>
       <div className="flex items-center gap-3 px-4 py-2">

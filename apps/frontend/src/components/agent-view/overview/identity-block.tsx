@@ -27,6 +27,8 @@ export function IdentityBlock(props: IdentityBlockProps) {
   }
 
   const { class_name, kind, hash_content, role, task, rules, examples } = meta.data;
+  const roleText = role?.trim() ? role : null;
+  const taskText = task?.trim() ? task : null;
   const summaryText = `${class_name} · ${kind} · ${rules.length} rules · ${examples.length} examples`;
 
   const succinct = (
@@ -46,26 +48,36 @@ export function IdentityBlock(props: IdentityBlockProps) {
           </Pill>
         ) : null}
       </div>
-      <div className="grid grid-cols-[60px_1fr] items-baseline gap-x-3 gap-y-1 text-[12px]">
-        <span className="text-[10px] uppercase tracking-[0.06em] text-muted-2">role</span>
-        <span className="truncate text-muted">{role ?? "—"}</span>
-        <span className="text-[10px] uppercase tracking-[0.06em] text-muted-2">task</span>
-        <span className="truncate text-muted">{task ?? "—"}</span>
-      </div>
+      {roleText || taskText ? (
+        <div className="grid grid-cols-[60px_1fr] items-baseline gap-x-3 gap-y-1 text-[12px]">
+          {roleText ? (
+            <>
+              <span className="text-[10px] uppercase tracking-[0.06em] text-muted-2">role</span>
+              <span className="truncate text-muted">{roleText}</span>
+            </>
+          ) : null}
+          {taskText ? (
+            <>
+              <span className="text-[10px] uppercase tracking-[0.06em] text-muted-2">task</span>
+              <span className="truncate text-muted">{taskText}</span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 
   return (
     <Section title="Identity" summary={summaryText} succinct={succinct}>
       <div className="space-y-3 text-[13px]">
-        {role ? (
+        {roleText ? (
           <Field label="role">
-            <span className="text-text">{role}</span>
+            <span className="text-text">{roleText}</span>
           </Field>
         ) : null}
-        {task ? (
+        {taskText ? (
           <Field label="task">
-            <span className="text-text">{task}</span>
+            <span className="text-text">{taskText}</span>
           </Field>
         ) : null}
         {rules.length > 0 ? (

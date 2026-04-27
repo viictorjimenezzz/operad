@@ -6,7 +6,8 @@ import {
   RunSummary,
   type RunSummary as RunSummaryType,
 } from "@/lib/types";
-import { cn, formatCost, formatDurationMs, formatRelativeTime, formatTokens } from "@/lib/utils";
+import { formatCostOrUnavailable, formatTokenPairOrUnavailable, hasTokenUsage } from "@/lib/usage";
+import { cn, formatDurationMs, formatRelativeTime } from "@/lib/utils";
 import { ExternalLink } from "lucide-react";
 import { useMemo } from "react";
 
@@ -97,11 +98,13 @@ function LatestInvocationCardImpl({
         <StatTile label="latency" value={formatDurationMs(latest.latency_ms ?? null)} size="sm" />
         <StatTile
           label="tokens"
-          value={`${formatTokens(latest.prompt_tokens)} / ${formatTokens(latest.completion_tokens)}`}
-          sub="in / out"
+          value={formatTokenPairOrUnavailable(latest.prompt_tokens, latest.completion_tokens)}
+          sub={
+            hasTokenUsage(latest.prompt_tokens, latest.completion_tokens) ? "in / out" : undefined
+          }
           size="sm"
         />
-        <StatTile label="cost" value={formatCost(latest.cost_usd)} size="sm" />
+        <StatTile label="cost" value={formatCostOrUnavailable(latest.cost_usd)} size="sm" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 px-5 py-5 lg:grid-cols-2">

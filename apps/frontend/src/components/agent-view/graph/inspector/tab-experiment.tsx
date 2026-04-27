@@ -1,11 +1,12 @@
 import { Button, Eyebrow, FieldTree } from "@/components/ui";
-import { useAgentMeta } from "@/hooks/use-runs";
+import { useAgentMeta, useManifest } from "@/hooks/use-runs";
 import { dashboardApi } from "@/lib/api/dashboard";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Play } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export function TabExperiment({ runId, agentPath }: { runId: string; agentPath: string }) {
+  const manifest = useManifest();
   const meta = useAgentMeta(runId, agentPath);
   const invocationsQuery = useQuery({
     queryKey: ["agent-invocations-tab", runId, agentPath] as const,
@@ -81,6 +82,22 @@ export function TabExperiment({ runId, agentPath }: { runId: string; agentPath: 
       setResult(null);
     },
   });
+
+  if (manifest.isLoading) {
+    return <div className="p-5 text-[12px] text-muted-2">checking experiment capability…</div>;
+  }
+
+  if (manifest.data?.allowExperiment !== true) {
+    return (
+      <div className="space-y-3 p-5 text-[12px] text-muted">
+        <div className="text-[13px] font-medium text-text">Edit & run is disabled</div>
+        <p className="max-w-prose leading-5">
+          This dashboard was started without experiment execution enabled. Relaunch the dashboard
+          with experiment support before invoking agents from the browser.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 p-5">

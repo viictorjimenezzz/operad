@@ -1,12 +1,7 @@
 import { HashTag, Metric, Pill } from "@/components/ui";
 import type { RunSummary } from "@/lib/types";
-import {
-  formatCost,
-  formatDurationMs,
-  formatRelativeTime,
-  formatTokens,
-  truncateMiddle,
-} from "@/lib/utils";
+import { formatCostOrUnavailable, formatTokensOrUnavailable } from "@/lib/usage";
+import { formatDurationMs, formatRelativeTime, formatTokens, truncateMiddle } from "@/lib/utils";
 import { ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -33,7 +28,7 @@ export function AgentHero({ run, langfuseUrl, hashContent }: AgentHeroProps) {
 
   return (
     <div className="flex h-9 items-center gap-3 border-b border-border bg-bg px-3 text-[12px]">
-      <Link to="/" className="text-muted-2 transition-colors hover:text-text">
+      <Link to="/" aria-label="all runs" className="text-muted-2 transition-colors hover:text-text">
         runs
       </Link>
       <span aria-hidden className="text-muted-2">
@@ -46,9 +41,7 @@ export function AgentHero({ run, langfuseUrl, hashContent }: AgentHeroProps) {
         ·
       </span>
       <HashTag hash={identityHash} dotOnly size="sm" />
-      <h1 className="m-0 truncate text-[13px] font-medium tracking-tight text-text">
-        {className}
-      </h1>
+      <h1 className="m-0 truncate text-[13px] font-medium tracking-tight text-text">{className}</h1>
       {run.state === "running" ? (
         <Pill tone="live" pulse>
           live
@@ -72,14 +65,14 @@ export function AgentHero({ run, langfuseUrl, hashContent }: AgentHeroProps) {
         <Metric label="dur" value={formatDurationMs(run.duration_ms)} />
         <Metric
           label="tok"
-          value={formatTokens(totalTokens)}
+          value={formatTokensOrUnavailable(totalTokens)}
           sub={
             totalTokens > 0
               ? `${formatTokens(run.prompt_tokens)} in / ${formatTokens(run.completion_tokens)} out`
               : undefined
           }
         />
-        <Metric label="$" value={formatCost(cost)} />
+        <Metric label="$" value={formatCostOrUnavailable(cost)} />
         {langfuseUrl ? (
           <a
             href={langfuseUrl}

@@ -91,7 +91,7 @@ describe("getAlgorithmMetric", () => {
 
   it("falls back to event count for unknown class", () => {
     const run = makeRun({ algorithm_class: "UnknownAlgo", event_total: 42 });
-    expect(getAlgorithmMetric(run)).toBe("events=42");
+    expect(getAlgorithmMetric(run)).toBe("42 events");
   });
 
   it("falls back to terminal score when available", () => {
@@ -103,9 +103,9 @@ describe("getAlgorithmMetric", () => {
     expect(getAlgorithmMetric(run)).toBe("score=0.750");
   });
 
-  it("returns events=N for plain agent run (no class)", () => {
-    const run = makeRun({ algorithm_class: null, event_total: 7 });
-    expect(getAlgorithmMetric(run)).toBe("events=7");
+  it("returns readable event metadata for plain agent runs", () => {
+    const run = makeRun({ algorithm_class: null, root_agent_path: "Root", event_total: 7 });
+    expect(getAlgorithmMetric(run)).toBe("7 agent events");
   });
 
   it("returns Debate rounds count", () => {

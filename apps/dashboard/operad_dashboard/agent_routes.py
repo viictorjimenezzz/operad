@@ -896,10 +896,18 @@ async def runs_by_hash(request: Request, hash_content: str = Query(...)) -> JSON
 
     matches: list[dict[str, Any]] = []
     obs = request.app.state.observer
-    for info in obs.registry.values():
-        last_hash = _latest_root_hash_content(info)
+    try:
+        live_runs = obs.registry.list()
+    except Exception:
+        live_runs = []
+    for info in live_runs:
+        try:
+            last_hash = _latest_root_hash_content(info)
+            summary = info.summary()
+        except Exception:
+            continue
         if last_hash and last_hash.startswith(target):
-            matches.append(info.summary())
+            matches.append(summary)
 
     store = getattr(request.app.state, "archive_store", None)
     if store is not None:
@@ -928,11 +936,18 @@ async def runs_by_hash(request: Request, hash_content: str = Query(...)) -> JSON
 def _latest_root_hash_content(info: RunInfo) -> str | None:
     """Walk the run's events back-to-front to find the latest root agent
     end event, and return the hash_content from its metadata if present."""
-    summary = info.summary()
+    try:
+        summary = info.summary()
+    except Exception:
+        return None
     root_path = summary.get("root_agent_path")
     if not isinstance(root_path, str):
         return None
-    for env in reversed(list(info.events)):
+    try:
+        events = list(info.events)
+    except Exception:
+        return None
+    for env in reversed(events):
         if env.get("type") != "agent_event":
             continue
         if env.get("kind") != "end":

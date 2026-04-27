@@ -24,9 +24,15 @@ const registry: Record<string, MetricFn> = {
 const fallback: MetricFn = (r) =>
   r.algorithm_terminal_score != null
     ? `score=${r.algorithm_terminal_score.toFixed(3)}`
-    : `events=${r.event_total}`;
+    : r.root_agent_path
+      ? `${agentEndCount(r) || r.event_total} agent events`
+      : `${r.event_total} events`;
 
 export function getAlgorithmMetric(run: RunSummary): string {
   const fn = run.algorithm_class ? registry[run.algorithm_class] : undefined;
   return (fn ?? fallback)(run);
+}
+
+function agentEndCount(run: RunSummary): number {
+  return run.event_counts["agent_event:end"] ?? run.event_counts.end ?? 0;
 }

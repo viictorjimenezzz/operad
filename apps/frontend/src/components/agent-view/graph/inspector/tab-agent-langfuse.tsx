@@ -16,24 +16,26 @@ export function TabAgentLangfuse({ runId, agentPath }: { runId: string; agentPat
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-border px-4 py-2">
-        <span className="font-mono text-[11px] text-muted-2">{url}</span>
+    <div className="flex h-full items-center justify-center p-5">
+      <div className="max-w-md rounded-xl border border-border bg-bg-1 p-5 text-[12px] text-muted">
+        <div className="text-[13px] font-medium text-text">Open Langfuse in a new tab</div>
+        <p className="mt-2 leading-5">
+          Langfuse usually blocks iframe embedding with browser security headers, so the dashboard
+          links out instead of showing a broken embedded page.
+        </p>
+        <div className="mt-3 break-all rounded-md bg-bg-inset p-2 font-mono text-[11px] text-muted-2">
+          {url}
+        </div>
         <Button
           size="sm"
-          variant="ghost"
-          className="gap-1"
+          variant="primary"
+          className="mt-4 gap-1"
           onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
         >
           open in new tab
           <ExternalLink size={11} />
         </Button>
       </div>
-      <iframe
-        title={`Langfuse search · ${agentPath}`}
-        src={url}
-        className="h-full w-full flex-1 border-0 bg-bg"
-      />
     </div>
   );
 }

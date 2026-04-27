@@ -30,9 +30,10 @@ export function ReproducibilityBlock(props: ReproducibilityBlockProps) {
     for (const row of rows) {
       for (const { key } of HASH_KEYS) {
         const value = (row as Record<string, unknown>)[key];
-        if (typeof value !== "string") continue;
+        const hash = normalizeHash(value);
+        if (!hash) continue;
         if (!acc[key]) acc[key] = new Set();
-        acc[key].add(value);
+        acc[key].add(hash);
       }
     }
     return acc;
@@ -42,27 +43,33 @@ export function ReproducibilityBlock(props: ReproducibilityBlockProps) {
   const totalCount = HASH_KEYS.filter((h) => (hashSets[h.key]?.size ?? 0) >= 1).length;
   const drifted = totalCount - stableCount;
   const contentHash = hashSets.hash_content ? [...hashSets.hash_content][0] : null;
+  const canCompare = rows.length >= 2;
 
   const summary =
     totalCount === 0
       ? "no hashes captured yet"
-      : stableCount === totalCount
-        ? `${stableCount}/${totalCount} stable across ${rows.length} invocation${rows.length === 1 ? "" : "s"}`
-        : `${stableCount}/${totalCount} stable · ${drifted} drifted`;
+      : !canCompare
+        ? `${totalCount} hash${totalCount === 1 ? "" : "es"} captured · need 2+ invocations for drift`
+        : stableCount === totalCount
+          ? `${stableCount}/${totalCount} stable across ${rows.length} invocation${rows.length === 1 ? "" : "s"}`
+          : `${stableCount}/${totalCount} stable · ${drifted} drifted`;
 
-  const succinct = totalCount === 0 ? null : (
-    <div className="flex items-center gap-3">
-      {contentHash ? <HashTag hash={contentHash} mono size="sm" /> : null}
-      {drifted === 0 ? (
-        <Pill tone="ok">{`${stableCount}/${totalCount} stable`}</Pill>
-      ) : (
-        <Pill tone="warn">{`${drifted}/${totalCount} drifted`}</Pill>
-      )}
-      <span className="text-[12px] text-muted-2">
-        across {rows.length} invocation{rows.length === 1 ? "" : "s"}
-      </span>
-    </div>
-  );
+  const succinct =
+    totalCount === 0 ? null : (
+      <div className="flex items-center gap-3">
+        {contentHash ? <HashTag hash={contentHash} mono size="sm" /> : null}
+        {!canCompare ? (
+          <Pill>{`${totalCount} baseline hash${totalCount === 1 ? "" : "es"}`}</Pill>
+        ) : drifted === 0 ? (
+          <Pill tone="ok">{`${stableCount}/${totalCount} stable`}</Pill>
+        ) : (
+          <Pill tone="warn">{`${drifted}/${totalCount} drifted`}</Pill>
+        )}
+        <span className="text-[12px] text-muted-2">
+          across {rows.length} invocation{rows.length === 1 ? "" : "s"}
+        </span>
+      </div>
+    );
 
   return (
     <Section
@@ -83,7 +90,7 @@ export function ReproducibilityBlock(props: ReproducibilityBlockProps) {
               label={label}
               help={help}
               hash={display}
-              drifted={drifted}
+              drifted={canCompare && drifted}
               variantCount={values.length}
             />
           );
@@ -91,6 +98,13 @@ export function ReproducibilityBlock(props: ReproducibilityBlockProps) {
       </div>
     </Section>
   );
+}
+
+function normalizeHash(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "—") return null;
+  return trimmed;
 }
 
 function HashRow({

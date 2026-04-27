@@ -17,6 +17,8 @@ describe("dashboardRouter", () => {
     expect(tabs).toContain("(index)");
     expect(tabs).toContain("graph");
     expect(tabs).toContain("invocations");
+    const graph = runDetail.children.find((c) => c.path === "graph");
+    expect(graph && "errorElement" in graph ? graph.errorElement : undefined).toBeDefined();
   });
 
   it("registers benchmark routes", () => {

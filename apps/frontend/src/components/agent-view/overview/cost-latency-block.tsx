@@ -16,6 +16,7 @@ export function CostLatencyBlock(props: CostLatencyBlockProps) {
   const stats = useMemo(() => {
     const latencyValues: number[] = [];
     const tokenValues: number[] = [];
+    const costValues: number[] = [];
     let totalCost = 0;
     let totalTokens = 0;
     for (const r of rows) {
@@ -23,7 +24,10 @@ export function CostLatencyBlock(props: CostLatencyBlockProps) {
       const total = (r.prompt_tokens ?? 0) + (r.completion_tokens ?? 0);
       if (total > 0) tokenValues.push(total);
       totalTokens += total;
-      if (typeof r.cost_usd === "number") totalCost += r.cost_usd;
+      if (typeof r.cost_usd === "number") {
+        costValues.push(r.cost_usd);
+        totalCost += r.cost_usd;
+      }
     }
     const avgLatency =
       latencyValues.length > 0
@@ -35,14 +39,25 @@ export function CostLatencyBlock(props: CostLatencyBlockProps) {
             Math.max(0, Math.ceil(latencyValues.length * 0.95) - 1)
           ]
         : null;
-    return { latencyValues, tokenValues, totalCost, totalTokens, avgLatency, p95Latency };
+    return {
+      latencyValues,
+      tokenValues,
+      costValues,
+      totalCost,
+      totalTokens,
+      avgLatency,
+      p95Latency,
+    };
   }, [rows]);
 
+  const hasTokens = stats.totalTokens > 0;
+  const hasCost = stats.costValues.length > 0;
+  const tokenSummary = hasTokens ? formatTokens(stats.totalTokens) : "tokens unavailable";
   const summary =
-    rows.length < 2
-      ? "needs 2+ invocations"
-      : `${rows.length} invocations · avg ${formatDurationMs(stats.avgLatency)} · ${formatTokens(stats.totalTokens)} tokens`;
-  const disabled = rows.length < 2;
+    rows.length === 0
+      ? "no invocations yet"
+      : `${rows.length} invocations · avg ${formatDurationMs(stats.avgLatency)} · ${tokenSummary}`;
+  const disabled = rows.length === 0;
 
   return (
     <Section
@@ -62,18 +77,26 @@ export function CostLatencyBlock(props: CostLatencyBlockProps) {
             ) : undefined
           }
         />
-        <StatTile size="sm" label="p95 latency" value={formatDurationMs(stats.p95Latency)} />
+        <StatTile
+          size="sm"
+          label="p95 latency"
+          value={rows.length >= 2 ? formatDurationMs(stats.p95Latency) : "needs 2+"}
+        />
         <StatTile
           size="sm"
           label="total tokens"
-          value={formatTokens(stats.totalTokens)}
+          value={hasTokens ? formatTokens(stats.totalTokens) : "unavailable"}
           sub={
             stats.tokenValues.length > 1 ? (
               <Sparkline values={stats.tokenValues} width={80} height={18} />
             ) : undefined
           }
         />
-        <StatTile size="sm" label="total cost" value={formatCost(stats.totalCost)} />
+        <StatTile
+          size="sm"
+          label="total cost"
+          value={hasCost ? formatCost(stats.totalCost) : "unavailable"}
+        />
       </div>
     </Section>
   );

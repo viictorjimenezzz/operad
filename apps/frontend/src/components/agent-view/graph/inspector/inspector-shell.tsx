@@ -44,6 +44,7 @@ export function InspectorShell({
         subtitle: edge.agent_path,
         identity: edge.agent_path,
         kind: "edge" as const,
+        agentKind: edge.kind,
       };
     }
     if (selection.kind === "node") {
@@ -79,7 +80,7 @@ export function InspectorShell({
           <div className="truncate text-[18px] font-medium leading-tight">{meta.title}</div>
           <div className="truncate font-mono text-[11px] text-muted-2">{meta.subtitle}</div>
         </div>
-        {meta.kind === "edge" ? <Pill tone="accent">leaf</Pill> : <Pill>type</Pill>}
+        {meta.kind === "edge" ? <Pill tone="accent">{meta.agentKind}</Pill> : <Pill>type</Pill>}
         <IconButton aria-label="close inspector" onClick={onClose}>
           <X size={14} />
         </IconButton>
