@@ -129,4 +129,7 @@ class UnactionableFeedback(Exception):
 
 ## Notes
 
-(Append discoveries here as you implement.)
+- No contract amendments needed.
+- `TextualGradient` is defined in `operad.optim.parameter` and is available
+  from `operad.optim.backprop.grad` via that module's import; the task's
+  requested import path works for this slice.
