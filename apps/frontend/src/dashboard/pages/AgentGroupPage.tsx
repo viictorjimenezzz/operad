@@ -93,7 +93,7 @@ function GroupTabs({ hashContent }: { hashContent: string }) {
         <NavLink
           key={t.to}
           to={t.to}
-          end={t.end}
+          end={t.end ?? false}
           className={({ isActive }) =>
             `relative flex h-9 items-center gap-1.5 px-3 text-[12px] font-medium transition-colors ${
               isActive
@@ -141,7 +141,7 @@ function AgentGroupOverviewInner({ hashContent }: { hashContent: string }) {
           <Kpi
             label="Success rate"
             value={`${Math.max(0, 100 - errorRate).toFixed(1)}%`}
-            sub={data.errors > 0 ? `${data.errors} errors` : undefined}
+            {...(data.errors > 0 ? { sub: `${data.errors} errors` } : {})}
           />
           <Kpi label="Avg latency" value={formatDurationMs(avgLatency)} />
           <Kpi label="Total tokens" value={formatTokens(totalTokens)} />

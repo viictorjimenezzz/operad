@@ -138,7 +138,7 @@ function GroupTreeRowView({
           onClick={() => onSelect(row)}
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
-          <StatusDot identity={identity} state={row.state} size="sm" />
+          <StatusDot identity={identity} size="sm" {...(row.state !== undefined ? { state: row.state } : {})} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 truncate text-[12px] font-medium text-text">
               <span className="min-w-0 truncate">{row.label}</span>

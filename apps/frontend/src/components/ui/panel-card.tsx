@@ -19,7 +19,7 @@ import {
  * `Section` for forms / lists / settings; use `PanelCard` for
  * everything that belongs in a workspace grid.
  */
-export interface PanelCardProps extends HTMLAttributes<HTMLDivElement> {
+export interface PanelCardProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   title?: ReactNode;
   /** Small label rendered before the title (W&B "System" eyebrow). */
   eyebrow?: ReactNode;
