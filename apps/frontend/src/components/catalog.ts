@@ -105,6 +105,16 @@ export const catalog = createCatalog({
     LrScheduleCurve: { props: z.object({ source: sourceExpr, height: z.number().optional() }) },
     CheckpointTimeline: { props: z.object({ source: sourceExpr }) },
     DebateRoundView: { props: z.object({ source: sourceExpr }) },
+    DebateDetailOverview: {
+      props: z.object({
+        sourceSummary: sourceExpr,
+        sourceDebate: sourceExpr,
+        sourceChildren: sourceExpr,
+        runId: z.string().optional(),
+      }),
+    },
+    DebateRoundsTab: { props: z.object({ source: sourceExpr }) },
+    DebateConsensusTab: { props: z.object({ source: sourceExpr }) },
     BeamCandidateChart: {
       props: z.object({
         source: sourceExpr,
@@ -120,6 +130,47 @@ export const catalog = createCatalog({
         source: sourceExpr,
         phaseFilter: z.string().optional(),
         showDiff: z.boolean().optional(),
+      }),
+    },
+    SelfRefineDetailOverview: {
+      props: z.object({
+        sourceSummary: sourceExpr,
+        sourceIterations: sourceExpr,
+        sourceChildren: sourceExpr,
+      }),
+    },
+    IterationLadder: {
+      props: z.object({
+        source: sourceExpr,
+        sourceChildren: sourceExpr,
+      }),
+    },
+    SelfRefineConvergence: {
+      props: z.object({ source: sourceExpr, height: z.number().optional() }),
+    },
+    AutoResearcherDetailOverview: {
+      props: z.object({
+        sourceSummary: sourceExpr,
+        sourceIterations: sourceExpr,
+        sourceEvents: sourceExpr,
+        sourceChildren: sourceExpr,
+      }),
+    },
+    AutoResearcherPlanTab: {
+      props: z.object({
+        sourceEvents: sourceExpr,
+        sourceChildren: sourceExpr,
+      }),
+    },
+    AutoResearcherAttemptsTab: {
+      props: z.object({
+        sourceIterations: sourceExpr,
+        sourceChildren: sourceExpr,
+      }),
+    },
+    AutoResearcherBestAnswer: {
+      props: z.object({
+        sourceChildren: sourceExpr,
       }),
     },
     SweepHeatmap: { props: z.object({ source: sourceExpr }) },
@@ -216,28 +267,27 @@ export const catalog = createCatalog({
       }),
     },
 
-    // Diagnostics
-    EventTimeline: {
-      props: z.object({
-        source: sourceExpr,
-        kindFilter: z.string().optional(),
-      }),
-    },
-    IODetail: { props: z.object({ source: sourceExpr }) },
-    RawEnvelope: { props: z.object({}) },
+    // Universal tabs
     AgentsTab: {
       props: z.object({
         runId: z.string().optional(),
         groupBy: z.enum(["hash", "none"]).optional(),
         extraColumns: z.array(z.string()).optional(),
+        emptyTitle: z.string().optional(),
+        emptyDescription: z.string().optional(),
       }),
     },
     EventsTab: {
       props: z.object({
         runId: z.string().optional(),
         defaultKindFilter: z.array(z.string()).optional(),
+        defaultPathFilter: z.string().optional(),
       }),
     },
+
+    // Diagnostics
+    IODetail: { props: z.object({ source: sourceExpr }) },
+    RawEnvelope: { props: z.object({}) },
   },
   actions: {},
 });

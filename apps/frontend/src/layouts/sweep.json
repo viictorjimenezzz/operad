@@ -67,10 +67,13 @@
         "props": {
           "runId": "$context.runId",
           "groupBy": "none",
-          "extraColumns": ["score", "axisValues"]
+          "extraColumns": ["axisValues", "score"]
         }
       },
-      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
+      "events": {
+        "type": "EventsTab",
+        "props": { "runId": "$context.runId", "defaultKindFilter": ["cell"] }
+      },
       "graph": {
         "type": "PanelCard",
         "props": { "title": "agent graph" },

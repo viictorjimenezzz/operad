@@ -1,45 +1,79 @@
 import { Button, EmptyState, type RunRow, RunTable, type RunTableColumn } from "@/components/ui";
-import { RunSummary as RunSummarySchema, SweepSnapshot } from "@/lib/types";
-import { truncateMiddle } from "@/lib/utils";
+import { type ChildRunSummary, useChildren } from "@/hooks/use-children";
+import { SweepSnapshot } from "@/lib/types";
+import { formatDurationMs, truncateMiddle } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { z } from "zod";
+import { useEffect, useMemo, useState } from "react";
 
 interface AgentsTabProps {
   runId: string;
   groupBy?: "hash" | "none";
   extraColumns?: string[];
+  emptyTitle?: string;
+  emptyDescription?: string;
 }
 
-const ChildRunSummary = RunSummarySchema.passthrough().extend({
-  hash_content: z.string().nullable().optional(),
-});
-
-type ChildRunSummary = z.infer<typeof ChildRunSummary>;
-
-const columns: RunTableColumn[] = [
+const defaultColumns: RunTableColumn[] = [
   { id: "state", label: "State", source: "_state", sortable: true, width: 86 },
-  { id: "agent", label: "Agent", source: "agent", sortable: true, width: "1fr" },
-  { id: "run", label: "Run", source: "_id", sortable: true, width: 160 },
-  { id: "events", label: "Events", source: "events", sortable: true, align: "right", width: 76 },
-  { id: "tokens", label: "Tokens", source: "tokens", sortable: true, align: "right", width: 88 },
-  { id: "cost", label: "Cost", source: "cost", sortable: true, align: "right", width: 78 },
-  { id: "score", label: "Score", source: "score", sortable: true, align: "right", width: 78 },
+  { id: "agent", label: "Agent class", source: "agent", sortable: true, width: "1fr" },
+  { id: "hash", label: "hash_content", source: "hash", sortable: true, width: 150 },
+  {
+    id: "invocations",
+    label: "# inv",
+    source: "invocations",
+    sortable: true,
+    align: "right",
+    width: 70,
+  },
   { id: "started", label: "Started", source: "_started", sortable: true, width: 110 },
+  { id: "last", label: "Last seen", source: "_ended", sortable: true, width: 110 },
+  {
+    id: "latency",
+    label: "Latency p50",
+    source: "latency",
+    sortable: true,
+    align: "right",
+    width: 92,
+  },
+  { id: "cost", label: "Cost", source: "cost", sortable: true, align: "right", width: 78 },
 ];
 
-export function AgentsTab({ runId, groupBy = "hash", extraColumns = [] }: AgentsTabProps) {
-  const children = useQuery({
-    queryKey: ["run", "children", runId] as const,
-    queryFn: async () => {
-      const response = await fetch(`/runs/${runId}/children`);
-      if (!response.ok) {
-        throw new Error(`${response.status} ${response.statusText} <- /runs/${runId}/children`);
-      }
-      return z.array(ChildRunSummary).parse(await response.json());
-    },
-    enabled: runId.length > 0,
-  });
+const extraColumnSpecs: Record<string, RunTableColumn> = {
+  score: {
+    id: "score",
+    label: "Score",
+    source: "score",
+    sortable: true,
+    align: "right",
+    width: 78,
+  },
+  axisValues: { id: "axisValues", label: "Axis values", source: "axisValues", width: "1fr" },
+  attempt_index: {
+    id: "attempt_index",
+    label: "Attempt",
+    source: "attempt_index",
+    sortable: true,
+    align: "right",
+    width: 82,
+  },
+  gen: { id: "gen", label: "Gen", source: "gen", sortable: true, align: "right", width: 64 },
+  individual_id: {
+    id: "individual_id",
+    label: "Individual",
+    source: "individual_id",
+    sortable: true,
+    width: 98,
+  },
+};
+
+export function AgentsTab({
+  runId,
+  groupBy = "hash",
+  extraColumns = [],
+  emptyTitle = "no agent invocations yet",
+  emptyDescription = "this algorithm has not spawned synthetic children yet; the first algo_emit lands as soon as the algorithm enters its main loop",
+}: AgentsTabProps) {
+  const children = useChildren(runId);
   const sweep = useQuery({
     queryKey: ["run", "sweep", runId] as const,
     queryFn: async () => {
@@ -50,16 +84,24 @@ export function AgentsTab({ runId, groupBy = "hash", extraColumns = [] }: Agents
       return SweepSnapshot.parse(await response.json());
     },
     enabled:
-      runId.length > 0 && (extraColumns.includes("score") || extraColumns.includes("axisValues")),
+      runId.length > 0 && (extraColumns.includes("axisValues") || extraColumns.includes("score")),
     staleTime: 30_000,
   });
   const [grouped, setGrouped] = useState(groupBy !== "none");
 
+  useEffect(() => {
+    setGrouped(groupBy !== "none");
+  }, [groupBy]);
+
+  const columns = useMemo(() => buildColumns(extraColumns), [extraColumns]);
   const rows = useMemo(
-    () => (children.data ?? []).map((child, index) => childToRow(child, index, sweep.data)),
-    [children.data, sweep.data],
+    () =>
+      (children.data ?? []).map((child, index) =>
+        childToRow(child, extraColumns, index, sweep.data),
+      ),
+    [children.data, extraColumns, sweep.data],
   );
-  const tableColumns = useMemo(() => extendColumns(columns, extraColumns), [extraColumns]);
+  const groupLabels = useMemo(() => buildGroupLabels(rows), [rows]);
 
   if (children.isLoading) {
     return <div className="p-4 text-xs text-muted">loading child agents...</div>;
@@ -79,97 +121,206 @@ export function AgentsTab({ runId, groupBy = "hash", extraColumns = [] }: Agents
         <div className="text-[12px] text-muted">
           {rows.length === 1 ? "1 child run" : `${rows.length} child runs`}
         </div>
-        <Button size="sm" variant="ghost" onClick={() => setGrouped((current) => !current)}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setGrouped((current) => !current)}
+          aria-pressed={grouped}
+        >
           {grouped ? "ungroup" : "group"}
         </Button>
       </div>
       <RunTable
         rows={rows}
-        columns={tableColumns}
-        storageKey={`algorithm-agents.${runId}`}
+        columns={columns}
+        storageKey={`agents-tab:${runId}`}
         rowHref={(row) => childHref(row)}
-        {...(grouped ? { groupBy: groupByAgent } : {})}
-        emptyTitle="no child agents"
-        emptyDescription="this algorithm has not spawned synthetic child runs yet"
+        {...(grouped ? { groupBy: (row) => groupByHash(row, groupLabels) } : {})}
+        emptyTitle={emptyTitle}
+        emptyDescription={emptyDescription}
+        pageSize={50}
       />
     </div>
   );
 }
 
+function buildColumns(extraColumns: string[]): RunTableColumn[] {
+  const extras = extraColumns.flatMap((key) => {
+    const spec = extraColumnSpecs[key];
+    return spec ? [spec] : [];
+  });
+  return [...defaultColumns, ...extras];
+}
+
 function childToRow(
   child: ChildRunSummary,
+  extraColumns: string[],
   index: number,
   sweep: SweepSnapshot | undefined,
 ): RunRow {
-  const hash = child.hash_content ?? child.root_agent_path ?? child.run_id;
+  const hash = childHash(child);
   const className = child.algorithm_class ?? child.root_agent_path?.split(".").at(-1) ?? "Agent";
   const totalTokens = child.prompt_tokens + child.completion_tokens;
   const sweepCell = sweep?.cells[index] ?? null;
+  const fields: RunRow["fields"] = {
+    agent: { kind: "text", value: className, mono: true },
+    hash: { kind: "hash", value: hash },
+    group: { kind: "text", value: hash, mono: true },
+    groupLabel: { kind: "text", value: className },
+    invocations: { kind: "num", value: child.event_counts.end ?? child.event_total, format: "int" },
+    latency: { kind: "num", value: child.duration_ms, format: "ms" },
+    tokens: { kind: "num", value: totalTokens, format: "tokens" },
+    cost: { kind: "num", value: child.cost?.cost_usd ?? null, format: "cost" },
+  };
+
+  for (const key of extraColumns) {
+    const value = extraField(child, key, sweepCell);
+    if (value !== null) fields[key] = value;
+  }
+
   return {
     id: child.run_id,
     identity: hash,
     state: child.state,
     startedAt: child.started_at,
-    endedAt: child.started_at + child.duration_ms / 1000,
+    endedAt: child.last_event_at,
     durationMs: child.duration_ms,
-    fields: {
-      agent: { kind: "text", value: className, mono: true },
-      group: { kind: "text", value: hash, mono: true },
-      events: { kind: "num", value: child.event_total, format: "int" },
-      tokens: { kind: "num", value: totalTokens, format: "tokens" },
-      cost: { kind: "num", value: child.cost?.cost_usd ?? null, format: "cost" },
-      score: { kind: "num", value: child.algorithm_terminal_score, format: "score" },
-      cellScore: { kind: "num", value: sweepCell?.score ?? null, format: "score" },
-      axisValues: {
-        kind: "text",
-        value: sweepCell ? axisValuesLabel(sweepCell.parameters) : "-",
-        mono: true,
-      },
-    },
+    fields,
   };
 }
 
-function extendColumns(base: RunTableColumn[], extraColumns: string[]): RunTableColumn[] {
-  const extras: RunTableColumn[] = [];
-  if (extraColumns.includes("score")) {
-    extras.push({
-      id: "cellScore",
-      label: "Cell score",
-      source: "cellScore",
-      sortable: true,
-      align: "right",
-      width: 88,
-    });
+function buildGroupLabels(rows: RunRow[]): Map<string, string> {
+  const groups = new Map<string, RunRow[]>();
+  for (const row of rows) {
+    const existing = groups.get(row.identity);
+    if (existing) existing.push(row);
+    else groups.set(row.identity, [row]);
   }
-  if (extraColumns.includes("axisValues")) {
-    extras.push({
-      id: "axisValues",
-      label: "Axis values",
-      source: "axisValues",
-      sortable: true,
-      width: "1fr",
-    });
-  }
-  if (extras.length === 0) return base;
-  const insertAt = Math.max(
-    0,
-    base.findIndex((column) => column.id === "started"),
+  return new Map(
+    [...groups.entries()].map(([hash, groupRows]) => {
+      const agent = textField(groupRows[0]?.fields.groupLabel) ?? "Agent";
+      const latency = median(
+        groupRows
+          .map((row) => (row.fields.latency?.kind === "num" ? row.fields.latency.value : null))
+          .filter((value): value is number => value !== null),
+      );
+      const latencyLabel = latency === null ? "p50 -" : `p50 ${formatDurationMs(latency)}`;
+      return [hash, `${agent} ${truncateMiddle(hash, 14)} ${latencyLabel}`];
+    }),
   );
-  return [...base.slice(0, insertAt), ...extras, ...base.slice(insertAt)];
 }
 
-function axisValuesLabel(parameters: Record<string, unknown>): string {
-  return Object.entries(parameters)
-    .map(([key, value]) => `${key}=${String(value)}`)
-    .join(", ");
-}
-
-function groupByAgent(row: RunRow): { key: string; label: string } {
+function groupByHash(row: RunRow, labels: Map<string, string>): { key: string; label: string } {
   const field = row.fields.group;
   const value = field?.kind === "text" ? field.value : row.identity;
-  return { key: value, label: truncateMiddle(value, 24) };
+  return { key: value, label: labels.get(value) ?? truncateMiddle(value, 24) };
 }
 
 function childHref(row: RunRow): string {
   return `/agents/${encodeURIComponent(row.identity)}/runs/${encodeURIComponent(row.id)}`;
+}
+
+function childHash(child: ChildRunSummary): string {
+  return (
+    child.hash_content ??
+    stringAt(child.metadata, "hash_content") ??
+    stringAt(child.parent_run_metadata, "hash_content") ??
+    child.root_agent_path ??
+    child.run_id
+  );
+}
+
+function extraField(
+  child: ChildRunSummary,
+  key: string,
+  sweepCell: SweepSnapshot["cells"][number] | null,
+): RunRow["fields"][string] | null {
+  if (key === "score") {
+    const score = numberAt(child.metrics, "score") ?? child.algorithm_terminal_score ?? sweepCell?.score;
+    return { kind: "num", value: score ?? null, format: "score" };
+  }
+  if (key === "axisValues") {
+    const values =
+      valueAt(child.metadata, "algorithm_axis_values") ??
+      valueAt(child.algorithm_metadata, "algorithm_axis_values") ??
+      valueAt(child.parent_run_metadata, "algorithm_axis_values") ??
+      valueAt(child.metadata, "axis_values") ??
+      valueAt(child, "axis_values") ??
+      sweepCell?.parameters;
+    return values == null ? null : { kind: "text", value: shortValue(values), mono: true };
+  }
+  if (key === "attempt_index") {
+    return { kind: "num", value: numberFromMetadata(child, "attempt_index"), format: "int" };
+  }
+  if (key === "gen") {
+    return {
+      kind: "num",
+      value: numberFromMetadata(child, "gen") ?? numberFromMetadata(child, "gen_index"),
+      format: "int",
+    };
+  }
+  if (key === "individual_id") {
+    const value = stringFromMetadata(child, "individual_id");
+    return value == null ? null : { kind: "text", value, mono: true };
+  }
+  return null;
+}
+
+function numberFromMetadata(child: ChildRunSummary, key: string): number | null {
+  return (
+    numberAt(child.algorithm_metadata, key) ??
+    numberAt(child.parent_run_metadata, key) ??
+    numberAt(child.metadata, key)
+  );
+}
+
+function stringFromMetadata(child: ChildRunSummary, key: string): string | null {
+  return (
+    stringAt(child.algorithm_metadata, key) ??
+    stringAt(child.parent_run_metadata, key) ??
+    stringAt(child.metadata, key)
+  );
+}
+
+function valueAt(source: unknown, key: string): unknown {
+  return isRecord(source) ? source[key] : undefined;
+}
+
+function numberAt(source: unknown, key: string): number | null {
+  const value = valueAt(source, key);
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function stringAt(source: unknown, key: string): string | null {
+  const value = valueAt(source, key);
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function textField(value: RunRow["fields"][string] | undefined): string | null {
+  return value?.kind === "text" ? value.value : null;
+}
+
+function shortValue(value: unknown): string {
+  if (isRecord(value)) {
+    return Object.entries(value)
+      .map(([key, item]) => `${key}=${String(item)}`)
+      .join(", ");
+  }
+  if (Array.isArray(value)) return value.map((item) => String(item)).join(", ");
+  return String(value);
+}
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const value = sorted[mid];
+  if (value === undefined) return null;
+  if (sorted.length % 2 === 1) return value;
+  const prev = sorted[mid - 1] ?? value;
+  return (prev + value) / 2;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
