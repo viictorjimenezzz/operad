@@ -17,6 +17,7 @@ const HASH_KEYS = [
 export interface ReproducibilityBlockProps {
   dataInvocations?: unknown;
   invocations?: unknown;
+  flat?: boolean;
 }
 
 export function ReproducibilityBlock(props: ReproducibilityBlockProps) {
@@ -25,23 +26,32 @@ export function ReproducibilityBlock(props: ReproducibilityBlockProps) {
   if (!parsed.success) return null;
 
   const rows = parsed.data.invocations;
-  const hashSets = useMemo(() => {
-    const acc: Record<string, Set<string>> = {};
+  const hashState = useMemo(() => {
+    const sets: Record<string, Set<string>> = {};
+    const latest = rows[rows.length - 1] ?? null;
+    const previous = rows.length >= 2 ? rows[rows.length - 2] : null;
+    const changed: Record<string, { current: string | null; previous: string | null }> = {};
     for (const row of rows) {
       for (const { key } of HASH_KEYS) {
         const value = (row as Record<string, unknown>)[key];
         const hash = normalizeHash(value);
         if (!hash) continue;
-        if (!acc[key]) acc[key] = new Set();
-        acc[key].add(hash);
+        if (!sets[key]) sets[key] = new Set();
+        sets[key].add(hash);
       }
     }
-    return acc;
+    for (const { key } of HASH_KEYS) {
+      const current = normalizeHash((latest as Record<string, unknown> | null)?.[key]);
+      const prev = normalizeHash((previous as Record<string, unknown> | null)?.[key]);
+      if (current && prev && current !== prev) changed[key] = { current, previous: prev };
+    }
+    return { sets, changed };
   }, [rows]);
 
-  const stableCount = HASH_KEYS.filter((h) => (hashSets[h.key]?.size ?? 0) === 1).length;
-  const totalCount = HASH_KEYS.filter((h) => (hashSets[h.key]?.size ?? 0) >= 1).length;
+  const stableCount = HASH_KEYS.filter((h) => (hashState.sets[h.key]?.size ?? 0) === 1).length;
+  const totalCount = HASH_KEYS.filter((h) => (hashState.sets[h.key]?.size ?? 0) >= 1).length;
   const drifted = totalCount - stableCount;
+  const changedCount = Object.keys(hashState.changed).length;
   const canCompare = rows.length >= 2;
 
   const titleNode =
@@ -53,37 +63,49 @@ export function ReproducibilityBlock(props: ReproducibilityBlockProps) {
           ? `${stableCount}/${totalCount} stable`
           : `${stableCount}/${totalCount} stable · ${drifted} drifted`;
 
+  const title = (
+    <span className="flex items-center gap-2">
+      {titleNode}
+      {changedCount > 0 && canCompare ? (
+        <Pill tone="warn" size="sm">
+          changed
+        </Pill>
+      ) : null}
+      {changedCount === 0 && canCompare ? (
+        <Pill tone="ok" size="sm">
+          stable
+        </Pill>
+      ) : null}
+    </span>
+  );
+  const body =
+    totalCount === 0 ? null : (
+      <div className="grid gap-1.5">
+        {HASH_KEYS.map(({ key, label, help }) => {
+          const set = hashState.sets[key];
+          const values = set ? [...set] : [];
+          const changed = hashState.changed[key];
+          const display = changed?.current ?? values[0] ?? null;
+          return (
+            <HashRow
+              key={key}
+              label={label}
+              help={help}
+              hash={display}
+              drifted={Boolean(changed)}
+              variantCount={values.length}
+              {...(changed?.previous ? { previousHash: changed.previous } : {})}
+            />
+          );
+        })}
+      </div>
+    );
+
+  if (props.flat) return body;
+
   return (
-    <PanelCard
-      eyebrow="Reproducibility"
-      title={
-        <span className="flex items-center gap-2">
-          {titleNode}
-          {drifted > 0 && canCompare ? <Pill tone="warn" size="sm">drift</Pill> : null}
-          {drifted === 0 && canCompare ? <Pill tone="ok" size="sm">stable</Pill> : null}
-        </span>
-      }
-    >
-      {totalCount === 0 ? null : (
-        <div className="grid gap-1.5">
-          {HASH_KEYS.map(({ key, label, help }) => {
-            const set = hashSets[key];
-            const values = set ? [...set] : [];
-            const drifted = values.length > 1;
-            const display = values[0] ?? null;
-            return (
-              <HashRow
-                key={key}
-                label={label}
-                help={help}
-                hash={display}
-                drifted={canCompare && drifted}
-                variantCount={values.length}
-              />
-            );
-          })}
-        </div>
-      )}
+    <PanelCard eyebrow="Reproducibility" title={title}>
+      {body}
     </PanelCard>
   );
 }
@@ -101,12 +123,14 @@ function HashRow({
   hash,
   drifted,
   variantCount,
+  previousHash,
 }: {
   label: string;
   help: string;
   hash: string | null;
   drifted: boolean;
   variantCount: number;
+  previousHash?: string | null | undefined;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -129,8 +153,11 @@ function HashRow({
         )}
       </div>
       {drifted ? (
-        <span className="rounded-full bg-[--color-warn-dim] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.06em] text-[--color-warn]">
-          {variantCount} variants
+        <span
+          title={previousHash ? `previous ${previousHash}` : undefined}
+          className="rounded-full bg-[--color-warn-dim] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.06em] text-[--color-warn]"
+        >
+          changed{variantCount > 1 ? ` · ${variantCount} variants` : ""}
         </span>
       ) : (
         <span />

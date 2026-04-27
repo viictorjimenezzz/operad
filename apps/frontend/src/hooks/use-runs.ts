@@ -36,6 +36,30 @@ export function useAgentGroup(hashContent: string | null | undefined) {
   });
 }
 
+export function useAgentGroupMetrics(hashContent: string | null | undefined) {
+  return useQuery({
+    queryKey: ["agents", hashContent, "metrics"] as const,
+    queryFn: () => {
+      if (!hashContent) throw new Error("useAgentGroupMetrics: hashContent is required");
+      return dashboardApi.agentGroupMetrics(hashContent);
+    },
+    enabled: !!hashContent,
+    retry: false,
+  });
+}
+
+export function useAgentGroupParameters(hashContent: string | null | undefined) {
+  return useQuery({
+    queryKey: ["agents", hashContent, "parameters"] as const,
+    queryFn: () => {
+      if (!hashContent) throw new Error("useAgentGroupParameters: hashContent is required");
+      return dashboardApi.agentGroupParameters(hashContent);
+    },
+    enabled: !!hashContent,
+    retry: false,
+  });
+}
+
 export function useAlgorithmGroups() {
   return useQuery({
     queryKey: ["algorithms"] as const,
@@ -95,6 +119,21 @@ export function useAgentMeta(
       if (!runId) throw new Error("useAgentMeta: runId is required");
       if (!agentPath) throw new Error("useAgentMeta: agentPath is required");
       return dashboardApi.agentMeta(runId, agentPath);
+    },
+    enabled: !!runId && !!agentPath,
+  });
+}
+
+export function useAgentParameters(
+  runId: string | null | undefined,
+  agentPath: string | null | undefined,
+) {
+  return useQuery({
+    queryKey: ["run", "agent-parameters", runId, agentPath] as const,
+    queryFn: () => {
+      if (!runId) throw new Error("useAgentParameters: runId is required");
+      if (!agentPath) throw new Error("useAgentParameters: agentPath is required");
+      return dashboardApi.agentParameters(runId, agentPath);
     },
     enabled: !!runId && !!agentPath,
   });
@@ -251,6 +290,21 @@ export function useManifest() {
     queryFn: () => dashboardApi.manifest(),
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,
+  });
+}
+
+export function usePatchRunNotes() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, markdown }: { runId: string; markdown: string }) =>
+      dashboardApi.patchRunNotes(runId, markdown),
+    onSuccess: (data, vars) => {
+      queryClient.setQueryData(["run", "summary", vars.runId], (current: unknown) => {
+        if (!current || typeof current !== "object") return current;
+        return { ...(current as Record<string, unknown>), notes_markdown: data.notes_markdown };
+      });
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+    },
   });
 }
 
