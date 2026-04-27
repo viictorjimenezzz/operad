@@ -1,0 +1,62 @@
+{
+  "algorithm": "TalkerReasoner",
+  "version": 1,
+  "dataSources": {
+    "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "children": { "endpoint": "/runs/$context.runId/children" },
+    "graph": { "endpoint": "/graph/$context.runId" }
+  },
+  "spec": {
+    "root": "page",
+    "elements": {
+      "page": {
+        "type": "Tabs",
+        "props": {
+          "tabs": [
+            { "id": "overview", "label": "Overview" },
+            { "id": "tree", "label": "Tree" },
+            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
+            { "id": "graph", "label": "Graph" }
+          ]
+        },
+        "children": ["overview", "tree", "agents", "events", "graph"]
+      },
+      "overview": {
+        "type": "PanelCard",
+        "props": {
+          "title": "TalkerReasoner overview",
+          "bodyMinHeight": 220
+        },
+        "children": ["overview-empty"]
+      },
+      "overview-empty": {
+        "type": "EmptyState",
+        "props": {
+          "title": "overview pending",
+          "description": "TalkerReasoner-specific overview panels are owned by Brief 09"
+        }
+      },
+      "tree": {
+        "type": "PanelCard",
+        "props": { "title": "scenario tree", "bodyMinHeight": 320 },
+        "children": ["tree-empty"]
+      },
+      "tree-empty": {
+        "type": "EmptyState",
+        "props": {
+          "title": "tree view pending",
+          "description": "interactive scenario-tree rendering is owned by Brief 09"
+        }
+      },
+      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
+      "graph": {
+        "type": "PanelCard",
+        "props": { "title": "agent graph" },
+        "children": ["graph-view"]
+      },
+      "graph-view": { "type": "AgentGraph", "props": { "source": "$queries.graph" } }
+    }
+  }
+}

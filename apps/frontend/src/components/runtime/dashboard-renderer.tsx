@@ -1,8 +1,17 @@
 import { registry } from "@/components/registry";
-import { resolveProps } from "@/components/runtime/source-resolver";
+import {
+  type ResolveContext,
+  resolveProps,
+  resolveSource,
+} from "@/components/runtime/source-resolver";
 import { SSEDispatcher } from "@/components/runtime/sse-dispatcher";
 import { autoMerge } from "@/lib/data-source";
-import { type LayoutSpec, resolvePath } from "@/lib/layout-schema";
+import {
+  type ElementSpec,
+  type LayoutSpec,
+  type TabsElementSpec,
+  resolvePath,
+} from "@/lib/layout-schema";
 import type { EventEnvelope } from "@/lib/types";
 import { useEventBufferStore } from "@/stores";
 /**
@@ -23,7 +32,8 @@ import { useEventBufferStore } from "@/stores";
 import type { UITree } from "@json-render/core";
 import { JSONUIProvider, Renderer } from "@json-render/react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
 interface DashboardRendererProps {
@@ -36,6 +46,21 @@ const passThrough = z.unknown();
 export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
   const entries = useMemo(() => Object.entries(layout.dataSources), [layout]);
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const setActiveTab = useCallback(
+    (tabId: string) => {
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.set("tab", tabId);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   const queries = useQueries({
     queries: entries.map(([name, src]) => {
@@ -100,6 +125,22 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
     };
     const elements: UITree["elements"] = {};
     for (const [id, el] of Object.entries(layout.spec.elements)) {
+      if (isTabsElement(el)) {
+        const tabs = resolveTabs(el.props.tabs, el.children, ctx);
+        const activeTab = tabs.find((tab) => tab.id === tabParam)?.id ?? tabs[0]?.id ?? "";
+        const activeChildId = tabs.find((tab) => tab.id === activeTab)?.childId;
+        elements[id] = {
+          key: id,
+          type: el.type,
+          props: {
+            tabs: tabs.map(({ childId: _childId, ...tab }) => tab),
+            activeTab,
+            onTabChange: setActiveTab,
+          },
+          children: activeChildId ? [activeChildId] : [],
+        };
+        continue;
+      }
       const node: UITree["elements"][string] = {
         key: id,
         type: el.type,
@@ -109,7 +150,7 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
       elements[id] = node;
     }
     return { root: layout.spec.root, elements };
-  }, [entries, layout, runEvents, context, queryDatas]);
+  }, [entries, layout, runEvents, context, queryDatas, tabParam, setActiveTab]);
 
   return (
     <JSONUIProvider registry={registry}>
@@ -119,6 +160,46 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
 }
 
 const EMPTY_EVENTS: EventEnvelope[] = [];
+
+type LayoutTab = {
+  id: string;
+  label: string;
+  badge?: string | number | undefined;
+  condition?: string | undefined;
+};
+
+type ResolvedTab = {
+  id: string;
+  label: string;
+  badge?: string | number;
+  childId: string | undefined;
+};
+
+function isTabsElement(element: ElementSpec): element is TabsElementSpec {
+  const props = (element as Partial<TabsElementSpec>).props;
+  return element.type === "Tabs" && Array.isArray(props?.tabs);
+}
+
+function resolveTabs(tabs: LayoutTab[], children: string[], ctx: ResolveContext): ResolvedTab[] {
+  return tabs
+    .map((tab, index) => {
+      const conditionValue =
+        tab.condition === undefined ? true : Boolean(resolveSource(tab.condition, ctx));
+      if (!conditionValue) return null;
+      const childId = children.includes(tab.id) ? tab.id : children[index];
+      const badge =
+        typeof tab.badge === "string" && tab.badge.startsWith("$")
+          ? resolveSource(tab.badge, ctx)
+          : tab.badge;
+      return {
+        id: tab.id,
+        label: tab.label,
+        ...(typeof badge === "string" || typeof badge === "number" ? { badge } : {}),
+        childId,
+      };
+    })
+    .filter((tab): tab is ResolvedTab => tab !== null);
+}
 
 function dataSourceQueryKey(
   name: string,

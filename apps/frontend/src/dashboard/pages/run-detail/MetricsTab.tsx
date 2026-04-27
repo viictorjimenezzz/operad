@@ -3,7 +3,7 @@ import { EmptyState } from "@/components/ui";
 import { useRunInvocations } from "@/hooks/use-runs";
 import { useParams } from "react-router-dom";
 
-export function CostTab() {
+export function MetricsTab() {
   const { runId } = useParams<{ runId: string }>();
   const invocations = useRunInvocations(runId);
 
@@ -14,8 +14,8 @@ export function CostTab() {
       <div className="mx-auto max-w-[1100px] space-y-3">
         {invocations.data && invocations.data.invocations.length === 0 ? (
           <EmptyState
-            title="no cost data yet"
-            description="cost & latency are computed once the agent has run at least once"
+            title="no metrics yet"
+            description="latency, token, and cost metrics are computed once the agent has run at least once"
           />
         ) : (
           <CostLatencyBlock dataInvocations={invocations.data} />

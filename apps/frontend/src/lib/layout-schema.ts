@@ -7,11 +7,30 @@
  */
 import { z } from "zod";
 
-export const ElementSpec = z.object({
+export const GenericElementSpec = z.object({
   type: z.string(),
   props: z.record(z.unknown()).optional(),
   children: z.array(z.string()).optional(),
 });
+export type GenericElementSpec = z.infer<typeof GenericElementSpec>;
+
+export const TabsElementSpec = z.object({
+  type: z.literal("Tabs"),
+  props: z.object({
+    tabs: z.array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        badge: z.union([z.string(), z.number()]).optional(),
+        condition: z.string().optional(),
+      }),
+    ),
+  }),
+  children: z.array(z.string()),
+});
+export type TabsElementSpec = z.infer<typeof TabsElementSpec>;
+
+export const ElementSpec = z.union([TabsElementSpec, GenericElementSpec]);
 export type ElementSpec = z.infer<typeof ElementSpec>;
 
 export const DataSourceSpec = z.object({

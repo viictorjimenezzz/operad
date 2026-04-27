@@ -11,6 +11,7 @@
       "endpoint": "/runs/$context.runId/mutations.json",
       "stream": "/runs/$context.runId/mutations.sse"
     },
+    "children": { "endpoint": "/runs/$context.runId/children" },
     "graph": { "endpoint": "/graph/$context.runId" }
   },
   "spec": {
@@ -20,15 +21,16 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "overview", "label": "overview" },
-            { "id": "evolution", "label": "evolution" },
-            { "id": "graph", "label": "graph" },
-            { "id": "events", "label": "events" }
+            { "id": "overview", "label": "Overview" },
+            { "id": "evolution", "label": "Evolution" },
+            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
+            { "id": "graph", "label": "Graph" }
           ]
         },
-        "children": ["t-overview", "t-evolution", "t-graph", "t-events"]
+        "children": ["overview", "evolution", "agents", "events", "graph"]
       },
-      "t-overview": {
+      "overview": {
         "type": "Stack",
         "props": { "gap": 16 },
         "children": ["kpiSection", "fitnessSection"]
@@ -114,7 +116,7 @@
       "meta": { "type": "MetaList", "props": { "source": "$queries.summary" } },
       "langfuse": { "type": "LangfuseLink", "props": { "runId": "$context.runId" } },
 
-      "t-evolution": {
+      "evolution": {
         "type": "Stack",
         "props": { "gap": 16 },
         "children": ["popSection", "opsSection"]
@@ -156,16 +158,17 @@
       },
       "heat": { "type": "MutationHeatmap", "props": { "source": "$queries.mutations" } },
 
-      "t-graph": {
+      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
+      "graph": {
         "type": "PanelCard",
         "props": { "title": "agent graph" },
-        "children": ["graph"]
+        "children": ["graph-view"]
       },
-      "graph": {
+      "graph-view": {
         "type": "AgentGraph",
         "props": { "source": "$queries.graph", "sourceMutations": "$queries.mutations" }
-      },
-      "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } }
+      }
     }
   }
 }

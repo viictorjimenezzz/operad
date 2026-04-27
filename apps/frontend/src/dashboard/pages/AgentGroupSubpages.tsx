@@ -73,15 +73,15 @@ export function AgentGroupRunsTab() {
   );
 }
 
-/* ---------- Cost / latency comparisons ---------- */
+/* ---------- Metrics / latency comparisons ---------- */
 
-export function AgentGroupCostTab() {
+export function AgentGroupMetricsTab() {
   const { hashContent } = useParams<{ hashContent: string }>();
   const group = useAgentGroup(hashContent);
   if (!group.data) return null;
   const runs = group.data.runs;
-  const costSeries = useScatter(runs, "cost", "latency");
-  const tokensSeries = useScatter(runs, "tokens", "latency");
+  const costSeries = useScatter(runs, "cost");
+  const tokensSeries = useScatter(runs, "tokens");
   return (
     <div className="h-full overflow-auto p-4">
       <PanelSection label="Cost vs latency">
@@ -112,31 +112,41 @@ export function AgentGroupCostTab() {
   );
 }
 
-function useScatter(
-  runs: RunSummary[],
-  yKind: "cost" | "tokens",
-  xKind: "latency",
-): MultiSeries[] {
+function useScatter(runs: RunSummary[], yKind: "cost" | "tokens"): MultiSeries[] {
   return useMemo(() => {
     return runs.map((r) => {
       const x = r.duration_ms;
       const y = yKind === "cost" ? r.cost?.cost_usd ?? 0 : r.prompt_tokens + r.completion_tokens;
       return { id: r.run_id, label: truncateMiddle(r.run_id, 14), points: [{ x, y }] };
     });
-  }, [runs, yKind, xKind]);
+  }, [runs, yKind]);
 }
 
-/* ---------- Drift placeholder ---------- */
+/* ---------- Downstream placeholders ---------- */
 
-export function AgentGroupDriftTab() {
+export function AgentGroupTrainTab() {
   const { hashContent } = useParams<{ hashContent: string }>();
   const group = useAgentGroup(hashContent);
   if (!group.data) return null;
   return (
     <div className="h-full overflow-auto p-4">
       <EmptyState
-        title="no drift events recorded"
-        description="prompt drift is captured per-Trainer; once a training run for this instance lands here you'll see the per-epoch hash deltas overlaid."
+        title="no trainable parameter series yet"
+        description="parameter evolution for this agent group is filled in by the Train tab redesign"
+      />
+    </div>
+  );
+}
+
+export function AgentGroupGraphTab() {
+  const { hashContent } = useParams<{ hashContent: string }>();
+  const group = useAgentGroup(hashContent);
+  if (!group.data) return null;
+  return (
+    <div className="h-full overflow-auto p-4">
+      <EmptyState
+        title="group graph pending"
+        description="the group-level graph tab is wired for the dashboard redesign and will be filled by the agent group brief"
       />
     </div>
   );

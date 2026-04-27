@@ -99,6 +99,14 @@ describe("resolveLayout integration (real layouts/)", () => {
     expect(layout.algorithm).toBe("Sweep");
   });
 
+  it("resolves TalkerReasoner, AutoResearcher, and OPRO layouts", async () => {
+    const { resolveLayout } = await import("./index");
+    expect(resolveLayout("TalkerReasoner").algorithm).toBe("TalkerReasoner");
+    expect(resolveLayout("AutoResearcher").algorithm).toBe("AutoResearcher");
+    expect(resolveLayout("OPRO").algorithm).toBe("OPRO");
+    expect(resolveLayout("OPROOptimizer").algorithm).toBe("OPRO");
+  });
+
   it("beam/verifier/selfrefine layouts reference iteration sources/components", async () => {
     const { resolveLayout } = await import("./index");
     const beam = resolveLayout("Beam");
@@ -109,7 +117,9 @@ describe("resolveLayout integration (real layouts/)", () => {
     expect(beam.spec.elements.candidates?.type).toBe("BeamCandidateChart");
     expect(verifier.spec.elements.curve?.type).toBe("ConvergenceCurve");
     expect(verifier.spec.elements.progression?.type).toBe("IterationProgression");
-    expect(selfrefine.spec.elements.refinements?.type).toBe("IterationProgression");
-    expect(selfrefine.spec.elements.refinements?.props?.showDiff).toBe(true);
+    const refinements = selfrefine.spec.elements["refinements-view"];
+    const refinementProps = refinements?.props as Record<string, unknown> | undefined;
+    expect(refinements?.type).toBe("IterationProgression");
+    expect(refinementProps?.showDiff).toBe(true);
   });
 });

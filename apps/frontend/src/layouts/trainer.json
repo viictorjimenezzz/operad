@@ -23,6 +23,7 @@
       "endpoint": "/runs/$context.runId/gradients.json",
       "stream": "/runs/$context.runId/gradients.sse"
     },
+    "children": { "endpoint": "/runs/$context.runId/children" },
     "graph": { "endpoint": "/graph/$context.runId" }
   },
   "spec": {
@@ -32,27 +33,29 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "loss", "label": "loss" },
-            { "id": "drift", "label": "drift" },
-            { "id": "gradients", "label": "gradients" },
-            { "id": "checkpoints", "label": "checkpoints" },
-            { "id": "progress", "label": "progress" },
-            { "id": "graph", "label": "graph" },
-            { "id": "events", "label": "events" }
+            { "id": "loss", "label": "Loss" },
+            { "id": "drift", "label": "Drift" },
+            { "id": "gradients", "label": "Gradients" },
+            { "id": "checkpoints", "label": "Checkpoints" },
+            { "id": "progress", "label": "Progress" },
+            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
+            { "id": "graph", "label": "Graph" }
           ]
         },
         "children": [
-          "t-loss",
-          "t-drift",
-          "t-gradients",
-          "t-checkpoints",
-          "t-progress",
-          "t-graph",
-          "t-events"
+          "loss",
+          "drift",
+          "gradients",
+          "checkpoints",
+          "progress",
+          "agents",
+          "events",
+          "graph"
         ]
       },
 
-      "t-loss": {
+      "loss": {
         "type": "Stack",
         "props": { "gap": 16 },
         "children": ["lossSection"]
@@ -90,31 +93,31 @@
         "props": { "source": "$queries.fitness", "height": 180 }
       },
 
-      "t-drift": {
+      "drift": {
         "type": "PanelCard",
         "props": { "title": "prompt drift" },
-        "children": ["drift"]
+        "children": ["drift-view"]
       },
-      "drift": { "type": "DriftTimeline", "props": { "source": "$queries.drift" } },
+      "drift-view": { "type": "DriftTimeline", "props": { "source": "$queries.drift" } },
 
-      "t-gradients": {
+      "gradients": {
         "type": "PanelCard",
         "props": { "title": "gradient log" },
-        "children": ["gradients"]
+        "children": ["gradients-view"]
       },
-      "gradients": { "type": "GradientLog", "props": { "source": "$queries.gradients" } },
+      "gradients-view": { "type": "GradientLog", "props": { "source": "$queries.gradients" } },
 
-      "t-checkpoints": {
+      "checkpoints": {
         "type": "PanelCard",
         "props": { "title": "checkpoints" },
-        "children": ["checkpoints"]
+        "children": ["checkpoints-view"]
       },
-      "checkpoints": {
+      "checkpoints-view": {
         "type": "CheckpointTimeline",
         "props": { "source": "$queries.checkpoints" }
       },
 
-      "t-progress": {
+      "progress": {
         "type": "Stack",
         "props": { "gap": 16 },
         "children": ["progressGrid"]
@@ -138,14 +141,14 @@
       },
       "progress": { "type": "TrainingProgress", "props": { "source": "$queries.progress" } },
 
-      "t-graph": {
+      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
+      "graph": {
         "type": "PanelCard",
         "props": { "title": "agent graph" },
-        "children": ["graph"]
+        "children": ["graph-view"]
       },
-      "graph": { "type": "AgentGraph", "props": { "source": "$queries.graph" } },
-
-      "t-events": { "type": "EventTimeline", "props": { "source": "$run.events" } }
+      "graph-view": { "type": "AgentGraph", "props": { "source": "$queries.graph" } }
     }
   }
 }

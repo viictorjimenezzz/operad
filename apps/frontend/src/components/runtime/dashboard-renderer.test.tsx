@@ -5,32 +5,37 @@
  *   - globalThis.fetch  (JSON snapshot endpoints)
  *   - globalThis.EventSource (SSE streams) via MockEventSource
  *   - @/stores (Zustand eventBuffer so we don't need a real provider)
- *   - @json-render/react (Renderer — we only care about data wiring, not rendering)
+ *   - @json-render/react (Renderer — captures the resolved tree)
  */
 import { DashboardRenderer } from "@/components/runtime/dashboard-renderer";
 import type { LayoutSpec } from "@/lib/layout-schema";
+import type { UITree } from "@json-render/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import type React from "react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
+const renderedTrees: UITree[] = [];
+
 vi.mock("@json-render/react", () => ({
-  Renderer: () => null,
+  Renderer: ({ tree }: { tree: UITree }) => {
+    renderedTrees.push(tree);
+    return null;
+  },
   JSONUIProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 vi.mock("@/stores", () => ({
-  useEventBufferStore: () => new Map(),
+  useEventBufferStore: (selector: (state: { eventsByRun: Map<string, unknown[]> }) => unknown) =>
+    selector({ eventsByRun: new Map() }),
 }));
 
 vi.mock("@/components/registry", () => ({ registry: {} }));
-vi.mock("@/components/runtime/source-resolver", () => ({
-  resolveProps: () => ({}),
-}));
 
 class MockEventSource {
   static instances: MockEventSource[] = [];
@@ -92,8 +97,20 @@ function makeQC() {
   });
 }
 
-function Wrapper({ qc, children }: { qc: QueryClient; children: React.ReactNode }) {
-  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+function Wrapper({
+  qc,
+  children,
+  initialEntries = ["/"],
+}: {
+  qc: QueryClient;
+  children: React.ReactNode;
+  initialEntries?: string[];
+}) {
+  return (
+    <MemoryRouter initialEntries={initialEntries}>
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    </MemoryRouter>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +120,7 @@ function Wrapper({ qc, children }: { qc: QueryClient; children: React.ReactNode 
 describe("DashboardRenderer", () => {
   beforeEach(() => {
     MockEventSource.instances = [];
+    renderedTrees.length = 0;
     (globalThis as { EventSource?: unknown }).EventSource = MockEventSource;
   });
 
@@ -232,5 +250,92 @@ describe("DashboardRenderer", () => {
     );
 
     expect(firstEs.closed).toBe(true);
+  });
+
+  it("uses ?tab to mount only the active tab subtree", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+
+    const qc = makeQC();
+    const layout: LayoutSpec = {
+      algorithm: "Test",
+      version: 1,
+      dataSources: {},
+      spec: {
+        root: "page",
+        elements: {
+          page: {
+            type: "Tabs",
+            props: {
+              tabs: [
+                { id: "overview", label: "Overview" },
+                { id: "events", label: "Events" },
+              ],
+            },
+            children: ["overview", "events"],
+          },
+          overview: { type: "Card", props: { title: "Overview" } },
+          events: { type: "Card", props: { title: "Events" } },
+        },
+      },
+    };
+
+    render(
+      <Wrapper qc={qc} initialEntries={["/?tab=events"]}>
+        <DashboardRenderer layout={layout} context={{ runId: "r1" }} />
+      </Wrapper>,
+    );
+
+    await waitFor(() =>
+      expect(renderedTrees.some((tree) => tree.elements.page?.props?.activeTab === "events")).toBe(
+        true,
+      ),
+    );
+    const tree = renderedTrees.find((item) => item.elements.page?.props?.activeTab === "events");
+    expect(tree?.elements.page?.props?.activeTab).toBe("events");
+    expect(tree?.elements.page?.children).toEqual(["events"]);
+  });
+
+  it("hides tabs whose condition resolves falsy", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+
+    const qc = makeQC();
+    const layout: LayoutSpec = {
+      algorithm: "Test",
+      version: 1,
+      dataSources: {},
+      spec: {
+        root: "page",
+        elements: {
+          page: {
+            type: "Tabs",
+            props: {
+              tabs: [
+                { id: "overview", label: "Overview" },
+                { id: "events", label: "Events", condition: "$expr:count($queries.children)" },
+              ],
+            },
+            children: ["overview", "events"],
+          },
+          overview: { type: "Card", props: { title: "Overview" } },
+          events: { type: "Card", props: { title: "Events" } },
+        },
+      },
+    };
+
+    render(
+      <Wrapper qc={qc}>
+        <DashboardRenderer layout={layout} context={{ runId: "r1" }} />
+      </Wrapper>,
+    );
+
+    await waitFor(() =>
+      expect(renderedTrees.some((tree) => Array.isArray(tree.elements.page?.props?.tabs))).toBe(
+        true,
+      ),
+    );
+    const tree = renderedTrees.find((item) => Array.isArray(item.elements.page?.props?.tabs));
+    const tabs = tree?.elements.page?.props?.tabs;
+    expect(tabs).toEqual([{ id: "overview", label: "Overview" }]);
+    expect(tree?.elements.page?.children).toEqual(["overview"]);
   });
 });

@@ -1,0 +1,62 @@
+{
+  "algorithm": "AutoResearcher",
+  "version": 1,
+  "dataSources": {
+    "summary": { "endpoint": "/runs/$context.runId/summary" },
+    "children": { "endpoint": "/runs/$context.runId/children" },
+    "graph": { "endpoint": "/graph/$context.runId" }
+  },
+  "spec": {
+    "root": "page",
+    "elements": {
+      "page": {
+        "type": "Tabs",
+        "props": {
+          "tabs": [
+            { "id": "overview", "label": "Overview" },
+            { "id": "attempts", "label": "Attempts" },
+            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
+            { "id": "graph", "label": "Graph" }
+          ]
+        },
+        "children": ["overview", "attempts", "agents", "events", "graph"]
+      },
+      "overview": {
+        "type": "PanelCard",
+        "props": {
+          "title": "AutoResearcher overview",
+          "bodyMinHeight": 220
+        },
+        "children": ["overview-empty"]
+      },
+      "overview-empty": {
+        "type": "EmptyState",
+        "props": {
+          "title": "overview pending",
+          "description": "AutoResearcher-specific overview panels are owned by Brief 12"
+        }
+      },
+      "attempts": {
+        "type": "PanelCard",
+        "props": { "title": "research attempts", "bodyMinHeight": 320 },
+        "children": ["attempts-empty"]
+      },
+      "attempts-empty": {
+        "type": "EmptyState",
+        "props": {
+          "title": "attempts view pending",
+          "description": "parallel attempt comparison is owned by Brief 12"
+        }
+      },
+      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
+      "graph": {
+        "type": "PanelCard",
+        "props": { "title": "agent graph" },
+        "children": ["graph-view"]
+      },
+      "graph-view": { "type": "AgentGraph", "props": { "source": "$queries.graph" } }
+    }
+  }
+}
