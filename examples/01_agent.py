@@ -43,6 +43,7 @@ except ImportError:
 
 _SCRIPT = "01_agent"
 DEFAULT_DASHBOARD = "127.0.0.1:7860"
+_LOCAL_BACKENDS = {"llamacpp", "lmstudio", "ollama"}
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +232,7 @@ async def main(args: argparse.Namespace) -> None:
         resilience=Resilience(max_retries=2, backoff_base=0.5),
     )
     print(f"[{_SCRIPT}] backend={cfg.backend} host={cfg.host} model={cfg.model}")
-    if not server_reachable(cfg.host or ""):
+    if cfg.backend in _LOCAL_BACKENDS and not server_reachable(cfg.host or ""):
         print(f"[{_SCRIPT}] cannot reach {cfg.host} — start llama-server", file=sys.stderr)
         raise SystemExit(1)
 
