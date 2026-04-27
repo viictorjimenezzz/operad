@@ -26,8 +26,10 @@ from pydantic import BaseModel, Field
 from operad import evaluate
 from operad.agents import Reasoner
 from operad.core.config import Resilience, Sampling
+from operad.metrics import CostObserver
 from operad.optim.optimizers.opro import OPROAgent, OPROOptimizer
 from operad.runtime import set_limit
+from operad.runtime.observers.base import registry
 
 from _config import local_config, server_reachable
 from utils import (
@@ -256,6 +258,9 @@ async def main(args: argparse.Namespace) -> None:
         ),
     )
 
+    cost_obs = CostObserver()
+    registry.register(cost_obs)
+
     print_rule("Stage 3 - fit (live per-step candidate detail)")
     for step in range(args.epochs):
         before_task = str(task_param.value)
@@ -275,6 +280,8 @@ async def main(args: argparse.Namespace) -> None:
                 history_size=len(history),
             ),
         )
+
+    registry.unregister(cost_obs)
 
     print_rule("Stage 4 - final evaluation")
     final_report = await evaluate(seed, dataset, [metric])
@@ -299,6 +306,20 @@ async def main(args: argparse.Namespace) -> None:
             f"(only `task` was optimized)\n\n"
             f"sample answer after training:\n  {final_answer[:_TARGET_HI + 50]}"
             + ("..." if len(final_answer) > _TARGET_HI + 50 else "")
+        ),
+    )
+
+    totals = cost_obs.totals()
+    prompt_tokens = sum(v["prompt_tokens"] for v in totals.values())
+    completion_tokens = sum(v["completion_tokens"] for v in totals.values())
+    cost_usd = sum(v["cost_usd"] for v in totals.values())
+    print_panel(
+        "Training cost (Stage 3 only)",
+        (
+            f"optimization steps:  {args.epochs}\n"
+            f"prompt_tokens:       {prompt_tokens}\n"
+            f"completion_tokens:   {completion_tokens}\n"
+            f"cost_usd:            ${cost_usd:.6f}"
         ),
     )
 

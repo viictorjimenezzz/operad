@@ -9,6 +9,7 @@ Run tested: `94a1c8cb15114cb78bdde9c737d6087d`
 I tested the dashboard Agent view against `examples/01_agent.py` using the Gemini backend, focusing on the view shown for a live agent invocation. I did not change application code.
 
 Assumptions:
+
 - The relevant target is the built dashboard served at `http://127.0.0.1:7860`.
 - `examples/01_agent.py` is representative because it exercises a root composite, parallel branches, nested `ReAct` composites, many leaf agents, typed IO schemas, prompts, invocation envelopes, trainable parameters, and Langfuse links.
 
@@ -26,6 +27,7 @@ set -a; [ -f .env ] && . ./.env; set +a; \
 ```
 
 Notes:
+
 - `make rebuild` failed because host port `7000` was already allocated for Langfuse. I continued with `make dashboard` in host mode, which is sufficient for the Agent view and HTTP attach ingestion.
 - The first Gemini run failed because the virtualenv did not include the `gemini` extra. Rerunning with `--extra gemini` fixed it.
 
@@ -43,6 +45,7 @@ The example completed successfully.
 - Root output rendered in Overview and Invocations
 
 Playwright artifacts saved under `.context/`:
+
 - `.context/agent-overview-94a1c8cb15114cb78bdde9c737d6087d.png`
 - `.context/agent-graph-94a1c8cb15114cb78bdde9c737d6087d.png`
 - `.context/agent-invocations-94a1c8cb15114cb78bdde9c737d6087d.png`
@@ -86,6 +89,7 @@ Relevant code: `apps/dashboard/operad_dashboard/agent_routes.py:899`
 The route assumes `obs.registry.values()`, but the current `RunRegistry` object is not dict-like. The UI survives and shows `Sister runs endpoint unavailable`, but this is a real backend bug.
 
 Suggested fix:
+
 - Use the `RunRegistry` public iterator/listing API instead of `.values()`.
 - Add a dashboard test for `/runs/by-hash` with the live in-memory registry.
 
@@ -102,13 +106,16 @@ TypeError: Cannot set properties of undefined (setting 'rank')
 This comes from Dagre layout after expanding all nested composites. After the crash, React Router renders its default error boundary and the graph disappears.
 
 Relevant code:
+
 - `apps/frontend/src/components/agent-view/graph/agent-flow-graph.tsx:55`
 - `apps/frontend/src/components/agent-view/graph/agent-flow-layout.ts:104-154`
 
 Likely cause:
+
 - The expanded compound Dagre graph is getting an invalid parent/edge arrangement for this nested `Sequential -> Parallel -> ReAct -> Loop` graph. The observed agent graph has deep compounds and edges that cross composite boundaries; Dagre is fragile when compound parent relationships and inter-cluster edges are inconsistent.
 
 Suggested fix:
+
 - Add a fixture from this run’s `agent_graph` payload.
 - Unit-test `layoutAgentFlow(... expanded=all composites ...)`.
 - In layout, normalize cross-boundary edges so Dagre never receives invalid compound edges. At minimum, wrap `dagre.layout(g)` and fall back to collapsed graph rather than crashing the route.
@@ -118,18 +125,22 @@ Suggested fix:
 Direct leaf APIs work, but the graph selection wiring prevents leaf nodes from opening the rich agent inspector.
 
 Relevant code:
+
 - `apps/frontend/src/components/agent-view/graph/agent-flow-graph.tsx:174-175`
 - `apps/frontend/src/components/agent-view/graph/graph-page.tsx:62-77`
 
 Problem:
+
 - Leaf nodes call `setSelection({ kind: "node", nodeKey: n.path })`.
 - `GraphPage` adapts `agent_graph` into an `IoGraphResponse` with `nodes: []`; all agent records are put into `edges`.
 - `InspectorShell` only shows the agent tabs for `selection.kind === "edge"`.
 
 Result:
+
 - A leaf should open `Overview / Invocations / Prompts / Events / Edit & run / Langfuse`, but the selection shape points at an empty node list.
 
 Suggested fix:
+
 - For agent-flow cards, select agents with `setSelection({ kind: "edge", agentPath: n.path })`, or rename/refactor the store shape so agent selections are not represented as legacy IO edges.
 - Add a component test that clicks `Planner` and asserts the inspector shows the six agent tabs.
 

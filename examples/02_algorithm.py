@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+import time
 
 from operad.algorithms import (
     ScenarioNode,
@@ -20,6 +21,8 @@ from operad.algorithms import (
     Transcript,
 )
 from operad.core.config import Resilience, Sampling
+from operad.metrics import CostObserver
+from operad.runtime.observers.base import registry
 
 from _config import local_config, server_reachable
 from utils import (
@@ -210,10 +213,30 @@ async def main(args: argparse.Namespace) -> None:
         ),
     )
 
+    cost_obs = CostObserver()
+    registry.register(cost_obs)
+    t0 = time.perf_counter()
     transcript = await (_run_scripted(tr) if args.scripted else _run_repl(tr))
+    elapsed_s = time.perf_counter() - t0
+    registry.unregister(cost_obs)
 
     print_rule("Stage 4 - run summary")
     print_talker_summary(transcript)
+
+    totals = cost_obs.totals()
+    prompt_tokens = sum(v["prompt_tokens"] for v in totals.values())
+    completion_tokens = sum(v["completion_tokens"] for v in totals.values())
+    cost_usd = sum(v["cost_usd"] for v in totals.values())
+    print_panel(
+        "Metrics",
+        (
+            f"total_latency_s:   {elapsed_s:.2f}\n"
+            f"turns:             {len(transcript.turns)}\n"
+            f"prompt_tokens:     {prompt_tokens}\n"
+            f"completion_tokens: {completion_tokens}\n"
+            f"cost_usd:          ${cost_usd:.6f}"
+        ),
+    )
 
     if attached:
         host, port = parse_dashboard_target(args.dashboard, default=DEFAULT_DASHBOARD)

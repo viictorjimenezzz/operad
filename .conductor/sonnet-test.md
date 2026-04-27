@@ -19,11 +19,13 @@
 **Files**: `apps/frontend/src/components/agent-view/graph/agent-flow-layout.ts`
 
 **Fix**: In the `remappedEdges` loop (around line 139–152), skip any edge where one endpoint is a dagre-parent of the other:
+
 ```ts
 // After remapping, skip parent→child compound edges
 if (g.hasNode(a) && g.parent(b) === a) continue;
 if (g.hasNode(b) && g.parent(a) === b) continue;
 ```
+
 Or equivalently, before calling `g.setEdge`, check if either node is the compound parent of the other.
 
 ### 2. No error boundary around the Graph tab
@@ -43,17 +45,21 @@ After the crash, React Router's default error page is shown with raw stack trace
 **Root cause** (two-part):
 
 **Part A** (selection kind mismatch): In `agent-flow-graph.tsx` (line ~175), leaf nodes call:
+
 ```ts
 onSelect: () => sel ? clearSelection() : setSelection({ kind: "node", nodeKey: n.path })
 ```
+
 But in `InspectorShell.tsx` (line ~50), the `"node"` branch looks up `ioGraph.nodes.find(n => n.key === selection.nodeKey)`. The `ioGraph` is built by `adaptAgentGraphForInspector()` in `graph-page.tsx` which **always sets `nodes: []`** — all agents (leaf and composite) are in `ioGraph.edges`. So `meta` is always `null` for leaf nodes, showing the placeholder.
 
 **Part B** (UX): On first click, the split pane *opens* (because `selection !== null`), but the inspector shows nothing. On second click, `sel = true` so `clearSelection()` fires and the pane *closes*. The user can never see inspector content for leaf nodes.
 
 **Fix**: Change `onSelect` for leaf nodes in `agent-flow-graph.tsx` to use the same kind as composites:
+
 ```ts
 onSelect: () => sel ? clearSelection() : setSelection({ kind: "edge", agentPath: n.path })
 ```
+
 This routes leaf nodes through `ioGraph.edges.find(e => e.agent_path === selection.agentPath)` where they actually live.
 
 ### 4. Token counts are always 0/0 for Gemini backend
@@ -61,6 +67,7 @@ This routes leaf nodes through `ioGraph.edges.find(e => e.agent_path === selecti
 **All invocations** (leaf and composite, run and agent level) report `prompt_tokens: 0, completion_tokens: 0`. Confirmed via direct API calls to `/runs/{id}/invocations` and `/runs/{id}/agent/{path}/invocations`.
 
 Downstream effects:
+
 - Invocation banner shows **TOKENS 0 / 0 in / out**
 - Run list header shows **TOKENS 0**
 - Cost tab shows **$0.00** total cost (cost is also `null`)
@@ -116,6 +123,7 @@ The block header shows "6/6 stable across 1 invocation" but two of the six hashe
 ### 11. Duplicate API requests on run detail load
 
 On navigating to a run detail page, the network log shows:
+
 - `/runs/{runId}/summary` fetched **2×** within 6ms
 - `/runs/{runId}/invocations` fetched **2×** within 6ms
 
@@ -130,12 +138,14 @@ All Langfuse deep-links (`langfuse` header badge, "Open in Langfuse" button, per
 The inspector Langfuse tab renders an `<iframe src="http://localhost:7000/traces?search=…">` unconditionally. If Langfuse is not running (e.g. docker stack not started, or port conflict as in this test), the iframe just shows a blank page or browser error — no feedback.
 
 **Fix**: 
+
 - The Langfuse tab should check `langfuse_search_url` is reachable before showing the iframe (or at least show a fallback "Langfuse is not accessible at …" message with an "open in new tab" button).
 - Consider checking during dashboard startup whether Langfuse is reachable and surfacing it in the header.
 
 ### 13. Graph tab: node/control layout breaks when split pane opens
 
 When the inspector split pane opens (by clicking any node), the graph canvas is resized to ~50% width. Two issues:
+
 1. The rightmost node (Reasoner) gets clipped outside the visible canvas area.
 2. The expand/collapse all + mermaid controls shift from top-right to a different position.
 
@@ -186,25 +196,28 @@ The `runs /` breadcrumb link has no accessible label. Add `aria-label="all runs"
 
 ## Summary table
 
-| # | Area | Severity | Status |
-|---|------|----------|--------|
-| 1 | Graph: expand composite crashes app | CRITICAL | Open |
-| 2 | Graph: no error boundary | CRITICAL | Open |
-| 3 | Graph: leaf node click → empty inspector | HIGH | Open |
-| 4 | Tokens always 0/0 for Gemini | HIGH | Open (backend) |
-| 5 | `/runs/by-hash` 500 (intermittent) | HIGH | Open |
-| 6 | Config block misleading for composites | MEDIUM | Open |
-| 7 | Empty ROLE/TASK labels for composites | MEDIUM | Open |
-| 8 | Output values not expandable | MEDIUM | Open |
-| 9 | Cost tab requires 2+ invocations | MEDIUM | Open |
-| 10 | Reproducibility counts `—` as stable | MEDIUM | Open |
-| 11 | Duplicate API requests on load | MEDIUM | Open |
-| 12 | Langfuse iframe with no reachability check | MEDIUM | Open |
-| 13 | Graph canvas not re-fit on split pane | MEDIUM | Open |
-| 14 | Orange dot on output_schema with 1 invocation | MEDIUM | Open |
-| 15 | Edit & run tab: no indication endpoint disabled | MEDIUM | Open |
-| 16 | `/agent/{path}/values` → 404 | MEDIUM | Open |
-| 17 | `/agent/{path}/diff` → 404 | MEDIUM | Open |
-| 18 | Sidebar "events=N" cryptic | LOW | Open |
-| 19 | Script path no tooltip | LOW | Open |
-| 20 | Breadcrumb missing aria-label | LOW | Open |
+
+| #   | Area                                            | Severity | Status         |
+| --- | ----------------------------------------------- | -------- | -------------- |
+| 1   | Graph: expand composite crashes app             | CRITICAL | Open           |
+| 2   | Graph: no error boundary                        | CRITICAL | Open           |
+| 3   | Graph: leaf node click → empty inspector        | HIGH     | Open           |
+| 4   | Tokens always 0/0 for Gemini                    | HIGH     | Open (backend) |
+| 5   | `/runs/by-hash` 500 (intermittent)              | HIGH     | Open           |
+| 6   | Config block misleading for composites          | MEDIUM   | Open           |
+| 7   | Empty ROLE/TASK labels for composites           | MEDIUM   | Open           |
+| 8   | Output values not expandable                    | MEDIUM   | Open           |
+| 9   | Cost tab requires 2+ invocations                | MEDIUM   | Open           |
+| 10  | Reproducibility counts `—` as stable            | MEDIUM   | Open           |
+| 11  | Duplicate API requests on load                  | MEDIUM   | Open           |
+| 12  | Langfuse iframe with no reachability check      | MEDIUM   | Open           |
+| 13  | Graph canvas not re-fit on split pane           | MEDIUM   | Open           |
+| 14  | Orange dot on output_schema with 1 invocation   | MEDIUM   | Open           |
+| 15  | Edit & run tab: no indication endpoint disabled | MEDIUM   | Open           |
+| 16  | `/agent/{path}/values` → 404                    | MEDIUM   | Open           |
+| 17  | `/agent/{path}/diff` → 404                      | MEDIUM   | Open           |
+| 18  | Sidebar "events=N" cryptic                      | LOW      | Open           |
+| 19  | Script path no tooltip                          | LOW      | Open           |
+| 20  | Breadcrumb missing aria-label                   | LOW      | Open           |
+
+
