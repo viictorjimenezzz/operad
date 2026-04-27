@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from operad import BuildError, Dataset, evaluate
 from operad.benchmark import AggregatedMetric, Entry, EvalReport
 from operad.core.agent import _compute_graph_hash
-from operad.metrics import Contains, ExactMatch
+from operad.metrics import ExactMatch, RegexMetric
 
 from ..conftest import A, B, FakeLeaf
 
@@ -158,7 +158,7 @@ async def test_evaluate_per_entry_metrics(cfg) -> None:
             Entry(
                 input=A(text="q3"),
                 expected_output=A(text="ell"),
-                metric=Contains(field="text"),
+                metric=RegexMetric(field="text", mode="contains"),
             ),
         ],
     )
@@ -169,9 +169,9 @@ async def test_evaluate_per_entry_metrics(cfg) -> None:
     assert report.rows[0]["exact_match"] == 1.0
     assert report.rows[0]["metric"] == "exact_match"
     assert report.rows[1]["exact_match"] == 0.0
-    assert report.rows[2]["contains"] == 1.0
-    assert report.rows[2]["metric"] == "contains"
-    assert set(report.summary.keys()) == {"exact_match", "contains"}
+    assert report.rows[2]["regex_contains"] == 1.0
+    assert report.rows[2]["metric"] == "regex_contains"
+    assert set(report.summary.keys()) == {"exact_match", "regex_contains"}
 
 
 # --- evaluate global-override ----------------------------------------------
@@ -186,12 +186,12 @@ async def test_evaluate_global_override_ignores_entry_metric(cfg) -> None:
             Entry(
                 input=A(text="q1"),
                 expected_output=A(text="hello"),
-                metric=Contains(field="text"),
+                metric=RegexMetric(field="text", mode="contains"),
             ),
             Entry(
                 input=A(text="q2"),
                 expected_output=A(text="hello"),
-                metric=Contains(field="text"),
+                metric=RegexMetric(field="text", mode="contains"),
             ),
         ],
     )

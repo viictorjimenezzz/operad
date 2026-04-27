@@ -8,7 +8,7 @@ from typing import Generic, Iterable, Iterator, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
-from ..metrics.base import Metric
+from ..metrics.metric import Metric
 from ..utils.hashing import hash_json
 from .entry import Entry
 

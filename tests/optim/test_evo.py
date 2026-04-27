@@ -8,7 +8,7 @@ import pytest
 from pydantic import BaseModel
 
 from operad import Agent
-from operad.metrics.base import MetricBase
+from operad.metrics.metric import MetricBase
 from operad.optim.optimizers.evo import EvoGradient
 from operad.optim.parameter import ConfigurationConstraint
 from operad.runtime.events import AlgorithmEvent

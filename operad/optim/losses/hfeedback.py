@@ -1,16 +1,8 @@
-"""`HumanFeedbackLoss` — score an agent against a human-rated NDJSON file.
-
-Pairs with `operad.train.callbacks.HumanFeedbackCallback`, which writes
-rows keyed by ``sha256(predicted_json)[:16]``. At training time, the
-loss hashes each ``predicted`` the trainer hands it and looks up the
-corresponding human rating (1-5). Unrated rows return a neutral score
-of ``0.5`` with a null gradient, so the trainer still counts the
-sample but applies no pressure — the agent effectively only gets
-feedback on outputs the human has actually rated.
-"""
+"""Human-feedback loss."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -18,13 +10,24 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from ..metrics.base import MetricBase
-from ..optim.parameter import TextualGradient
-from .callbacks import _row_id
-
+from operad.metrics.metric import MetricBase
+from operad.optim.parameter import TextualGradient
 
 _NEUTRAL_SCORE = 0.5
 _LOGGER = logging.getLogger("operad.train")
+
+
+def _row_id(predicted: Any) -> str:
+    """Stable 16-hex key derived from sorted JSON of ``predicted``."""
+    try:
+        if hasattr(predicted, "model_dump"):
+            dumped = predicted.model_dump(mode="json")
+        else:
+            dumped = predicted
+        payload = json.dumps(dumped, sort_keys=True, default=str)
+    except Exception:
+        payload = repr(predicted)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
 class HumanFeedbackLoss(MetricBase):
@@ -48,7 +51,6 @@ class HumanFeedbackLoss(MetricBase):
         self._mtime: float | None = None
 
     def reload(self) -> None:
-        """Force cache invalidation; next _load() re-reads the file."""
         self._by_id = None
         self._mtime = None
 
@@ -75,7 +77,7 @@ class HumanFeedbackLoss(MetricBase):
                     continue
                 row_id = row.get("id")
                 if isinstance(row_id, str):
-                    by_id[row_id] = row  # later entries overwrite earlier ones
+                    by_id[row_id] = row
         self._mtime = current_mtime
         self._by_id = by_id
         return by_id
@@ -83,16 +85,15 @@ class HumanFeedbackLoss(MetricBase):
     async def score(
         self, predicted: BaseModel, expected: BaseModel
     ) -> float:
-        s, _ = await self.compute(predicted, expected)
-        return s
+        score, _ = await self.compute(predicted, expected)
+        return score
 
     async def compute(
         self, predicted: BaseModel, expected: BaseModel | None
     ) -> tuple[float, TextualGradient]:
         del expected
         by_id = self._load()
-        row_id = _row_id(predicted)
-        row = by_id.get(row_id)
+        row = by_id.get(_row_id(predicted))
         rating = row.get("rating") if row is not None else None
         if not isinstance(rating, (int, float)):
             return _NEUTRAL_SCORE, TextualGradient.null_gradient()
@@ -103,8 +104,8 @@ class HumanFeedbackLoss(MetricBase):
         msg = self.gradient_template.format(
             rating=rating, rationale=rationale or "(none)"
         )
-        sev = max(0.0, min(1.0, 1.0 - score_val))
-        return score_val, TextualGradient(message=msg, severity=sev)
+        severity = max(0.0, min(1.0, 1.0 - score_val))
+        return score_val, TextualGradient(message=msg, severity=severity)
 
 
-__all__ = ["HumanFeedbackLoss"]
+__all__ = ["HumanFeedbackLoss", "_row_id"]

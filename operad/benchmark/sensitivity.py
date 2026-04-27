@@ -21,7 +21,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from ..core.agent import Agent
-from ..metrics.base import Metric
+from ..metrics.metric import Metric
 from ..utils.paths import set_path
 from .aggregated import AggregatedMetric, Reducer
 from .dataset import Dataset

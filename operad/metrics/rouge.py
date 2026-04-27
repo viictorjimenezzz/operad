@@ -1,4 +1,4 @@
-"""Rouge-1 (unigram overlap) F1 metric — pure Python, no dependencies."""
+"""ROUGE unigram-overlap F1 metric."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from .base import MetricBase
+from .metric import MetricBase
 
 _TOKEN = re.compile(r"\w+")
 
@@ -17,7 +17,7 @@ def _tokens(s: str) -> list[str]:
 
 
 @dataclass
-class Rouge1(MetricBase):
+class Rouge(MetricBase):
     """Unigram overlap F1 between `predicted.<field>` and `expected.<field>`.
 
     Not a full `rouge-score` reimplementation — just precision, recall,
@@ -26,7 +26,7 @@ class Rouge1(MetricBase):
     """
 
     field: str
-    name: str = "rouge1"
+    name: str = "rouge"
 
     async def score(self, predicted: BaseModel, expected: BaseModel) -> float:
         pred = _tokens(str(getattr(predicted, self.field)))
@@ -41,3 +41,6 @@ class Rouge1(MetricBase):
         precision = overlap / len(pred_set)
         recall = overlap / len(ref_set)
         return 2 * precision * recall / (precision + recall)
+
+
+__all__ = ["Rouge"]

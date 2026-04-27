@@ -9,8 +9,9 @@ import pytest
 from pydantic import BaseModel
 
 from operad.benchmark.evaluate import EvalReport
-from operad.train import HumanFeedbackCallback, HumanFeedbackLoss
-from operad.train.callbacks import _row_id
+from operad.optim.losses import HumanFeedbackLoss
+from operad.optim.losses.hfeedback import _row_id
+from operad.train import HumanFeedbackCallback
 
 
 class _Out(BaseModel):

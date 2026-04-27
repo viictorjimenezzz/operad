@@ -25,7 +25,6 @@ sequence of `Agent.invoke` calls plus a few extra event types
 | `replay.py`       | Replay primitives consumed by `operad tail` and `Trace.replay`.                   |
 | `retry.py`        | `RetryPolicy` (timeout, max_retries, backoff_base) — wraps the provider call.     |
 | `streaming.py`    | `ChunkEvent` token-stream events.                                                 |
-| `cost.py`         | `CostObserver` aggregator; sums per-run cost across observers.                    |
 | `observers/base.py` | `Observer` protocol + the global `registry`.                                    |
 | `observers/jsonl.py`| `JsonlObserver` — one NDJSON line per event; `save()` to file.                  |
 | `observers/rich.py` | `RichDashboardObserver` — live terminal TUI; needs `[observers]`.               |
@@ -36,7 +35,7 @@ sequence of `Agent.invoke` calls plus a few extra event types
 
 ```python
 from operad.runtime import SlotRegistry, acquire, registry, set_limit, SlotOccupancy
-from operad.runtime.cost import CostObserver
+from operad.metrics.cost import CostObserver
 from operad.runtime.trace import Trace
 from operad.runtime.trace_diff import trace_diff
 from operad.runtime.streaming import ChunkEvent

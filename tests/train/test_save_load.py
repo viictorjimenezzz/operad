@@ -11,7 +11,7 @@ import pytest
 from operad.benchmark.dataset import Dataset
 from operad.benchmark.entry import Entry
 from operad.data.loader import DataLoader
-from operad.metrics.base import MetricBase
+from operad.metrics.metric import MetricBase
 from operad.optim.schedulers.lr import ConstantLR
 from operad.optim.optimizers.optimizer import Optimizer, ParamGroup
 from operad.optim.parameter import Parameter, TextualGradient

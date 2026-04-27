@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from operad.agents.reasoning.schemas import Candidate
 from operad.core.agent import Agent
-from operad.metrics.base import MetricBase
+from operad.metrics.metric import MetricBase
 from operad.optim.losses.loss import _clamp01
 from operad.optim.parameter import TextualGradient
 

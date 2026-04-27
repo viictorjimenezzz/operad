@@ -2,7 +2,7 @@
 
 50 instructions across 5 tools.
 Primary metric: exact match on tool_name.
-Secondary metric: Contains on tool_args (expected key present).
+Secondary metric: RegexMetric contains on tool_args (expected key present).
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import Any
 
 from operad import Agent
 from operad.benchmark import BenchmarkTask
-from operad.metrics import Contains
+from operad.metrics import RegexMetric
 from operad.optim.losses import MetricLoss
 
 from ._config import default_config
@@ -26,7 +26,7 @@ from ._offline import OFFLINE_CFG, OfflineToolLeaf
 
 DATASET = make_tool_use_dataset(n=50, seed=42)
 
-METRICS = [ToolNameExactMatch(), Contains(field="tool_args")]
+METRICS = [ToolNameExactMatch(), RegexMetric(field="tool_args", mode="contains")]
 
 LOSS_FN = MetricLoss(METRICS[0])
 

@@ -2,7 +2,7 @@
 
 Re-scores the recorded root output with caller-supplied metrics.
 Zero-cost only for deterministic metrics; metrics that themselves
-invoke an LLM (e.g. ``RubricCritic``) still cost. Use
+invoke an LLM (e.g. ``LLMAAJ``) still cost. Use
 ``assert_no_network`` from ``tests/conftest.py`` to enforce that in
 tests.
 """
@@ -15,7 +15,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from ..benchmark.evaluate import EvalReport
-from ..metrics.base import Metric
+from ..metrics.metric import Metric
 from .trace import Trace
 
 

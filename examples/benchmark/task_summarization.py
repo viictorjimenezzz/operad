@@ -1,7 +1,7 @@
 """Task: short-form summarization.
 
 50 synthesized (doc, one-sentence summary) pairs.
-Primary metric: Rouge1 on the `summary` field.
+Primary metric: Rouge on the `summary` field.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from typing import Any
 
 from operad import Agent
 from operad.benchmark import BenchmarkTask
-from operad.metrics import Rouge1
+from operad.metrics import Rouge
 from operad.optim.losses import MetricLoss
 
 from ._config import default_config
@@ -23,7 +23,7 @@ from ._offline import OFFLINE_CFG, OfflineSummaryLeaf
 
 DATASET = make_summarization_dataset(n=50, seed=42)
 
-METRICS = [Rouge1(field="summary")]
+METRICS = [Rouge(field="summary")]
 
 LOSS_FN = MetricLoss(METRICS[0])
 

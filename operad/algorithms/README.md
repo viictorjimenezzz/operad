@@ -40,9 +40,9 @@ from operad.algorithms import (
 
 ```python
 from operad.algorithms import Beam
-from operad.metrics import RubricCritic
+from operad.metrics import LLMAAJ
 
-beam = Beam(generator=reasoner, critic=RubricCritic(critic), n=5)
+beam = Beam(generator=reasoner, critic=LLMAAJ(judge), n=5)
 best = await beam.run(Q(text="Explain entropy."))
 ```
 

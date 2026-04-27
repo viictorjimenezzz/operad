@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 from operad.core.agent import Agent
 from operad.core.config import Configuration
 from operad.core.agent import Example
-from operad.metrics.base import Metric
+from operad.metrics.metric import Metric
 from operad.optim.parameter import Parameter
 from operad.optim.backprop.rewrite import _describe_constraint, _parse, _serialize
 from operad.optim.optimizers.optimizer import Optimizer, ParamGroup

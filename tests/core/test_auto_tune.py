@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from operad import Agent
 from operad.benchmark.dataset import Dataset
-from operad.metrics.base import MetricBase
+from operad.metrics.metric import MetricBase
 from operad.utils.ops import (
     AppendRule,
     EditTask,

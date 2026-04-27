@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel
 
-from operad.metrics.base import MetricBase
+from operad.metrics.metric import MetricBase
 
 try:
     from rich.console import Console

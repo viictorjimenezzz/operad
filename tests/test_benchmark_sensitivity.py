@@ -13,7 +13,7 @@ from operad.benchmark import (
     SensitivityReport,
     sensitivity,
 )
-from operad.metrics.base import MetricBase
+from operad.metrics.metric import MetricBase
 
 from .conftest import A, FakeLeaf
 

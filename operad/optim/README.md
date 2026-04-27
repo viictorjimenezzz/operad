@@ -41,7 +41,7 @@ await agent.abuild()
 train, val = random_split(dataset, [0.8, 0.2])
 loader     = DataLoader(train, batch_size=8, shuffle=True)
 
-loss_fn   = JudgeLoss(rubric_critic)
+loss_fn   = JudgeLoss(judge)
 optimizer = TextualGradientDescent(agent.parameters(), lr=1.0)
 scheduler = CosineExplorationLR(optimizer, T_max=10)
 
@@ -136,7 +136,7 @@ constraint overrides). Subclasses:
 `operad.train.Trainer(agent, optimizer, loss_fn, ...)` exposes
 `fit(loader, val, epochs, ...)`, `evaluate(ds)`, `predict(x)`. Supports
 callbacks (`EarlyStopping`, `BestCheckpoint`, `GradClip`,
-`PromptDrift`, `LearningRateLogger`). Batching, gradient accumulation,
+`PromptDrift`, `LRLogger`). Batching, gradient accumulation,
 LR scheduling, validation, checkpointing — the whole standard fit
 loop.
 

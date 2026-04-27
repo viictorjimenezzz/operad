@@ -25,7 +25,7 @@ from .observers.base import AgentEvent
 if TYPE_CHECKING:
     from ..core.agent import Agent
     from ..eval import EvalReport
-    from ..metrics.base import Metric
+    from ..metrics.metric import Metric
 
 
 class TraceStep(BaseModel):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from operad.metrics.base import MetricBase
+from operad.metrics.metric import MetricBase
 
 
 class ToolNameExactMatch(MetricBase):

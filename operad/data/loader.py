@@ -34,7 +34,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ..benchmark.dataset import Dataset
 from ..benchmark.entry import Entry
-from ..metrics.base import Metric
+from ..metrics.metric import Metric
 from ..runtime.events import get_current_epoch
 from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
 from ..utils.hashing import hash_json

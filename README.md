@@ -79,7 +79,7 @@ loader     = DataLoader(train, batch_size=8, shuffle=True)
 
 trainer = Trainer(agent,
                   TextualGradientDescent(agent.parameters(), lr=1.0),
-                  JudgeLoss(rubric_critic))
+                  JudgeLoss(judge))
 report  = await trainer.fit(loader, val_ds=val, epochs=5)
 ```
 
@@ -144,9 +144,9 @@ not `Agent` subclasses.
 
 ```python
 from operad.algorithms import BestOfN
-from operad.metrics import RubricCritic
+from operad.metrics import LLMAAJ
 
-bon  = BestOfN(generator=reasoner, critic=RubricCritic(critic), n=5)
+bon  = BestOfN(generator=reasoner, critic=LLMAAJ(judge), n=5)
 best = await bon.run(Q(text="..."))
 ```
 
@@ -205,7 +205,7 @@ uv run operad tail  run.jsonl --speed=0
 builds the graph, invokes, and prints the `Out` as JSON. `trace`
 prints the Mermaid rendering. `graph` dumps it as JSON. `tail`
 replays a recorded NDJSON trace. See
-[`operad/configs/README.md`](operad/configs/README.md).
+[`operad/core/config.py`](operad/core/config.py).
 
 ## Apps
 

@@ -4,12 +4,9 @@ from __future__ import annotations
 import pytest
 from operad import OperadOutput, Trace
 from operad.runtime.trace import TraceObserver, TraceStep
-from operad.runtime.cost import CostObserver, Pricing, cost_estimate
+from operad.metrics.cost import CostObserver, CostTracker, Pricing, cost_estimate
 from operad.runtime.observers import base as _obs
 from tests.conftest import A, B, FakeLeaf
-from operad.metrics import CostTracker
-
-from operad.metrics.cost import _CostEvent
 
 
 # --- from test_cost.py ---
@@ -87,40 +84,28 @@ async def test_cost_estimate_on_real_trace(cfg) -> None:
     assert report.run_id == t.run_id
     assert len(report.per_step) == len(t.steps)
 
-# --- from test_metrics_cost.py ---
-pytestmark = [
-    pytest.mark.asyncio,
-    pytest.mark.filterwarnings("ignore::DeprecationWarning"),
-]
-
-
 async def test_cost_tracker_accumulates_per_run() -> None:
     tracker = CostTracker()
-    await tracker.on_event(
-        _CostEvent(
-            run_id="r1",
-            backend="anthropic",
-            model="claude-haiku-4-5",
-            prompt_text="a" * 400,          # ~100 prompt tokens
-            completion_text="b" * 200,       # ~50 completion tokens
-        )
+    tracker.add(
+        run_id="r1",
+        backend="anthropic",
+        model="claude-haiku-4-5",
+        prompt_tokens=100,
+        completion_tokens=50,
     )
-    await tracker.on_event(
-        _CostEvent(
-            run_id="r1",
-            backend="anthropic",
-            model="claude-haiku-4-5",
-            prompt_text="c" * 40,            # ~10
-            completion_text="d" * 40,        # ~10
-        )
+    tracker.add(
+        run_id="r1",
+        backend="anthropic",
+        model="claude-haiku-4-5",
+        prompt_tokens=10,
+        completion_tokens=10,
     )
-    await tracker.on_event(
-        _CostEvent(
-            run_id="r2",
-            backend="llamacpp",
-            model="default",
-            prompt_text="free " * 20,
-        )
+    tracker.add(
+        run_id="r2",
+        backend="llamacpp",
+        model="default",
+        prompt_tokens=100,
+        completion_tokens=0,
     )
 
     totals = tracker.totals()
@@ -135,13 +120,12 @@ async def test_cost_tracker_accumulates_per_run() -> None:
 
 async def test_cost_tracker_unknown_model_is_free() -> None:
     tracker = CostTracker()
-    await tracker.on_event(
-        _CostEvent(
-            run_id="x",
-            backend="nobody",
-            model="whoknows",
-            prompt_text="hello world",
-        )
+    tracker.add(
+        run_id="x",
+        backend="nobody",
+        model="whoknows",
+        prompt_tokens=2,
+        completion_tokens=0,
     )
     assert tracker.totals()["x"]["cost_usd"] == 0.0
 

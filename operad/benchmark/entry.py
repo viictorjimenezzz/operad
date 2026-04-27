@@ -12,7 +12,7 @@ from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
-from ..metrics.base import Metric
+from ..metrics.metric import Metric
 
 In = TypeVar("In", bound=BaseModel)
 Out = TypeVar("Out", bound=BaseModel)

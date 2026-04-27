@@ -101,7 +101,7 @@ from operad.optim.losses import (
 loss_exact = MetricLoss(ExactMatch())
 
 # LLM rubric judge → the judge's rationale becomes the critique
-loss_rubric = JudgeLoss(rubric_critic)
+loss_rubric = JudgeLoss(judge)
 
 # Shape-conformance check
 loss_shape = SchemaLoss(Answer)
@@ -142,7 +142,7 @@ train, val = random_split(dataset, [0.8, 0.2], seed=0)
 loader = DataLoader(train, batch_size=8, shuffle=True)
 
 # 3. Loss, optimizer, scheduler.
-loss_fn   = JudgeLoss(rubric_critic)
+loss_fn   = JudgeLoss(judge)
 optimizer = TextualGradientDescent(agent.parameters(), lr=1.0)
 scheduler = CosineExplorationLR(optimizer, T_max=10)
 
@@ -234,7 +234,7 @@ Callbacks attach at `Trainer` construction or via the
 ```python
 from operad.train import (
     BestCheckpoint, EarlyStopping, GradClip,
-    LearningRateLogger, MemoryRotation, PromptDrift,
+    LRLogger, MemoryRotation, PromptDrift,
 )
 
 trainer = Trainer(
@@ -243,8 +243,8 @@ trainer = Trainer(
         BestCheckpoint(monitor="val_loss", mode="min"),
         GradClip(max_severity=0.8),
         PromptDrift(),                    # per-epoch prompt hash + diff
-        LearningRateLogger(),
-        MemoryRotation(max_entries=4096),
+        LRLogger(),
+        MemoryRotation(max_tape_entries=4096),
     ],
 )
 
@@ -260,7 +260,7 @@ await trainer.fit(
 | `BestCheckpoint`      | Tracks the best epoch's `hash_content`.                          |
 | `GradClip`            | Caps `TextualGradient.severity` per step.                        |
 | `PromptDrift`         | Logs each epoch's prompt-hash delta from the seed.               |
-| `LearningRateLogger`  | Records per-group `lr` at every epoch boundary.                  |
+| `LRLogger`  | Records per-group `lr` at every epoch boundary.                  |
 | `MemoryRotation`      | Rotates the oldest tape entries to bound long-run memory.        |
 
 `TrainingReport.best_hash_content` gives you a content-addressable
@@ -378,9 +378,8 @@ the browser and re-launches training with `HumanFeedbackLoss` as the
 loss:
 
 ```python
-from operad.train import (
-    HumanFeedbackCallback, HumanFeedbackLoss, Trainer,
-)
+from operad.optim.losses import HumanFeedbackLoss
+from operad.train import HumanFeedbackCallback, Trainer
 
 # Round 1 — dump unrated rows for labeling.
 trainer = Trainer(agent, optimizer, loss_fn,

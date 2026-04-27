@@ -9,7 +9,7 @@ import pytest
 from pydantic import BaseModel
 
 from operad import Agent
-from operad.metrics.base import MetricBase
+from operad.metrics.metric import MetricBase
 from operad.optim.parameter import TextualGradient
 from operad.utils.ops import AppendRule
 

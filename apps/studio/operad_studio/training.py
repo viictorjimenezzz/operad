@@ -167,7 +167,8 @@ async def _default_runner(
     """
     from operad.optim.optimizers.optimizer import Optimizer
     from operad.optim.optimizers.tgd import TextualGradientDescent
-    from operad.train import HumanFeedbackLoss, Trainer
+    from operad.optim.losses import HumanFeedbackLoss
+    from operad.train import Trainer
 
     # Dashboard forwarding — optional, scoped to this call.
     attached = None
