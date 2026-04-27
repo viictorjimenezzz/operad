@@ -14,15 +14,34 @@ export const registry: ComponentRegistry = {
   ...algorithmsRegistry,
   ...agentViewRegistry,
   AgentsTab: ({ element }) => {
-    const props = element.props as { runId?: string };
-    return <AgentsTab runId={props.runId ?? ""} />;
+    const props = element.props as {
+      runId?: string;
+      groupBy?: "hash" | "none";
+      extraColumns?: string[];
+      emptyTitle?: string;
+      emptyDescription?: string;
+    };
+    return (
+      <AgentsTab
+        runId={props.runId ?? ""}
+        {...(props.groupBy ? { groupBy: props.groupBy } : {})}
+        {...(props.extraColumns ? { extraColumns: props.extraColumns } : {})}
+        {...(props.emptyTitle ? { emptyTitle: props.emptyTitle } : {})}
+        {...(props.emptyDescription ? { emptyDescription: props.emptyDescription } : {})}
+      />
+    );
   },
   EventsTab: ({ element }) => {
-    const props = element.props as { runId?: string; defaultKindFilter?: string[] };
+    const props = element.props as {
+      runId?: string;
+      defaultKindFilter?: string[];
+      defaultPathFilter?: string;
+    };
     return (
       <EventsTab
         runId={props.runId ?? ""}
         {...(props.defaultKindFilter ? { defaultKindFilter: props.defaultKindFilter } : {})}
+        {...(props.defaultPathFilter ? { defaultPathFilter: props.defaultPathFilter } : {})}
       />
     );
   },
