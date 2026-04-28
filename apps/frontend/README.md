@@ -65,7 +65,7 @@ src/
     charts/                   FitnessCurve, PopulationScatter, MutationHeatmap,
                               TrainingProgress, TrainingLossCurve, DriftTimeline,
                               DebateRoundView, BeamCandidateChart, AgentGraph
-    panels/                   RunListSidebar, GlobalStatsBar, EventTimeline,
+    panels/                   RunListSidebar, EventTimeline,
                               IODetail, RawEnvelopePanel, MetaListPanel, KpiTile,
                               LangfuseLink
   dashboard/                  Shell + routes + pages (RunList, RunDetail, NotFound)
