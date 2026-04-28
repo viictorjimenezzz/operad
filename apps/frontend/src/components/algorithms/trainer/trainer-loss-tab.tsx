@@ -1,6 +1,6 @@
 import { TrainingLossCurve } from "@/components/charts/training-loss-curve";
 import { EmptyState, PanelCard, Pill } from "@/components/ui";
-import { CheckpointEntry, FitnessEntry } from "@/lib/types";
+import { FitnessEntry } from "@/lib/types";
 import { useMemo, useState } from "react";
 import {
   CartesianGrid,

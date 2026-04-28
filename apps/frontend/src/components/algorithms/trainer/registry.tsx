@@ -64,7 +64,12 @@ export const trainerRegistry: ComponentRegistry = {
   },
   TrainerTracebackTab: ({ element }) => {
     const p = element.props as { runId?: string; dataSummary?: unknown };
-    return <TrainerTracebackTab runId={p.runId} dataSummary={p.dataSummary} />;
+    return (
+      <TrainerTracebackTab
+        {...(p.runId !== undefined ? { runId: p.runId } : {})}
+        dataSummary={p.dataSummary}
+      />
+    );
   },
   TrainingTracebackTab: ({ element }) => {
     const p = element.props as { runId?: string; dataSummary?: unknown };
