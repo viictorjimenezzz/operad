@@ -227,6 +227,27 @@ Behavior:
 
 ## Notes
 
-(Append discoveries here as you implement. Particularly: how you
-handled idempotency in dry-run mode and whether the runner's state
-machinery cooperates.)
+- Dry-run idempotency is handled by running the normal targeted step on the
+  supplied runner, building the report from the post-step state, then restoring
+  the target leaf's `role`, `task`, and `rules` plus all pre-existing
+  `requires_grad` overrides. This avoids cloning an `ArtemisRunner`; cloning
+  drops YAML metadata on cloned leaves and would require rebuilding provider
+  runners in offline tests.
+- `Agent.state()` returns an `AgentState` tree in this checkout, not the flat
+  path dictionary shown in the brief. `apply_fix` flattens that tree internally
+  for the C9 off-target assertion and keeps `FixReport.before_state` /
+  `after_state` as the target leaf's JSON state.
+- `Agent.freeze_parameters()` does not expose public flags for every config
+  parameter yielded by `named_parameters()` (`config.model`, `config.backend`,
+  `config.io.renderer`). To make the C9 trainable-parameter check exact,
+  `apply_fix` snapshots and writes the agents' existing requires-grad override
+  maps, then restores them before returning.
+- This checkout does not contain the public `CassetteRetrievalClient` described
+  by task 1-4. The `fix` command therefore includes a small replay-only reader
+  for the documented `retrieve/<key>.json` and `metadata/<workspace_id>.json`
+  cassette layout, scoped to the command file.
+- Existing `dump_yaml(..., source_path=...)` can preserve comments in a way that
+  reloads section comments inside `prompt.rules` as rule text for the reasoner
+  fixture. `apply_fix` first uses the source-path-aware dump, then falls back to
+  rewriting only `role`, `task`, `closure`, and `rules` if the required
+  post-dump `hash_content` round-trip check fails.
