@@ -1,6 +1,7 @@
 # examples/
 
-Four end-to-end examples — one per pillar of the operad vision. Every
+Six end-to-end examples — the first four cover the core operad pillars,
+and the last two cover dashboard-specific algorithm/training layouts. Every
 example talks to a **real** LLM via the backend declared in `_config.py`
 (defaults: `127.0.0.1:9000`, `google/gemma-4-e2b`; override with
 `OPERAD_LLAMACPP_HOST` / `OPERAD_LLAMACPP_MODEL`). No fakes, no
@@ -16,6 +17,8 @@ exit cleanly with an error if the backend is not up.
 | 2 | `02_algorithm.py`          | `TalkerReasoner` over a four-stage scenario tree with two run paths: interactive REPL (`input()`) by default, or `--scripted` replay. Exercises stay/advance/branch/finish decisions. |
 | 3 | `03_training.py`        | Training loop with `OPROOptimizer`: metric-feedback task prompt rewrites against a reference-free length-band scorer. |
 | 4 | `04_evolutionary.py`          | Evolutionary loop with `EvoGradient` over prompt-rule mutations (`append_rule`, `replace_rule`, `drop_rule`) across generations. Real `Reasoner` agent + reference-free length-band metric. |
+| 5 | `05_algorithm_gallery.py` | Dashboard algorithm gallery for `Beam`, `Sweep`, `Debate`, `SelfRefine`, `AutoResearcher`, and `VerifierAgent`. Runs are intentionally small and print the dashboard run ids they generated. |
+| 6 | `06_training_dashboard.py` | Dashboard training coverage for `Trainer` with `TextualGradientDescent`, `MomentumTextGrad`, and `APEOptimizer`, including loss, schedule, drift, parameters, gradient, and traceback events. |
 
 Run them from the repo root:
 
@@ -24,11 +27,16 @@ uv run python examples/01_agent.py
 uv run python examples/02_algorithm.py
 uv run python examples/03_training.py
 uv run python examples/04_evolutionary.py
+uv run python examples/05_algorithm_gallery.py
+uv run python examples/06_training_dashboard.py
 ```
 
 `03_training.py` uses `--epochs` and `--candidates` for OPRO steps and
 candidate attempts. `04_evolutionary.py` keeps `--generations` and
-`--branches` for EvoGradient.
+`--branches` for EvoGradient. `05_algorithm_gallery.py` accepts
+`--only beam|sweep|debate|selfrefine|autoresearcher|verifier|all`.
+`06_training_dashboard.py` accepts
+`--optimizer textgrad|momentum|ape|all` and `--epochs`.
 
 To stream runs into `operad-dashboard` from a separate process:
 
@@ -49,7 +57,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:3000/api/public/otel \
 uv run --extra otel python examples/01_agent.py --dashboard
 ```
 
-All four scripts (`01`..`04`) accept `--dashboard [HOST:PORT]` and
+All six scripts (`01`..`06`) accept `--dashboard [HOST:PORT]` and
 `--no-open`.
 
 `scripts/verify.sh` runs each one with `--offline` (the no-op path) so
