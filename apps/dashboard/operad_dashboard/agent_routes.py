@@ -578,7 +578,7 @@ async def agent_graph(request: Request, run_id: str) -> JSONResponse:
                     graph_json = graph
                     break
     if graph_json is None:
-        return JSONResponse({"root": None, "nodes": [], "edges": []})
+        return JSONResponse(_synthetic_agent_graph_payload(ctx))
     payload = to_agent_graph_from_json(graph_json)
 
     # Backfill class_name on agents using runtime metadata from end events,
@@ -601,6 +601,103 @@ async def agent_graph(request: Request, run_id: str) -> JSONResponse:
         if rt:
             node["class_name"] = rt
     return JSONResponse(payload)
+
+
+def _synthetic_agent_graph_payload(ctx: _RunContext) -> dict[str, Any]:
+    """Build a minimal graph from terminal child-agent events.
+
+    Pure algorithm runs such as SelfRefine may record nested agent
+    invocations without a root agent graph. The Parameters tab still needs
+    leaf paths so it can query `/agent/{path}/parameters`.
+    """
+    root = _synthetic_root_path(ctx)
+    nodes_by_path: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+
+    for env in ctx.events:
+        if env.get("type") != "agent_event" or env.get("kind") not in {"end", "error"}:
+            continue
+        path = env.get("agent_path")
+        if not isinstance(path, str) or not path or path == root:
+            continue
+        meta = env.get("metadata")
+        meta = meta if isinstance(meta, dict) else {}
+        if path not in nodes_by_path:
+            order.append(path)
+        nodes_by_path[path] = {
+            "path": path,
+            "class_name": _metadata_string(meta, "class_name") or path.rsplit(".", 1)[-1],
+            "kind": _agent_kind(meta),
+            "parent_path": root,
+            "input": _type_name(meta, "input_type_name"),
+            "output": _type_name(meta, "output_type_name"),
+            "input_label": _type_label(_type_name(meta, "input_type_name")),
+            "output_label": _type_label(_type_name(meta, "output_type_name")),
+        }
+
+    if not order:
+        return {"root": None, "nodes": [], "edges": []}
+
+    nodes = [
+        {
+            "path": root,
+            "class_name": root.rsplit(".", 1)[-1],
+            "kind": "composite",
+            "parent_path": None,
+            "input": "",
+            "output": "",
+            "input_label": "",
+            "output_label": "",
+        },
+        *(nodes_by_path[path] for path in order),
+    ]
+    edges = [
+        {
+            "caller": root,
+            "callee": path,
+            "type": "invoke",
+            "input": nodes_by_path[path]["input"],
+            "output": nodes_by_path[path]["output"],
+        }
+        for path in order
+    ]
+    return {"root": root, "nodes": nodes, "edges": edges}
+
+
+def _synthetic_root_path(ctx: _RunContext) -> str:
+    root = ctx.summary.get("root_agent_path")
+    if isinstance(root, str) and root:
+        return root
+    algorithm = ctx.summary.get("algorithm_class") or ctx.summary.get("algorithm_path")
+    if isinstance(algorithm, str) and algorithm:
+        return algorithm
+    return ctx.run_id
+
+
+def _agent_kind(metadata: dict[str, Any]) -> str:
+    kind = metadata.get("kind")
+    return kind if kind in {"leaf", "composite"} else "leaf"
+
+
+def _metadata_string(metadata: dict[str, Any], key: str) -> str | None:
+    value = metadata.get(key)
+    return value if isinstance(value, str) and value else None
+
+
+def _type_name(metadata: dict[str, Any], key: str) -> str:
+    value = _metadata_string(metadata, key)
+    if value is not None:
+        return value
+    snapshot = metadata.get("state_snapshot")
+    if isinstance(snapshot, dict):
+        value = snapshot.get(key)
+        if isinstance(value, str):
+            return value
+    return ""
+
+
+def _type_label(type_name: str) -> str:
+    return type_name.rsplit(".", 1)[-1] if type_name else ""
 
 
 @router.get("/runs/{run_id}/invocations")
@@ -892,8 +989,10 @@ async def agent_parameters(request: Request, run_id: str, path: str) -> JSONResp
             {
                 "requires_grad": True,
                 "path": param_path,
+                "type": entry.get("type") or _parameter_type(entry.get("value")),
                 "value": entry.get("value"),
                 "hash": entry.get("hash"),
+                "constraint": entry.get("constraint"),
                 "tape_link": tape_link,
                 "gradient": gradient,
             }

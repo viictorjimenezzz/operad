@@ -39,6 +39,18 @@ describe("appendDedupe", () => {
     expect(appendDedupe(arr, { epoch: 2, loss: 0.4 })).toHaveLength(2);
   });
 
+  it("keeps distinct phases for the same iter_index", () => {
+    const arr = [{ iter_index: 1, phase: "refine", text: "draft" }];
+    const result = appendDedupe(arr, { iter_index: 1, phase: "reflect", score: 0.9 });
+    expect(result).toHaveLength(2);
+  });
+
+  it("deduplicates iteration rows by iter_index and phase", () => {
+    const arr = [{ iter_index: 1, phase: "reflect", score: 0.8 }];
+    const result = appendDedupe(arr, { iter_index: 1, phase: "reflect", score: 0.9 });
+    expect(result).toHaveLength(1);
+  });
+
   it("appends when no primary key (no dedup possible)", () => {
     const arr = [{ foo: "a" }];
     const result = appendDedupe(arr, { foo: "b" });
@@ -71,6 +83,62 @@ describe("autoMerge", () => {
     const current = { epoch: 1, loss: 0.5 };
     const delta = { epoch: 2, loss: 0.3 };
     expect(autoMerge(current, delta)).toBe(delta);
+  });
+
+  it("merges an iteration row into an IterationsResponse snapshot", () => {
+    const current = {
+      iterations: [{ iter_index: 0, phase: "reflect", score: 0.5 }],
+      max_iter: 2,
+      threshold: null,
+      converged: false,
+    };
+    const result = autoMerge(current, {
+      iter_index: 1,
+      phase: "refine",
+      score: null,
+      text: "draft",
+      metadata: {},
+    }) as typeof current;
+
+    expect(result.iterations).toHaveLength(2);
+    expect(result.max_iter).toBe(2);
+    expect(result.converged).toBe(false);
+  });
+
+  it("preserves multiple iteration phases while merging into a snapshot", () => {
+    const current = {
+      iterations: [{ iter_index: 1, phase: "refine", score: null }],
+      max_iter: 2,
+      threshold: null,
+      converged: false,
+    };
+    const result = autoMerge(current, {
+      iter_index: 1,
+      phase: "reflect",
+      score: 1,
+      text: "accepted",
+      metadata: {},
+    }) as typeof current;
+
+    expect(result.iterations.map((row) => row.phase)).toEqual(["refine", "reflect"]);
+  });
+
+  it("does not let SSE history replay replace the snapshot object", () => {
+    const current = {
+      iterations: [{ iter_index: 0, phase: "reflect", score: 1 }],
+      max_iter: 2,
+      threshold: null,
+      converged: false,
+    };
+    const result = autoMerge(current, {
+      iter_index: 0,
+      phase: "reflect",
+      score: 1,
+      text: "same event",
+      metadata: {},
+    });
+
+    expect(result).toEqual(current);
   });
 
   it("replaces when current is undefined (first delta before JSON resolves)", () => {

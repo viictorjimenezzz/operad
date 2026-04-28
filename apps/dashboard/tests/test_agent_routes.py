@@ -328,7 +328,9 @@ def test_live_io_graph_invocations_meta_prompts_values_events(app_and_obs) -> No
         rows = params.json()["parameters"]
         assert len(rows) == 2
         assert rows[0]["path"] == "role"
+        assert rows[0]["type"] == "TextParameter"
         assert rows[0]["requires_grad"] is True
+        assert rows[0]["constraint"] == {"kind": "text", "max_length": 200, "forbidden": []}
         assert "tape_link" in rows[0]
         assert "gradient" in rows[0]
 
@@ -342,6 +344,67 @@ def test_live_io_graph_invocations_meta_prompts_values_events(app_and_obs) -> No
         assert body["from_hash_content"] == "hash-a"
         assert body["to_hash_content"] == "hash-b"
         assert len(body["changes"]) > 0
+
+
+def test_algorithm_agent_graph_falls_back_to_terminal_agents(app_and_obs) -> None:
+    app, _ = app_and_obs
+    events = [
+        {
+            "type": "algo_event",
+            "run_id": "algo-run",
+            "algorithm_path": "SelfRefine",
+            "kind": "algo_start",
+            "payload": {"max_iter": 2},
+            "started_at": 1.0,
+            "finished_at": None,
+            "metadata": {},
+        },
+        {
+            "type": "agent_event",
+            "run_id": "algo-run",
+            "agent_path": "Reasoner",
+            "kind": "end",
+            "input": {"text": "q"},
+            "output": {"response": {"value": 1}},
+            "started_at": 2.0,
+            "finished_at": 3.0,
+            "metadata": _component_meta(
+                prompt_system="<role>reason</role>",
+                prompt_user="<input>q</input>",
+            ),
+            "error": None,
+        },
+        {
+            "type": "agent_event",
+            "run_id": "algo-run",
+            "agent_path": "Reflector",
+            "kind": "end",
+            "input": {"text": "draft"},
+            "output": {"response": {"value": 2}},
+            "started_at": 4.0,
+            "finished_at": 5.0,
+            "metadata": {
+                **_component_meta(
+                    prompt_system="<role>reflect</role>",
+                    prompt_user="<input>draft</input>",
+                ),
+                "class_name": "Reflector",
+            },
+            "error": None,
+        },
+    ]
+
+    with TestClient(app) as client:
+        assert client.post("/_ingest", json=events).status_code == 200
+        response = client.get("/runs/algo-run/agent_graph")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["root"] == "SelfRefine"
+    paths = [node["path"] for node in body["nodes"]]
+    assert paths == ["SelfRefine", "Reasoner", "Reflector"]
+    assert body["nodes"][1]["parent_path"] == "SelfRefine"
+    assert {edge["callee"] for edge in body["edges"]} == {"Reasoner", "Reflector"}
 
 
 def test_parameters_and_parameter_evolution_include_gradient_context(app_and_obs) -> None:
