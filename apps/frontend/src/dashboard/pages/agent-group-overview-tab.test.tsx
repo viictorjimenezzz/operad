@@ -5,10 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockUseAgentGroup = vi.fn();
 const mockUseAgentMeta = vi.fn();
+const mockUsePatchRunNotes = vi.fn();
 
 vi.mock("@/hooks/use-runs", () => ({
   useAgentGroup: () => mockUseAgentGroup(),
   useAgentMeta: () => mockUseAgentMeta(),
+  usePatchRunNotes: () => mockUsePatchRunNotes(),
 }));
 
 const baseRun = {
@@ -82,6 +84,7 @@ function renderTab(hashContent = "abc123def456") {
 describe("AgentGroupOverviewTab", () => {
   beforeEach(() => {
     mockUseAgentMeta.mockReturnValue({ data: null });
+    mockUsePatchRunNotes.mockReturnValue({ mutateAsync: vi.fn() });
   });
 
   it("N=1: does not render a Latency x invocation panel", () => {
