@@ -14,6 +14,10 @@ describe("findPrimaryKey", () => {
     expect(findPrimaryKey({ iter_index: 1, score: 0.7 })).toBe("iter_index");
   });
 
+  it("returns round_index for debate round deltas", () => {
+    expect(findPrimaryKey({ round_index: 1, scores: [0.7, 0.8] })).toBe("round_index");
+  });
+
   it("returns null when no known key present", () => {
     expect(findPrimaryKey({ foo: "bar" })).toBeNull();
   });
@@ -39,6 +43,12 @@ describe("appendDedupe", () => {
     expect(appendDedupe(arr, { epoch: 2, loss: 0.4 })).toHaveLength(2);
   });
 
+  it("deduplicates debate rounds by round_index", () => {
+    const arr = [{ round_index: 0, scores: [0.7, 0.8] }];
+    expect(appendDedupe(arr, { round_index: 0, scores: [0.7, 0.8] })).toHaveLength(1);
+    expect(appendDedupe(arr, { round_index: 1, scores: [0.8, 0.75] })).toHaveLength(2);
+  });
+
   it("appends when no primary key (no dedup possible)", () => {
     const arr = [{ foo: "a" }];
     const result = appendDedupe(arr, { foo: "b" });
@@ -57,6 +67,13 @@ describe("autoMerge", () => {
   it("deduplicates when current is array and delta has a matching primary key", () => {
     const current = [{ gen_index: 0, best: 0.8 }];
     const delta = { gen_index: 0, best: 0.85 };
+    const result = autoMerge(current, delta) as unknown[];
+    expect(result).toHaveLength(1);
+  });
+
+  it("deduplicates streamed debate rounds by round_index", () => {
+    const current = [{ round_index: 0, scores: [0.7, 0.8] }];
+    const delta = { round_index: 0, scores: [0.7, 0.8] };
     const result = autoMerge(current, delta) as unknown[];
     expect(result).toHaveLength(1);
   });

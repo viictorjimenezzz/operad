@@ -11,7 +11,7 @@
 
 export type MergeMode = "replace" | "append" | "map";
 
-const PRIMARY_KEYS = ["gen_index", "epoch", "iter_index", "batch_index"] as const;
+const PRIMARY_KEYS = ["gen_index", "epoch", "iter_index", "round_index", "batch_index"] as const;
 
 export function findPrimaryKey(obj: Record<string, unknown>): string | null {
   return PRIMARY_KEYS.find((k) => obj[k] !== undefined) ?? null;

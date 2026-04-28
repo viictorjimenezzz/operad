@@ -192,12 +192,22 @@ async def _run_sweep(cfg: Configuration) -> None:
 async def _run_debate(cfg: Configuration) -> None:
     print_rule("Debate - proposals, critiques, synthesis")
     debate = Debate(
-        context="Dashboard example: one short round with two distinct proposers.",
-        rounds=1,
+        context="Dashboard example: multiple rounds with distinct proposer stances.",
+        rounds=3,
     )
     debate.proposers = [
-        Proposer(config=_cfg_for(cfg, temperature=0.8), context="Argue for a narrow first release."),
-        Proposer(config=_cfg_for(cfg, temperature=0.8), context="Argue for a broader integrated release."),
+        Proposer(
+            config=_cfg_for(cfg, temperature=0.8),
+            context="Argue for a narrow first release.",
+        ),
+        Proposer(
+            config=_cfg_for(cfg, temperature=0.8),
+            context="Argue for a broader integrated release.",
+        ),
+        Proposer(
+            config=_cfg_for(cfg, temperature=0.8),
+            context="Argue for a staged release that expands coverage over time.",
+        ),
     ]
     debate.critic = DebateCritic(config=_cfg_for(cfg, temperature=0.0))
     debate.synthesizer = Synthesizer(config=_cfg_for(cfg, temperature=0.2))
@@ -205,7 +215,10 @@ async def _run_debate(cfg: Configuration) -> None:
     answer = await debate.run(
         DebateTopic(
             topic="Should a dashboard example suite prioritize breadth or speed?",
-            details="The suite is for maintainers checking UI layouts after algorithm runs.",
+            details=(
+                "The suite is for maintainers checking UI layouts after algorithm runs. "
+                "It should expose enough variation for score and agreement charts to move."
+            ),
         )
     )
     print_panel("Debate synthesis", _answer_text(answer))
