@@ -28,6 +28,7 @@
             { "id": "operators", "label": "Operators" },
             { "id": "lineage", "label": "Lineage" },
             { "id": "best-diff", "label": "Best diff" },
+            { "id": "parameters", "label": "Parameters" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
             { "id": "graph", "label": "Graph" }
@@ -40,6 +41,7 @@
           "operators",
           "lineage",
           "best-diff",
+          "parameters",
           "agents",
           "events",
           "graph"
@@ -93,6 +95,10 @@
           "sourceFitness": "$queries.fitness",
           "sourceEvents": "$queries.events"
         }
+      },
+      "parameters": {
+        "type": "ParametersTab",
+        "props": { "runId": "$context.runId", "scope": "run" }
       },
       "agents": {
         "type": "AgentsTab",

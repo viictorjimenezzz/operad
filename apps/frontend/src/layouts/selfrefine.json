@@ -20,12 +20,13 @@
             { "id": "overview", "label": "Overview" },
             { "id": "iterations", "label": "Iterations" },
             { "id": "convergence", "label": "Convergence" },
+            { "id": "parameters", "label": "Parameters" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
             { "id": "graph", "label": "Graph" }
           ]
         },
-        "children": ["overview", "iterations", "convergence", "agents", "events", "graph"]
+        "children": ["overview", "iterations", "convergence", "parameters", "agents", "events", "graph"]
       },
 
       "overview": {
@@ -51,6 +52,10 @@
       "convergence-view": {
         "type": "SelfRefineConvergence",
         "props": { "source": "$queries.iterations", "height": 300 }
+      },
+      "parameters": {
+        "type": "ParametersTab",
+        "props": { "runId": "$context.runId", "scope": "run" }
       },
 
       "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId", "groupBy": "hash" } },

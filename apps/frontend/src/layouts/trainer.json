@@ -36,7 +36,6 @@
           "tabs": [
             { "id": "workspace", "label": "Workspace" },
             { "id": "loss", "label": "Loss" },
-            { "id": "parameters", "label": "Parameters" },
             { "id": "drift", "label": "Drift" },
             { "id": "gradients", "label": "Gradients" },
             { "id": "checkpoints", "label": "Checkpoints" },
@@ -46,6 +45,7 @@
               "label": "Traceback",
               "condition": "$queries.summary.has_traceback"
             },
+            { "id": "parameters", "label": "Parameters" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
             { "id": "graph", "label": "Graph" }
@@ -54,12 +54,12 @@
         "children": [
           "workspace",
           "loss",
-          "parameters",
           "drift",
           "gradients",
           "checkpoints",
           "progress",
           "traceback",
+          "parameters",
           "agents",
           "events",
           "graph"
@@ -113,16 +113,8 @@
       },
 
       "parameters": {
-        "type": "PanelCard",
-        "props": { "title": "parameter evolution" },
-        "children": ["parameters-view"]
-      },
-      "parameters-view": {
-        "type": "ParameterEvolutionMultiples",
-        "props": {
-          "sourceCheckpoints": "$queries.checkpoints",
-          "sourceSummary": "$queries.summary"
-        }
+        "type": "ParametersTab",
+        "props": { "runId": "$context.runId", "scope": "run" }
       },
 
       "drift": {
