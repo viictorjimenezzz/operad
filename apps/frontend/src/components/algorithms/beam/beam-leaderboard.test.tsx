@@ -1,26 +1,15 @@
-import { BeamLeaderboard } from "@/components/algorithms/beam/beam-leaderboard";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BeamLeaderboardTab } from "@/components/algorithms/beam/leaderboard-tab";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
 afterEach(cleanup);
 
-function wrapper(children: ReactNode) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return (
-    <QueryClientProvider client={client}>
-      <MemoryRouter>{children}</MemoryRouter>
-    </QueryClientProvider>
-  );
-}
-
-describe("BeamLeaderboard", () => {
-  it("sorts scored candidates descending and expands a candidate", () => {
+describe("BeamLeaderboardTab", () => {
+  it("shows top-k candidates by default and expands to all candidates", () => {
     render(
-      wrapper(
-        <BeamLeaderboard
+      <MemoryRouter>
+        <BeamLeaderboardTab
           runId="beam-1"
           data={[
             { candidate_index: 0, score: 0.2, text: "low", timestamp: 1, iter_index: 0 },
@@ -30,31 +19,25 @@ describe("BeamLeaderboard", () => {
             iterations: [{ iter_index: 0, phase: "prune", metadata: { top_indices: [1] } }],
           }}
           dataChildren={[]}
-        />,
-      ),
+        />
+      </MemoryRouter>,
     );
 
-    const text = document.body.textContent ?? "";
-    expect(text.indexOf("#1")).toBeLessThan(text.indexOf("#0"));
-    fireEvent.click(screen.getByText("#1"));
-    expect(screen.getByText("Full text")).toBeTruthy();
-    expect(screen.getAllByText("high").length).toBeGreaterThan(0);
+    expect(screen.getByText("K = 1 of 2")).toBeTruthy();
+    expect(screen.getByText("high")).toBeTruthy();
+    expect(screen.queryByText("low")).toBeNull();
+
+    fireEvent.click(screen.getByText("show all candidates"));
+    expect(screen.getByText("low")).toBeTruthy();
   });
 
-  it("hides score column for judge-free candidates", () => {
+  it("shows an empty state when candidate data is missing", () => {
     render(
-      wrapper(
-        <BeamLeaderboard
-          runId="beam-1"
-          data={[
-            { candidate_index: 0, score: null, text: "generated", timestamp: 1, iter_index: 0 },
-          ]}
-          dataChildren={[]}
-        />,
-      ),
+      <MemoryRouter>
+        <BeamLeaderboardTab runId="beam-1" data={null} />
+      </MemoryRouter>,
     );
 
-    expect(screen.queryByText("Score")).toBeNull();
-    expect(screen.getByText("#0")).toBeTruthy();
+    expect(screen.getByText("no candidates")).toBeTruthy();
   });
 });

@@ -7,8 +7,7 @@
       "endpoint": "/runs/$context.runId/iterations.json",
       "stream": "/runs/$context.runId/iterations.sse"
     },
-    "children": { "endpoint": "/runs/$context.runId/children" },
-    "graph": { "endpoint": "/graph/$context.runId" }
+    "children": { "endpoint": "/runs/$context.runId/children" }
   },
   "spec": {
     "root": "page",
@@ -17,36 +16,40 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "overview", "label": "Overview" },
+            { "id": "leaderboard", "label": "Leaderboard" },
             { "id": "candidates", "label": "Candidates" },
-            { "id": "histogram", "label": "Histogram" },
+            { "id": "histogram", "label": "Score distribution" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
-            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
-            { "id": "graph", "label": "Graph" }
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
-        "children": ["overview", "candidates", "histogram", "agents", "events", "graph"]
+        "children": ["leaderboard", "candidates", "histogram", "agents", "events"]
       },
-      "overview": {
-        "type": "BeamDetailOverview",
-        "props": {
-          "sourceSummary": "$queries.summary",
-          "sourceIterations": "$queries.iterations",
-          "sourceChildren": "$queries.children"
-        }
-      },
-      "candidates": {
+      "leaderboard": {
         "type": "PanelCard",
-        "props": { "title": "candidate leaderboard", "bodyMinHeight": 320 },
-        "children": ["candidate-leaderboard"]
+        "props": { "title": "top-k leaderboard", "bodyMinHeight": 320 },
+        "children": ["leaderboard-view"]
       },
-      "candidate-leaderboard": {
+      "leaderboard-view": {
         "type": "BeamLeaderboard",
         "props": {
           "source": "$queries.summary.candidates",
           "sourceIterations": "$queries.iterations",
           "sourceChildren": "$queries.children",
           "runId": "$context.runId"
+        }
+      },
+      "candidates": {
+        "type": "PanelCard",
+        "props": { "title": "candidates", "bodyMinHeight": 320 },
+        "children": ["candidate-chart"]
+      },
+      "candidate-chart": {
+        "type": "BeamCandidateChart",
+        "props": {
+          "source": "$queries.summary.candidates",
+          "sourceIterations": "$queries.iterations",
+          "height": 320
         }
       },
       "histogram": {
@@ -58,17 +61,12 @@
         "type": "BeamScoreHistogram",
         "props": {
           "source": "$queries.summary.candidates",
-          "sourceIterations": "$queries.iterations"
+          "sourceIterations": "$queries.iterations",
+          "bins": 10
         }
       },
       "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
-      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
-      "graph": {
-        "type": "PanelCard",
-        "props": { "title": "agent graph" },
-        "children": ["graph-view"]
-      },
-      "graph-view": { "type": "AgentGraph", "props": { "source": "$queries.graph" } }
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } }
     }
   }
 }

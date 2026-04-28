@@ -1,15 +1,15 @@
-import { BeamScoreHistogram } from "@/components/algorithms/beam/beam-score-histogram";
+import { BeamScoreHistogramTab } from "@/components/algorithms/beam/score-histogram-tab";
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
 afterEach(cleanup);
 
-describe("BeamScoreHistogram", () => {
-  it("renders score distribution with top-k threshold", () => {
+describe("BeamScoreHistogramTab", () => {
+  it("renders histogram bins with a k-cutoff marker", () => {
     render(
       <MemoryRouter>
-        <BeamScoreHistogram
+        <BeamScoreHistogramTab
           data={[
             { candidate_index: 0, score: 0.2, text: "a", timestamp: 1, iter_index: 0 },
             { candidate_index: 1, score: 0.9, text: "b", timestamp: 1, iter_index: 0 },
@@ -19,20 +19,19 @@ describe("BeamScoreHistogram", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("score distribution")).toBeTruthy();
-    expect(screen.getByText(/top-k threshold/)).toBeTruthy();
+    expect(screen.getByText("10 bins")).toBeTruthy();
+    expect(screen.getByText(/K cutoff/)).toBeTruthy();
   });
 
-  it("switches to text length distribution when scores are null", () => {
+  it("renders a scored-empty state when all candidate scores are null", () => {
     render(
       <MemoryRouter>
-        <BeamScoreHistogram
+        <BeamScoreHistogramTab
           data={[{ candidate_index: 0, score: null, text: "short", timestamp: 1, iter_index: 0 }]}
         />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("text length distribution")).toBeTruthy();
-    expect(screen.getByText(/judge=None/)).toBeTruthy();
+    expect(screen.getByText("no scored candidates")).toBeTruthy();
   });
 });
