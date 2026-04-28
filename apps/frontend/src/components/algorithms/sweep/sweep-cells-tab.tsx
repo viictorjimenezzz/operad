@@ -5,6 +5,7 @@ import { z } from "zod";
 
 const ChildRunSummary = RunSummarySchema.passthrough().extend({
   hash_content: z.string().nullable().optional(),
+  langfuse_url: z.string().nullable().optional(),
 });
 
 type ChildRunSummary = z.infer<typeof ChildRunSummary>;
