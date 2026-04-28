@@ -1,8 +1,9 @@
 import { agentGroupTabs } from "@/components/agent-view/page-shell/agent-group-tabs";
-import { Breadcrumb, type BreadcrumbItem, EmptyState, HashTag, Pill } from "@/components/ui";
+import { EmptyState, HashTag, Pill } from "@/components/ui";
 import { useAgentGroup, useAgentMeta } from "@/hooks/use-runs";
-import { truncateMiddle } from "@/lib/utils";
-import { NavLink, Outlet, useParams } from "react-router-dom";
+import { cn, truncateMiddle } from "@/lib/utils";
+import { ChevronRight } from "lucide-react";
+import { Link, NavLink, Outlet, useParams } from "react-router-dom";
 
 export function AgentGroupPage() {
   const { hashContent } = useParams<{ hashContent: string }>();
@@ -39,32 +40,17 @@ function AgentGroupPageInner({ hashContent }: { hashContent: string }) {
   // the backend's runtime metadata. The detail record already carries
   // the user-facing name so we use that as the source of truth.
   const className = detail.class_name ?? meta.data?.class_name ?? "Agent";
-  const showTraining =
-    detail.is_trainer ||
-    (meta.data?.trainable_paths.length ?? 0) > 0;
-  const breadcrumbs: BreadcrumbItem[] = [
-    { label: "Agents", to: "/agents" },
-    { label: className },
-    { label: truncateMiddle(hashContent, 14), mono: true },
-  ];
+  const showTraining = detail.is_trainer || (meta.data?.trainable_paths.length ?? 0) > 0;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <Breadcrumb
-        items={breadcrumbs}
-        trailing={
-          <>
-            <HashTag hash={hashContent} mono size="sm" />
-            <Pill
-              tone={detail.running > 0 ? "live" : detail.errors > 0 ? "error" : "ok"}
-              pulse={detail.running > 0}
-            >
-              {detail.running > 0 ? "live" : detail.errors > 0 ? "error" : "ended"}
-            </Pill>
-          </>
-        }
+      <GroupChrome
+        hashContent={hashContent}
+        className={className}
+        showTraining={showTraining}
+        stateTone={detail.running > 0 ? "live" : detail.errors > 0 ? "error" : "ok"}
+        stateLabel={detail.running > 0 ? "live" : detail.errors > 0 ? "error" : "ended"}
       />
-      <GroupTabs hashContent={hashContent} showTraining={showTraining} />
       <div className="flex-1 overflow-hidden">
         <Outlet />
       </div>
@@ -72,25 +58,58 @@ function AgentGroupPageInner({ hashContent }: { hashContent: string }) {
   );
 }
 
-function GroupTabs({ hashContent, showTraining }: { hashContent: string; showTraining: boolean }) {
+function GroupChrome({
+  hashContent,
+  className,
+  showTraining,
+  stateTone,
+  stateLabel,
+}: {
+  hashContent: string;
+  className: string;
+  showTraining: boolean;
+  stateTone: "live" | "error" | "ok";
+  stateLabel: string;
+}) {
   return (
-    <div className="flex h-9 items-center border-b border-border bg-bg-1/60 px-2">
-      {agentGroupTabs(hashContent, { showTraining }).map((t) => (
-        <NavLink
-          key={t.to}
-          to={t.to}
-          end={t.end ?? false}
-          className={({ isActive }) =>
-            `relative flex h-9 items-center gap-1.5 px-3 text-[12px] font-medium transition-colors ${
-              isActive
-                ? "text-text after:absolute after:inset-x-3 after:bottom-0 after:h-[2px] after:bg-accent"
-                : "text-muted hover:text-text"
-            }`
-          }
-        >
-          {t.label}
-        </NavLink>
-      ))}
-    </div>
+    <header className="flex h-9 flex-shrink-0 items-center gap-3 border-b border-border bg-bg-1/60 px-2">
+      <nav className="flex h-full min-w-0 items-center" aria-label="agent instance sections">
+        {agentGroupTabs(hashContent, { showTraining }).map((t) => (
+          <NavLink
+            key={t.to}
+            to={t.to}
+            end={t.end ?? false}
+            className={({ isActive }) =>
+              cn(
+                "relative flex h-9 items-center gap-1.5 px-3 text-[12px] font-medium transition-colors",
+                "after:absolute after:inset-x-3 after:bottom-0 after:h-[2px] after:rounded-t-full after:transition-colors",
+                isActive
+                  ? "text-text after:bg-accent"
+                  : "text-muted hover:text-text after:bg-transparent",
+              )
+            }
+          >
+            {t.label}
+          </NavLink>
+        ))}
+      </nav>
+      <div className="ml-auto flex min-w-0 items-center gap-2 text-[12px]" aria-label="agent path">
+        <Link to="/agents" className="text-muted transition-colors hover:text-text">
+          Agents
+        </Link>
+        <ChevronRight aria-hidden size={12} className="flex-shrink-0 text-muted-2" />
+        <span className="truncate text-muted" title={className}>
+          {className}
+        </span>
+        <ChevronRight aria-hidden size={12} className="flex-shrink-0 text-muted-2" />
+        <span className="max-w-32 truncate font-mono text-[11px] text-text" title={hashContent}>
+          {truncateMiddle(hashContent, 14)}
+        </span>
+        <HashTag hash={hashContent} mono size="sm" />
+        <Pill tone={stateTone} pulse={stateTone === "live"} size="sm">
+          {stateLabel}
+        </Pill>
+      </div>
+    </header>
   );
 }

@@ -1,5 +1,4 @@
 import {
-  Eyebrow,
   MetricSeriesChart,
   MultiSeriesChart,
   PanelCard,
@@ -8,27 +7,55 @@ import {
 } from "@/components/ui";
 import { useAgentGroup, useAgentGroupMetrics } from "@/hooks/use-runs";
 import type { RunSummary } from "@/lib/types";
-import { formatCost, formatDurationMs, formatNumber, formatTokens } from "@/lib/utils";
+import { cn, formatCost, formatDurationMs, formatNumber, formatTokens } from "@/lib/utils";
 import { useParams } from "react-router-dom";
+
+type MetricFormat = "ms" | "tokens" | "cost" | "score" | "number";
 
 type MetricDef = {
   key: string;
   label: string;
-  format: "ms" | "tokens" | "cost" | "score" | "number";
+  format: MetricFormat;
   source: string;
+  unit: string | null;
+};
+
+type MetricPoint = { x: number; y: number | null; runId: string };
+
+type EndpointMetrics = {
+  metrics: Record<
+    string,
+    {
+      unit?: string | null;
+      series: Array<{ run_id: string; started_at: number; value: number | null }>;
+    }
+  >;
 };
 
 const BUILT_INS: MetricDef[] = [
-  { key: "latency_ms", label: "Latency", format: "ms", source: "built-in" },
-  { key: "prompt_tokens", label: "Prompt tokens", format: "tokens", source: "built-in" },
-  { key: "completion_tokens", label: "Completion tokens", format: "tokens", source: "built-in" },
-  { key: "cost_usd", label: "Cost", format: "cost", source: "built-in" },
-  { key: "error_rate", label: "Error rate", format: "score", source: "built-in" },
+  { key: "latency_ms", label: "Latency", format: "ms", source: "built-in", unit: "ms" },
+  {
+    key: "prompt_tokens",
+    label: "Prompt tokens",
+    format: "tokens",
+    source: "built-in",
+    unit: "tokens",
+  },
+  {
+    key: "completion_tokens",
+    label: "Completion tokens",
+    format: "tokens",
+    source: "built-in",
+    unit: "tokens",
+  },
+  { key: "cost_usd", label: "Cost", format: "cost", source: "built-in", unit: "usd" },
+  { key: "error_rate", label: "Error rate", format: "score", source: "built-in", unit: null },
   {
     key: "schema_validation_rate",
     label: "Output schema validation",
     format: "score",
     source: "built-in",
+    unit: null,
   },
 ];
 
@@ -39,19 +66,19 @@ export function AgentGroupMetricsTab() {
 
   if (!hashContent || !group.data) return null;
   const runs = [...group.data.runs].sort((a, b) => a.started_at - b.started_at);
-  const N = runs.length;
   const agentPath = runs.at(-1)?.root_agent_path ?? null;
   const metricDefs = allMetricDefs(
     runs,
     endpoint.data?.metrics ? Object.keys(endpoint.data.metrics) : [],
+    endpoint.data as EndpointMetrics | undefined,
     agentPath,
   );
 
   return (
     <div className="h-full overflow-auto p-4">
-      <div className="space-y-4">
-        {N >= 2 ? (
-          <PanelSection label="Cost vs latency">
+      <div className="mx-auto max-w-[1280px] space-y-4">
+        {runs.length >= 2 ? (
+          <PanelSection label="Relationships">
             <PanelGrid cols={2}>
               <PanelCard title="Cost vs latency" eyebrow="USD vs ms" bodyMinHeight={260}>
                 <MultiSeriesChart
@@ -77,182 +104,135 @@ export function AgentGroupMetricsTab() {
           </PanelSection>
         ) : null}
         <PanelSection label="Metrics" count={metricDefs.length}>
-          {N === 1 ? (
-            <MetricTable runs={runs} metricDefs={metricDefs} endpoint={endpoint.data} />
-          ) : N <= 4 ? (
-            <MiniBars runs={runs} metricDefs={metricDefs} endpoint={endpoint.data} />
-          ) : (
-            <SeriesCharts
-              runs={runs}
-              metricDefs={metricDefs}
-              endpoint={endpoint.data}
-              hashContent={hashContent}
-            />
-          )}
+          <PanelGrid cols={3}>
+            {metricDefs.map((metric) => (
+              <MetricCard
+                key={metric.key}
+                metric={metric}
+                runs={runs}
+                endpoint={endpoint.data as EndpointMetrics | undefined}
+                hashContent={hashContent}
+              />
+            ))}
+          </PanelGrid>
         </PanelSection>
       </div>
     </div>
   );
 }
 
-function MetricTable({
+function MetricCard({
+  metric,
   runs,
-  metricDefs,
-  endpoint,
-}: {
-  runs: RunSummary[];
-  metricDefs: MetricDef[];
-  endpoint: { metrics: Record<string, { series: Array<{ run_id: string; started_at: number; value: number | null }> }> } | undefined;
-}) {
-  const run = runs[0];
-  if (!run) return null;
-  return (
-    <div className="divide-y divide-border">
-      {metricDefs.map((metric) => {
-        const points = seriesPoints(runs, metric.key, endpoint?.metrics[metric.key]?.series);
-        const value = points[0]?.y ?? null;
-        return (
-          <div key={metric.key} className="grid grid-cols-[1fr_auto] items-center gap-4 py-2 px-1">
-            <div className="min-w-0">
-              <Eyebrow>{metric.source}</Eyebrow>
-              <span className="text-[13px] text-text">{metric.label}</span>
-            </div>
-            <span className="font-mono tabular-nums text-[13px] text-text">
-              {value != null ? formatMetric(value, metric.format) : "—"}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function MiniBars({
-  runs,
-  metricDefs,
-  endpoint,
-}: {
-  runs: RunSummary[];
-  metricDefs: MetricDef[];
-  endpoint: { metrics: Record<string, { series: Array<{ run_id: string; started_at: number; value: number | null }> }> } | undefined;
-}) {
-  return (
-    <div className="space-y-4">
-      {metricDefs.map((metric) => {
-        const points = seriesPoints(runs, metric.key, endpoint?.metrics[metric.key]?.series);
-        const values = points.map((p) => p.y).filter((v): v is number => v != null);
-        const max = values.length > 0 ? Math.max(...values) : 1;
-        return (
-          <div key={metric.key} className="space-y-1">
-            <Eyebrow>{metric.source}</Eyebrow>
-            <div className="text-[12px] font-medium text-text">{metric.label}</div>
-            <div className="flex items-end gap-2">
-              {points.map((point, i) => {
-                const ratio = max > 0 && point.y != null ? point.y / max : 0;
-                const runLabel = runs[i]?.run_id.slice(0, 8) ?? String(i + 1);
-                return (
-                  <div key={i} className="flex flex-col items-center gap-1 min-w-0">
-                    <span className="text-[10px] text-muted-2 truncate max-w-[48px]">
-                      {point.y != null ? formatMetric(point.y, metric.format) : "—"}
-                    </span>
-                    <div
-                      className="w-8 bg-accent/25 rounded-sm"
-                      style={{ height: `${Math.max(4, Math.round(ratio * 48))}px` }}
-                    />
-                    <span
-                      className="text-[10px] text-muted-2 truncate max-w-[48px]"
-                      title={runs[i]?.run_id}
-                    >
-                      {runLabel}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function SeriesCharts({
-  runs,
-  metricDefs,
   endpoint,
   hashContent,
 }: {
+  metric: MetricDef;
   runs: RunSummary[];
-  metricDefs: MetricDef[];
-  endpoint: { metrics: Record<string, { series: Array<{ run_id: string; started_at: number; value: number | null }> }> } | undefined;
+  endpoint: EndpointMetrics | undefined;
   hashContent: string;
 }) {
-  type DefWithPoints = {
-    metric: MetricDef;
-    points: Array<{ x: number; y: number | null; runId: string }>;
-    distinctValueCount: number;
-  };
-  const enriched: DefWithPoints[] = metricDefs.map((metric) => {
-    const points = seriesPoints(runs, metric.key, endpoint?.metrics[metric.key]?.series);
-    const distinct = new Set(points.map((p) => p.y).filter((v) => v != null));
-    return { metric, points, distinctValueCount: distinct.size };
-  });
-  // Charts only make sense when there's variation; otherwise we collapse
-  // to a flat tile (the previous build silently dropped these metrics
-  // entirely on agents whose every invocation had identical zero values
-  // — the Metrics tab then rendered an empty area below the heading).
-  const charts = enriched.filter((row) => row.distinctValueCount >= 2);
-  const flat = enriched.filter((row) => row.distinctValueCount < 2);
+  const points = seriesPoints(runs, metric.key, endpoint?.metrics[metric.key]?.series);
+  const values = points.map((point) => point.y).filter((value): value is number => value != null);
+  const latest = [...points].reverse().find((point) => point.y != null)?.y ?? null;
+  const p50 = median(values);
+  const min = values.length > 0 ? Math.min(...values) : null;
+  const max = values.length > 0 ? Math.max(...values) : null;
+  const distinct = new Set(values).size;
+  const hasSeries = values.length >= 2 && distinct >= 2;
+
   return (
-    <div className="space-y-4">
-      <PanelGrid cols={2}>
-        {charts.map(({ metric, points }) => {
-          const p50 = median(
-            points.map((point) => point.y).filter((value): value is number => value != null),
-          );
-          return (
-            <PanelCard
-              key={metric.key}
-              title={metric.label}
-              eyebrow={metric.source}
-              bodyMinHeight={240}
-            >
-              <MetricSeriesChart
-                points={points}
-                identity={hashContent}
-                height={210}
-                formatY={(n) => formatMetric(n, metric.format)}
-                reference={p50 != null ? { y: p50, label: "group p50" } : undefined}
-                xLabel="invocation"
-              />
-            </PanelCard>
-          );
-        })}
-      </PanelGrid>
-      {flat.length > 0 ? (
-        <div className="divide-y divide-border rounded-md border border-border">
-          {flat.map(({ metric, points }) => {
-            const value = points.find((p) => p.y != null)?.y ?? null;
-            return (
-              <div
-                key={metric.key}
-                className="grid grid-cols-[1fr_auto] items-center gap-4 py-2 px-3"
-              >
-                <div className="min-w-0">
-                  <Eyebrow>{metric.source}</Eyebrow>
-                  <span className="text-[13px] text-text">{metric.label}</span>
-                </div>
-                <span
-                  className="font-mono tabular-nums text-[13px] text-muted-2"
-                  title="constant across invocations"
-                >
-                  {value != null ? formatMetric(value, metric.format) : "—"}
-                </span>
-              </div>
-            );
-          })}
+    <PanelCard
+      title={metric.label}
+      eyebrow={metric.source}
+      bodyMinHeight={240}
+      toolbar={
+        metric.unit ? (
+          <span className="rounded border border-border bg-bg-inset px-1.5 py-0.5 font-mono text-[10px] text-muted-2">
+            {metric.unit}
+          </span>
+        ) : null
+      }
+    >
+      <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+        <div className="min-w-0">
+          <div className="text-[10px] uppercase tracking-[0.06em] text-muted-2">latest</div>
+          <div className="mt-0.5 truncate font-mono text-[18px] text-text">
+            {formatMetric(latest, metric.format)}
+          </div>
         </div>
-      ) : null}
+        <div className="grid grid-cols-3 gap-2 text-right">
+          <MetricStat label="p50" value={formatMetric(p50, metric.format)} />
+          <MetricStat label="min" value={formatMetric(min, metric.format)} />
+          <MetricStat label="max" value={formatMetric(max, metric.format)} />
+        </div>
+      </div>
+      {hasSeries ? (
+        <MetricSeriesChart
+          points={points}
+          identity={hashContent}
+          height={145}
+          formatY={(n) => formatMetric(n, metric.format)}
+          reference={p50 != null ? { y: p50, label: "p50" } : undefined}
+          xLabel="invocation"
+        />
+      ) : values.length > 0 ? (
+        <ConstantMetricPreview value={latest} values={values} format={metric.format} />
+      ) : (
+        <NoDataPreview />
+      )}
+    </PanelCard>
+  );
+}
+
+function MetricStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-[0.06em] text-muted-2">{label}</div>
+      <div className="mt-0.5 font-mono text-[11px] text-muted">{value}</div>
+    </div>
+  );
+}
+
+function ConstantMetricPreview({
+  value,
+  values,
+  format,
+}: {
+  value: number | null;
+  values: number[];
+  format: MetricFormat;
+}) {
+  const label = value == null ? "—" : formatMetric(value, format);
+  return (
+    <div className="rounded-md border border-border bg-bg-inset p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="text-[12px] text-muted">
+          {new Set(values).size === 1 ? "constant across invocations" : "limited samples"}
+        </span>
+        <span className="font-mono text-[12px] text-text">{label}</span>
+      </div>
+      <div className="flex h-20 items-end gap-1">
+        {values.map((point, index) => (
+          <div
+            key={`${point}:${index}`}
+            className={cn(
+              "min-w-1 flex-1 rounded-t-sm bg-accent/25",
+              point === 0 && "bg-accent/15",
+            )}
+            style={{ height: `${point === 0 ? 10 : 38}px` }}
+            title={formatMetric(point, format)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NoDataPreview() {
+  return (
+    <div className="flex h-[118px] items-center justify-center rounded-md border border-border bg-bg-inset text-[12px] text-muted-2">
+      no numeric samples
     </div>
   );
 }
@@ -260,6 +240,7 @@ function SeriesCharts({
 function allMetricDefs(
   runs: RunSummary[],
   endpointKeys: string[],
+  endpoint: EndpointMetrics | undefined,
   agentPath: string | null,
 ): MetricDef[] {
   const names = new Set([...BUILT_INS.map((metric) => metric.key), ...endpointKeys]);
@@ -274,6 +255,7 @@ function allMetricDefs(
       label: key,
       format: metricFormat(key),
       source: agentPath ?? "user",
+      unit: endpoint?.metrics[key]?.unit ?? null,
     };
   });
 }
@@ -282,7 +264,7 @@ function seriesPoints(
   runs: RunSummary[],
   key: string,
   endpointSeries: Array<{ run_id: string; started_at: number; value: number | null }> | undefined,
-) {
+): MetricPoint[] {
   if (endpointSeries && endpointSeries.length > 0) {
     return [...endpointSeries]
       .sort((a, b) => a.started_at - b.started_at)
@@ -299,9 +281,7 @@ function scatterPoints(runs: RunSummary[], key: "cost_usd" | "tokens") {
   return runs.map((run) => ({
     x: run.duration_ms,
     y:
-      key === "cost_usd"
-        ? (run.cost?.cost_usd ?? null)
-        : run.prompt_tokens + run.completion_tokens,
+      key === "cost_usd" ? (run.cost?.cost_usd ?? null) : run.prompt_tokens + run.completion_tokens,
   }));
 }
 
@@ -342,7 +322,7 @@ function median(values: number[]): number | null {
     : ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
 }
 
-function metricFormat(key: string): MetricDef["format"] {
+function metricFormat(key: string): MetricFormat {
   if (key.includes("latency") || key.endsWith("_ms")) return "ms";
   if (key.includes("token")) return "tokens";
   if (key.includes("cost") || key.includes("usd")) return "cost";
@@ -350,7 +330,8 @@ function metricFormat(key: string): MetricDef["format"] {
   return "number";
 }
 
-function formatMetric(value: number, format: MetricDef["format"]): string {
+function formatMetric(value: number | null, format: MetricFormat): string {
+  if (value == null || !Number.isFinite(value)) return "—";
   switch (format) {
     case "ms":
       return formatDurationMs(value);
