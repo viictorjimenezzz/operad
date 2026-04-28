@@ -4,6 +4,7 @@ import {
   SweepDetailOverview,
 } from "@/components/algorithms/sweep/sweep-detail-overview";
 import { SweepHeatmapTab } from "@/components/algorithms/sweep/sweep-heatmap-tab";
+import { SweepParallelCoordsTab } from "@/components/algorithms/sweep/parallel-coords-tab";
 import { SweepBestCellCard } from "@/components/charts/sweep-best-cell-card";
 import { SweepCostTotalizer } from "@/components/charts/sweep-cost-totalizer";
 import { SweepHeatmap } from "@/components/charts/sweep-heatmap";
@@ -31,6 +32,10 @@ export const sweepRegistry: ComponentRegistry = {
   SweepCostTab: ({ element }) => {
     const p = element.props as { data?: unknown; dataChildren?: unknown };
     return <SweepCostTab data={p.data} dataChildren={p.dataChildren} />;
+  },
+  SweepParallelCoordsTab: ({ element }) => {
+    const p = element.props as { data?: unknown; dataChildren?: unknown };
+    return <SweepParallelCoordsTab data={p.data} dataChildren={p.dataChildren} />;
   },
   SweepHeatmap: ({ element }) => <SweepHeatmap data={(element.props as { data?: unknown }).data} />,
   SweepBestCellCard: ({ element }) => (

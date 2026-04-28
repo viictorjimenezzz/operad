@@ -7,8 +7,7 @@
       "endpoint": "/runs/$context.runId/sweep.json",
       "stream": "/runs/$context.runId/sweep.sse"
     },
-    "children": { "endpoint": "/runs/$context.runId/children" },
-    "graph": { "endpoint": "/graph/$context.runId" }
+    "children": { "endpoint": "/runs/$context.runId/children" }
   },
   "spec": {
     "root": "page",
@@ -20,13 +19,13 @@
             { "id": "overview", "label": "Overview" },
             { "id": "heatmap", "label": "Heatmap" },
             { "id": "cells", "label": "Cells" },
+            { "id": "parallel", "label": "Parallel coords" },
             { "id": "cost", "label": "Cost" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
-            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
-            { "id": "graph", "label": "Graph" }
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
-        "children": ["overview", "heatmap", "cells", "cost", "agents", "events", "graph"]
+        "children": ["overview", "heatmap", "cells", "parallel", "cost", "agents", "events"]
       },
       "overview": {
         "type": "SweepDetailOverview",
@@ -58,6 +57,18 @@
           "runId": "$context.runId"
         }
       },
+      "parallel": {
+        "type": "PanelCard",
+        "props": { "title": "parallel coordinates", "bodyMinHeight": 320 },
+        "children": ["parallel-view"]
+      },
+      "parallel-view": {
+        "type": "SweepParallelCoordsTab",
+        "props": {
+          "source": "$queries.sweep",
+          "sourceChildren": "$queries.children"
+        }
+      },
       "cost": {
         "type": "SweepCostTab",
         "props": { "source": "$queries.sweep", "sourceChildren": "$queries.children" }
@@ -73,13 +84,7 @@
       "events": {
         "type": "EventsTab",
         "props": { "runId": "$context.runId", "defaultKindFilter": ["cell"] }
-      },
-      "graph": {
-        "type": "PanelCard",
-        "props": { "title": "agent graph" },
-        "children": ["graph-view"]
-      },
-      "graph-view": { "type": "AgentGraph", "props": { "source": "$queries.graph" } }
+      }
     }
   }
 }
