@@ -7,8 +7,7 @@
       "endpoint": "/runs/$context.runId/debate.json",
       "stream": "/runs/$context.runId/debate.sse"
     },
-    "children": { "endpoint": "/runs/$context.runId/children" },
-    "graph": { "endpoint": "/graph/$context.runId" }
+    "children": { "endpoint": "/runs/$context.runId/children" }
   },
   "spec": {
     "root": "page",
@@ -17,43 +16,45 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "overview", "label": "Overview" },
             { "id": "rounds", "label": "Rounds" },
+            { "id": "transcript", "label": "Transcript" },
             { "id": "consensus", "label": "Consensus" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
-            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
-            { "id": "graph", "label": "Graph" }
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
-        "children": ["overview", "rounds", "consensus", "agents", "events", "graph"]
-      },
-
-      "overview": {
-        "type": "DebateDetailOverview",
-        "props": {
-          "sourceSummary": "$queries.summary",
-          "sourceDebate": "$queries.debate",
-          "sourceChildren": "$queries.children",
-          "runId": "$context.runId"
-        }
+        "children": ["rounds", "transcript", "consensus", "agents", "events"]
       },
       "rounds": {
-        "type": "DebateRoundsTab",
+        "type": "PanelCard",
+        "props": { "title": "round-by-round scoring", "bodyMinHeight": 320 },
+        "children": ["rounds-view"]
+      },
+      "rounds-view": {
+        "type": "DebateRoundView",
+        "props": { "source": "$queries.debate" }
+      },
+      "transcript": {
+        "type": "PanelCard",
+        "props": { "title": "transcript by round", "bodyMinHeight": 320 },
+        "children": ["transcript-view"]
+      },
+      "transcript-view": {
+        "type": "DebateTranscript",
         "props": { "source": "$queries.debate" }
       },
       "consensus": {
-        "type": "DebateConsensusTab",
-        "props": { "source": "$queries.debate" }
+        "type": "PanelCard",
+        "props": { "title": "consensus arc", "bodyMinHeight": 320 },
+        "children": ["consensus-view"]
+      },
+      "consensus-view": {
+        "type": "DebateConsensusTracker",
+        "props": { "source": "$queries.debate", "height": 300 }
       },
 
       "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId", "groupBy": "hash" } },
-      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
-      "graph": {
-        "type": "PanelCard",
-        "props": { "title": "agent graph" },
-        "children": ["graph-view"]
-      },
-      "graph-view": { "type": "AgentGraph", "props": { "source": "$queries.graph" } }
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } }
     }
   }
 }

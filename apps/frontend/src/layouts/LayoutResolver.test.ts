@@ -128,8 +128,15 @@ describe("resolveLayout integration (real layouts/)", () => {
     const debate = resolveLayout("Debate");
     const autoResearcher = resolveLayout("AutoResearcher");
 
-    expect(debate.spec.elements.rounds?.type).toBe("DebateRoundsTab");
-    expect(debate.spec.elements.consensus?.type).toBe("DebateConsensusTab");
+    expect(debate.dataSources.debate?.endpoint).toContain("/debate.json");
+    expect(debate.spec.elements["rounds-view"]?.type).toBe("DebateRoundView");
+    expect(debate.spec.elements["transcript-view"]?.type).toBe("DebateTranscript");
+    expect(debate.spec.elements["consensus-view"]?.type).toBe("DebateConsensusTracker");
+    expect(
+      ((debate.spec.elements.page?.props as { tabs?: Array<{ id: string }> }).tabs ?? []).map(
+        (tab) => tab.id,
+      ),
+    ).toEqual(["rounds", "transcript", "consensus", "agents", "events"]);
     expect(autoResearcher.dataSources.iterations?.endpoint).toContain("/iterations.json");
     expect(autoResearcher.dataSources.runEvents?.endpoint).toContain("/events");
     expect(autoResearcher.spec.elements.plan?.type).toBe("AutoResearcherPlanTab");
