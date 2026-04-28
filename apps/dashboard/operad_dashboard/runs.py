@@ -61,6 +61,7 @@ class RunInfo:
     metrics: dict[str, float] = field(default_factory=dict)
     notes_markdown: str = ""
     parameter_snapshots: list[dict[str, Any]] = field(default_factory=list)
+    tape_entries: list[dict[str, Any]] = field(default_factory=list)
     traceback_path: str | None = None
     error_message: str | None = None
     algorithm_terminal_score: float | None = None
@@ -118,6 +119,7 @@ class RunInfo:
             "metrics": dict(self.metrics),
             "notes_markdown": self.notes_markdown,
             "parameter_snapshots": list(self.parameter_snapshots),
+            "tape_entries": list(self.tape_entries),
             "traceback_path": self.traceback_path,
             "has_traceback": self.traceback_path is not None,
             "error": self.error_message,
@@ -222,6 +224,12 @@ class RunRegistry:
         info.parameter_snapshots = (
             [s for s in snapshots if isinstance(s, dict)]
             if isinstance(snapshots, list)
+            else []
+        )
+        tape_entries = summary.get("tape_entries")
+        info.tape_entries = (
+            [entry for entry in tape_entries if isinstance(entry, dict)]
+            if isinstance(tape_entries, list)
             else []
         )
         traceback_path = summary.get("traceback_path")
@@ -476,6 +484,9 @@ class RunRegistry:
         self, info: RunInfo, envelope: dict[str, Any], kind: str
     ) -> None:
         metadata = envelope.get("metadata") or {}
+        tape_entry = metadata.get("tape_entry")
+        if isinstance(tape_entry, dict):
+            info.tape_entries.append(dict(tape_entry))
         is_root = bool(metadata.get("is_root"))
         agent_path = envelope.get("agent_path")
         if is_root and agent_path:

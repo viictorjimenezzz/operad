@@ -1,4 +1,5 @@
 import { ParametersTab } from "@/components/agent-view/parameter-evolution/parameters-tab";
+import { TrainerTapeView } from "@/components/algorithms/trainer/tape-view";
 import { registry as baseRegistry } from "@/components/registry";
 import { InvocationsTab } from "@/components/runtime/invocations-tab";
 import {
@@ -74,6 +75,18 @@ const registry: ComponentRegistry = {
         runId={props.runId ?? ""}
         algorithmClass={props.algorithmClass ?? null}
         {...(props.defaultGroupBy ? { defaultGroupBy: props.defaultGroupBy } : {})}
+      />
+    );
+  },
+  TrainerTapeView: ({ element }) => {
+    const props = element.props as {
+      runId?: string;
+      dataTape?: unknown;
+    };
+    return (
+      <TrainerTapeView
+        {...(props.runId ? { runId: props.runId } : {})}
+        dataTape={props.dataTape}
       />
     );
   },
