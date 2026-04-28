@@ -3,7 +3,7 @@ import {
   type ParameterSeries,
 } from "@/components/agent-view/group/parameter-evolution";
 import { DriftBlock } from "@/components/agent-view/overview/drift-block";
-import { Button, EmptyState, Metric, PanelSection } from "@/components/ui";
+import { EmptyState, Metric, PanelSection } from "@/components/ui";
 import {
   useAgentGroup,
   useAgentGroupParameters,
@@ -59,21 +59,7 @@ export function AgentGroupTrainTab() {
           />
         ) : (
           <>
-            <PanelSection
-              label="Train"
-              toolbar={
-                trainableCount > 0 ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled
-                    title="Coming soon - see the Training rail"
-                  >
-                    Promote to training run
-                  </Button>
-                ) : null
-              }
-            >
+            <PanelSection label="Training">
               <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-border bg-bg-1 px-3 py-2">
                 <Metric label="trainable params" value={trainableCount} />
                 <Metric label="values seen" value={valuesSeen} />
