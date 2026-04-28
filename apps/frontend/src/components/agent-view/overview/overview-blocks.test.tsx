@@ -1,9 +1,10 @@
 import { ConfigBlock } from "@/components/agent-view/overview/config-block";
 import { IdentityBlock } from "@/components/agent-view/overview/identity-block";
 import { IOFieldPreview } from "@/components/agent-view/overview/io-field-preview";
+import { IOHero } from "@/components/agent-view/overview/io-hero";
 import { MetricsValueTable } from "@/components/agent-view/overview/metrics-value-table";
 import { ReproducibilityBlock } from "@/components/agent-view/overview/reproducibility-block";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockUseAgentMeta = vi.fn();
@@ -173,5 +174,33 @@ describe("Agent overview sparse states", () => {
     expect(screen.getByText("show full")).toBeTruthy();
     fireEvent.click(screen.getByText("show full"));
     expect(screen.getByText((text) => text.includes("-end"))).toBeTruthy();
+  });
+
+  it("renders invocation IO values expanded without preview controls", () => {
+    const long = `start-${"x".repeat(140)}-end`;
+
+    const view = render(
+      <IOHero
+        dataInvocations={{
+          agent_path: "Root",
+          invocations: [
+            {
+              id: "Root:0",
+              started_at: 1,
+              status: "ok",
+              input: { question: long },
+              output: { answer: long },
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(within(view.container).queryByText("show full")).toBeNull();
+    expect(within(view.container).queryByText("preview")).toBeNull();
+    expect(within(view.container).queryByLabelText(/collapse input/i)).toBeNull();
+    expect(
+      within(view.container).getAllByText((text) => text.includes("-end")).length,
+    ).toBeGreaterThan(0);
   });
 });

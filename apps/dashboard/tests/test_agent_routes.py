@@ -285,6 +285,9 @@ def test_live_io_graph_invocations_meta_prompts_values_events(app_and_obs) -> No
         assert root_inv.json()["agent_path"] == "Sequential"
         assert len(root_inv.json()["invocations"]) == 1
         assert root_inv.json()["invocations"][0]["langfuse_url"] == "http://lf.example/trace/run-live"
+        assert root_inv.json()["invocations"][0]["config"]["model"] == "test"
+        assert root_inv.json()["invocations"][0]["prompt_system"] == "<role>root</role>"
+        assert root_inv.json()["invocations"][0]["prompt_user"] == "<input>seed</input>"
 
         inv = client.get("/runs/run-live/agent/Sequential.stage_0/invocations")
         assert inv.status_code == 200
@@ -292,6 +295,9 @@ def test_live_io_graph_invocations_meta_prompts_values_events(app_and_obs) -> No
         assert len(rows) == 2
         assert rows[0]["hash_prompt"] == "p1"
         assert rows[1]["hash_prompt"] == "p2"
+        assert rows[0]["config"]["io"]["renderer"] == "xml"
+        assert rows[0]["prompt_system"] == "<role>a</role>"
+        assert rows[0]["prompt_user"] == "<input>q1</input>"
 
         meta = client.get("/runs/run-live/agent/Sequential.stage_0/meta")
         assert meta.status_code == 200

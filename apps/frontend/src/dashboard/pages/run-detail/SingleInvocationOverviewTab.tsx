@@ -1,11 +1,9 @@
-import { DefinitionPanel } from "@/components/agent-view/overview/definition-section";
 import { IOHero } from "@/components/agent-view/overview/io-hero";
 import { ActivityStrip } from "@/components/agent-view/overview/run-status-strip";
-import { StructureOverview } from "@/components/agent-view/overview/structure-overview";
-import { EmptyState, Eyebrow } from "@/components/ui";
-import { HashRow, type HashKey } from "@/components/ui/hash-row";
+import { EmptyState, Eyebrow, FieldTree } from "@/components/ui";
+import { type HashKey, HashRow } from "@/components/ui/hash-row";
 import { useRunInvocations, useRunSummary } from "@/hooks/use-runs";
-import { RunInvocationsResponse } from "@/lib/types";
+import { type RunInvocation, RunInvocationsResponse } from "@/lib/types";
 import { useParams } from "react-router-dom";
 
 export function SingleInvocationOverviewTab() {
@@ -45,11 +43,17 @@ export function SingleInvocationOverviewTab() {
   ];
 
   const hashCurrent: Partial<Record<HashKey, string | null>> = Object.fromEntries(
-    hashKeys.map((k) => [k, (latest as Record<string, unknown> | null)?.[k] as string | null ?? null]),
+    hashKeys.map((k) => [
+      k,
+      ((latest as Record<string, unknown> | null)?.[k] as string | null) ?? null,
+    ]),
   );
   const hashPrevious: Partial<Record<HashKey, string | null>> | undefined = previous
     ? Object.fromEntries(
-        hashKeys.map((k) => [k, (previous as Record<string, unknown>)[k] as string | null ?? null]),
+        hashKeys.map((k) => [
+          k,
+          ((previous as Record<string, unknown>)[k] as string | null) ?? null,
+        ]),
       )
     : undefined;
 
@@ -62,17 +66,82 @@ export function SingleInvocationOverviewTab() {
           runId={runId}
         />
         <IOHero dataInvocations={invocations.data} runId={runId} />
-        <DefinitionPanel
-          dataSummary={summary.data}
-          dataInvocations={invocations.data}
-          runId={runId}
-        />
+        <PromptPanel invocation={latest} />
+        <RuntimeConfigPanel invocation={latest} />
         <section className="space-y-2 border-t border-border pt-4">
           <Eyebrow>reproducibility</Eyebrow>
-          <HashRow current={hashCurrent} {...(hashPrevious !== undefined ? { previous: hashPrevious } : {})} />
+          <HashRow
+            current={hashCurrent}
+            {...(hashPrevious !== undefined ? { previous: hashPrevious } : {})}
+          />
         </section>
-        <StructureOverview runId={runId} hashContent={summary.data.hash_content ?? null} />
       </div>
     </div>
+  );
+}
+
+function PromptPanel({ invocation }: { invocation: RunInvocation | null }) {
+  const system = invocation?.prompt_system?.trim() || null;
+  const user = invocation?.prompt_user?.trim() || null;
+  const renderer = invocation?.renderer ?? null;
+
+  return (
+    <section className="space-y-3 border-t border-border pt-4">
+      <div className="flex items-center gap-2">
+        <Eyebrow>prompt</Eyebrow>
+        {renderer ? (
+          <span className="rounded border border-border bg-bg-2 px-1.5 py-0.5 font-mono text-[10px] text-muted">
+            {renderer}
+          </span>
+        ) : null}
+      </div>
+      {system || user ? (
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          <PromptTextBlock label="system" value={system} />
+          <PromptTextBlock label="user" value={user} />
+        </div>
+      ) : (
+        <div className="rounded-md border border-border bg-bg-2 px-3 py-2 text-[12px] text-muted-2">
+          no prompt captured
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PromptTextBlock({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="flex h-[260px] flex-col rounded-md border border-border bg-bg-2">
+      <div className="border-b border-border/60 px-3 py-2">
+        <Eyebrow>{label}</Eyebrow>
+      </div>
+      <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap px-3 py-2 font-mono text-[11px] leading-5 text-text">
+        {value ?? "—"}
+      </pre>
+    </div>
+  );
+}
+
+function RuntimeConfigPanel({ invocation }: { invocation: RunInvocation | null }) {
+  const config = invocation?.config ?? null;
+  const hasConfig = config !== null && Object.keys(config).length > 0;
+
+  return (
+    <section className="space-y-2 border-t border-border pt-4">
+      <Eyebrow>runtime config</Eyebrow>
+      <div className="max-h-[360px] overflow-auto rounded-md border border-border bg-bg-2 px-3 py-2">
+        {hasConfig ? (
+          <FieldTree
+            data={config}
+            defaultDepth={3}
+            hideCopy
+            truncateStrings={false}
+            layout="stacked"
+          />
+        ) : (
+          <span className="text-[12px] text-muted-2">no runtime configuration captured</span>
+        )}
+      </div>
+    </section>
   );
 }

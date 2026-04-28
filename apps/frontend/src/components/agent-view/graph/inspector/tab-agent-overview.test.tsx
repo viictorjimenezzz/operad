@@ -25,8 +25,42 @@ const fixtureMeta = {
     },
   ],
   config: { backend: "openai" },
-  input_schema: { query: "string" },
-  output_schema: { result: "string" },
+  input_schema: {
+    key: "tests.Input",
+    name: "Input",
+    fields: [
+      {
+        name: "query",
+        type: "str",
+        description: "Search query.",
+        system: false,
+        has_default: false,
+        default: null,
+      },
+      {
+        name: "policy",
+        type: "str",
+        description: "Routing policy.",
+        system: true,
+        has_default: true,
+        default: "web",
+      },
+    ],
+  },
+  output_schema: {
+    key: "tests.Output",
+    name: "Output",
+    fields: [
+      {
+        name: "result",
+        type: "str",
+        description: "Final answer.",
+        system: false,
+        has_default: false,
+        default: null,
+      },
+    ],
+  },
   forward_in_overridden: false,
   forward_out_overridden: true,
   trainable_paths: ["role"],
@@ -47,52 +81,29 @@ describe("TabAgentOverview", () => {
     mockUseAgentMeta.mockReturnValue({ isLoading: false, error: null, data: fixtureMeta });
   });
 
-  it("renders identity section with class, kind, and agent path", () => {
+  it("renders input and output schema summaries", () => {
     render(wrapper(<TabAgentOverview runId="run-1" agentPath="Root.researcher" />));
-    expect(screen.getByText("identity")).toBeTruthy();
-    expect(screen.getByText("Reasoner")).toBeTruthy();
-    expect(screen.getByText("leaf")).toBeTruthy();
-    expect(screen.getByText("Root.researcher")).toBeTruthy();
+    expect(screen.getByText("tests.Input")).toBeTruthy();
+    expect(screen.getByText("tests.Output")).toBeTruthy();
+    expect(screen.getByText("query")).toBeTruthy();
+    expect(screen.getByText("result")).toBeTruthy();
   });
 
-  it("renders role and task section labels", () => {
+  it("renders field system markers, descriptions, and defaults", () => {
     render(wrapper(<TabAgentOverview runId="run-1" agentPath="Root.researcher" />));
-    const allRole = screen.getAllByText("role");
-    expect(allRole.length).toBeGreaterThan(0);
-    const allTask = screen.getAllByText("task");
-    expect(allTask.length).toBeGreaterThan(0);
+    expect(screen.getByText("system")).toBeTruthy();
+    expect(screen.getByText("Routing policy.")).toBeTruthy();
+    expect(screen.getByText('default "web"')).toBeTruthy();
   });
 
-  it("renders rules as a numbered list", () => {
+  it("does not render instance-definition sections", () => {
     render(wrapper(<TabAgentOverview runId="run-1" agentPath="Root.researcher" />));
-    expect(screen.getByText(/rules \(2\)/i)).toBeTruthy();
-    expect(screen.getByText("Be concise")).toBeTruthy();
-    expect(screen.getByText("Cite sources")).toBeTruthy();
-  });
-
-  it("renders examples section", () => {
-    render(wrapper(<TabAgentOverview runId="run-1" agentPath="Root.researcher" />));
-    expect(screen.getByText(/examples \(1\)/i)).toBeTruthy();
-  });
-
-  it("renders config section", () => {
-    render(wrapper(<TabAgentOverview runId="run-1" agentPath="Root.researcher" />));
-    expect(screen.getByText("config")).toBeTruthy();
-  });
-
-  it("renders hooks section with overridden state", () => {
-    render(wrapper(<TabAgentOverview runId="run-1" agentPath="Root.researcher" />));
-    expect(screen.getByText("hooks")).toBeTruthy();
-    expect(screen.getByText(/forward_out overridden/)).toBeTruthy();
-    expect(screen.getByText(/forward_in default/)).toBeTruthy();
-  });
-
-  it("renders input and output section labels", () => {
-    render(wrapper(<TabAgentOverview runId="run-1" agentPath="Root.researcher" />));
-    const allInput = screen.getAllByText("input");
-    expect(allInput.length).toBeGreaterThan(0);
-    const allOutput = screen.getAllByText("output");
-    expect(allOutput.length).toBeGreaterThan(0);
+    expect(screen.queryByText("identity")).toBeNull();
+    expect(screen.queryByText("role")).toBeNull();
+    expect(screen.queryByText("task")).toBeNull();
+    expect(screen.queryByText(/rules/i)).toBeNull();
+    expect(screen.queryByText("config")).toBeNull();
+    expect(screen.queryByText("hooks")).toBeNull();
   });
 
   it("shows loading state when isLoading is true", () => {

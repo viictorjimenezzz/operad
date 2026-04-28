@@ -232,13 +232,17 @@ def _build_invocations(
             start_meta = start.get("metadata")
             if isinstance(start_meta, dict) and isinstance(start_meta.get("script"), str):
                 script = start_meta.get("script")
-        cfg = metadata.get("config") if isinstance(metadata.get("config"), dict) else {}
+        raw_config = metadata.get("config")
+        config = raw_config if isinstance(raw_config, dict) else None
+        cfg = config or {}
         cfg_io = cfg.get("io") if isinstance(cfg, dict) else None
         renderer = (
             cfg_io.get("renderer")
             if isinstance(cfg_io, dict) and isinstance(cfg_io.get("renderer"), str)
             else None
         )
+        prompt_system = metadata.get("prompt_system")
+        prompt_user = metadata.get("prompt_user")
         out.append(
             _Invocation(
                 row={
@@ -270,6 +274,9 @@ def _build_invocations(
                         or (cfg.get("model") if isinstance(cfg, dict) else None)
                     ),
                     "renderer": renderer,
+                    "config": config,
+                    "prompt_system": prompt_system if isinstance(prompt_system, str) else None,
+                    "prompt_user": prompt_user if isinstance(prompt_user, str) else None,
                     "input": start.get("input") if isinstance(start, dict) else None,
                     "output": output.get("response"),
                 },

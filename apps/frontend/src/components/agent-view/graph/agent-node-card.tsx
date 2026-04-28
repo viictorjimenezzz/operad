@@ -25,25 +25,27 @@ export function AgentNodeCard({ data }: NodeProps) {
   return (
     <div
       className={cn(
-        "flex h-full w-full cursor-pointer flex-col items-stretch gap-1 rounded-md border bg-bg-1 px-2.5 py-1.5 text-left transition-colors",
+        "flex h-full w-full cursor-pointer flex-col items-stretch gap-1 rounded-md border bg-bg-2 px-2.5 py-1.5 text-left shadow-[var(--shadow-card-raised)] transition-colors hover:bg-bg-3",
         d.selected
           ? "border-accent ring-1 ring-[--color-accent-dim]"
-          : "border-border hover:border-border-strong",
+          : "border-border-strong hover:border-accent/70",
         d.active && !d.selected ? "border-[--color-ok-dim]" : "",
-        d.dimmed ? "opacity-30" : "opacity-100",
+        d.dimmed ? "opacity-60" : "opacity-100",
       )}
       style={{ minWidth: 0 }}
     >
-      <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-0 !bg-muted-2" />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!h-2.5 !w-2.5 !border-0 !bg-accent"
+      />
       <div className="flex items-center gap-1.5">
         <HashTag hash={d.hashContent ?? d.path} dotOnly size="sm" />
         <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-text">
           {d.className}
         </span>
         {d.trainable ? <Flame size={10} className="text-[--color-warn]" /> : null}
-        {d.active ? (
-          <Activity size={10} className="animate-pulse text-[--color-ok]" />
-        ) : null}
+        {d.active ? <Activity size={10} className="animate-pulse text-[--color-ok]" /> : null}
       </div>
       <div className="flex items-center justify-between font-mono text-[10px] text-muted-2">
         <span className="truncate" title={d.inputLabel}>
@@ -59,7 +61,11 @@ export function AgentNodeCard({ data }: NodeProps) {
           {d.invocationCount}× invocations
         </div>
       ) : null}
-      <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-0 !bg-muted-2" />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!h-2.5 !w-2.5 !border-0 !bg-accent"
+      />
     </div>
   );
 }
