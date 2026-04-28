@@ -1,9 +1,9 @@
 import { AgentGroupIdentityCard } from "@/components/agent-view/group/identity-card";
 import { DefinitionPanel } from "@/components/agent-view/overview/definition-section";
-import { ReproducibilityBlock } from "@/components/agent-view/overview/reproducibility-block";
 import { Metric, MultiSeriesChart, PanelCard } from "@/components/ui";
+import { type HashKey, HashRow } from "@/components/ui/hash-row";
 import { useAgentGroup, useAgentMeta } from "@/hooks/use-runs";
-import type { RunInvocationsResponse, RunSummary } from "@/lib/types";
+import type { RunSummary } from "@/lib/types";
 import { formatCost, formatDurationMs, formatTokens } from "@/lib/utils";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
@@ -85,7 +85,7 @@ export function AgentGroupOverviewTab() {
         {singleRun ? (
           <div className="space-y-3">
             <DefinitionPanel dataSummary={singleRun} runId={singleRun.run_id} />
-            <ReproducibilityBlock dataInvocations={invocationsFromSummary(singleRun)} />
+            <HashRow current={hashesForRun(singleRun)} />
           </div>
         ) : null}
       </div>
@@ -113,6 +113,18 @@ function buildSeries(runs: RunSummary[], visible: Set<ToggleKey>) {
     }));
 }
 
+function hashesForRun(run: RunSummary): Partial<Record<HashKey, string | null>> {
+  return {
+    hash_content: run.hash_content ?? null,
+    hash_model: run.hash_model ?? null,
+    hash_prompt: run.hash_prompt ?? null,
+    hash_input: run.hash_input ?? null,
+    hash_output_schema: run.hash_output_schema ?? null,
+    hash_graph: run.hash_graph ?? null,
+    hash_config: run.hash_config ?? null,
+  };
+}
+
 function median(values: number[]): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -120,35 +132,4 @@ function median(values: number[]): number | null {
   return sorted.length % 2
     ? (sorted[mid] ?? null)
     : ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
-}
-
-function invocationsFromSummary(run: RunSummary): RunInvocationsResponse {
-  return {
-    agent_path: run.root_agent_path,
-    invocations: [
-      {
-        id: run.run_id,
-        started_at: run.started_at,
-        finished_at: run.last_event_at,
-        latency_ms: run.duration_ms,
-        prompt_tokens: run.prompt_tokens,
-        completion_tokens: run.completion_tokens,
-        cost_usd: run.cost?.cost_usd ?? null,
-        hash_model: run.hash_model ?? null,
-        hash_prompt: run.hash_prompt ?? null,
-        hash_graph: run.hash_graph ?? null,
-        hash_input: run.hash_input ?? null,
-        hash_output_schema: run.hash_output_schema ?? null,
-        hash_config: run.hash_config ?? null,
-        hash_content: run.hash_content ?? null,
-        status: run.state === "error" ? "error" : "ok",
-        error: run.error,
-        langfuse_url: null,
-        script: run.script,
-        backend: run.backend ?? null,
-        model: run.model ?? null,
-        renderer: null,
-      },
-    ],
-  };
 }
