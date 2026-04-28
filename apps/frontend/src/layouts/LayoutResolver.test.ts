@@ -114,7 +114,7 @@ describe("resolveLayout integration (real layouts/)", () => {
     const selfrefine = resolveLayout("SelfRefine");
 
     expect(beam.dataSources.iterations?.endpoint).toContain("/iterations.json");
-    expect(beam.spec.elements["candidate-leaderboard"]?.type).toBe("BeamLeaderboard");
+    expect(beam.spec.elements["leaderboard-view"]?.type).toBe("BeamLeaderboard");
     expect(beam.spec.elements["histogram-view"]?.type).toBe("BeamScoreHistogram");
     expect(verifier.spec.elements.iterations?.type).toBe("VerifierIterationsTab");
     expect(verifier.spec.elements.acceptance?.type).toBe("VerifierAcceptanceTab");
