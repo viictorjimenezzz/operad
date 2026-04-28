@@ -49,11 +49,37 @@ _SNAPSHOT_INTERVAL_SECONDS = 2.0
 _MAX_EVENTS_PER_REQUEST = 500
 _KNOWN_ENVELOPE_TYPES = {"agent_event", "algo_event", "slot_occupancy", "cost_update", "stats_update"}
 
+
 def _dashboard_version() -> str:
     try:
         return version("operad-dashboard")
     except PackageNotFoundError:
         return "0.0.0"
+
+
+def _repo_root() -> Path:
+    return _PKG_DIR.parents[2]
+
+
+def _cassette_stale(path_value: str | None) -> bool:
+    if not isinstance(path_value, str) or not path_value.strip():
+        return False
+    raw_path = Path(path_value).expanduser()
+    path = raw_path if raw_path.is_absolute() else (_repo_root() / raw_path)
+    try:
+        cassette_mtime = path.stat().st_mtime
+    except OSError:
+        return False
+    source_root = _repo_root() / "operad"
+    if not source_root.is_dir():
+        return False
+    for source in source_root.rglob("*.py"):
+        try:
+            if source.stat().st_mtime > cassette_mtime:
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def create_app(
@@ -127,12 +153,17 @@ def create_app(
     @app.get("/api/manifest")
     async def manifest() -> JSONResponse:
         mode = "production" if os.environ.get("OPERAD_ENV") == "production" else "development"
+        cassette_path = os.environ.get("OPERAD_CASSETTE_PATH")
         return JSONResponse(
             {
                 "mode": mode,
                 "version": _dashboard_version(),
                 "langfuseUrl": app.state.langfuse_url,
                 "allowExperiment": app.state.allow_experiment,
+                "cassetteMode": bool(os.environ.get("OPERAD_CASSETTE")),
+                "cassettePath": cassette_path,
+                "cassetteStale": _cassette_stale(cassette_path),
+                "tracePath": os.environ.get("OPERAD_TRACE"),
             }
         )
 

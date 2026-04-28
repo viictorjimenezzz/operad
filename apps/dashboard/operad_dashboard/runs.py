@@ -407,12 +407,14 @@ class RunRegistry:
             if payload.get("phase") == "epoch_end" and isinstance(
                 parameter_snapshot, dict
             ):
+                context = _snapshot_context(payload)
                 info.parameter_snapshots.append(
                     {
                         "source": "epoch_end",
                         "epoch": payload.get("epoch"),
                         "values": dict(parameter_snapshot),
                         "timestamp": ts,
+                        "tape_link": context,
                     }
                 )
             traceback_path = payload.get("path")
@@ -507,6 +509,7 @@ class RunRegistry:
             params = metadata.get("parameters")
             if isinstance(params, list):
                 values: dict[str, Any] = {}
+                details: dict[str, dict[str, Any]] = {}
                 for raw in params:
                     if not isinstance(raw, dict):
                         continue
@@ -515,12 +518,26 @@ class RunRegistry:
                     path = raw.get("path")
                     if isinstance(path, str) and path:
                         values[path] = raw.get("value")
+                        detail: dict[str, Any] = {
+                            "requires_grad": True,
+                        }
+                        hv = raw.get("hash")
+                        if isinstance(hv, str) and hv:
+                            detail["hash"] = hv
+                        tape_link = _normalize_tape_link(raw.get("tape_link"))
+                        if tape_link is not None:
+                            detail["tape_link"] = tape_link
+                        gradient = _normalize_gradient(raw.get("gradient") or raw.get("grad"))
+                        if gradient is not None:
+                            detail["gradient"] = gradient
+                        details[path] = detail
                 if values:
                     info.parameter_snapshots.append(
                         {
                             "source": "agent_event",
                             "agent_path": agent_path,
                             "values": values,
+                            "details": details,
                             "timestamp": envelope.get("finished_at")
                             or envelope.get("started_at"),
                         }
@@ -593,6 +610,49 @@ def _as_tuple(value: Any) -> tuple[str, ...]:
     if isinstance(value, str):
         return (value,)
     return tuple(value)
+
+
+def _snapshot_context(payload: dict[str, Any]) -> dict[str, int] | None:
+    tape = _normalize_tape_link(payload)
+    if tape is not None:
+        return tape
+    return None
+
+
+def _normalize_tape_link(raw: Any) -> dict[str, int] | None:
+    if not isinstance(raw, dict):
+        return None
+    out: dict[str, int] = {}
+    mapping = {
+        "epoch": "epoch",
+        "batch": "batch",
+        "iter": "iter",
+        "optimizer_step": "optimizer_step",
+        "optimizerStep": "optimizer_step",
+    }
+    for src, dst in mapping.items():
+        value = raw.get(src)
+        if isinstance(value, int):
+            out[dst] = value
+        elif isinstance(value, float):
+            out[dst] = int(value)
+    return out or None
+
+
+def _normalize_gradient(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    out: dict[str, Any] = {}
+    message = raw.get("message")
+    if isinstance(message, str):
+        out["message"] = message
+    severity = raw.get("severity")
+    if isinstance(severity, (int, float, str)):
+        out["severity"] = severity
+    target_paths = raw.get("target_paths")
+    if isinstance(target_paths, list):
+        out["target_paths"] = [str(item) for item in target_paths if isinstance(item, str)]
+    return out or None
 
 
 def _fallback_mermaid(graph_data: dict[str, Any]) -> str:

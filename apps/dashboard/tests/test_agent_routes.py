@@ -329,6 +329,8 @@ def test_live_io_graph_invocations_meta_prompts_values_events(app_and_obs) -> No
         assert len(rows) == 2
         assert rows[0]["path"] == "role"
         assert rows[0]["requires_grad"] is True
+        assert "tape_link" in rows[0]
+        assert "gradient" in rows[0]
 
         diff = client.get(
             "/runs/run-live/agent/Sequential.stage_0/diff?from=Sequential.stage_0:0&to=Sequential.stage_0:1"
@@ -340,6 +342,87 @@ def test_live_io_graph_invocations_meta_prompts_values_events(app_and_obs) -> No
         assert body["from_hash_content"] == "hash-a"
         assert body["to_hash_content"] == "hash-b"
         assert len(body["changes"]) > 0
+
+
+def test_parameters_and_parameter_evolution_include_gradient_context(app_and_obs) -> None:
+    app, _ = app_and_obs
+    with TestClient(app) as client:
+        previous = _run_envelopes("run-prev")
+        for env in previous:
+            if env.get("agent_path") != "Sequential.stage_0":
+                continue
+            if env.get("kind") != "end":
+                continue
+            metadata = env.get("metadata")
+            if not isinstance(metadata, dict):
+                continue
+            parameters = metadata.get("parameters")
+            if not isinstance(parameters, list):
+                continue
+            first = parameters[0] if parameters else None
+            if isinstance(first, dict):
+                first["value"] = "Role v0"
+        assert client.post("/_ingest", json=previous).status_code == 200
+        _seed_live(client, run_id="run-live")
+
+        gradient_prev = {
+            "type": "algo_event",
+            "run_id": "run-prev",
+            "algorithm_path": "Trainer",
+            "kind": "gradient_applied",
+            "payload": {
+                "message": "improve role framing",
+                "severity": 0.2,
+                "target_paths": ["Sequential.stage_0.role"],
+                "epoch": 0,
+                "batch": 1,
+                "iter": 2,
+                "optimizer_step": 3,
+            },
+            "started_at": 20.5,
+            "finished_at": 20.6,
+            "metadata": {},
+        }
+        gradient_live = {
+            "type": "algo_event",
+            "run_id": "run-live",
+            "algorithm_path": "Trainer",
+            "kind": "gradient_applied",
+            "payload": {
+                "message": "tighten role wording",
+                "severity": 0.9,
+                "target_paths": ["role"],
+                "epoch": 1,
+                "batch": 2,
+                "iter": 3,
+                "optimizer_step": 4,
+            },
+            "started_at": 20.7,
+            "finished_at": 20.8,
+            "metadata": {},
+        }
+        assert client.post("/_ingest", json=[gradient_prev, gradient_live]).status_code == 200
+
+        params = client.get("/runs/run-live/agent/Sequential.stage_0/parameters")
+        assert params.status_code == 200
+        role = next(row for row in params.json()["parameters"] if row["path"] == "role")
+        assert role["gradient"]["severity"] == "high"
+        assert role["gradient"]["message"] == "tighten role wording"
+        assert role["tape_link"] == {"epoch": 1, "batch": 2, "iter": 3, "optimizer_step": 4}
+
+        evolution = client.get("/runs/run-live/parameter-evolution/Sequential.stage_0.role")
+        assert evolution.status_code == 200
+        body = evolution.json()
+        assert body["path"] == "Sequential.stage_0.role"
+        assert body["type"] == "text"
+        points = body["points"]
+        assert len(points) == 2
+        assert [point["run_id"] for point in points] == ["run-prev", "run-live"]
+        assert points[0]["value"] == "Role v0"
+        assert points[1]["value"] == "Role v2"
+        assert points[0]["gradient"]["severity"] == "low"
+        assert points[1]["gradient"]["severity"] == "high"
+        assert points[1]["source_tape_step"]["optimizer_step"] == 4
 
 
 def test_archived_run_parity(app_and_obs) -> None:
