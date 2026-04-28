@@ -15,7 +15,11 @@ export const talkerReasonerRegistry: ComponentRegistry = {
   TalkerDecisionsTab: ({ element }) => {
     const p = element.props as { runId?: string; dataSummary?: unknown; dataEvents?: unknown };
     return (
-      <TalkerDecisionsTab runId={p.runId} dataSummary={p.dataSummary} dataEvents={p.dataEvents} />
+      <TalkerDecisionsTab
+        {...(typeof p.runId === "string" ? { runId: p.runId } : {})}
+        dataSummary={p.dataSummary}
+        dataEvents={p.dataEvents}
+      />
     );
   },
 };
