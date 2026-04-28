@@ -1,28 +1,31 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #07080d;
-  --color-bg-1: #0d101a;
-  --color-bg-2: #141826;
-  --color-bg-3: #1c2233;
-  --color-bg-inset: #090b12;
-  --color-border: #232a3d;
-  --color-border-strong: #313a52;
-  --color-text: #e7e9f1;
-  --color-muted: #8991a7;
-  --color-muted-2: #5a6275;
-  --color-accent: #5aa9ff;
-  --color-accent-strong: #7cb9ff;
-  --color-accent-dim: #1c324d;
-  --color-ok: #43c871;
-  --color-ok-dim: #1c3d27;
-  --color-warn: #f2a93a;
-  --color-warn-dim: #3d2c14;
-  --color-err: #ff6b7a;
-  --color-err-dim: #4a1c23;
-  --color-algo: #b794f4;
-  --color-algo-dim: #311e4a;
-  --color-chunk: #778bae;
+  /* Neutral graphite palette tuned to match Weights & Biases:
+   * pure-gray surfaces (no blue tint), subtle borders, and a teal
+   * accent for status dots, active-nav indicators, and chart series. */
+  --color-bg: #16181c;
+  --color-bg-1: #1c1f24;
+  --color-bg-2: #232730;
+  --color-bg-3: #2c313b;
+  --color-bg-inset: #0e1014;
+  --color-border: #2a2e36;
+  --color-border-strong: #3a3f49;
+  --color-text: #ececef;
+  --color-muted: #9aa0aa;
+  --color-muted-2: #6a6f78;
+  --color-accent: #2dd4bf;
+  --color-accent-strong: #5eead4;
+  --color-accent-dim: #134e4a;
+  --color-ok: #4ade80;
+  --color-ok-dim: #14361f;
+  --color-warn: #f59e0b;
+  --color-warn-dim: #3d2a10;
+  --color-err: #ef4444;
+  --color-err-dim: #401a1d;
+  --color-algo: #c084fc;
+  --color-algo-dim: #2e1d47;
+  --color-chunk: #94a3b8;
   /* Curated 12-hue qualitative palette, vivid on dark, legible on light. */
   --qual-1: hsl(4, 78%, 60%); /* coral */
   --qual-2: hsl(28, 90%, 58%); /* tangerine */
