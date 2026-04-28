@@ -1,8 +1,8 @@
 """Run each offline-capable example's ``main`` end-to-end.
 
 Stronger than a smoke-import: confirms every offline example actually
-completes its ``asyncio.run`` without contacting a network. The four
-scripts listed here are the same set that ``scripts/verify.sh`` runs.
+completes its ``asyncio.run`` without contacting a network. The scripts
+listed here are the same set that ``scripts/verify.sh`` runs.
 
 Each example exposes ``_parse_args`` (constructs the example's
 ``argparse.Namespace``) and ``main(args)``. We construct args via the
@@ -26,6 +26,8 @@ OFFLINE_SCRIPTS = [
     "02_algorithm.py",
     "03_training.py",
     "04_evolutionary.py",
+    "05_algorithm_gallery.py",
+    "06_training_dashboard.py",
 ]
 
 

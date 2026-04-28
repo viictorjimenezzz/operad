@@ -7,7 +7,9 @@ for f in \
   examples/01_agent.py \
   examples/02_algorithm.py \
   examples/03_training.py \
-  examples/04_evolutionary.py; do
+  examples/04_evolutionary.py \
+  examples/05_algorithm_gallery.py \
+  examples/06_training_dashboard.py; do
     echo "== $f =="
     uv run python "$f" --offline
 done
