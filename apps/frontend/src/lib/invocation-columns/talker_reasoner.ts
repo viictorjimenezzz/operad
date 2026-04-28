@@ -1,6 +1,7 @@
 import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
 import {
   baseRow,
+  diffField,
   metadataNumber,
   metadataString,
   metricNumber,
@@ -43,11 +44,10 @@ export const talkerReasonerColumns: AlgorithmColumns = {
         turn: { kind: "num", value: metadataNumber(child, "turn", "turn_index"), format: "int" },
         router: { kind: "pill", value: choice, tone: decisionTone(choice) },
         target: { kind: "text", value: metadataString(child, "target_node", "to") ?? "—", mono: true },
-        reason: {
-          kind: "diff",
-          value: metadataString(child, "reason", "text") ?? "—",
-          previous: previous ? (metadataString(previous, "reason", "text") ?? undefined) : undefined,
-        },
+        reason: diffField(
+          metadataString(child, "reason", "text") ?? "—",
+          previous ? (metadataString(previous, "reason", "text") ?? undefined) : undefined,
+        ),
         score: { kind: "score", value: metricNumber(child, "score") ?? child.algorithm_terminal_score ?? null },
       },
     };

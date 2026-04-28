@@ -1,6 +1,7 @@
 import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
 import {
   baseRow,
+  diffField,
   metadataBoolean,
   metadataNumber,
   metadataString,
@@ -38,13 +39,10 @@ export const verifierColumns: AlgorithmColumns = {
       ...baseRow(child),
       fields: {
         iter: { kind: "num", value: metadataNumber(child, "iter", "iter_index"), format: "int" },
-        candidate: {
-          kind: "diff",
-          value: metadataString(child, "candidate_text", "text") ?? "—",
-          previous: previous
-            ? (metadataString(previous, "candidate_text", "text") ?? undefined)
-            : undefined,
-        },
+        candidate: diffField(
+          metadataString(child, "candidate_text", "text") ?? "—",
+          previous ? (metadataString(previous, "candidate_text", "text") ?? undefined) : undefined,
+        ),
         score: { kind: "score", value: metricNumber(child, "score") ?? child.algorithm_terminal_score ?? null },
         accepted: {
           kind: "pill",

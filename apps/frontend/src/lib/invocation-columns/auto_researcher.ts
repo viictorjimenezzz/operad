@@ -1,6 +1,7 @@
 import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
 import {
   baseRow,
+  diffField,
   metadataNumber,
   metadataString,
   metricNumber,
@@ -46,11 +47,10 @@ export const autoResearcherColumns: AlgorithmColumns = {
           format: "int",
         },
         phase: { kind: "pill", value: phase, tone: phaseTone(phase) },
-        query: {
-          kind: "diff",
-          value: metadataString(child, "query", "text") ?? "—",
-          previous: previous ? (metadataString(previous, "query", "text") ?? undefined) : undefined,
-        },
+        query: diffField(
+          metadataString(child, "query", "text") ?? "—",
+          previous ? (metadataString(previous, "query", "text") ?? undefined) : undefined,
+        ),
         score: { kind: "score", value: metricNumber(child, "score") ?? child.algorithm_terminal_score ?? null },
         cost: { kind: "num", value: child.cost?.cost_usd ?? null, format: "cost" },
       },

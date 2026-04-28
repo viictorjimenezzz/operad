@@ -1,6 +1,7 @@
 import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
 import {
   baseRow,
+  diffField,
   metadataNumber,
   metadataString,
   metricNumber,
@@ -45,13 +46,10 @@ export const selfrefineColumns: AlgorithmColumns = {
           kind: "text",
           value: metadataString(child, "stop_reason", "reason") ?? "—",
         },
-        response: {
-          kind: "diff",
-          value: metadataString(child, "response", "text") ?? "—",
-          previous: previous
-            ? (metadataString(previous, "response", "text") ?? undefined)
-            : undefined,
-        },
+        response: diffField(
+          metadataString(child, "response", "text") ?? "—",
+          previous ? (metadataString(previous, "response", "text") ?? undefined) : undefined,
+        ),
       },
     };
   },

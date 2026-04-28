@@ -1,6 +1,7 @@
 import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
 import {
   baseRow,
+  diffField,
   metadataNumber,
   metadataString,
   metricNumber,
@@ -34,11 +35,10 @@ export const debateColumns: AlgorithmColumns = {
         format: "int",
       },
       speaker: { kind: "text", value: metadataString(child, "speaker", "side") ?? "unknown", mono: true },
-      claim: {
-        kind: "diff",
-        value: metadataString(child, "claim", "text") ?? "—",
-        previous: previous ? (metadataString(previous, "claim", "text") ?? undefined) : undefined,
-      },
+      claim: diffField(
+        metadataString(child, "claim", "text") ?? "—",
+        previous ? (metadataString(previous, "claim", "text") ?? undefined) : undefined,
+      ),
       score: { kind: "score", value: metricNumber(child, "score"), min: 0, max: 1 },
     },
   }),

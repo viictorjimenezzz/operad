@@ -1,6 +1,7 @@
 import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
 import {
   baseRow,
+  diffField,
   metadataNumber,
   metadataString,
   metricNumber,
@@ -30,11 +31,10 @@ export const oproColumns: AlgorithmColumns = {
     fields: {
       iter: { kind: "num", value: metadataNumber(child, "iter", "iter_index"), format: "int" },
       role: { kind: "text", value: metadataString(child, "role", "actor") ?? "candidate", mono: true },
-      prompt: {
-        kind: "diff",
-        value: metadataString(child, "prompt", "text") ?? "—",
-        previous: previous ? (metadataString(previous, "prompt", "text") ?? undefined) : undefined,
-      },
+      prompt: diffField(
+        metadataString(child, "prompt", "text") ?? "—",
+        previous ? (metadataString(previous, "prompt", "text") ?? undefined) : undefined,
+      ),
       score: { kind: "score", value: metricNumber(child, "score") ?? child.algorithm_terminal_score ?? null },
       cost: { kind: "num", value: child.cost?.cost_usd ?? null, format: "cost" },
     },

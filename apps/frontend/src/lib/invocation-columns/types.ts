@@ -1,12 +1,12 @@
-import type { RunRow, RunTableColumn } from "@/components/ui/run-table";
+import type { RunFieldValue, RunRow, RunTableColumn } from "@/components/ui/run-table";
 import type { RunSummary } from "@/lib/types";
 
-export type InvocationChild = RunSummary & {
-  metadata?: Record<string, unknown>;
-  algorithm_metadata?: Record<string, unknown>;
-  parent_run_metadata?: Record<string, unknown>;
-  metrics?: Record<string, unknown>;
-  langfuse_url?: string | null;
+export type InvocationChild = Omit<RunSummary, "metrics"> & {
+  metrics?: Record<string, unknown> | undefined;
+  metadata?: Record<string, unknown> | undefined;
+  algorithm_metadata?: Record<string, unknown> | undefined;
+  parent_run_metadata?: Record<string, unknown> | undefined;
+  langfuse_url?: string | null | undefined;
 };
 
 export interface AlgorithmColumns {
@@ -91,4 +91,8 @@ export function metricNumber(child: InvocationChild, ...keys: string[]): number 
     if (value != null) return value;
   }
   return null;
+}
+
+export function diffField(value: string, previous?: string): Extract<RunFieldValue, { kind: "diff" }> {
+  return previous === undefined ? { kind: "diff", value } : { kind: "diff", value, previous };
 }
