@@ -79,12 +79,12 @@ def test_archive_filters_detail_delete_restore_export(app_and_obs) -> None:
     _seed_archived_run(app, run_id="arch-2", started_at=20.0, algorithm_path="pkg.Trainer")
 
     with TestClient(app) as client:
-        r = client.get("/archive?algorithm=EvoGradient&from=0&to=15&limit=10")
+        r = client.get("/api/archive?algorithm=EvoGradient&from=0&to=15&limit=10")
         assert r.status_code == 200
         rows = r.json()
         assert [row["run_id"] for row in rows] == ["arch-1"]
 
-        detail = client.get("/archive/arch-1")
+        detail = client.get("/api/archive/arch-1")
         assert detail.status_code == 200
         body = detail.json()
         assert body["summary"]["run_id"] == "arch-1"
@@ -96,24 +96,24 @@ def test_archive_filters_detail_delete_restore_export(app_and_obs) -> None:
         assert events_fallback.status_code == 200
         assert len(events_fallback.json()["events"]) == 2
 
-        restore = client.post("/archive/arch-1/restore")
+        restore = client.post("/api/archive/arch-1/restore")
         assert restore.status_code == 200
         assert restore.json()["ok"] is True
         live = client.get("/runs/arch-1/summary")
         assert live.status_code == 200
         assert live.json()["run_id"] == "arch-1"
 
-        exported = client.post("/archive/_export?format=jsonl")
+        exported = client.post("/api/archive/_export?format=jsonl")
         assert exported.status_code == 200
         lines = [line for line in exported.text.strip().splitlines() if line.strip()]
         assert len(lines) >= 2
         parsed = [json.loads(line) for line in lines]
         assert all("summary" in item and "events" in item for item in parsed)
 
-        deleted = client.delete("/archive/arch-2")
+        deleted = client.delete("/api/archive/arch-2")
         assert deleted.status_code == 200
         assert deleted.json() == {"ok": True}
-        missing = client.get("/archive/arch-2")
+        missing = client.get("/api/archive/arch-2")
         assert missing.status_code == 404
 
 
@@ -167,7 +167,7 @@ def test_restart_survives_via_data_dir(tmp_path: Path) -> None:
         assert live.status_code == 200
         assert live.json() == []
 
-        archive = client.get("/archive")
+        archive = client.get("/api/archive")
         assert archive.status_code == 200
         run_ids = [row["run_id"] for row in archive.json()]
         assert "restart-1" in run_ids

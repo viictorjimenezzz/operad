@@ -112,15 +112,14 @@ function MetricTable({
         const points = seriesPoints(runs, metric.key, endpoint?.metrics[metric.key]?.series);
         const value = points[0]?.y ?? null;
         return (
-          <div key={metric.key} className="grid grid-cols-[1fr_auto_80px] items-center gap-4 py-2 px-1">
+          <div key={metric.key} className="grid grid-cols-[1fr_auto] items-center gap-4 py-2 px-1">
             <div className="min-w-0">
               <Eyebrow>{metric.source}</Eyebrow>
               <span className="text-[13px] text-text">{metric.label}</span>
             </div>
-            <span className="text-[13px] text-muted">
+            <span className="font-mono tabular-nums text-[13px] text-text">
               {value != null ? formatMetric(value, metric.format) : "—"}
             </span>
-            <span className="text-[11px] text-muted-2 text-right">{metric.format}</span>
           </div>
         );
       })}

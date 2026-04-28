@@ -27,13 +27,19 @@ describe("Training tab gate (§2)", () => {
 
   it("Training tab label is exactly 'Training' (not 'Train')", () => {
     const tabs = agentGroupTabs("abc123", { showTraining: true });
-    const trainTab = tabs.find((t) => t.to.endsWith("/train"));
+    const trainTab = tabs.find((t) => t.to.endsWith("/training"));
     expect(trainTab?.label).toBe("Training");
   });
 
-  it("Training tab URL preserves /train path (not /training)", () => {
+  it("Training tab URL matches the label: /training", () => {
     const tabs = agentGroupTabs("abc123", { showTraining: true });
     const trainTab = tabs.find((t) => t.label === "Training");
-    expect(trainTab?.to).toBe("/agents/abc123/train");
+    expect(trainTab?.to).toBe("/agents/abc123/training");
+  });
+
+  it("Invocations tab URL matches the label: /invocations", () => {
+    const tabs = agentGroupTabs("abc123", {});
+    const invTab = tabs.find((t) => t.label === "Invocations");
+    expect(invTab?.to).toBe("/agents/abc123/invocations");
   });
 });

@@ -34,7 +34,11 @@ function AgentGroupPageInner({ hashContent }: { hashContent: string }) {
   }
 
   const detail = group.data;
-  const className = detail.class_name ?? "Agent";
+  // Prefer the user-declared class name (e.g. `research_analyst`,
+  // `Reasoner`) over the structural `Sequential` we'd see if we asked
+  // the backend's runtime metadata. The detail record already carries
+  // the user-facing name so we use that as the source of truth.
+  const className = detail.class_name ?? meta.data?.class_name ?? "Agent";
   const showTraining =
     detail.is_trainer ||
     (meta.data?.trainable_paths.length ?? 0) > 0;

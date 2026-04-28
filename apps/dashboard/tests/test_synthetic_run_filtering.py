@@ -130,7 +130,11 @@ def test_algorithm_class_in_summary(app_and_obs) -> None:
     assert parent.summary()["algorithm_class"] == "EvoGradient"
 
 
-def test_synthetic_algorithm_child_stays_on_algorithms_rail(app_and_obs) -> None:
+def test_optimisers_and_trainer_route_to_training_rail(app_and_obs) -> None:
+    """Trainer and optimisers (OPRO/EvoGradient/...) belong on the
+    Training rail; the Algorithms rail keeps inference orchestrators
+    only (Beam / Sweep / Debate / SelfRefine / AutoResearcher / ...).
+    """
     app, obs = app_and_obs
     obs.registry.record_envelope(
         {
@@ -158,13 +162,16 @@ def test_synthetic_algorithm_child_stays_on_algorithms_rail(app_and_obs) -> None
     )
 
     with TestClient(app) as client:
-        response = client.get("/api/algorithms")
+        algos = client.get("/api/algorithms")
+        trainings = client.get("/api/trainings")
 
-    assert response.status_code == 200
-    groups = response.json()
-    assert groups[0]["class_name"] == "OPROOptimizer"
-    assert groups[0]["runs"][0]["run_id"] == "opro-child"
-    assert groups[0]["runs"][0]["synthetic"] is True
+    assert algos.status_code == 200
+    assert trainings.status_code == 200
+    # Algorithms rail must be empty: Trainer + OPROOptimizer both belong
+    # to Training.
+    assert algos.json() == []
+    paths = {entry["algorithm_path"] for entry in trainings.json()}
+    assert {"Trainer", "OPROOptimizer"} <= paths
 
 
 def test_opro_endpoint_filters_opro_algorithm_runs(app_and_obs) -> None:

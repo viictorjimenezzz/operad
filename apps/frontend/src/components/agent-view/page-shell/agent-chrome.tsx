@@ -72,14 +72,16 @@ export function AgentChrome({
             {run.is_algorithm ? <Pill tone="algo" size="sm">algo</Pill> : null}
             <Metric label="ago" value={formatRelativeTime(run.started_at)} />
             <Metric label="dur" value={formatDurationMs(run.duration_ms)} />
-            <Metric
-              label="tok"
-              value={formatTokensOrUnavailable(totalTokens)}
-              {...(hasTokenUsage(run.prompt_tokens, run.completion_tokens)
-                ? { sub: formatTokenPairOrUnavailable(run.prompt_tokens, run.completion_tokens) }
-                : {})}
-            />
-            <Metric label="$" value={formatCostOrUnavailable(cost)} />
+            {hasTokenUsage(run.prompt_tokens, run.completion_tokens) ? (
+              <Metric
+                label="tok"
+                value={formatTokensOrUnavailable(totalTokens)}
+                sub={formatTokenPairOrUnavailable(run.prompt_tokens, run.completion_tokens)}
+              />
+            ) : null}
+            {typeof cost === "number" && Number.isFinite(cost) && cost > 0 ? (
+              <Metric label="$" value={formatCostOrUnavailable(cost)} />
+            ) : null}
             {langfuseUrl ? (
               <a
                 href={langfuseUrl}

@@ -600,6 +600,7 @@ provides-extras = ["observers", "dashboard", "gemini", "huggingface", "otel"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "apps-uthereal", editable = "../uthereal" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.23" },
 ]

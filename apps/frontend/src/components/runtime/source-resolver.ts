@@ -44,6 +44,7 @@ const HELPERS: Record<string, Helper> = {
     const obj = asObject(arg);
     if (obj && Array.isArray(obj.invocations)) return (obj.invocations as unknown[]).length;
     if (obj && Array.isArray(obj.children)) return (obj.children as unknown[]).length;
+    if (obj && Array.isArray(obj.agents)) return (obj.agents as unknown[]).length;
     return 0;
   },
   length: (arg) => {

@@ -34,13 +34,13 @@ class DeterminismRequest(BaseModel):
     path: str = Field(min_length=1)
 
 
-@router.get("/cassettes")
+@router.get("/api/cassettes")
 async def list_cassettes() -> JSONResponse:
     root = cassette_root_from_env()
     return JSONResponse(discover_cassettes(root))
 
 
-@router.get("/cassettes/preview")
+@router.get("/api/cassettes/preview")
 async def cassette_preview(
     path: str,
     limit: int = Query(default=100, ge=1, le=500),
@@ -56,7 +56,7 @@ async def cassette_preview(
     return JSONResponse({"path": path, "events": envelopes})
 
 
-@router.post("/cassettes/replay")
+@router.post("/api/cassettes/replay")
 async def replay_cassette(
     req: ReplayRequest,
     request: Request,
@@ -85,7 +85,7 @@ async def replay_cassette(
     return JSONResponse({"run_id": run_id, "emitted": emitted})
 
 
-@router.post("/cassettes/determinism-check")
+@router.post("/api/cassettes/determinism-check")
 async def cassette_determinism(req: DeterminismRequest) -> JSONResponse:
     root = cassette_root_from_env()
     try:

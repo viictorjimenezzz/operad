@@ -134,7 +134,11 @@ function buildInstanceRow(
   const meta = g.is_trainer
     ? `Trainer · ${formatRelativeTime(g.last_seen)}`
     : formatRelativeTime(g.last_seen);
-  const sparkline = g.latencies.slice(-12);
+  // Only show a sparkline when there are at least two latency samples;
+  // otherwise the Sparkline component would just render a placeholder
+  // dash that looks like missing data.
+  const finiteLatencies = g.latencies.filter((value) => Number.isFinite(value));
+  const sparkline = finiteLatencies.length >= 2 ? g.latencies.slice(-12) : undefined;
   const state = g.running > 0 ? "running" : g.errors > 0 ? "error" : "ended";
   const children: GroupTreeRow[] = g.run_ids.slice().reverse().map((runId) => ({
     id: `run::${g.hash_content}::${runId}`,
@@ -144,17 +148,23 @@ function buildInstanceRow(
     state: "ended",
     active: activeHash === g.hash_content && activeRunId === runId,
   }));
+  const trailing =
+    g.errors > 0
+      ? `${g.errors} err`
+      : sparkline === undefined
+        ? `${g.count} run${g.count === 1 ? "" : "s"}`
+        : undefined;
   return {
     id: `instance::${g.hash_content}`,
     label: <span className="font-mono text-[11px]">{truncateMiddle(g.hash_content, 12)}</span>,
     meta,
     colorIdentity: g.hash_content,
-    sparkline,
+    ...(sparkline ? { sparkline } : {}),
     state,
     active: isActive,
     count: g.count,
     children,
-    trailing: g.errors > 0 ? `${g.errors} err` : undefined,
+    ...(trailing ? { trailing } : {}),
   };
 }
 

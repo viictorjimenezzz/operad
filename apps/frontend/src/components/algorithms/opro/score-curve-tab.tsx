@@ -25,6 +25,24 @@ export function OPROScoreCurveTab({
       />
     );
   }
+  if (series.iterations.length < 2) {
+    const single = series.iterations[0];
+    return (
+      <div className="h-full overflow-auto p-4">
+        <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-border bg-bg-1 px-6 py-10 text-center">
+          <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-muted-2">
+            single iteration
+          </div>
+          <div className="text-[18px] font-semibold tabular-nums text-text">
+            {single?.score == null ? "—" : single.score.toFixed(3)}
+          </div>
+          <p className="m-0 max-w-md text-[12px] text-muted">
+            A score curve appears once at least two evaluate iterations have landed.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full overflow-auto p-4">

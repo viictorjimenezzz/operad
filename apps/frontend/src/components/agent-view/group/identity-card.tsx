@@ -8,10 +8,26 @@ export function AgentGroupIdentityCard({
   group: AgentGroupDetail;
   meta?: AgentMetaResponse | null | undefined;
 }) {
-  const className = meta?.class_name ?? group.class_name ?? "Agent";
+  // Prefer the group-level class name (the user-declared label such as
+  // `research_analyst` or `Reasoner`) over the runtime meta's
+  // `class_name`, which may resolve to the wrapper composite type
+  // (`Sequential`, `Parallel`...) and confuse the reader.
+  const className = group.class_name ?? meta?.class_name ?? "Agent";
   const role = meta?.role?.trim() ? meta.role : null;
   const task = meta?.task?.trim() ? meta.task : null;
   const trainable = meta?.trainable_paths.length ?? 0;
+  // Show only the leaf-level parameter names (e.g. "role, task") without
+  // the dotted full path, capped at 6 — enough to cue the reader without
+  // turning the identity card into a wall of text. The full list lives
+  // on the Training tab.
+  const trainablePreview =
+    trainable > 0
+      ? meta!.trainable_paths
+          .slice(0, 6)
+          .map((path) => path.split(".").at(-1) ?? path)
+          .filter((leaf, index, arr) => arr.indexOf(leaf) === index)
+          .join(", ") + (trainable > 6 ? "…" : "")
+      : undefined;
 
   return (
     <section className="border-b border-border pb-3">
@@ -31,7 +47,7 @@ export function AgentGroupIdentityCard({
             <Metric
               label="trainable"
               value={trainable}
-              sub={trainable > 0 ? meta?.trainable_paths.join(", ") : undefined}
+              {...(trainablePreview ? { sub: trainablePreview } : {})}
             />
           </div>
         </div>

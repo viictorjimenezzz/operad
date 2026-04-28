@@ -43,7 +43,7 @@ describe("dashboardApi cassette endpoints", () => {
     const out = await dashboardApi.cassetteReplay({ path: "trace.jsonl", delayMs: 0 });
     expect(out.run_id).toBe("cassette-1");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/cassettes/replay?delay_ms=0",
+      "/api/cassettes/replay?delay_ms=0",
       expect.objectContaining({ method: "POST" }),
     );
   });

@@ -78,7 +78,10 @@ def _all_runs(request: Request) -> list[RunInfo]:
 
 
 def _is_trainer(info: RunInfo) -> bool:
-    return isinstance(info.algorithm_path, str) and info.algorithm_path.endswith(".Trainer")
+    path = info.algorithm_path
+    if not isinstance(path, str):
+        return False
+    return path == "Trainer" or path.endswith(".Trainer")
 
 
 def _short_hash(value: str) -> str:
@@ -513,19 +516,54 @@ async def agent_group_parameters(
 # ---------------------------------------------------------------------------
 
 
+_OPRO_PATHS = {"OPROOptimizer", "OPRO"}
+_OPTIMIZER_PATHS = {
+    "OPROOptimizer",
+    "OPRO",
+    "EvoGradient",
+    "TextualGradientDescent",
+    "MomentumTextGrad",
+    "APEOptimizer",
+}
+
+
 @router.get("/api/algorithms")
 async def list_algorithm_runs(request: Request, path: str | None = None) -> JSONResponse:
-    """Return one entry per algorithm orchestrator run, grouped by class."""
-    return JSONResponse(_algorithm_groups(request, path_filter=path))
+    """Return one entry per algorithm orchestrator run, grouped by class.
+
+    Optimizers (OPRO/EvoGradient/TextualGradientDescent/...) and the
+    `Trainer` belong to the Training rail (§7) and are intentionally
+    excluded here so the Algorithms rail stays focused on inference
+    orchestrators (Beam / Sweep / Debate / SelfRefine / AutoResearcher /
+    Verifier / TalkerReasoner).
+    """
+    if path is not None:
+        match = lambda info: info.algorithm_path == path  # noqa: E731
+    else:
+        match = lambda info: (  # noqa: E731
+            info.algorithm_path is not None
+            and info.algorithm_path not in _OPTIMIZER_PATHS
+            and not _is_trainer(info)
+        )
+    return JSONResponse(_algorithm_groups(request, match=match))
 
 
 @router.get("/api/opro")
 async def list_opro_runs(request: Request) -> JSONResponse:
-    """Return OPRO optimizer algorithm runs only."""
-    return JSONResponse(_algorithm_groups(request, path_filter="OPRO"))
+    """Return OPRO optimizer algorithm runs (matched by class name)."""
+    return JSONResponse(
+        _algorithm_groups(
+            request,
+            match=lambda info: info.algorithm_path in _OPRO_PATHS,
+        )
+    )
 
 
-def _algorithm_groups(request: Request, path_filter: str | None = None) -> list[dict[str, Any]]:
+def _algorithm_groups(
+    request: Request,
+    *,
+    match: Any,
+) -> list[dict[str, Any]]:
     runs = _all_runs(request)
     cost_totals: dict[str, Any] = {}
     cost = getattr(request.app.state, "cost_observer", None)
@@ -538,11 +576,7 @@ def _algorithm_groups(request: Request, path_filter: str | None = None) -> list[
     for info in runs:
         if not info.is_algorithm:
             continue
-        if _is_trainer(info):
-            # Trainer goes on its own rail; keep the algorithms rail focused
-            # on Beam / Sweep / Debate / Evo / SelfRefine / AutoResearcher.
-            continue
-        if path_filter is not None and info.algorithm_path != path_filter:
+        if not match(info):
             continue
         key = info.algorithm_path or "_unknown"
         groups.setdefault(key, []).append(info)
@@ -579,21 +613,43 @@ def _summary_with_cost(info: RunInfo, cost_totals: dict[str, Any]) -> dict[str, 
 # ---------------------------------------------------------------------------
 
 
+def _is_training_run(info: RunInfo) -> bool:
+    """Anything that mutates Parameters belongs on the Training rail.
+
+    That covers Trainer.fit() plus every optimizer (OPRO, EvoGradient,
+    TextualGradientDescent, MomentumTextGrad, APE...). Inference-only
+    orchestrators (Beam / Sweep / Debate / Verifier ...) stay on the
+    Algorithms rail.
+    """
+    if _is_trainer(info):
+        return True
+    return info.algorithm_path in _OPTIMIZER_PATHS
+
+
 @router.get("/api/trainings")
 async def list_training_runs(request: Request) -> JSONResponse:
-    """Return one entry per Trainer.fit() run, grouped by trainee identity."""
+    """Return one entry per training-class run, grouped by trainee identity.
+
+    A "training-class" run is any algorithm that mutates Agent
+    Parameters: ``Trainer.fit`` plus every optimizer (`OPRO`,
+    `EvoGradient`, `TextualGradientDescent`, ...).
+    """
     runs = _all_runs(request)
     groups: dict[str, list[RunInfo]] = {}
-    pending: list[RunInfo] = []
     for info in runs:
-        if not _is_trainer(info):
+        if not _is_training_run(info):
             continue
-        if info.synthetic:
-            continue
+        # Optimisers nested inside a Trainer/script *are* synthetic runs
+        # (parent_run_id is the Trainer's run id) but they're still
+        # part of the training story — keep them.
         hc = _latest_root_hash_content(info)
-        key = hc or f"_pending_{info.run_id}"
-        if hc is None:
-            pending.append(info)
+        # Optimizer runs may not carry a root agent hash; fall back to the
+        # algorithm class so the rail still groups them sensibly.
+        key = (
+            hc
+            or info.algorithm_path
+            or f"_pending_{info.run_id}"
+        )
         groups.setdefault(key, []).append(info)
 
     out: list[dict[str, Any]] = []
@@ -603,8 +659,9 @@ async def list_training_runs(request: Request) -> JSONResponse:
         out.append(
             {
                 "hash_content": key if not key.startswith("_pending_") else None,
-                "class_name": _class_name_from_path(head.root_agent_path),
+                "class_name": _class_name_from_path(head.root_agent_path) or head.algorithm_class,
                 "root_agent_path": head.root_agent_path,
+                "algorithm_path": head.algorithm_path,
                 "count": len(members),
                 "running": sum(1 for r in members if r.state == "running"),
                 "errors": sum(1 for r in members if r.state == "error"),
@@ -614,5 +671,4 @@ async def list_training_runs(request: Request) -> JSONResponse:
             }
         )
     out.sort(key=lambda g: g["last_seen"], reverse=True)
-    del pending
     return JSONResponse(out)

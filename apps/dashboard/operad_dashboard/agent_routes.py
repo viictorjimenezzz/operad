@@ -707,6 +707,17 @@ async def agent_meta(request: Request, run_id: str, path: str) -> JSONResponse:
     if kind not in {"leaf", "composite"}:
         kind = "leaf" if edge is not None else "composite"
     langfuse_base = getattr(request.app.state, "langfuse_url", None)
+    parameters_raw = metadata.get("parameters")
+    trainable_paths: list[str] = []
+    if isinstance(parameters_raw, list):
+        for entry in parameters_raw:
+            if not isinstance(entry, dict):
+                continue
+            if not bool(entry.get("requires_grad")):
+                continue
+            param_path = entry.get("path")
+            if isinstance(param_path, str) and param_path:
+                trainable_paths.append(param_path)
     return JSONResponse(
         {
             "agent_path": path,
@@ -724,7 +735,7 @@ async def agent_meta(request: Request, run_id: str, path: str) -> JSONResponse:
             "forward_out_overridden": bool(metadata.get("forward_out_overridden")),
             "forward_in_doc": metadata.get("forward_in_doc"),
             "forward_out_doc": metadata.get("forward_out_doc"),
-            "trainable_paths": metadata.get("trainable_paths") or [],
+            "trainable_paths": trainable_paths,
             "langfuse_search_url": (
                 f"{langfuse_base}/traces?search={quote(path)}" if langfuse_base else None
             ),
@@ -1151,6 +1162,118 @@ async def agent_values(
             "values": values,
         }
     )
+
+
+@router.get("/runs/{run_id}/agents-summary")
+async def agents_summary(request: Request, run_id: str) -> JSONResponse:
+    """Aggregate every nested agent invocation seen during a run.
+
+    Used by the algorithm-detail "Agents" tab so optimisers (OPRO,
+    EvoGradient, Trainer, ...) can show the agents they touched even
+    when those agents weren't spawned as separate synthetic runs. Each
+    output row is keyed by ``(agent_path, hash_content)`` so identical
+    agents merged across multiple invocations show as a single entry
+    with an aggregated count.
+    """
+    ctx = _resolve_run_context(request, run_id)
+    if ctx is None:
+        return _not_found("unknown run_id")
+    langfuse_url = getattr(request.app.state, "langfuse_url", None)
+    by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    for env in ctx.events:
+        if env.get("type") != "agent_event" or env.get("kind") != "end":
+            continue
+        path = env.get("agent_path")
+        meta = env.get("metadata")
+        if not isinstance(path, str) or not isinstance(meta, dict):
+            continue
+        hash_content = meta.get("hash_content")
+        class_name = meta.get("class_name")
+        kind = meta.get("kind")
+        cfg = meta.get("config") if isinstance(meta.get("config"), dict) else {}
+        cfg_io = cfg.get("io") if isinstance(cfg, dict) else None
+        renderer = (
+            cfg_io.get("renderer")
+            if isinstance(cfg_io, dict) and isinstance(cfg_io.get("renderer"), str)
+            else None
+        )
+        backend = cfg.get("backend") if isinstance(cfg, dict) else None
+        model = cfg.get("model") if isinstance(cfg, dict) else None
+        key = (path, str(hash_content) if hash_content else "")
+        bucket = by_key.setdefault(
+            key,
+            {
+                "agent_path": path,
+                "class_name": class_name,
+                "kind": kind,
+                "hash_content": hash_content,
+                "first_seen": float(env.get("started_at") or 0.0),
+                "last_seen": float(env.get("started_at") or 0.0),
+                "invocations": 0,
+                "errors": 0,
+                "latency_ms_total": 0.0,
+                "latency_samples": [],
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "backend": backend,
+                "model": model,
+                "renderer": renderer,
+                "langfuse_url": (
+                    f"{langfuse_url}/trace/{run_id}" if langfuse_url is not None else None
+                ),
+            },
+        )
+        bucket["invocations"] += 1
+        ts = float(env.get("started_at") or 0.0)
+        if ts < bucket["first_seen"]:
+            bucket["first_seen"] = ts
+        if ts > bucket["last_seen"]:
+            bucket["last_seen"] = ts
+        finished = env.get("finished_at")
+        if isinstance(finished, (int, float)):
+            latency_ms = max(0.0, (float(finished) - ts) * 1000.0)
+            bucket["latency_ms_total"] += latency_ms
+            bucket["latency_samples"].append(latency_ms)
+        out = env.get("output")
+        if isinstance(out, dict):
+            pt = out.get("prompt_tokens")
+            ct = out.get("completion_tokens")
+            if isinstance(pt, (int, float)):
+                bucket["prompt_tokens"] += int(pt)
+            if isinstance(ct, (int, float)):
+                bucket["completion_tokens"] += int(ct)
+
+    # Count error envelopes too.
+    for env in ctx.events:
+        if env.get("type") != "agent_event" or env.get("kind") != "error":
+            continue
+        path = env.get("agent_path")
+        meta = env.get("metadata")
+        if not isinstance(path, str):
+            continue
+        hash_content = meta.get("hash_content") if isinstance(meta, dict) else None
+        key = (path, str(hash_content) if hash_content else "")
+        bucket = by_key.get(key)
+        if bucket is not None:
+            bucket["errors"] += 1
+
+    rows: list[dict[str, Any]] = []
+    for bucket in by_key.values():
+        latency_samples = sorted(bucket.pop("latency_samples"))
+        n = len(latency_samples)
+        bucket["latency_p50_ms"] = (
+            (latency_samples[n // 2] + latency_samples[(n - 1) // 2]) / 2
+            if n > 0
+            else None
+        )
+        bucket["latency_avg_ms"] = (
+            bucket["latency_ms_total"] / max(1, bucket["invocations"])
+            if bucket["invocations"] > 0
+            else None
+        )
+        rows.append(bucket)
+    rows.sort(key=lambda row: row["last_seen"], reverse=True)
+    return JSONResponse({"run_id": run_id, "agents": rows})
 
 
 @router.get("/runs/{run_id}/agent/{path:path}/events")

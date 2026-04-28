@@ -77,6 +77,7 @@ export function IOFieldPreview({
                 data={data}
                 defaultDepth={2}
                 truncateStrings={false}
+                layout="stacked"
                 {...(descriptions ? { descriptions } : {})}
               />
             </motion.div>

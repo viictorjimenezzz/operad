@@ -16,7 +16,8 @@
       "stream": "/runs/$context.runId/checkpoints.sse"
     },
     "tape": { "endpoint": "/runs/$context.runId/tape.json" },
-    "children": { "endpoint": "/runs/$context.runId/children" }
+    "children": { "endpoint": "/runs/$context.runId/children" },
+    "agentsSummary": { "endpoint": "/runs/$context.runId/agents-summary" }
   },
   "spec": {
     "root": "page",
@@ -35,7 +36,7 @@
               "label": "Traceback",
               "badge": "$queries.summary.has_traceback"
             },
-            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
+            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.agentsSummary.agents)", "condition": "$expr:count($queries.agentsSummary.agents)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },

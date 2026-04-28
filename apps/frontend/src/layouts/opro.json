@@ -5,7 +5,8 @@
     "summary": { "endpoint": "/runs/$context.runId/summary" },
     "iterations": { "endpoint": "/runs/$context.runId/iterations.json" },
     "events": { "endpoint": "/runs/$context.runId/events?limit=500" },
-    "children": { "endpoint": "/runs/$context.runId/children" }
+    "children": { "endpoint": "/runs/$context.runId/children" },
+    "agentsSummary": { "endpoint": "/runs/$context.runId/agents-summary" }
   },
   "spec": {
     "root": "page",
@@ -17,7 +18,7 @@
             { "id": "history", "label": "Prompt history" },
             { "id": "score", "label": "Score curve" },
             { "id": "parameters", "label": "Parameters" },
-            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
+            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.agentsSummary.agents)", "condition": "$expr:count($queries.agentsSummary.agents)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },

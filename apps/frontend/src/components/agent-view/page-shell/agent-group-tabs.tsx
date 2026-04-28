@@ -14,12 +14,12 @@ export function agentGroupTabs(
   const base = `/agents/${hashContent}`;
   const tabs = [
     { to: base, label: "Overview", end: true },
-    { to: `${base}/runs`, label: "Invocations" },
+    { to: `${base}/invocations`, label: "Invocations" },
     { to: `${base}/metrics`, label: "Metrics" },
     { to: `${base}/graph`, label: "Graph" },
   ];
   if (options.showTraining) {
-    tabs.splice(3, 0, { to: `${base}/train`, label: "Training" });
+    tabs.splice(3, 0, { to: `${base}/training`, label: "Training" });
   }
   return tabs;
 }
