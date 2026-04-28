@@ -20,34 +20,46 @@ export function CompositeFlowNode({ data }: NodeProps) {
     return (
       <div
         className={cn(
-          "flex h-full w-full cursor-pointer flex-col rounded-md border border-dashed bg-bg-1/40 transition-colors",
-          d.selected ? "border-accent" : "border-[--color-algo]/40",
-          d.dimmed ? "opacity-30" : "opacity-100",
+          "flex h-full w-full cursor-pointer flex-col rounded-md border bg-bg-2 shadow-[var(--shadow-card-raised)] transition-colors hover:bg-bg-3",
+          d.selected ? "border-accent ring-1 ring-[--color-accent-dim]" : "border-border-strong",
+          d.dimmed ? "opacity-60" : "opacity-100",
         )}
       >
-        <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-0 !bg-muted-2" />
-        <div className="flex h-7 items-center gap-1.5 border-b border-[--color-algo]/30 bg-[--color-algo-dim]/30 px-2 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[--color-algo]">
+        <Handle
+          type="target"
+          position={Position.Left}
+          className="!h-2.5 !w-2.5 !border-0 !bg-[--color-algo]"
+        />
+        <div className="flex h-7 items-center gap-1.5 border-b border-border-strong bg-bg-3 px-2 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-text">
           <ChevronDown size={11} />
           <span className="truncate">{d.className}</span>
           <span className="ml-auto font-mono text-[10px] normal-case tracking-normal text-muted">
             {d.childCount} child{d.childCount === 1 ? "" : "ren"}
           </span>
         </div>
-        <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-0 !bg-muted-2" />
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="!h-2.5 !w-2.5 !border-0 !bg-[--color-algo]"
+        />
       </div>
     );
   }
   return (
     <div
       className={cn(
-        "flex h-full w-full cursor-pointer flex-col gap-0.5 rounded-md border bg-[--color-algo-dim]/40 px-2.5 py-1.5 text-left transition-colors",
+        "flex h-full w-full cursor-pointer flex-col gap-0.5 rounded-md border bg-bg-2 px-2.5 py-1.5 text-left shadow-[var(--shadow-card-raised)] transition-colors hover:bg-bg-3",
         d.selected
-          ? "border-[--color-algo] ring-1 ring-[--color-algo]/30"
-          : "border-[--color-algo]/40 hover:border-[--color-algo]",
-        d.dimmed ? "opacity-30" : "opacity-100",
+          ? "border-accent ring-1 ring-[--color-accent-dim]"
+          : "border-border-strong hover:border-[--color-algo]",
+        d.dimmed ? "opacity-60" : "opacity-100",
       )}
     >
-      <Handle type="target" position={Position.Left} className="!h-2 !w-2 !border-0 !bg-muted-2" />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!h-2.5 !w-2.5 !border-0 !bg-[--color-algo]"
+      />
       <div className="flex items-center gap-1.5">
         <ChevronRight size={11} className="text-[--color-algo]" />
         <span className="min-w-0 flex-1 truncate text-[12px] font-semibold uppercase tracking-[0.04em] text-[--color-algo]">
@@ -57,7 +69,11 @@ export function CompositeFlowNode({ data }: NodeProps) {
       <div className="font-mono text-[10px] text-muted">
         {d.childCount} child{d.childCount === 1 ? "" : "ren"} · double-click to expand
       </div>
-      <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-0 !bg-muted-2" />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!h-2.5 !w-2.5 !border-0 !bg-[--color-algo]"
+      />
     </div>
   );
 }

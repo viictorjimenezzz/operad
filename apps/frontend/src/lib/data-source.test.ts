@@ -85,6 +85,39 @@ describe("autoMerge", () => {
     expect(autoMerge(current, delta)).toBe(delta);
   });
 
+  it("appends keyed deltas into an object snapshot collection", () => {
+    const current = {
+      iterations: [{ iter_index: 0, text: "first" }],
+      threshold: 1.1,
+      max_iter: 2,
+      converged: false,
+    };
+    const result = autoMerge(current, { iter_index: 1, text: "second" }) as {
+      iterations: unknown[];
+      threshold: number;
+      max_iter: number;
+      converged: boolean;
+    };
+
+    expect(result.iterations).toHaveLength(2);
+    expect(result.threshold).toBe(1.1);
+    expect(result.max_iter).toBe(2);
+    expect(result.converged).toBe(false);
+  });
+
+  it("deduplicates keyed deltas inside an object snapshot collection", () => {
+    const current = {
+      iterations: [{ iter_index: 0, text: "first" }],
+      threshold: 1.1,
+    };
+    const result = autoMerge(current, { iter_index: 0, text: "updated" }) as {
+      iterations: unknown[];
+    };
+
+    expect(result.iterations).toHaveLength(1);
+    expect(result).toBe(current);
+  });
+
   it("merges an iteration row into an IterationsResponse snapshot", () => {
     const current = {
       iterations: [{ iter_index: 0, phase: "reflect", score: 0.5 }],

@@ -1,80 +1,98 @@
-import { Breadcrumb, EmptyState, PanelCard, PanelGrid, StatusDot } from "@/components/ui";
+import { EmptyState, type RunRow, RunTable, type RunTableColumn } from "@/components/ui";
 import { useAlgorithmGroups } from "@/hooks/use-runs";
-import type { AlgorithmGroup } from "@/lib/types";
-import { formatRelativeTime } from "@/lib/utils";
-import { Link } from "react-router-dom";
+import { getAlgorithmMetric } from "@/lib/algorithm-metrics";
+import type { RunSummary } from "@/lib/types";
+
+const columns: RunTableColumn[] = [
+  { id: "state", label: "State", source: "_state", sortable: true, width: 86 },
+  { id: "instance", label: "Instance", source: "instance", sortable: true, width: 150 },
+  { id: "run", label: "Run ID", source: "_id", sortable: true, width: 220 },
+  {
+    id: "started",
+    label: "Started timestamp",
+    source: "started",
+    sortable: true,
+    defaultSort: "desc",
+    width: 170,
+  },
+  { id: "script", label: "Script", source: "script", sortable: true, width: "1fr" },
+  {
+    id: "latency",
+    label: "Latency",
+    source: "_duration",
+    sortable: true,
+    align: "right",
+    width: 82,
+  },
+  { id: "metric", label: "Metric", source: "metric", sortable: true, align: "right", width: 112 },
+  { id: "events", label: "Events", source: "events", sortable: true, align: "right", width: 76 },
+  { id: "tokens", label: "Tokens", source: "tokens", sortable: true, align: "right", width: 82 },
+  { id: "cost", label: "Cost", source: "cost", sortable: true, align: "right", width: 76 },
+];
 
 export function AlgorithmsIndexPage() {
   const groups = useAlgorithmGroups();
-  const allRuns = groups.data?.flatMap((g) => g.runs) ?? [];
+  const allRuns =
+    groups.data?.flatMap((group) =>
+      group.runs.map((run) => ({
+        ...run,
+        algorithm_class: run.algorithm_class ?? group.class_name,
+      })),
+    ) ?? [];
+  const rows = allRuns.map(runToRow);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <Breadcrumb items={[{ label: "Algorithms" }]} />
       <div className="flex-1 overflow-auto p-4">
         {groups.isLoading ? (
           <div className="text-xs text-muted">loading algorithms…</div>
-        ) : allRuns.length === 0 ? (
+        ) : rows.length === 0 ? (
           <EmptyState
             title="no algorithm runs yet"
-            description="run a Beam / Sweep / Debate / EvoGradient / SelfRefine / AutoResearcher script to populate this view"
+            description="algorithm invocations will appear here once they emit algorithm events"
           />
         ) : (
-          <div className="space-y-4">
-            {groups.data?.map((g) => (
-              <AlgorithmGroupBlock key={g.algorithm_path} group={g} />
-            ))}
-          </div>
+          <RunTable
+            rows={rows}
+            columns={columns}
+            storageKey="algorithms-index"
+            rowHref={(row) => `/algorithms/${encodeURIComponent(row.id)}`}
+            emptyTitle="no algorithm runs yet"
+            emptyDescription="algorithm invocations will appear here once they emit algorithm events"
+            pageSize={50}
+          />
         )}
       </div>
     </div>
   );
 }
 
-function AlgorithmGroupBlock({ group }: { group: AlgorithmGroup }) {
-  return (
-    <PanelCard
-      eyebrow="Algorithm"
-      title={
-        <span>
-          {group.class_name ?? group.algorithm_path}
-          <span className="ml-2 rounded-full bg-bg-3 px-2 py-0.5 text-[10px] tabular-nums text-muted-2">
-            {group.count}
-          </span>
-        </span>
-      }
-    >
-      <PanelGrid cols={3}>
-        {group.runs.slice().reverse().slice(0, 12).map((r) => (
-          <Link to={`/algorithms/${r.run_id}`} key={r.run_id} className="block">
-            <PanelCard surface="inset" bare flush className="px-3 py-2.5 hover:border-border-strong">
-              <div className="flex items-center gap-2">
-                <StatusDot
-                  identity={r.run_id}
-                  state={r.state === "running" ? "running" : r.state === "error" ? "error" : "ended"}
-                  size="sm"
-                />
-                <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-text">
-                  {r.run_id}
-                </span>
-              </div>
-              <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-2">
-                <span>{formatRelativeTime(r.started_at)}</span>
-                {r.algorithm_terminal_score != null ? (
-                  <span className="ml-auto font-mono tabular-nums text-text">
-                    {r.algorithm_terminal_score.toFixed(3)}
-                  </span>
-                ) : null}
-              </div>
-              {r.script ? (
-                <div className="mt-1 truncate font-mono text-[10px] text-muted-2" title={r.script}>
-                  {r.script}
-                </div>
-              ) : null}
-            </PanelCard>
-          </Link>
-        ))}
-      </PanelGrid>
-    </PanelCard>
-  );
+function runToRow(run: RunSummary): RunRow {
+  const className = run.algorithm_class ?? run.algorithm_path?.split(".").at(-1) ?? "Algorithm";
+  const tokens = run.prompt_tokens + run.completion_tokens;
+
+  return {
+    id: run.run_id,
+    identity: className,
+    state: run.state,
+    startedAt: run.started_at,
+    endedAt: run.last_event_at,
+    durationMs: run.duration_ms,
+    fields: {
+      instance: { kind: "text", value: className },
+      started: { kind: "text", value: formatTimestamp(run.started_at), mono: true },
+      script: { kind: "text", value: run.script ?? "-", mono: true },
+      metric: { kind: "text", value: getAlgorithmMetric(run), mono: true },
+      events: { kind: "num", value: run.event_total, format: "int" },
+      tokens: { kind: "num", value: tokens, format: "tokens" },
+      cost: { kind: "num", value: run.cost?.cost_usd ?? 0, format: "cost" },
+    },
+  };
+}
+
+function formatTimestamp(unixSeconds: number): string {
+  return new Date(unixSeconds * 1000)
+    .toISOString()
+    .replace("T", " ")
+    .replace(/\.\d{3}Z$/, " UTC");
 }

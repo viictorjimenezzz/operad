@@ -205,6 +205,64 @@ describe("DashboardRenderer", () => {
     expect(setQueryDataSpy).toHaveBeenCalled();
   });
 
+  it("keeps object snapshots when merging keyed SSE collection rows", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          iterations: [{ iter_index: 0, phase: "verify", score: 0.5, text: "first" }],
+          max_iter: 2,
+          threshold: 1.1,
+          converged: false,
+        }),
+      }),
+    );
+
+    const qc = makeQC();
+    const layout: LayoutSpec = {
+      algorithm: "VerifierAgent",
+      version: 1,
+      dataSources: {
+        iterations: {
+          endpoint: "/runs/r1/iterations.json",
+          stream: "/runs/r1/iterations.sse",
+        },
+      },
+      spec: {
+        root: "root",
+        elements: {
+          root: { type: "VerifierIterationsTab", props: { source: "$queries.iterations" } },
+        },
+      },
+    };
+    const queryKey = ["layout", "iterations", "/runs/r1/iterations.json"] as const;
+
+    render(
+      <Wrapper qc={qc}>
+        <DashboardRenderer layout={layout} context={{ runId: "r1" }} />
+      </Wrapper>,
+    );
+
+    await waitFor(() => expect(qc.getQueryData(queryKey)).toBeDefined());
+    const es = MockEventSource.instances[0];
+    if (!es) throw new Error("no EventSource created");
+    act(() => {
+      es.emitOpen();
+      es.emitMessage({ iter_index: 1, phase: "verify", score: 0.9, text: "second" });
+    });
+
+    expect(qc.getQueryData(queryKey)).toEqual({
+      iterations: [
+        { iter_index: 0, phase: "verify", score: 0.5, text: "first" },
+        { iter_index: 1, phase: "verify", score: 0.9, text: "second" },
+      ],
+      max_iter: 2,
+      threshold: 1.1,
+      converged: false,
+    });
+  });
+
   it("invalidates the query key on SSE reconnect", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));

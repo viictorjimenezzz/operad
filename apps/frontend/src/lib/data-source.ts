@@ -4,10 +4,11 @@
  * (the TanStack Query cache) instead of a parallel streamed-state map.
  *
  * autoMerge heuristic:
- *   - current is an array AND delta is a non-array object → append-dedupe
- *   - current is an object with a matching array field AND delta is a row → append-dedupe into that field
- *   - delta is an array → replace (full snapshot from server wins)
- *   - anything else → replace
+ *   - current is an array AND delta is a non-array object -> append-dedupe
+ *   - current is an object snapshot with one matching array collection
+ *     AND delta is a keyed object -> append-dedupe into that collection
+ *   - delta is an array -> replace (full snapshot from server wins)
+ *   - anything else -> replace
  */
 
 export type MergeMode = "replace" | "append" | "map";
@@ -39,32 +40,37 @@ export function autoMerge(current: unknown, delta: unknown): unknown {
     return appendDedupe(current, delta);
   }
   if (isRecord(current) && isRecord(delta)) {
-    const arrayField = arrayFieldForDelta(current, delta);
-    if (arrayField) {
-      return {
-        ...current,
-        [arrayField]: appendDedupe(current[arrayField] as unknown[], delta),
-      };
-    }
+    const key = findPrimaryKey(delta);
+    if (!key) return delta;
+
+    const collection = findArrayCollection(current, key);
+    if (!collection) return delta;
+
+    const [name, arr] = collection;
+    const next = appendDedupe(arr, delta);
+    return next === arr ? current : { ...current, [name]: next };
   }
   return delta;
 }
 
-function arrayFieldForDelta(
-  current: Record<string, unknown>,
-  delta: Record<string, unknown>,
-): string | null {
-  const key = findPrimaryKey(delta);
-  if (!key) return null;
-
-  for (const field of ARRAY_FIELDS_BY_PRIMARY_KEY[key] ?? []) {
-    if (Array.isArray(current[field])) return field;
+function findArrayCollection(
+  obj: Record<string, unknown>,
+  primaryKey: string,
+): [string, unknown[]] | null {
+  for (const name of ARRAY_FIELDS_BY_PRIMARY_KEY[primaryKey] ?? []) {
+    const value = obj[name];
+    if (Array.isArray(value)) return [name, value];
   }
 
-  const arrayFields = Object.entries(current)
-    .filter(([, value]) => Array.isArray(value))
-    .map(([field]) => field);
-  return arrayFields.length === 1 ? (arrayFields[0] ?? null) : null;
+  const arrayEntries = Object.entries(obj).filter((entry): entry is [string, unknown[]] =>
+    Array.isArray(entry[1]),
+  );
+  const matching = arrayEntries.filter(([, arr]) =>
+    arr.some((item) => isRecord(item) && findPrimaryKey(item) === primaryKey),
+  );
+  if (matching.length === 1) return matching[0] ?? null;
+  if (matching.length > 1) return null;
+  return arrayEntries.length === 1 ? (arrayEntries[0] ?? null) : null;
 }
 
 function sameRowIdentity(
