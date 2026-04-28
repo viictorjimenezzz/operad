@@ -21,7 +21,9 @@ class DatasetEntry(BaseModel):
     """One input that the user sends through the loop."""
 
     entry_id: str | None = Field(default=None, description="Stable entry id; computed from canonical JSON when absent.")
-    workspace_id: str = Field(default="", description="Workspace identifier.")
+    id_tenant: str = Field(default="", description="Tenant identifier (uthereal multi-tenant key).")
+    workspace_id: str = Field(default="", description="Workspace identifier (uthereal id_workspace).")
+    id_assistant: str = Field(default="", description="Assistant identifier (selfserve id_assistant).")
     user_message: str = Field(default="", description="Latest user message.")
     chat_history: str = Field(default="", description="Rendered previous turns.")
     session_memory_context: str = Field(default="", description="Rendered SessionMemoryState for previous turns.")
@@ -57,7 +59,9 @@ class DatasetEntry(BaseModel):
 class WorkspaceMetadata(BaseModel):
     """What the runner needs from the RAG container's metadata endpoint."""
 
-    workspace_id: str = Field(default="", description="Workspace identifier.")
+    workspace_id: str = Field(default="", description="Workspace identifier (id_workspace).")
+    id_tenant: str = Field(default="", description="Tenant identifier.")
+    id_assistant: str = Field(default="", description="Assistant identifier.")
     id_to_datasource: dict[str, str] = Field(default_factory=dict, description="Datasource id lookup.")
     id_to_length: dict[str, int] = Field(default_factory=dict, description="Content-length lookup.")
     rules: list[dict[str, JsonValue]] = Field(default_factory=list, description="Opaque rule envelopes.")

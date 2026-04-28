@@ -15,7 +15,6 @@ from typing import Any
 
 from operad import Agent
 from operad.core.agent import _TRACER
-from operad.runtime.observers import base as _obs
 from operad.runtime.observers.base import registry
 
 from apps_uthereal.leaves._common import load_yaml
@@ -107,7 +106,9 @@ class ArtemisRunner(Agent[ArtemisInput, ArtemisFinalAnswer]):
             return await self._trace_all_leaves()
 
         state = ArtemisRunState.from_input(x)
+        state.id_tenant = state.id_tenant or x.workspace.id_tenant
         state.workspace_id = state.workspace_id or x.workspace.workspace_id
+        state.id_assistant = state.id_assistant or x.workspace.id_assistant
 
         if _exceeds_character_limit(state):
             _apply_character_limit_rejection(state)
@@ -186,19 +187,22 @@ class ArtemisRunner(Agent[ArtemisInput, ArtemisFinalAnswer]):
         self,
         x: ArtemisInput,
     ) -> tuple[ArtemisFinalAnswer, WorkflowTrace]:
-        """Run the workflow with a WorkflowTraceObserver installed."""
+        """Run the workflow with a WorkflowTraceObserver installed.
+
+        Uses the standard ``invoke`` envelope so any tape observer
+        (operad.optim.backprop.tape) sees the runner as the tape root and
+        every leaf as its child. The WorkflowTraceObserver filters non-leaf
+        events out, so the on-disk trace remains leaf-only.
+        """
 
         self.validate(x)
-        obs = WorkflowTraceObserver(entry_id=x.entry.compute_entry_id())
-        registry.register(obs)
         run_id = x.entry.compute_entry_id()
-        run_token = _obs._RUN_ID.set(run_id)
-        path_token = _obs._PATH_STACK.set((self, self.name))
+        obs = WorkflowTraceObserver(entry_id=run_id)
+        registry.register(obs)
         try:
-            answer = await self.forward(x)
+            envelope = await self.invoke(x)
+            answer = envelope.response
         finally:
-            _obs._PATH_STACK.reset(path_token)
-            _obs._RUN_ID.reset(run_token)
             registry.unregister(obs)
 
         trace = _seal_runner_trace(
@@ -215,7 +219,12 @@ class ArtemisRunner(Agent[ArtemisInput, ArtemisFinalAnswer]):
             return []
         results = await asyncio.gather(
             *(
-                self.retrieval.retrieve(spec, workspace_id=state.workspace_id)
+                self.retrieval.retrieve(
+                    spec,
+                    id_tenant=state.id_tenant,
+                    id_workspace=state.workspace_id,
+                    id_assistant=state.id_assistant,
+                )
                 for spec in state.retrieval_specs
             )
         )

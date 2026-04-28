@@ -53,7 +53,7 @@ def test_cmd_blame_writes_blame_json_no_confirm(
     fake_blamer = _patch_blamer(monkeypatch, expected)
     cassette_calls: list[tuple[Path, str]] = []
     _patch_cassette(monkeypatch, cassette_calls)
-    monkeypatch.setattr(cmd_blame, "load_all_leaves", _leaf_directory)
+    monkeypatch.setattr(cmd_blame, "aload_all_leaves", _leaf_directory)
 
     rc = main(
         [
@@ -153,7 +153,7 @@ def test_cmd_blame_replay_deterministic(tmp_path: Path, monkeypatch: Any) -> Non
 
     monkeypatch.setattr(cmd_blame, "Blamer", CachingBlamer)
     monkeypatch.setattr(cmd_blame, "cassette_context", fake_cassette)
-    monkeypatch.setattr(cmd_blame, "load_all_leaves", _leaf_directory)
+    monkeypatch.setattr(cmd_blame, "aload_all_leaves", _leaf_directory)
 
     args = [
         "blame",
@@ -295,7 +295,7 @@ def _make_run(
     return run_dir, trace
 
 
-def _leaf_directory(_selfserve_root: Path) -> dict[str, Agent[Any, Any]]:
+async def _leaf_directory(_selfserve_root: Path) -> dict[str, Agent[Any, Any]]:
     return {
         step_name: DummyLeaf(role=f"{step_name} role", task=f"{step_name} task")
         for step_name in KNOWN_LEAF_PATHS

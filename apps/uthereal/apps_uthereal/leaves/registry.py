@@ -64,3 +64,27 @@ def load_all_leaves(
         )
         leaves[step_name] = leaf.build()
     return leaves
+
+
+async def aload_all_leaves(
+    selfserve_root: Path,
+    *,
+    config_overrides: dict[str, Any] | None = None,
+) -> dict[str, Agent[Any, Any]]:
+    """Async variant of ``load_all_leaves`` for callers already in an event loop.
+
+    operad guards ``build()`` against being called from a running event loop;
+    this helper does the YAML load synchronously and then awaits ``abuild()``
+    on each leaf so it is safe to call from an ``async def``.
+    """
+
+    leaves: dict[str, Agent[Any, Any]] = {}
+    for relative_path, leaf_cls in LEAF_REGISTRY.items():
+        step_name = LEAF_STEP_NAMES[relative_path]
+        leaf = load_yaml(
+            selfserve_root / relative_path,
+            leaf_cls=leaf_cls,
+            config_overrides=config_overrides,
+        )
+        leaves[step_name] = await leaf.abuild()
+    return leaves

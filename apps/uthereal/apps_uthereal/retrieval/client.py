@@ -2,6 +2,10 @@ from __future__ import annotations
 
 """Retrieval client protocol used by the Artemis runner.
 
+The bridge talks to uthereal's `/retrieve` API in production, and to a
+cassette-backed implementation in tests / replay loops. Calls are keyed
+by `(id_tenant, id_workspace, id_assistant, spec)`.
+
 Owner: 1-4-retrieval-client.
 """
 
@@ -33,11 +37,19 @@ class RetrievalClient(Protocol):
         self,
         spec: RetrievalSpecification,
         *,
-        workspace_id: str,
+        id_tenant: str,
+        id_workspace: str,
+        id_assistant: str,
     ) -> RetrievalResult:
         """Retrieve text and image hits for one retrieval specification."""
 
-    async def get_workspace_metadata(self, workspace_id: str) -> WorkspaceMetadata:
+    async def get_workspace_metadata(
+        self,
+        *,
+        id_tenant: str,
+        id_workspace: str,
+        id_assistant: str,
+    ) -> WorkspaceMetadata:
         """Return metadata needed to render retrieval inputs."""
 
 
