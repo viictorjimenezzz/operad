@@ -35,10 +35,9 @@ function AgentGroupPageInner({ hashContent }: { hashContent: string }) {
 
   const detail = group.data;
   const className = detail.class_name ?? "Agent";
-  const showTrain =
+  const showTraining =
     detail.is_trainer ||
-    (meta.data?.trainable_paths.length ?? 0) > 0 ||
-    detail.runs.some((run) => run.metrics?.best_score != null);
+    (meta.data?.trainable_paths.length ?? 0) > 0;
   const breadcrumbs: BreadcrumbItem[] = [
     { label: "Agents", to: "/agents" },
     { label: className },
@@ -61,7 +60,7 @@ function AgentGroupPageInner({ hashContent }: { hashContent: string }) {
           </>
         }
       />
-      <GroupTabs hashContent={hashContent} showTrain={showTrain} />
+      <GroupTabs hashContent={hashContent} showTraining={showTraining} />
       <div className="flex-1 overflow-hidden">
         <Outlet />
       </div>
@@ -69,10 +68,10 @@ function AgentGroupPageInner({ hashContent }: { hashContent: string }) {
   );
 }
 
-function GroupTabs({ hashContent, showTrain }: { hashContent: string; showTrain: boolean }) {
+function GroupTabs({ hashContent, showTraining }: { hashContent: string; showTraining: boolean }) {
   return (
     <div className="flex h-9 items-center border-b border-border bg-bg-1/60 px-2">
-      {agentGroupTabs(hashContent, { showTrain }).map((t) => (
+      {agentGroupTabs(hashContent, { showTraining }).map((t) => (
         <NavLink
           key={t.to}
           to={t.to}

@@ -9,7 +9,7 @@ export interface GroupTabSpec {
 
 export function agentGroupTabs(
   hashContent: string,
-  options: { showTrain?: boolean } = {},
+  options: { showTraining?: boolean } = {},
 ): GroupTabSpec[] {
   const base = `/agents/${hashContent}`;
   const tabs = [
@@ -18,8 +18,8 @@ export function agentGroupTabs(
     { to: `${base}/metrics`, label: "Metrics" },
     { to: `${base}/graph`, label: "Graph" },
   ];
-  if (options.showTrain) {
-    tabs.splice(3, 0, { to: `${base}/train`, label: "Train" });
+  if (options.showTraining) {
+    tabs.splice(3, 0, { to: `${base}/train`, label: "Training" });
   }
   return tabs;
 }
