@@ -54,6 +54,14 @@
 
   --row-height-sm: 28px;
   --row-height-xs: 22px;
+  --row-h: 28px;
+  --row-h-tight: 22px;
+  --panel-pad-y: 8px;
+  --panel-pad-x: 12px;
+  --canvas-gutter: 1px;
+  --drawer-width: 50vw;
+  --drawer-min: 480px;
+  --drawer-max: 720px;
   --pad-cell: 8px 12px;
   --pad-cell-tight: 4px 8px;
   --chrome-row: 36px;

@@ -103,4 +103,142 @@ describe("RunTable", () => {
     expect(screen.queryByText("run-00")).toBeNull();
     expect(screen.getByText("run-01")).toBeTruthy();
   });
+
+  it("renders and sorts param cells with numeric and textual values", () => {
+    const rows: RunRow[] = [
+      {
+        id: "run-a",
+        identity: "identity-a",
+        state: "ended",
+        startedAt: 1,
+        endedAt: 2,
+        durationMs: 10,
+        fields: {
+          paramValue: { kind: "param", value: 2, previous: 1, format: "number" },
+        },
+      },
+      {
+        id: "run-b",
+        identity: "identity-b",
+        state: "ended",
+        startedAt: 2,
+        endedAt: 3,
+        durationMs: 11,
+        fields: {
+          paramValue: { kind: "param", value: 10, previous: 10, format: "number" },
+        },
+      },
+    ];
+    const paramColumns: RunTableColumn[] = [
+      { id: "run", label: "Run", source: "_id", sortable: true, width: 100 },
+      { id: "param", label: "Param", source: "paramValue", sortable: true, width: 140 },
+    ];
+    render(
+      <MemoryRouter>
+        <RunTable rows={rows} columns={paramColumns} storageKey="param-test" pageSize={50} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getAllByText(/\+1/).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /Param/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Param/ }));
+    const text = document.body.textContent ?? "";
+    expect(text.indexOf("run-b")).toBeLessThan(text.indexOf("run-a"));
+  });
+
+  it("renders and sorts score cells with bars", () => {
+    const rows: RunRow[] = [
+      {
+        id: "run-neg",
+        identity: "identity-neg",
+        state: "ended",
+        startedAt: 1,
+        endedAt: 2,
+        durationMs: 10,
+        fields: { scoreValue: { kind: "score", value: -0.5, min: -1, max: 1 } },
+      },
+      {
+        id: "run-pos",
+        identity: "identity-pos",
+        state: "ended",
+        startedAt: 2,
+        endedAt: 3,
+        durationMs: 11,
+        fields: { scoreValue: { kind: "score", value: 0.5, min: -1, max: 1 } },
+      },
+    ];
+    const scoreColumns: RunTableColumn[] = [
+      { id: "run", label: "Run", source: "_id", sortable: true, width: 100 },
+      { id: "score", label: "Score", source: "scoreValue", sortable: true, width: 160 },
+    ];
+    render(
+      <MemoryRouter>
+        <RunTable rows={rows} columns={scoreColumns} storageKey="score-test" pageSize={50} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getAllByLabelText("score bar").length).toBe(2);
+    fireEvent.click(screen.getByRole("button", { name: /Score/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Score/ }));
+    const text = document.body.textContent ?? "";
+    expect(text.indexOf("run-pos")).toBeLessThan(text.indexOf("run-neg"));
+  });
+
+  it("renders diff and image cells and keeps image non-sortable", () => {
+    const rows: RunRow[] = [
+      {
+        id: "run-0",
+        identity: "identity-0",
+        state: "ended",
+        startedAt: 1,
+        endedAt: 2,
+        durationMs: 10,
+        fields: {
+          diffValue: { kind: "diff", value: "next value", previous: "previous value" },
+          imageValue: {
+            kind: "image",
+            src: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'/>",
+            alt: "thumbnail",
+            width: 20,
+            height: 20,
+          },
+        },
+      },
+      {
+        id: "run-1",
+        identity: "identity-1",
+        state: "ended",
+        startedAt: 2,
+        endedAt: 3,
+        durationMs: 11,
+        fields: {
+          diffValue: { kind: "diff", value: "zz next", previous: "aa previous" },
+          imageValue: {
+            kind: "image",
+            src: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'/>",
+            alt: "thumbnail-2",
+          },
+        },
+      },
+    ];
+    const diffImageColumns: RunTableColumn[] = [
+      { id: "run", label: "Run", source: "_id", sortable: true, width: 100 },
+      { id: "diff", label: "Diff", source: "diffValue", sortable: true, width: 200 },
+      { id: "image", label: "Image", source: "imageValue", sortable: false, width: 60 },
+    ];
+    render(
+      <MemoryRouter>
+        <RunTable rows={rows} columns={diffImageColumns} storageKey="diff-image-test" pageSize={50} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("next value")).toBeTruthy();
+    expect(screen.getByAltText("thumbnail")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Diff/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Diff/ }));
+    const text = document.body.textContent ?? "";
+    expect(text.indexOf("run-1")).toBeLessThan(text.indexOf("run-0"));
+    const imageHeader = screen.getByRole("button", { name: /Image/ });
+    expect(imageHeader.hasAttribute("disabled")).toBe(true);
+  });
 });

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 
 export interface MetricSeriesChartProps {
   points: { x: number; y: number | null; runId: string }[];
+  /** Stable identity used to resolve line color consistently via hashColor. */
   identity: string;
   height?: number;
   formatY?: ((n: number) => string) | undefined;
