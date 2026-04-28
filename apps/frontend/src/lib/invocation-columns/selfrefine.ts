@@ -2,6 +2,7 @@ import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
 import {
   baseRow,
   diffField,
+  langfuseField,
   metadataNumber,
   metadataString,
   metricNumber,
@@ -33,6 +34,7 @@ export const selfrefineColumns: AlgorithmColumns = {
     },
     { id: "stopReason", label: "Stop reason", source: "stopReason", sortable: true, width: 132 },
     { id: "response", label: "Response", source: "response", width: "1fr" },
+    { id: "langfuse", label: "Langfuse", source: "langfuse", width: 92 },
   ],
   rowMapper: (child, _parent, _index, previous) => {
     const phase = metadataString(child, "phase") ?? "refine";
@@ -50,6 +52,7 @@ export const selfrefineColumns: AlgorithmColumns = {
           metadataString(child, "response", "text") ?? "—",
           previous ? (metadataString(previous, "response", "text") ?? undefined) : undefined,
         ),
+        langfuse: langfuseField(child),
       },
     };
   },

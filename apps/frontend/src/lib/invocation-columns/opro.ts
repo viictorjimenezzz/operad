@@ -2,6 +2,7 @@ import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
 import {
   baseRow,
   diffField,
+  langfuseField,
   metadataNumber,
   metadataString,
   metricNumber,
@@ -25,6 +26,7 @@ export const oproColumns: AlgorithmColumns = {
       defaultSort: "desc",
     },
     { id: "cost", label: "Cost", source: "cost", sortable: true, align: "right", width: 84 },
+    { id: "langfuse", label: "Langfuse", source: "langfuse", width: 92 },
   ],
   rowMapper: (child, _parent, _index, previous) => ({
     ...baseRow(child),
@@ -37,6 +39,7 @@ export const oproColumns: AlgorithmColumns = {
       ),
       score: { kind: "score", value: metricNumber(child, "score") ?? child.algorithm_terminal_score ?? null },
       cost: { kind: "num", value: child.cost?.cost_usd ?? null, format: "cost" },
+      langfuse: langfuseField(child),
     },
   }),
 };

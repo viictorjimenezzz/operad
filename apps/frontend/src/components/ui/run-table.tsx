@@ -659,6 +659,8 @@ function renderCell(row: RunRow, column: RunTableColumn): ReactNode {
       return (
         <a
           href={value.to}
+          target="_blank"
+          rel="noopener noreferrer"
           onClick={(event) => event.stopPropagation()}
           className="text-accent hover:text-[--color-accent-strong]"
         >

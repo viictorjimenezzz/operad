@@ -241,4 +241,33 @@ describe("RunTable", () => {
     const imageHeader = screen.getByRole("button", { name: /Image/ });
     expect(imageHeader.hasAttribute("disabled")).toBe(true);
   });
+
+  it("renders link cells as safe external links", () => {
+    const rows: RunRow[] = [
+      {
+        id: "run-link",
+        identity: "identity-link",
+        state: "ended",
+        startedAt: 1,
+        endedAt: 2,
+        durationMs: 10,
+        fields: {
+          linkValue: { kind: "link", label: "open", to: "https://langfuse.example/trace/run-link" },
+        },
+      },
+    ];
+    const linkColumns: RunTableColumn[] = [
+      { id: "run", label: "Run", source: "_id", sortable: true, width: 100 },
+      { id: "link", label: "Link", source: "linkValue", sortable: false, width: 120 },
+    ];
+    render(
+      <MemoryRouter>
+        <RunTable rows={rows} columns={linkColumns} storageKey="link-test" pageSize={50} />
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole("link", { name: "open" });
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  });
 });

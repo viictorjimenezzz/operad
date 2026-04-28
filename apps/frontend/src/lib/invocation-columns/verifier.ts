@@ -2,6 +2,7 @@ import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
 import {
   baseRow,
   diffField,
+  langfuseField,
   metadataBoolean,
   metadataNumber,
   metadataString,
@@ -32,6 +33,7 @@ export const verifierColumns: AlgorithmColumns = {
     },
     { id: "accepted", label: "Accepted", source: "accepted", sortable: true, width: 96 },
     { id: "cost", label: "Cost", source: "cost", sortable: true, align: "right", width: 84 },
+    { id: "langfuse", label: "Langfuse", source: "langfuse", width: 92 },
   ],
   rowMapper: (child, _parent, _index, previous) => {
     const accepted = metadataBoolean(child, "accepted", "is_accepted") ?? false;
@@ -50,6 +52,7 @@ export const verifierColumns: AlgorithmColumns = {
           tone: acceptedTone(accepted),
         },
         cost: { kind: "num", value: child.cost?.cost_usd ?? null, format: "cost" },
+        langfuse: langfuseField(child),
       },
     };
   },

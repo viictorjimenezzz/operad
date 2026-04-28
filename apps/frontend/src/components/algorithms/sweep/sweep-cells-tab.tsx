@@ -5,6 +5,7 @@ import { z } from "zod";
 
 const ChildRunSummary = RunSummarySchema.passthrough().extend({
   hash_content: z.string().nullable().optional(),
+  langfuse_url: z.string().nullable().optional(),
 });
 
 type ChildRunSummary = z.infer<typeof ChildRunSummary>;
@@ -58,6 +59,9 @@ export function SweepCellsTab({ data, dataChildren, runId }: SweepCellsTabProps)
         run: href
           ? { kind: "link", label: "open", to: href }
           : { kind: "text", value: "-", mono: true },
+        langfuse: child?.langfuse_url
+          ? { kind: "link", label: "open", to: child.langfuse_url }
+          : { kind: "text", value: "—" },
       },
     };
   });
@@ -84,6 +88,7 @@ export function SweepCellsTab({ data, dataChildren, runId }: SweepCellsTabProps)
       align: "right",
       width: 88,
     },
+    { id: "langfuse", label: "Langfuse", source: "langfuse", width: 92 },
     { id: "run", label: "Run", source: "run", width: 64 },
   ];
 

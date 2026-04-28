@@ -9,7 +9,7 @@ import {
 import { Button, EmptyState, JsonView, MarkdownView } from "@/components/ui";
 import { useManifest, useRunEvents, useRunSummary } from "@/hooks/use-runs";
 import { useUrlState } from "@/hooks/use-url-state";
-import { langfuseUrlFor } from "@/lib/langfuse";
+import { langfuseLinkProps } from "@/lib/langfuse";
 import type { Envelope, EventEnvelope } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useEventBufferStore } from "@/stores";
@@ -475,8 +475,7 @@ function EventDetail({
 
   const path = eventPath(event);
   const spanId = spanIdFromMetadata(event.metadata);
-  const eventHref =
-    langfuseUrl && spanId ? langfuseUrlFor(langfuseUrl, event.run_id, spanId) : null;
+  const eventLink = langfuseUrl && spanId ? langfuseLinkProps(langfuseUrl, event.run_id, spanId) : null;
 
   return (
     <div className="min-h-0 overflow-auto rounded-md border border-border bg-bg-1 p-3">
@@ -488,11 +487,12 @@ function EventDetail({
           </div>
           <div className="font-mono text-xs text-muted">{event.kind}</div>
         </div>
-        {eventHref ? (
+        {eventLink ? (
           <a
-            href={eventHref}
-            target="_blank"
-            rel="noopener noreferrer"
+            href={eventLink.href}
+            target={eventLink.target}
+            rel={eventLink.rel}
+            title={eventLink.title}
             className="inline-flex h-7 items-center gap-1 rounded border border-border bg-bg-2 px-2 text-[11px] text-accent transition-colors hover:border-border-strong"
           >
             Open in Langfuse
