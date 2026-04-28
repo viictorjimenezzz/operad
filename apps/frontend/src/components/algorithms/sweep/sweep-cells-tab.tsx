@@ -1,6 +1,9 @@
 import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
 import { type RunRow, RunTable, type RunTableColumn } from "@/components/ui/run-table";
 import { RunSummary as RunSummarySchema, SweepSnapshot } from "@/lib/types";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 const ChildRunSummary = RunSummarySchema.passthrough().extend({
@@ -17,6 +20,9 @@ interface SweepCellsTabProps {
 }
 
 export function SweepCellsTab({ data, dataChildren, runId }: SweepCellsTabProps) {
+  const navigate = useNavigate();
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const [tableVersion, setTableVersion] = useState(0);
   const parsed = SweepSnapshot.safeParse(data);
   if (!parsed.success) {
     return <EmptyState title="no sweep cells" description="waiting for sweep events" />;
@@ -91,20 +97,63 @@ export function SweepCellsTab({ data, dataChildren, runId }: SweepCellsTabProps)
     { id: "langfuse", label: "Langfuse", source: "langfuse", width: 92 },
     { id: "run", label: "Run", source: "run", width: 64 },
   ];
+  const selected = useMemo(() => selectedRunIds(selectedRows, rows), [rows, selectedRows]);
 
   return (
-    <RunTable
-      rows={rows}
-      columns={columns}
-      storageKey={`sweep-cells:${runId}`}
-      rowHref={(row) => {
-        const link = row.fields.run;
-        return link?.kind === "link" ? link.to : null;
-      }}
-      emptyTitle="no sweep cells"
-      emptyDescription="cell events have not arrived for this sweep"
-    />
+    <div className="space-y-3">
+      {selected.length >= 2 ? (
+        <div className="sticky bottom-0 z-10 flex items-center gap-2 border border-border bg-bg-1 px-3 py-2 text-[12px] text-text">
+          <span className="font-mono">{selected.length} selected</span>
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() =>
+              navigate(`/experiments?runs=${selected.map(encodeURIComponent).join(",")}`)
+            }
+          >
+            Compare
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setSelectedRows([]);
+              setTableVersion((value) => value + 1);
+            }}
+          >
+            Clear
+          </Button>
+        </div>
+      ) : null}
+      <RunTable
+        key={tableVersion}
+        rows={rows}
+        columns={columns}
+        storageKey={`sweep-cells:${runId}`}
+        rowHref={(row) => {
+          const link = row.fields.run;
+          return link?.kind === "link" ? link.to : null;
+        }}
+        selectable
+        onSelectionChange={setSelectedRows}
+        emptyTitle="no sweep cells"
+        emptyDescription="cell events have not arrived for this sweep"
+      />
+    </div>
   );
+}
+
+function selectedRunIds(selected: string[], rows: RunRow[]): string[] {
+  const byRowId = new Map(rows.map((row) => [row.id, row]));
+  return selected
+    .map((id) => {
+      const row = byRowId.get(id);
+      const link = row?.fields.run;
+      if (link?.kind !== "link") return null;
+      const encoded = link.to.split("/").at(-1);
+      return encoded ? decodeURIComponent(encoded) : null;
+    })
+    .filter((runId): runId is string => runId != null && runId.length > 0);
 }
 
 function parseChildren(data: unknown): ChildRunSummary[] {

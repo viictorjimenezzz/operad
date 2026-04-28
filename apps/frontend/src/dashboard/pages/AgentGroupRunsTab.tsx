@@ -81,7 +81,7 @@ export function AgentGroupRunsTab() {
               size="sm"
               variant="primary"
               onClick={() =>
-                navigate(`/experiments?runs=${encodeURIComponent(selected.join(","))}`)
+                navigate(`/experiments?runs=${selected.map(encodeURIComponent).join(",")}`)
               }
             >
               Compare
