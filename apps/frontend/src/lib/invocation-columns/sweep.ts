@@ -2,6 +2,7 @@ import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
 import {
   asRecord,
   baseRow,
+  langfuseField,
   metadataNumber,
   metadataString,
   metadataValue,
@@ -43,9 +44,7 @@ export const sweepColumns: AlgorithmColumns = {
         axes: { kind: "param", value: axisValues ?? metadataString(child, "axis_values") ?? "—" },
         score: { kind: "score", value: metricNumber(child, "score"), min: 0, max: 1 },
         cost: { kind: "num", value: child.cost?.cost_usd ?? null, format: "cost" },
-        langfuse: child.langfuse_url
-          ? { kind: "link", label: "open", to: child.langfuse_url }
-          : { kind: "text", value: "—" },
+        langfuse: langfuseField(child),
       },
     };
   },

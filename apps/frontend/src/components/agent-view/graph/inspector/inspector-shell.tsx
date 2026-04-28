@@ -3,6 +3,7 @@ import { TabAgentInvocations } from "@/components/agent-view/graph/inspector/tab
 import { TabAgentOverview } from "@/components/agent-view/graph/inspector/tab-agent-overview";
 import { TabAgentPrompts } from "@/components/agent-view/graph/inspector/tab-agent-prompts";
 import { TabFields } from "@/components/agent-view/graph/inspector/tab-fields";
+import { HashRow, type HashKey } from "@/components/ui/hash-row";
 import { Eyebrow, HashTag, IconButton, Pill } from "@/components/ui";
 import { useAgentMeta } from "@/hooks/use-runs";
 import type { IoGraphResponse } from "@/lib/types";
@@ -125,6 +126,11 @@ function Header({
     meta.kind === "edge" ? meta.agentPath : null,
   );
   const langfuseUrl = agentMeta.data?.langfuse_search_url ?? null;
+  const currentHashes = useMemo(() => {
+    return {
+      hash_content: agentMeta.data?.hash_content ?? meta.identity,
+    } satisfies Partial<Record<HashKey, string | null>>;
+  }, [agentMeta.data?.hash_content, meta.identity]);
 
   return (
     <header className="flex items-start gap-3 border-b border-border px-5 py-4">
@@ -133,6 +139,10 @@ function Header({
         <Eyebrow>{meta.kind === "edge" ? "agent" : "i/o type"}</Eyebrow>
         <div className="flex items-center gap-2">
           <div className="truncate text-[18px] font-medium leading-tight">{meta.title}</div>
+          <HashRow
+            variant="compact"
+            current={currentHashes}
+          />
           {langfuseUrl ? (
             <a
               href={langfuseUrl}

@@ -1,5 +1,5 @@
 import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
-import { baseRow, metadataNumber, metricNumber } from "@/lib/invocation-columns/types";
+import { baseRow, langfuseField, metadataNumber, metricNumber } from "@/lib/invocation-columns/types";
 
 export const beamColumns: AlgorithmColumns = {
   algorithmClass: "Beam",
@@ -26,6 +26,7 @@ export const beamColumns: AlgorithmColumns = {
     },
     { id: "latency", label: "Latency", source: "_duration", sortable: true, align: "right", width: 88 },
     { id: "cost", label: "Cost", source: "cost", sortable: true, align: "right", width: 84 },
+    { id: "langfuse", label: "Langfuse", source: "langfuse", width: 92 },
   ],
   rowMapper: (child) => ({
     ...baseRow(child),
@@ -38,6 +39,7 @@ export const beamColumns: AlgorithmColumns = {
       },
       score: { kind: "score", value: metricNumber(child, "score") ?? child.algorithm_terminal_score ?? null },
       cost: { kind: "num", value: child.cost?.cost_usd ?? null, format: "cost" },
+      langfuse: langfuseField(child),
     },
   }),
 };

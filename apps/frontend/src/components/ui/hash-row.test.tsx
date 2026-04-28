@@ -53,4 +53,25 @@ describe("HashRow", () => {
 
     expect(onCopy).toHaveBeenCalledWith("hash_prompt", current.hash_prompt);
   });
+
+  it("renders compact variant with full-hash tooltip rows", async () => {
+    render(<HashRow variant="compact" current={makeHashes("current")} />);
+
+    const trigger = screen.getByRole("button", { name: /hash drift summary/i });
+    fireEvent.focus(trigger);
+
+    expect((await screen.findAllByText(/hash_model:/i)).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByRole("button", { name: /copy hash_prompt/i })).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("renders strip variant with seven drift cells", () => {
+    const current = makeHashes("current");
+    const previous = makeHashes("previous");
+    render(<HashRow variant="strip" current={current} previous={previous} />);
+
+    expect(screen.getByRole("list", { name: /hash drift strip/i })).toBeTruthy();
+    expect(screen.getAllByRole("listitem").length).toBe(7);
+  });
 });

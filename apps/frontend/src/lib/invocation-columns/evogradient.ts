@@ -1,6 +1,7 @@
 import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
 import {
   baseRow,
+  langfuseField,
   metadataNumber,
   metadataString,
   metricNumber,
@@ -37,6 +38,7 @@ export const evogradientColumns: AlgorithmColumns = {
       align: "right",
       width: 100,
     },
+    { id: "langfuse", label: "Langfuse", source: "langfuse", width: 92 },
   ],
   rowMapper: (child) => ({
     ...baseRow(child),
@@ -55,6 +57,7 @@ export const evogradientColumns: AlgorithmColumns = {
       },
       score: { kind: "score", value: metricNumber(child, "score") ?? child.algorithm_terminal_score ?? null },
       delta: { kind: "num", value: metadataNumber(child, "delta", "score_delta"), format: "score" },
+      langfuse: langfuseField(child),
     },
   }),
 };

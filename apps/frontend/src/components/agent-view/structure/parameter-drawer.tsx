@@ -1,4 +1,4 @@
-import { IconButton } from "@/components/ui";
+import { HashRow, type HashKey, IconButton } from "@/components/ui";
 import { hashColor } from "@/lib/hash-color";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
@@ -10,6 +10,8 @@ export interface ParameterDrawerProps {
   identity: string;
   title: string;
   subtitle?: string;
+  hashes?: Partial<Record<HashKey, string | null>>;
+  previousHashes?: Partial<Record<HashKey, string | null>>;
   onClose: () => void;
   children: ReactNode;
 }
@@ -19,6 +21,8 @@ export function ParameterDrawer({
   identity,
   title,
   subtitle,
+  hashes,
+  previousHashes,
   onClose,
   children,
 }: ParameterDrawerProps) {
@@ -67,11 +71,18 @@ export function ParameterDrawer({
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex items-start gap-3 border-b border-border px-5 py-4">
             <div className="min-w-0 flex-1">
-              <div
-                id="parameter-drawer-title"
-                className="truncate text-[18px] font-medium leading-tight text-text"
-              >
-                {title}
+              <div className="flex items-center gap-2">
+                <div
+                  id="parameter-drawer-title"
+                  className="truncate text-[18px] font-medium leading-tight text-text"
+                >
+                  {title}
+                </div>
+                <HashRow
+                  variant="compact"
+                  current={hashes ?? { hash_content: identity }}
+                  {...(previousHashes ? { previous: previousHashes } : {})}
+                />
               </div>
               {subtitle ? (
                 <div className="mt-1 truncate font-mono text-[11px] text-muted-2">{subtitle}</div>

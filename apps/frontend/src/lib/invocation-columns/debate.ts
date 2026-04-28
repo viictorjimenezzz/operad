@@ -2,6 +2,7 @@ import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
 import {
   baseRow,
   diffField,
+  langfuseField,
   metadataNumber,
   metadataString,
   metricNumber,
@@ -25,6 +26,7 @@ export const debateColumns: AlgorithmColumns = {
       defaultSort: "desc",
     },
     { id: "latency", label: "Latency", source: "_duration", sortable: true, align: "right", width: 88 },
+    { id: "langfuse", label: "Langfuse", source: "langfuse", width: 92 },
   ],
   rowMapper: (child, _parent, _index, previous) => ({
     ...baseRow(child),
@@ -40,6 +42,7 @@ export const debateColumns: AlgorithmColumns = {
         previous ? (metadataString(previous, "claim", "text") ?? undefined) : undefined,
       ),
       score: { kind: "score", value: metricNumber(child, "score"), min: 0, max: 1 },
+      langfuse: langfuseField(child),
     },
   }),
 };
