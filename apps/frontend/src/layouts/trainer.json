@@ -15,6 +15,7 @@
       "endpoint": "/runs/$context.runId/checkpoints.json",
       "stream": "/runs/$context.runId/checkpoints.sse"
     },
+    "tape": { "endpoint": "/runs/$context.runId/tape.json" },
     "children": { "endpoint": "/runs/$context.runId/children" }
   },
   "spec": {
@@ -27,6 +28,7 @@
             { "id": "loss", "label": "Loss" },
             { "id": "schedule", "label": "Schedule" },
             { "id": "drift", "label": "Drift" },
+            { "id": "tape", "label": "Tape" },
             { "id": "parameters", "label": "Parameters" },
             {
               "id": "traceback",
@@ -37,7 +39,7 @@
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
-        "children": ["loss", "schedule", "drift", "parameters", "traceback", "agents", "events"]
+        "children": ["loss", "schedule", "drift", "tape", "parameters", "traceback", "agents", "events"]
       },
       "loss": {
         "type": "TrainerLossTab",
@@ -57,6 +59,13 @@
       "drift": {
         "type": "TrainerDriftTab",
         "props": { "sourceDrift": "$queries.drift" }
+      },
+      "tape": {
+        "type": "TrainerTapeView",
+        "props": {
+          "runId": "$context.runId",
+          "sourceTape": "$queries.tape"
+        }
       },
       "parameters": {
         "type": "ParametersTab",
