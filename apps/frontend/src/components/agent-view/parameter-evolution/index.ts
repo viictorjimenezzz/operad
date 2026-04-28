@@ -24,6 +24,13 @@ export { RuleListEvolution } from "./rule-list-evolution";
 export type { RuleListEvolutionProps } from "./rule-list-evolution";
 export { TextEvolution } from "./text-evolution";
 export type { ParameterEvolutionPoint, TextEvolutionProps } from "./text-evolution";
+export { WhyPane } from "./why-pane";
+export type {
+  ParameterEvolutionPoint as WhyPanePoint,
+  TapeStepRef,
+  TextualGradient,
+  WhyPaneProps,
+} from "./why-pane";
 
 export type ParameterEvolutionViewProps = {
   path?: string;
