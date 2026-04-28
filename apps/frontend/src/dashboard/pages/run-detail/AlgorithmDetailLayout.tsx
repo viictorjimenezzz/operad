@@ -1,28 +1,14 @@
 import { DashboardRenderer } from "@/components/runtime/dashboard-renderer";
-import {
-  Breadcrumb,
-  type BreadcrumbItem,
-  EmptyState,
-  HashTag,
-  Metric,
-  Pill,
-} from "@/components/ui";
+import { EmptyState } from "@/components/ui";
 import { useManifest, useRunEvents, useRunInvocations, useRunSummary } from "@/hooks/use-runs";
 import { resolveLayout } from "@/layouts";
-import { computeAlgorithmKpis } from "@/lib/algorithm-kpis";
 import type { RunSummary } from "@/lib/types";
-import {
-  formatCostOrUnavailable,
-  formatTokenPairOrUnavailable,
-  formatTokensOrUnavailable,
-  hasTokenUsage,
-} from "@/lib/usage";
-import { formatDurationMs, formatRelativeTime } from "@/lib/utils";
+import { truncateMiddle } from "@/lib/utils";
 import { useEventBufferStore } from "@/stores";
 import { useRunStore } from "@/stores/run";
-import { ExternalLink } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useEffect, useMemo } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 
 export function AlgorithmDetailLayout() {
   const { runId } = useParams<{ runId: string }>();
@@ -81,54 +67,30 @@ export function AlgorithmDetailLayout() {
   const run = summary.data;
   const layout = resolveLayout(run.algorithm_path);
   const isOpro = location.pathname.startsWith("/opro/");
-  const breadcrumbs: BreadcrumbItem[] = isOpro
-    ? [{ label: "OPRO", to: "/opro" }]
-    : [{ label: "Algorithms", to: "/algorithms" }];
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <RunBreadcrumb
-        run={run}
-        breadcrumbs={breadcrumbs}
-        langfuseUrl={derivedLangfuseUrl}
-        hashContent={latest?.hash_content ?? run.run_id}
+      {/* Key on runId so swapping between two OPROOptimizer (or any
+          two algo) instances fully remounts the renderer; otherwise
+          the stale query cache from the previous run flashes the
+          old tabs and data. */}
+      <DashboardRenderer
+        key={runId}
+        layout={layout}
+        context={{
+          runId,
+          algorithmPath: run.algorithm_path ?? "",
+          langfuseUrl: derivedLangfuseUrl ?? "",
+        }}
+        tabsTrailing={<RunTabsBreadcrumb run={run} section={isOpro ? "OPRO" : "Algorithms"} />}
       />
-      <div className="flex-1 overflow-hidden">
-        {/* Key on runId so swapping between two OPROOptimizer (or any
-            two algo) instances fully remounts the renderer; otherwise
-            the stale query cache from the previous run flashes the
-            old tabs and data. */}
-        <DashboardRenderer
-          key={runId}
-          layout={layout}
-          context={{ runId, algorithmPath: run.algorithm_path ?? "" }}
-        />
-      </div>
     </div>
   );
 }
 
-function RunBreadcrumb({
-  run,
-  breadcrumbs,
-  langfuseUrl,
-  hashContent,
-}: {
-  run: RunSummary;
-  breadcrumbs: BreadcrumbItem[];
-  langfuseUrl?: string | null;
-  hashContent?: string | null;
-}) {
+function RunTabsBreadcrumb({ run, section }: { run: RunSummary; section: "Algorithms" | "OPRO" }) {
   const className = run.algorithm_class ?? run.algorithm_path?.split(".").at(-1) ?? "Algorithm";
-  const totalTokens = run.prompt_tokens + run.completion_tokens;
-  const cost = run.cost?.cost_usd;
-  // Show a truncated id in the breadcrumb so two distinct OPROOptimizer
-  // (or any two algo) instances are visually distinguishable without
-  // overflowing the row with a full hash.
-  const shortRunId = run.run_id.length > 12 ? `${run.run_id.slice(0, 8)}…${run.run_id.slice(-4)}` : run.run_id;
-  // For optimisers (OPRO/EvoGradient) include the parameter path being
-  // optimised. Without this the breadcrumb of two optimiser sessions that
-  // target different params reads identically.
+  const shortRunId = truncateMiddle(run.run_id, 16);
   const paramPath = (() => {
     for (const it of run.iterations ?? []) {
       const meta = (it as { metadata?: { param_path?: unknown } }).metadata;
@@ -137,63 +99,44 @@ function RunBreadcrumb({
     }
     return null;
   })();
+  const sectionHref = section === "OPRO" ? "/opro" : "/algorithms";
+  const items = [
+    { label: section, to: sectionHref, mono: false },
+    { label: className, mono: false },
+    ...(paramPath ? [{ label: paramPath, mono: true }] : []),
+    { label: shortRunId, mono: true },
+  ];
 
   return (
-    <Breadcrumb
-      items={[
-        ...breadcrumbs,
-        { label: className },
-        ...(paramPath ? [{ label: paramPath, mono: true }] : []),
-        { label: shortRunId, mono: true },
-      ]}
-      trailing={
-        <>
-          <HashTag hash={hashContent ?? run.run_id} dotOnly size="sm" />
-          {run.state === "running" ? (
-            <Pill tone="live" pulse size="sm">
-              live
-            </Pill>
-          ) : run.state === "error" ? (
-            <Pill tone="error" size="sm">
-              error
-            </Pill>
-          ) : (
-            <Pill tone="ok" size="sm">
-              ended
-            </Pill>
-          )}
-          <Pill tone="algo" size="sm">
-            algo
-          </Pill>
-            <Metric label="ago" value={formatRelativeTime(run.started_at)} />
-            <Metric label="dur" value={formatDurationMs(run.duration_ms)} />
-            {hasTokenUsage(run.prompt_tokens, run.completion_tokens) ? (
-              <Metric
-                label="tok"
-                value={formatTokensOrUnavailable(totalTokens)}
-                sub={formatTokenPairOrUnavailable(run.prompt_tokens, run.completion_tokens)}
-              />
+    <nav
+      aria-label="algorithm breadcrumb"
+      className="flex min-w-0 items-center gap-1.5 text-[12px]"
+    >
+      {items.map((item, index) => {
+        const last = index === items.length - 1;
+        const labelClass = item.mono ? "font-mono text-[11px]" : "";
+        return (
+          <span key={`${item.label}-${index}`} className="flex min-w-0 items-center gap-1.5">
+            {item.to ? (
+              <Link
+                to={item.to}
+                className="min-w-0 truncate text-muted transition-colors hover:text-text"
+              >
+                <span className={labelClass}>{item.label}</span>
+              </Link>
+            ) : (
+              <span
+                className={`${labelClass} min-w-0 truncate ${last ? "text-text" : "text-muted"}`}
+              >
+                {item.label}
+              </span>
+            )}
+            {!last ? (
+              <ChevronRight aria-hidden size={12} className="flex-shrink-0 text-muted-2" />
             ) : null}
-            {typeof cost === "number" && Number.isFinite(cost) && cost > 0 ? (
-              <Metric label="$" value={formatCostOrUnavailable(cost)} />
-            ) : null}
-            {computeAlgorithmKpis(run).map((kpi) => (
-              <Metric key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} />
-            ))}
-          {langfuseUrl ? (
-            <a
-              href={langfuseUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[12px] text-accent transition-colors hover:text-[--color-accent-strong]"
-              title="Open in Langfuse"
-            >
-              langfuse
-              <ExternalLink size={11} />
-            </a>
-          ) : null}
-        </>
-      }
-    />
+          </span>
+        );
+      })}
+    </nav>
   );
 }

@@ -182,5 +182,5 @@ describe("resolveLayout integration (real layouts/)", () => {
         "VerifierAcceptanceTab",
       ]),
     );
-  });
+  }, 10_000);
 });

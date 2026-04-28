@@ -182,6 +182,26 @@ describe("agent-view contracts", () => {
     expect(parsed.parameters[0]?.path).toBe("role");
   });
 
+  it("parses backend-style agent parameter rows", () => {
+    const parsed = AgentParametersResponse.parse({
+      agent_path: "VerifierAgent.generator",
+      parameters: [
+        {
+          path: "role",
+          value: "You are careful.",
+          requires_grad: true,
+          hash: null,
+          tape_link: null,
+          gradient: null,
+        },
+      ],
+    });
+
+    expect(parsed.parameters[0]?.type).toBe("Parameter");
+    expect(parsed.parameters[0]?.hash).toBeNull();
+    expect(parsed.parameters[0]?.gradient).toBeNull();
+  });
+
   it("parses invocation diff payload", () => {
     const parsed = AgentInvocationDiffResponse.parse({
       from_invocation: "Root:0",
