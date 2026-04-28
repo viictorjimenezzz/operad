@@ -1,15 +1,14 @@
 import { TabAgentEvents } from "@/components/agent-view/graph/inspector/tab-agent-events";
 import { TabAgentInvocations } from "@/components/agent-view/graph/inspector/tab-agent-invocations";
-import { TabAgentLangfuse } from "@/components/agent-view/graph/inspector/tab-agent-langfuse";
 import { TabAgentOverview } from "@/components/agent-view/graph/inspector/tab-agent-overview";
 import { TabAgentPrompts } from "@/components/agent-view/graph/inspector/tab-agent-prompts";
-import { TabExperiment } from "@/components/agent-view/graph/inspector/tab-experiment";
 import { TabFields } from "@/components/agent-view/graph/inspector/tab-fields";
 import { Eyebrow, HashTag, IconButton, Pill } from "@/components/ui";
+import { useAgentMeta } from "@/hooks/use-runs";
 import type { IoGraphResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { type GraphInspectorTab, useUIStore } from "@/stores";
-import { X } from "lucide-react";
+import { ExternalLink, X } from "lucide-react";
 import { useMemo } from "react";
 
 const EDGE_TABS: Array<{ id: GraphInspectorTab; label: string }> = [
@@ -17,8 +16,6 @@ const EDGE_TABS: Array<{ id: GraphInspectorTab; label: string }> = [
   { id: "invocations", label: "Invocations" },
   { id: "prompts", label: "Prompts" },
   { id: "events", label: "Events" },
-  { id: "experiment", label: "Edit & run" },
-  { id: "langfuse", label: "Langfuse" },
 ];
 
 export function InspectorShell({
@@ -45,6 +42,7 @@ export function InspectorShell({
         identity: edge.agent_path,
         kind: "edge" as const,
         agentKind: edge.kind,
+        agentPath: edge.agent_path,
       };
     }
     if (selection.kind === "node") {
@@ -55,6 +53,7 @@ export function InspectorShell({
         subtitle: `${node.fields.length} fields`,
         identity: node.key,
         kind: "node" as const,
+        agentPath: null as string | null,
       };
     }
     return null;
@@ -73,18 +72,11 @@ export function InspectorShell({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-start gap-3 border-b border-border px-5 py-4">
-        <HashTag hash={meta.identity} dotOnly size="md" />
-        <div className="min-w-0 flex-1">
-          <Eyebrow>{meta.kind === "edge" ? "agent" : "i/o type"}</Eyebrow>
-          <div className="truncate text-[18px] font-medium leading-tight">{meta.title}</div>
-          <div className="truncate font-mono text-[11px] text-muted-2">{meta.subtitle}</div>
-        </div>
-        {meta.kind === "edge" ? <Pill tone="accent">{meta.agentKind}</Pill> : <Pill>type</Pill>}
-        <IconButton aria-label="close inspector" onClick={onClose}>
-          <X size={14} />
-        </IconButton>
-      </header>
+      <Header
+        runId={runId}
+        meta={meta}
+        onClose={onClose}
+      />
       {showTabs ? (
         <div className="flex items-center gap-1 border-b border-border px-3">
           {EDGE_TABS.map((t) => (
@@ -112,6 +104,60 @@ export function InspectorShell({
   );
 }
 
+function Header({
+  runId,
+  meta,
+  onClose,
+}: {
+  runId: string;
+  meta: {
+    title: string;
+    subtitle: string;
+    identity: string;
+    kind: "edge" | "node";
+    agentKind?: string;
+    agentPath: string | null;
+  };
+  onClose: () => void;
+}) {
+  const agentMeta = useAgentMeta(
+    meta.kind === "edge" ? runId : null,
+    meta.kind === "edge" ? meta.agentPath : null,
+  );
+  const langfuseUrl = agentMeta.data?.langfuse_search_url ?? null;
+
+  return (
+    <header className="flex items-start gap-3 border-b border-border px-5 py-4">
+      <HashTag hash={meta.identity} dotOnly size="md" />
+      <div className="min-w-0 flex-1">
+        <Eyebrow>{meta.kind === "edge" ? "agent" : "i/o type"}</Eyebrow>
+        <div className="flex items-center gap-2">
+          <div className="truncate text-[18px] font-medium leading-tight">{meta.title}</div>
+          {langfuseUrl ? (
+            <a
+              href={langfuseUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-2 inline-flex items-center gap-1 text-[12px] text-accent transition-colors hover:text-[--color-accent-strong]"
+            >
+              langfuse <ExternalLink size={11} />
+            </a>
+          ) : null}
+        </div>
+        <div className="truncate font-mono text-[11px] text-muted-2">{meta.subtitle}</div>
+      </div>
+      {meta.kind === "edge" ? (
+        <Pill tone="accent">{meta.agentKind}</Pill>
+      ) : (
+        <Pill>type</Pill>
+      )}
+      <IconButton aria-label="close inspector" onClick={onClose}>
+        <X size={14} />
+      </IconButton>
+    </header>
+  );
+}
+
 function Body({
   tab,
   runId,
@@ -136,10 +182,6 @@ function Body({
       return <TabAgentPrompts runId={runId} agentPath={agentPath} />;
     case "events":
       return <TabAgentEvents runId={runId} agentPath={agentPath} />;
-    case "experiment":
-      return <TabExperiment runId={runId} agentPath={agentPath} />;
-    case "langfuse":
-      return <TabAgentLangfuse runId={runId} agentPath={agentPath} />;
     default:
       return null;
   }

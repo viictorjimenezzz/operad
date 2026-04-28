@@ -14,8 +14,6 @@ export type GraphInspectorTab =
   | "invocations"
   | "prompts"
   | "events"
-  | "experiment"
-  | "langfuse"
   | "fields";
 
 const SPLIT_MIN = 320;
