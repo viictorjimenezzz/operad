@@ -9,6 +9,7 @@ const mockUseAgentMeta = vi.fn();
 vi.mock("@/hooks/use-runs", () => ({
   useAgentGroup: () => mockUseAgentGroup(),
   useAgentMeta: () => mockUseAgentMeta(),
+  usePatchRunNotes: () => ({ mutateAsync: vi.fn() }),
 }));
 
 const baseRun = {
