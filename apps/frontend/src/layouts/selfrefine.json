@@ -7,8 +7,7 @@
       "endpoint": "/runs/$context.runId/iterations.json",
       "stream": "/runs/$context.runId/iterations.sse"
     },
-    "children": { "endpoint": "/runs/$context.runId/children" },
-    "graph": { "endpoint": "/graph/$context.runId" }
+    "children": { "endpoint": "/runs/$context.runId/children" }
   },
   "spec": {
     "root": "page",
@@ -17,55 +16,40 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "overview", "label": "Overview" },
+            { "id": "ladder", "label": "Refine ladder" },
             { "id": "iterations", "label": "Iterations" },
-            { "id": "convergence", "label": "Convergence" },
             { "id": "parameters", "label": "Parameters" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
-            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
-            { "id": "graph", "label": "Graph" }
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
-        "children": ["overview", "iterations", "convergence", "parameters", "agents", "events", "graph"]
+        "children": ["ladder", "iterations", "parameters", "agents", "events"]
       },
-
-      "overview": {
-        "type": "SelfRefineDetailOverview",
+      "ladder": {
+        "type": "SelfRefineLadderTab",
         "props": {
-          "sourceSummary": "$queries.summary",
-          "sourceIterations": "$queries.iterations",
-          "sourceChildren": "$queries.children"
+          "sourceIterations": "$queries.iterations"
         }
       },
       "iterations": {
-        "type": "IterationLadder",
+        "type": "SelfRefineIterationsTab",
         "props": {
-          "source": "$queries.iterations",
-          "sourceChildren": "$queries.children"
+          "sourceIterations": "$queries.iterations",
+          "runId": "$context.runId"
         }
-      },
-      "convergence": {
-        "type": "PanelCard",
-        "props": { "title": "convergence", "bodyMinHeight": 320 },
-        "children": ["convergence-view"]
-      },
-      "convergence-view": {
-        "type": "SelfRefineConvergence",
-        "props": { "source": "$queries.iterations", "height": 300 }
       },
       "parameters": {
         "type": "ParametersTab",
         "props": { "runId": "$context.runId", "scope": "run" }
       },
-
-      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId", "groupBy": "hash" } },
-      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
-      "graph": {
-        "type": "PanelCard",
-        "props": { "title": "agent graph" },
-        "children": ["graph-view"]
+      "agents": {
+        "type": "AgentsTab",
+        "props": {
+          "runId": "$context.runId",
+          "groupBy": "hash"
+        }
       },
-      "graph-view": { "type": "AgentGraph", "props": { "source": "$queries.graph" } }
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } }
     }
   }
 }
