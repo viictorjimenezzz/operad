@@ -41,7 +41,6 @@ export function AgentGroupOverviewTab() {
   }
 
   const singleRun = N === 1 ? runs[0] : undefined;
-  const hashCurrent = singleRun ? runHashes(singleRun) : null;
 
   return (
     <div className="h-full overflow-auto p-4">
@@ -86,24 +85,12 @@ export function AgentGroupOverviewTab() {
         {singleRun ? (
           <div className="space-y-3">
             <DefinitionPanel dataSummary={singleRun} runId={singleRun.run_id} />
-            {hashCurrent ? <HashRow current={hashCurrent} /> : null}
+            <HashRow current={hashesForRun(singleRun)} />
           </div>
         ) : null}
       </div>
     </div>
   );
-}
-
-function runHashes(run: RunSummary): Partial<Record<HashKey, string | null>> {
-  return {
-    hash_content: run.hash_content ?? null,
-    hash_model: run.hash_model ?? null,
-    hash_prompt: run.hash_prompt ?? null,
-    hash_input: run.hash_input ?? null,
-    hash_output_schema: run.hash_output_schema ?? null,
-    hash_graph: run.hash_graph ?? null,
-    hash_config: run.hash_config ?? null,
-  };
 }
 
 function buildSeries(runs: RunSummary[], visible: Set<ToggleKey>) {
@@ -124,6 +111,18 @@ function buildSeries(runs: RunSummary[], visible: Set<ToggleKey>) {
       color: SERIES_COLORS[d.key],
       points: runs.map((run, index) => ({ x: index + 1, y: d.getValue(run) })),
     }));
+}
+
+function hashesForRun(run: RunSummary): Partial<Record<HashKey, string | null>> {
+  return {
+    hash_content: run.hash_content ?? null,
+    hash_model: run.hash_model ?? null,
+    hash_prompt: run.hash_prompt ?? null,
+    hash_input: run.hash_input ?? null,
+    hash_output_schema: run.hash_output_schema ?? null,
+    hash_graph: run.hash_graph ?? null,
+    hash_config: run.hash_config ?? null,
+  };
 }
 
 function median(values: number[]): number | null {

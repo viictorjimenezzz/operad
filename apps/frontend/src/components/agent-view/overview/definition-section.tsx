@@ -1,7 +1,8 @@
 import { BackendBlock } from "@/components/agent-view/overview/backend-block";
 import { ConfigBlock } from "@/components/agent-view/overview/config-block";
 import { ExamplesBlock } from "@/components/agent-view/overview/examples-block";
-import { MarkdownView } from "@/components/ui";
+import { Eyebrow, HashRow, MarkdownView } from "@/components/ui";
+import type { HashKey } from "@/components/ui/hash-row";
 import { useAgentMeta, usePatchRunNotes } from "@/hooks/use-runs";
 import { RunInvocationsResponse, RunSummary } from "@/lib/types";
 import { useEffect, useState } from "react";
@@ -13,6 +14,8 @@ export interface DefinitionPanelProps {
   sourceInvocations?: unknown;
   runId?: string;
 }
+
+export type ReproducibilitySectionProps = Pick<DefinitionPanelProps, "dataSummary" | "runId">;
 
 type TabId = "role" | "task" | "rules" | "examples" | "config" | "notes";
 
@@ -96,9 +99,7 @@ export function DefinitionPanel(props: DefinitionPanelProps) {
             ))}
           </ol>
         )}
-        {current === "examples" && (
-          <ExamplesBlock dataSummary={run} runId={runId} flat />
-        )}
+        {current === "examples" && <ExamplesBlock dataSummary={run} runId={runId} flat />}
         {current === "config" && (
           <div className="space-y-4">
             <BackendBlock
@@ -124,6 +125,32 @@ export function DefinitionPanel(props: DefinitionPanelProps) {
           />
         )}
       </div>
+    </section>
+  );
+}
+
+export function DefinitionSection(props: DefinitionPanelProps) {
+  return <DefinitionPanel {...props} />;
+}
+
+export function ReproducibilitySection({ dataSummary }: ReproducibilitySectionProps) {
+  const summary = RunSummary.safeParse(dataSummary);
+  if (!summary.success) return null;
+
+  const current: Partial<Record<HashKey, string | null>> = {
+    hash_content: summary.data.hash_content ?? null,
+    hash_model: summary.data.hash_model ?? null,
+    hash_prompt: summary.data.hash_prompt ?? null,
+    hash_input: summary.data.hash_input ?? null,
+    hash_output_schema: summary.data.hash_output_schema ?? null,
+    hash_graph: summary.data.hash_graph ?? null,
+    hash_config: summary.data.hash_config ?? null,
+  };
+
+  return (
+    <section className="space-y-2 border-t border-border pt-4">
+      <Eyebrow>reproducibility</Eyebrow>
+      <HashRow current={current} />
     </section>
   );
 }
