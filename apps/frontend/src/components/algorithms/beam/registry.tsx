@@ -23,7 +23,7 @@ export const beamRegistry: ComponentRegistry = {
       />
     );
   },
-  BeamLeaderboard: ({ element }) => {
+  BeamLeaderboardTab: ({ element }) => {
     const p = element.props as {
       data?: unknown;
       dataIterations?: unknown;
@@ -39,7 +39,7 @@ export const beamRegistry: ComponentRegistry = {
       />
     );
   },
-  BeamScoreHistogram: ({ element }) => {
+  BeamHistogramTab: ({ element }) => {
     const p = element.props as { data?: unknown; dataIterations?: unknown; bins?: number };
     return (
       <BeamScoreHistogramTab
@@ -53,7 +53,7 @@ export const beamRegistry: ComponentRegistry = {
     const p = element.props as ComponentProps<typeof CriticRationaleCard>;
     return <CriticRationaleCard {...p} />;
   },
-  BeamCandidateChart: ({ element }) => {
+  BeamCandidatesTab: ({ element }) => {
     const p = element.props as {
       data?: unknown;
       iterationsData?: unknown;

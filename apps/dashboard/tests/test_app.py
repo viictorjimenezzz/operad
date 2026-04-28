@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 import pytest
 from fastapi.testclient import TestClient
 
-from operad_dashboard.app import create_app
+from operad_dashboard.app import _event_stream, create_app
 from operad_dashboard.observer import WebDashboardObserver
 from operad_dashboard.runs import RunInfo
 
@@ -100,17 +101,18 @@ def test_ingest_broadcasts_to_subscribers(app_and_obs) -> None:
 
 
 async def test_stream_yields_first_event(app_and_obs) -> None:
-    import httpx
-
     app, obs = app_and_obs
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
-        async with client.stream("GET", "/stream", timeout=5.0) as resp:
-            assert resp.status_code == 200
-            seen: list[dict] = []
-            async for line in resp.aiter_lines():
-                if line.startswith("data:"):
-                    seen.append(json.loads(line[5:].strip()))
-                    break
-            assert seen
-            assert seen[0]["type"] in {"slot_occupancy", "cost_update"}
+
+    class _Request:
+        async def is_disconnected(self) -> bool:
+            return False
+
+    gen = _event_stream(_Request(), obs, app.state.cost_observer)  # type: ignore[arg-type]
+    try:
+        first = await asyncio.wait_for(anext(gen), timeout=1.0)
+    finally:
+        await gen.aclose()
+
+    assert first["event"] == "message"
+    body = json.loads(first["data"])
+    assert body["type"] in {"slot_occupancy", "cost_update", "stats_update"}

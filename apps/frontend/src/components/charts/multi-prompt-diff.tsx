@@ -64,9 +64,9 @@ function DiffPane({ lines, label }: { lines: DiffLine[]; label: string }) {
             key={i}
             className={
               l.type === "added"
-                ? "bg-green-900/30 text-green-300"
+                ? "bg-ok-dim/50 text-ok"
                 : l.type === "removed"
-                  ? "bg-red-900/30 text-red-300"
+                  ? "bg-err-dim/50 text-err"
                   : ""
             }
           >

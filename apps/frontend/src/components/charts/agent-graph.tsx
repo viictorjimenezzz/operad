@@ -32,11 +32,11 @@ export function AgentGraph({ data, mutations }: AgentGraphProps) {
           startOnLoad: false,
           theme: "dark",
           themeVariables: {
-            background: "#181c28",
-            primaryColor: "#1f2432",
-            primaryTextColor: "#e7e9f1",
-            primaryBorderColor: "#313849",
-            lineColor: "#5a6275",
+            background: "var(--color-bg-2)",
+            primaryColor: "var(--color-bg-3)",
+            primaryTextColor: "var(--color-text)",
+            primaryBorderColor: "var(--color-border-strong)",
+            lineColor: "var(--color-muted-2)",
           },
           securityLevel: "loose",
         });
@@ -92,8 +92,8 @@ function appendMutationStyles(source: string, matrix: z.infer<typeof MutationsMa
     // a footer that lists hottest ops so users see the signal even if
     // node tinting isn't possible.
     const rate = totalSuccess / totalAttempts;
-    const fill = rate > 0 ? "#1c3d27" : "#4a1c23";
-    const stroke = rate > 0 ? "#43c871" : "#f2a93a";
+    const fill = rate > 0 ? "var(--color-ok-dim)" : "var(--color-err-dim)";
+    const stroke = rate > 0 ? "var(--color-ok)" : "var(--color-warn)";
     lines.push(
       `%% ${op}: ${totalSuccess}/${totalAttempts}, ${(rate * 100).toFixed(0)}%, fill=${fill}, stroke=${stroke}`,
     );

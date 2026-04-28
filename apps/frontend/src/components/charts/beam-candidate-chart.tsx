@@ -263,10 +263,10 @@ function PruningView({
         {steps.map((step) => (
           <li key={step.iterIndex} className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-muted">#{step.iterIndex}</span>
-            <span className="rounded px-1.5 py-0.5 bg-green-500/15 text-green-400">
+            <span className="rounded bg-ok-dim px-1.5 py-0.5 text-ok">
               kept [{step.kept.join(", ")}]
             </span>
-            <span className="rounded px-1.5 py-0.5 bg-rose-500/15 text-rose-400">
+            <span className="rounded bg-err-dim px-1.5 py-0.5 text-err">
               dropped [{step.dropped.join(", ")}]
             </span>
           </li>

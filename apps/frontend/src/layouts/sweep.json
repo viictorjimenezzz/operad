@@ -36,20 +36,10 @@
         }
       },
       "heatmap": {
-        "type": "PanelCard",
-        "props": { "title": "parameter grid", "bodyMinHeight": 320 },
-        "children": ["heatmap-view"]
-      },
-      "heatmap-view": {
         "type": "SweepHeatmapTab",
         "props": { "source": "$queries.sweep", "sourceChildren": "$queries.children" }
       },
       "cells": {
-        "type": "PanelCard",
-        "props": { "title": "cells", "bodyMinHeight": 320 },
-        "children": ["cells-view"]
-      },
-      "cells-view": {
         "type": "SweepCellsTab",
         "props": {
           "source": "$queries.sweep",
@@ -58,11 +48,6 @@
         }
       },
       "parallel": {
-        "type": "PanelCard",
-        "props": { "title": "parallel coordinates", "bodyMinHeight": 320 },
-        "children": ["parallel-view"]
-      },
-      "parallel-view": {
         "type": "SweepParallelCoordsTab",
         "props": {
           "source": "$queries.sweep",

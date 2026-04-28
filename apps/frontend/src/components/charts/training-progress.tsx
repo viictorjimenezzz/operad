@@ -27,7 +27,7 @@ export function TrainingProgress({ data }: { data: unknown }) {
         <Stat label="eta" value={p.eta_s != null ? formatDurationMs(p.eta_s * 1000) : "—"} />
       </div>
       {p.finished && (
-        <div className="rounded-md border border-ok bg-ok-dim/40 px-2 py-1 text-center text-[#aaf0be]">
+        <div className="rounded-md border border-ok bg-ok-dim/40 px-2 py-1 text-center text-ok">
           finished
         </div>
       )}

@@ -6,9 +6,9 @@ import { z } from "zod";
 const Schema = z.array(GradientEntry);
 
 const severityClass = {
-  high: "bg-red-900/40 text-red-300 border-red-700",
-  medium: "bg-yellow-900/40 text-yellow-300 border-yellow-700",
-  low: "bg-blue-900/40 text-blue-300 border-blue-700",
+  high: "border-err bg-err-dim text-err",
+  medium: "border-warn bg-warn-dim text-warn",
+  low: "border-accent bg-accent-dim text-accent",
   info: "bg-bg-3 text-muted border-border",
 };
 

@@ -16,10 +16,10 @@ interface IterationsResponse {
 }
 
 const PHASE_STYLES: Record<string, { badge: string; dot: string }> = {
-  generate: { badge: "bg-blue-500/15 text-blue-400", dot: "bg-blue-400" },
-  verify: { badge: "bg-green-500/15 text-green-400", dot: "bg-green-400" },
-  reflect: { badge: "bg-amber-500/15 text-amber-400", dot: "bg-amber-400" },
-  refine: { badge: "bg-violet-500/15 text-violet-400", dot: "bg-violet-400" },
+  generate: { badge: "bg-accent-dim text-accent", dot: "bg-accent" },
+  verify: { badge: "bg-ok-dim text-ok", dot: "bg-ok" },
+  reflect: { badge: "bg-warn-dim text-warn", dot: "bg-warn" },
+  refine: { badge: "bg-algo-dim text-algo", dot: "bg-algo" },
 };
 
 const DEFAULT_STYLE = { badge: "bg-muted/20 text-muted", dot: "bg-muted" };

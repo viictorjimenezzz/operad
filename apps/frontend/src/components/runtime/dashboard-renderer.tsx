@@ -2,6 +2,7 @@ import { ParametersTab } from "@/components/agent-view/parameter-evolution/param
 import { TrainerTapeView } from "@/components/algorithms/trainer/tape-view";
 import { registry as baseRegistry } from "@/components/registry";
 import { InvocationsTab } from "@/components/runtime/invocations-tab";
+import { HashRow, type HashKey } from "@/components/ui/hash-row";
 import {
   type ResolveContext,
   resolveProps,
@@ -48,6 +49,23 @@ interface DashboardRendererProps {
 const passThrough = z.unknown();
 const registry: ComponentRegistry = {
   ...baseRegistry,
+  HashRow: ({ element }) => {
+    const props = element.props as {
+      current?: Partial<Record<HashKey, string | null>>;
+      dataCurrent?: Partial<Record<HashKey, string | null>>;
+      previous?: Partial<Record<HashKey, string | null>>;
+      dataPrevious?: Partial<Record<HashKey, string | null>>;
+      size?: "sm" | "md";
+    };
+    const previous = props.previous ?? props.dataPrevious;
+    return (
+      <HashRow
+        current={props.current ?? props.dataCurrent ?? {}}
+        {...(previous ? { previous } : {})}
+        size={props.size ?? "sm"}
+      />
+    );
+  },
   ParametersTab: ({ element }) => {
     const props = element.props as {
       runId?: string;

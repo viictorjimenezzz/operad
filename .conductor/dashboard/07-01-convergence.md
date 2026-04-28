@@ -115,10 +115,21 @@ All green.
 (Fill in during the convergence pass; this section becomes the seed
 for future planning.)
 
-- Surprise: …
-- Underestimated: …
-- Overestimated: …
-- For next redesign: …
+- Surprise: contract names drifted in the Beam and Debate layouts even
+  though the underlying components existed. The safest convergence fix
+  was to move the JSON layouts onto the reserved §11 names and remove
+  registry-only legacy aliases.
+- Underestimated: the color audit needed more than the requested
+  hex/hsl/rgb grep; Tailwind palette classes had also slipped into
+  older chart components and needed to be moved back onto palette
+  tokens.
+- Overestimated: the registry conflicts themselves were small. Most
+  cleanup time went into proving which `rounded-lg border bg-bg-*`
+  matches were real nested-card issues versus top-level panels or
+  reusable table primitives.
+- For next redesign: keep the component catalog, layout JSON, and
+  registry key names in one reserved-type test from the first sequence
+  so later briefs cannot silently introduce alternate names.
 
 ## Out of scope
 
