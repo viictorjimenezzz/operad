@@ -38,5 +38,5 @@ export function ReproducibilityBlock(props: ReproducibilityBlockProps) {
       }
     : undefined;
 
-  return <HashRow current={current} previous={prev} />;
+  return <HashRow current={current} {...(prev !== undefined ? { previous: prev } : {})} />;
 }

@@ -69,7 +69,7 @@ export function SingleInvocationOverviewTab() {
         />
         <section className="space-y-2 border-t border-border pt-4">
           <Eyebrow>reproducibility</Eyebrow>
-          <HashRow current={hashCurrent} previous={hashPrevious} />
+          <HashRow current={hashCurrent} {...(hashPrevious !== undefined ? { previous: hashPrevious } : {})} />
         </section>
         <StructureOverview runId={runId} hashContent={summary.data.hash_content ?? null} />
       </div>
