@@ -34,14 +34,18 @@ export function HashRow({
   if (variant === "compact") {
     return (
       <Tooltip.Provider delayDuration={0}>
-        <HashCompact current={current} previous={previous} onCopy={onCopy} />
+        <HashCompact
+          current={current}
+          {...(previous !== undefined ? { previous } : {})}
+          {...(onCopy !== undefined ? { onCopy } : {})}
+        />
       </Tooltip.Provider>
     );
   }
   if (variant === "strip") {
     return (
       <Tooltip.Provider delayDuration={0}>
-        <HashStrip current={current} previous={previous} />
+        <HashStrip current={current} {...(previous !== undefined ? { previous } : {})} />
       </Tooltip.Provider>
     );
   }
@@ -109,7 +113,11 @@ function HashCompact({
           <div className="mb-1 text-[10px] uppercase tracking-[0.06em] text-muted-2">
             Reproducibility hashes
           </div>
-          <HashTooltipRows current={current} previous={previous} onCopy={onCopy} />
+          <HashTooltipRows
+            current={current}
+            {...(previous !== undefined ? { previous } : {})}
+            {...(onCopy !== undefined ? { onCopy } : {})}
+          />
           <Tooltip.Arrow className="fill-bg-1" />
         </Tooltip.Content>
       </Tooltip.Portal>
