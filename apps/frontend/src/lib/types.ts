@@ -614,9 +614,12 @@ export type AgentInvocationsResponse = z.infer<typeof AgentInvocationsResponse>;
 
 export const AgentParameterEntry = z.object({
   path: z.string(),
-  type: z.string(),
+  type: z.string().default("Parameter"),
   value: z.unknown(),
   requires_grad: z.boolean().default(false),
+  hash: z.string().nullable().optional(),
+  tape_link: z.unknown().nullable().optional(),
+  gradient: z.unknown().nullable().optional(),
   grad: z
     .object({
       message: z.string().default(""),

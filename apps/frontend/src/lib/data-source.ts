@@ -5,6 +5,8 @@
  *
  * autoMerge heuristic:
  *   - current is an array AND delta is a non-array object → append-dedupe
+ *   - current is an object snapshot with one matching array collection
+ *     AND delta is a keyed object → append-dedupe into that collection
  *   - delta is an array → replace (full snapshot from server wins)
  *   - anything else → replace
  */
@@ -37,5 +39,35 @@ export function autoMerge(current: unknown, delta: unknown): unknown {
   if (Array.isArray(current) && !Array.isArray(delta)) {
     return appendDedupe(current, delta);
   }
+  if (isRecord(current) && isRecord(delta)) {
+    const key = findPrimaryKey(delta);
+    if (!key) return delta;
+
+    const collection = findArrayCollection(current, key);
+    if (!collection) return delta;
+
+    const [name, arr] = collection;
+    const next = appendDedupe(arr, delta);
+    return next === arr ? current : { ...current, [name]: next };
+  }
   return delta;
+}
+
+function findArrayCollection(
+  obj: Record<string, unknown>,
+  primaryKey: string,
+): [string, unknown[]] | null {
+  const arrayEntries = Object.entries(obj).filter((entry): entry is [string, unknown[]] =>
+    Array.isArray(entry[1]),
+  );
+  const matching = arrayEntries.filter(([, arr]) =>
+    arr.some((item) => isRecord(item) && findPrimaryKey(item) === primaryKey),
+  );
+  if (matching.length === 1) return matching[0] ?? null;
+  if (matching.length > 1) return null;
+  return arrayEntries.length === 1 ? (arrayEntries[0] ?? null) : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
