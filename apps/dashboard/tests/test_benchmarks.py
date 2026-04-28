@@ -81,11 +81,11 @@ def _report(
 def test_benchmark_ingest_list_detail_delete(app_and_store) -> None:
     app, _ = app_and_store
     with TestClient(app) as client:
-        r_ingest = client.post("/benchmarks/_ingest", json=_report())
+        r_ingest = client.post("/api/benchmarks/_ingest", json=_report())
         assert r_ingest.status_code == 200
         bench_id = r_ingest.json()["id"]
 
-        r_list = client.get("/benchmarks")
+        r_list = client.get("/api/benchmarks")
         assert r_list.status_code == 200
         rows = r_list.json()
         assert len(rows) == 1
@@ -94,7 +94,7 @@ def test_benchmark_ingest_list_detail_delete(app_and_store) -> None:
         assert rows[0]["n_tasks"] == 1
         assert rows[0]["n_methods"] == 2
 
-        r_detail = client.get(f"/benchmarks/{bench_id}")
+        r_detail = client.get(f"/api/benchmarks/{bench_id}")
         assert r_detail.status_code == 200
         detail = r_detail.json()
         assert detail["id"] == bench_id
@@ -104,11 +104,11 @@ def test_benchmark_ingest_list_detail_delete(app_and_store) -> None:
         assert detail["baseline"] is None
         assert detail["delta"] == []
 
-        r_delete = client.delete(f"/benchmarks/{bench_id}")
+        r_delete = client.delete(f"/api/benchmarks/{bench_id}")
         assert r_delete.status_code == 200
         assert r_delete.json() == {"ok": True}
 
-        r_list2 = client.get("/benchmarks")
+        r_list2 = client.get("/api/benchmarks")
         assert r_list2.status_code == 200
         assert r_list2.json() == []
 
@@ -116,32 +116,32 @@ def test_benchmark_ingest_list_detail_delete(app_and_store) -> None:
 def test_benchmark_ingest_invalid_schema_422(app_and_store) -> None:
     app, _ = app_and_store
     with TestClient(app) as client:
-        r = client.post("/benchmarks/_ingest", json={"summary": [], "headline_findings": {}})
+        r = client.post("/api/benchmarks/_ingest", json={"summary": [], "headline_findings": {}})
         assert r.status_code == 422
 
 
 def test_benchmark_tag_idempotent_and_latest_baseline(app_and_store) -> None:
     app, _ = app_and_store
     with TestClient(app) as client:
-        base1 = client.post("/benchmarks/_ingest", json=_report(mean_a=0.50, mean_b=0.45)).json()["id"]
-        base2 = client.post("/benchmarks/_ingest", json=_report(mean_a=0.70, mean_b=0.60)).json()["id"]
-        curr = client.post("/benchmarks/_ingest", json=_report(mean_a=0.90, mean_b=0.80)).json()["id"]
+        base1 = client.post("/api/benchmarks/_ingest", json=_report(mean_a=0.50, mean_b=0.45)).json()["id"]
+        base2 = client.post("/api/benchmarks/_ingest", json=_report(mean_a=0.70, mean_b=0.60)).json()["id"]
+        curr = client.post("/api/benchmarks/_ingest", json=_report(mean_a=0.90, mean_b=0.80)).json()["id"]
 
-        r_tag1 = client.post(f"/benchmarks/{base1}/tag", json={"tag": "baseline-v1"})
+        r_tag1 = client.post(f"/api/benchmarks/{base1}/tag", json={"tag": "baseline-v1"})
         assert r_tag1.status_code == 200
 
-        first_detail = client.get(f"/benchmarks/{base1}").json()
+        first_detail = client.get(f"/api/benchmarks/{base1}").json()
         tagged_at_1 = first_detail["tagged_at"]
 
-        r_tag1_repeat = client.post(f"/benchmarks/{base1}/tag", json={"tag": "baseline-v1"})
+        r_tag1_repeat = client.post(f"/api/benchmarks/{base1}/tag", json={"tag": "baseline-v1"})
         assert r_tag1_repeat.status_code == 200
-        second_detail = client.get(f"/benchmarks/{base1}").json()
+        second_detail = client.get(f"/api/benchmarks/{base1}").json()
         assert second_detail["tagged_at"] == tagged_at_1
 
-        r_tag2 = client.post(f"/benchmarks/{base2}/tag", json={"tag": "baseline-v2"})
+        r_tag2 = client.post(f"/api/benchmarks/{base2}/tag", json={"tag": "baseline-v2"})
         assert r_tag2.status_code == 200
 
-        current_detail = client.get(f"/benchmarks/{curr}").json()
+        current_detail = client.get(f"/api/benchmarks/{curr}").json()
         assert current_detail["baseline"]["id"] == base2
         deltas = {(d["task"], d["method"]): d["delta"] for d in current_detail["delta"]}
         assert deltas[("classification", "tgd")] == pytest.approx(0.2)
@@ -157,7 +157,7 @@ def test_benchmark_startup_scan_ingests_valid_files(tmp_path: Path) -> None:
 
     app = create_app(auto_register=False, benchmark_dir=str(bench_dir))
     with TestClient(app) as client:
-        rows = client.get("/benchmarks").json()
+        rows = client.get("/api/benchmarks").json()
         assert len(rows) == 1
         assert rows[0]["n_tasks"] == 1
         assert rows[0]["n_methods"] == 2

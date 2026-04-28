@@ -98,6 +98,9 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
     [agentGraph, expanded],
   );
 
+  // Per-leaf invocation stats (latency / count). Use a stable `pathsKey` so
+  // memos don't re-fire when the underlying array identity changes but the
+  // path set is unchanged (the root cause of the React #185 loop).
   const visibleLeafPaths = useMemo(() => {
     const paths = layout.nodes.filter((n) => n.kind === "leaf" && !n.hidden).map((n) => n.path);
     return paths.sort();
@@ -353,31 +356,31 @@ function SingleLeafCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
   const singlePath = single?.path ?? "";
 
   const invocationQueries = useQueries({
-    queries: singlePath
-      ? [
-          {
-            queryKey: ["graph", "agent-invocations", runId, singlePath] as const,
-            queryFn: () => dashboardApi.agentInvocations(runId, singlePath),
-            staleTime: 30_000,
-            retry: false,
-          },
-        ]
-      : [],
+    queries: [
+      {
+        queryKey: ["graph", "agent-invocations", runId, singlePath] as const,
+        queryFn: () => dashboardApi.agentInvocations(runId, singlePath),
+        staleTime: 30_000,
+        retry: false as const,
+        enabled: Boolean(singlePath),
+      },
+    ],
   });
   const metaQueries = useQueries({
-    queries: singlePath
-      ? [
-          {
-            queryKey: ["graph", "agent-meta", runId, singlePath] as const,
-            queryFn: () => dashboardApi.agentMeta(runId, singlePath),
-            staleTime: 60_000,
-            retry: false,
-          },
-        ]
-      : [],
+    queries: [
+      {
+        queryKey: ["graph", "agent-meta", runId, singlePath] as const,
+        queryFn: () => dashboardApi.agentMeta(runId, singlePath),
+        staleTime: 60_000,
+        retry: false as const,
+        enabled: Boolean(singlePath),
+      },
+    ],
   });
 
-  // Auto-select the leaf exactly once per mount.
+  // Auto-select the leaf exactly once per mount; using a ref instead of a
+  // useState flag avoids the rerender-after-setState that triggers the
+  // React #185 max-update-depth loop.
   useEffect(() => {
     if (!singlePath || autoSelectedRef.current) return;
     autoSelectedRef.current = true;

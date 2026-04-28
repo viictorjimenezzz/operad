@@ -672,6 +672,9 @@ async def list_training_runs(request: Request) -> JSONResponse:
     for info in runs:
         if not _is_training_run(info):
             continue
+        # Optimisers nested inside a Trainer/script *are* synthetic runs
+        # (parent_run_id is the Trainer's run id) but they're still
+        # part of the training story — keep them.
         hc = _latest_root_hash_content(info)
         if hc:
             key = hc
