@@ -96,10 +96,11 @@ export function TrainerTapeView({ runId, dataTape }: TrainerTapeViewProps) {
                   aria-label={`open tape entry ${row.agentPath}`}
                   onClick={() => {
                     if (!row.paramPath) return;
+                    const paramPath = row.paramPath;
                     setSearchParams((current) => {
                       const next = new URLSearchParams(current);
                       next.set("tab", "parameters");
-                      next.set("param", row.paramPath);
+                      next.set("param", paramPath);
                       if (row.stepIndex != null) next.set("step", String(row.stepIndex));
                       else next.delete("step");
                       return next;
