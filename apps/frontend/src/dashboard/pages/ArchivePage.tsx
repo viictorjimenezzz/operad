@@ -60,7 +60,14 @@ export function ArchivePage() {
 }
 
 function toRow(run: RunSummary): RunRow {
-  const agent = run.algorithm_class ?? run.algorithm_path?.split(".").at(-1) ?? "Agent";
+  // Prefer the user-visible agent class. Algorithm orchestrators expose
+  // it via `algorithm_class`; agent invocations carry `root_agent_path`.
+  // Falling back to a literal "Agent" hides the class and was a regression.
+  const agent =
+    run.algorithm_class ??
+    run.algorithm_path?.split(".").at(-1) ??
+    run.root_agent_path?.split(".").at(-1) ??
+    "Agent";
   return {
     id: run.run_id,
     identity: run.hash_content ?? run.run_id,

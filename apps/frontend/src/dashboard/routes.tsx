@@ -46,7 +46,20 @@ export const dashboardRoutes = [
           { path: "invocations", element: <AgentGroupRunsTab /> },
           { path: "metrics", element: <AgentGroupMetricsTab /> },
           { path: "training", element: <AgentGroupTrainTab /> },
-          { path: "graph", element: <AgentGroupGraphTab /> },
+          {
+            path: "graph",
+            element: <AgentGroupGraphTab />,
+            errorElement: <GraphRouteErrorBoundary />,
+          },
+          // Legacy aliases — old links/bookmarks should not 404.
+          {
+            path: "runs",
+            element: <Navigate to="../invocations" relative="path" replace />,
+          },
+          {
+            path: "train",
+            element: <Navigate to="../training" relative="path" replace />,
+          },
         ],
       },
       {

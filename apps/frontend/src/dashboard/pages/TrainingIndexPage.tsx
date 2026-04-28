@@ -130,6 +130,16 @@ function groupRow(group: TrainingGroup): RunRow {
   const identity = group.hash_content ?? latest?.run_id ?? "pending";
   const state = group.running > 0 ? "running" : group.errors > 0 ? "error" : "ended";
   const best = bestScore(runs);
+  // Optimisers that don't advertise a trainee root hash arrive without a
+  // `hash_content`; we used to render them with "pending" in the hash
+  // column. Showing the algorithm class is more honest and matches the
+  // grouping key emitted by the backend.
+  const hashCell =
+    group.hash_content
+      ? { kind: "hash" as const, value: group.hash_content }
+      : group.algorithm_path
+        ? { kind: "text" as const, value: "—", mono: true }
+        : { kind: "text" as const, value: "pending", mono: true };
   return {
     id: latest?.run_id ?? identity,
     identity,
@@ -139,9 +149,7 @@ function groupRow(group: TrainingGroup): RunRow {
     durationMs: runs.reduce((acc, run) => acc + run.duration_ms, 0),
     fields: {
       class: { kind: "text", value: group.class_name ?? "Trainer" },
-      hash: group.hash_content
-        ? { kind: "hash", value: group.hash_content }
-        : { kind: "text", value: "pending", mono: true },
+      hash: hashCell,
       runs: { kind: "num", value: group.count, format: "int" },
       best: { kind: "num", value: best, format: "score" },
       epochs: { kind: "num", value: latest ? epochCount(latest) : null, format: "int" },

@@ -18,6 +18,11 @@ export function GlobalStatsBar({ subtitle }: { subtitle?: string }) {
 
   const status = useStreamStore((s) => s.status);
   const statusVariant = status === "live" ? "live" : status === "error" ? "error" : "default";
+  const totalTokens = (stats?.prompt_tokens ?? 0) + (stats?.completion_tokens ?? 0);
+  // Trace replays from cassettes don't carry token/cost usage; rather than
+  // misleading the user with `tokens 0 / cost $0.00`, render a hyphen.
+  const tokenLabel = totalTokens > 0 ? formatTokens(totalTokens) : "—";
+  const costLabel = totalCost > 0 ? formatCost(totalCost) : "—";
 
   return (
     <header className="flex h-12 items-center gap-5 border-b border-border bg-bg-1 px-4 text-xs">
@@ -39,11 +44,8 @@ export function GlobalStatsBar({ subtitle }: { subtitle?: string }) {
           {...(stats?.runs_error ? { variant: "error" as const } : {})}
         />
         <Stat label="events" value={stats?.event_total} />
-        <Stat
-          label="tokens"
-          value={formatTokens((stats?.prompt_tokens ?? 0) + (stats?.completion_tokens ?? 0))}
-        />
-        <Stat label="cost" value={formatCost(totalCost)} />
+        <Stat label="tokens" value={tokenLabel} />
+        <Stat label="cost" value={costLabel} />
       </div>
       <div className="flex items-center gap-2">
         <Badge variant={statusVariant}>{status}</Badge>

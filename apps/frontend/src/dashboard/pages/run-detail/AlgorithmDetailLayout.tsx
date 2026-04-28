@@ -126,10 +126,26 @@ function RunBreadcrumb({
   // (or any two algo) instances are visually distinguishable without
   // overflowing the row with a full hash.
   const shortRunId = run.run_id.length > 12 ? `${run.run_id.slice(0, 8)}…${run.run_id.slice(-4)}` : run.run_id;
+  // For optimisers (OPRO/EvoGradient) include the parameter path being
+  // optimised. Without this the breadcrumb of two optimiser sessions that
+  // target different params reads identically.
+  const paramPath = (() => {
+    for (const it of run.iterations ?? []) {
+      const meta = (it as { metadata?: { param_path?: unknown } }).metadata;
+      const pp = meta?.param_path;
+      if (typeof pp === "string" && pp) return pp;
+    }
+    return null;
+  })();
 
   return (
     <Breadcrumb
-      items={[...breadcrumbs, { label: className }, { label: shortRunId, mono: true }]}
+      items={[
+        ...breadcrumbs,
+        { label: className },
+        ...(paramPath ? [{ label: paramPath, mono: true }] : []),
+        { label: shortRunId, mono: true },
+      ]}
       trailing={
         <>
           <HashTag hash={hashContent ?? run.run_id} dotOnly size="sm" />

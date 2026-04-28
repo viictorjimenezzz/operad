@@ -16,7 +16,6 @@ import {
   type Node,
   ReactFlow,
   ReactFlowProvider,
-  useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Copy, Maximize2, Minimize2 } from "lucide-react";
@@ -29,21 +28,48 @@ interface AgentFlowGraphProps {
 
 const nodeTypes = { agent: AgentNodeCard, composite: CompositeFlowNode };
 const edgeTypes = { typed: TypedEdge };
+const FIT_VIEW_OPTIONS = { padding: 0.18, duration: 220 } as const;
+const SINGLE_FIT_VIEW_OPTIONS = { padding: 0.45, duration: 180 } as const;
+const MINIMAP_STYLE = {
+  background: "var(--color-bg-1)",
+  border: "1px solid var(--color-border)",
+  borderRadius: 6,
+} as const;
 
 function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
   const selection = useUIStore((s) => s.graphSelection);
   const setSelection = useUIStore((s) => s.setGraphSelection);
   const clearSelection = useUIStore((s) => s.clearGraphSelection);
   const activeAgents = useActiveAgents(runId);
-  const { fitView } = useReactFlow();
 
   const composites = useMemo(
     () => agentGraph.nodes.filter((n) => n.kind === "composite" && n.path !== agentGraph.root),
     [agentGraph.nodes, agentGraph.root],
   );
 
-  // Default: every composite expanded so the user sees the full agent graph.
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(composites.map((c) => c.path)));
+  // Default: every composite expanded so the first paint already shows the
+  // full agent tree (matches the spec requirement "all visible, expandable").
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set(composites.map((c) => c.path)),
+  );
+
+  // If new composites arrive after first paint (e.g. graph payload landed
+  // a tick later), expand them by default but never undo manual collapses.
+  const lastCompositeKey = useRef<string>("");
+  useEffect(() => {
+    const key = composites
+      .map((c) => c.path)
+      .sort()
+      .join(",");
+    if (key === lastCompositeKey.current) return;
+    lastCompositeKey.current = key;
+    setExpanded((prev) => {
+      if (prev.size === 0 && composites.length > 0) {
+        return new Set(composites.map((c) => c.path));
+      }
+      return prev;
+    });
+  }, [composites]);
 
   const toggleComposite = useCallback((path: string) => {
     setExpanded((curr) => {
@@ -99,14 +125,18 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
     })),
   });
 
-  // Build a content-hashed signature so the stats memo only re-emits when
-  // actual data changes — not on every render where `useQueries` returned
-  // a new array reference for the same payload.
+  // Content-based signatures so the stats memo only re-emits when actual
+  // data changes, not on every render where `useQueries` returned a new
+  // array reference for the same payload. This is the linchpin against
+  // the React #185 max-update-depth loop the previous implementation hit.
   const invocationsSignature = invocationQueries
-    .map((q) => (q.data?.invocations.length ?? 0))
+    .map((q) => {
+      const inv = q.data?.invocations ?? [];
+      return `${inv.length}/${inv[inv.length - 1]?.hash_content ?? ""}`;
+    })
     .join(",");
   const metaSignature = metaQueries
-    .map((q) => (q.data?.trainable_paths.length ?? 0))
+    .map((q) => q.data?.trainable_paths.length ?? 0)
     .join(",");
 
   const statsByPath = useMemo(() => {
@@ -126,8 +156,6 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
       };
     });
     return out;
-    // The signatures + pathsKey capture every relevant change without
-    // depending on the unstable array identities `useQueries` returns.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathsKey, invocationsSignature, metaSignature]);
 
@@ -141,16 +169,19 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
     return out;
   }, [agentGraph]);
 
-  const nodes: Node[] = useMemo(() => {
-    const selectedAgentPath = selection?.kind === "edge" ? selection.agentPath : null;
+  const selectedAgentPath = selection?.kind === "edge" ? selection.agentPath : null;
+  const activeAgentsKey = useMemo(
+    () => Array.from(activeAgents).sort().join(","),
+    [activeAgents],
+  );
 
+  const nodes: Node[] = useMemo(() => {
     return layout.nodes
       .filter((n) => !n.hidden)
       .map((n) => {
         const isComposite = n.kind === "composite";
         const sel = selectedAgentPath === n.path;
         const dimmed = selectedAgentPath != null && !sel;
-
         if (isComposite) {
           return {
             id: n.path,
@@ -164,9 +195,6 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
               selected: sel,
               dimmed,
               childCount: childCounts[n.path] ?? 0,
-              onSelect: () =>
-                sel ? clearSelection() : setSelection({ kind: "edge", agentPath: n.path }),
-              onToggle: () => toggleComposite(n.path),
             },
           } satisfies Node;
         }
@@ -187,21 +215,11 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
             trainable: stats?.trainable ?? false,
             hashContent: stats?.hashContent ?? null,
             invocationCount: stats?.invocationCount ?? 0,
-            onSelect: () =>
-              sel ? clearSelection() : setSelection({ kind: "edge", agentPath: n.path }),
           },
         } satisfies Node;
       });
-  }, [
-    layout.nodes,
-    selection,
-    activeAgents,
-    statsByPath,
-    childCounts,
-    toggleComposite,
-    setSelection,
-    clearSelection,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout.nodes, selectedAgentPath, statsByPath, childCounts, activeAgentsKey]);
 
   // Filter and dedupe edges from layout.
   const visibleEdges = useMemo(() => {
@@ -218,7 +236,6 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
   }, [layout.edges]);
 
   const edges: Edge[] = useMemo(() => {
-    const selectedAgentPath = selection?.kind === "edge" ? selection.agentPath : null;
     return visibleEdges.map((e, i) => {
       const dimmed =
         selectedAgentPath != null &&
@@ -237,26 +254,25 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
         },
       } satisfies Edge;
     });
-  }, [visibleEdges, selection, activeAgents]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleEdges, selectedAgentPath, activeAgentsKey]);
 
-  // Fit-view trigger keyed only on user-initiated changes (selection,
-  // expansion). Re-running fitView on every nodes/edges array identity
-  // change drove the React #185 loop because nodes is recomputed every
-  // render via useMemo deps that themselves churn.
-  const fitViewTrigger = `${selection?.kind ?? "none"}:${selection?.kind === "edge" ? selection.agentPath : ""}:${expanded.size}:${pathsKey}`;
+  const onNodeClick = useCallback(
+    (_evt: React.MouseEvent, node: Node) => {
+      if (selectedAgentPath === node.id) clearSelection();
+      else setSelection({ kind: "edge", agentPath: node.id });
+    },
+    [selectedAgentPath, clearSelection, setSelection],
+  );
 
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      fitView({ padding: 0.18, duration: 180 });
-    }, 240);
-    return () => window.clearTimeout(id);
-  }, [fitView, fitViewTrigger]);
-
-  useEffect(() => {
-    const onResize = () => fitView({ padding: 0.18, duration: 120 });
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [fitView]);
+  const onNodeDoubleClick = useCallback(
+    (_evt: React.MouseEvent, node: Node) => {
+      if (node.type === "composite") {
+        toggleComposite(node.id);
+      }
+    },
+    [toggleComposite],
+  );
 
   const copyMermaid = useCallback(async () => {
     try {
@@ -293,18 +309,20 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
         </Button>
       </div>
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        defaultNodes={nodes}
+        defaultEdges={edges}
+        onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
-        fitViewOptions={{ padding: 0.18, duration: 220 }}
+        fitViewOptions={FIT_VIEW_OPTIONS}
         panOnDrag
         zoomOnScroll
         minZoom={0.2}
         maxZoom={2.4}
         proOptions={{ hideAttribution: true }}
-        onPaneClick={() => clearSelection()}
+        onPaneClick={clearSelection}
         nodesDraggable={false}
         nodesConnectable={false}
       >
@@ -313,14 +331,10 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
           pannable
           zoomable
           maskColor="rgba(7, 9, 16, 0.65)"
-          nodeColor={() => "var(--color-bg-3)"}
-          nodeStrokeColor={() => "var(--color-border)"}
+          nodeColor="var(--color-bg-3)"
+          nodeStrokeColor="var(--color-border)"
           nodeStrokeWidth={1}
-          style={{
-            background: "var(--color-bg-1)",
-            border: "1px solid var(--color-border)",
-            borderRadius: 6,
-          }}
+          style={MINIMAP_STYLE}
         />
         <Controls
           showInteractive
@@ -336,7 +350,6 @@ function SingleLeafCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
   const setSelection = useUIStore((s) => s.setGraphSelection);
   const clearSelection = useUIStore((s) => s.clearGraphSelection);
   const activeAgents = useActiveAgents(runId);
-  const { fitView } = useReactFlow();
   const autoSelectedRef = useRef(false);
 
   const single = agentGraph.nodes[0] ?? null;
@@ -349,7 +362,7 @@ function SingleLeafCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
         queryFn: () => dashboardApi.agentInvocations(runId, singlePath),
         staleTime: 30_000,
         retry: false as const,
-        enabled: Boolean(single),
+        enabled: Boolean(singlePath),
       },
     ],
   });
@@ -360,7 +373,7 @@ function SingleLeafCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
         queryFn: () => dashboardApi.agentMeta(runId, singlePath),
         staleTime: 60_000,
         retry: false as const,
-        enabled: Boolean(single),
+        enabled: Boolean(singlePath),
       },
     ],
   });
@@ -376,13 +389,6 @@ function SingleLeafCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
     }
   }, [singlePath, selection, setSelection]);
 
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      fitView({ padding: 0.45, duration: 180 });
-    }, 120);
-    return () => window.clearTimeout(id);
-  }, [fitView]);
-
   const inv = invocationQueries[0]?.data;
   const meta = metaQueries[0]?.data;
   const invocationCount = inv?.invocations.length ?? 0;
@@ -390,6 +396,10 @@ function SingleLeafCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
   const trainable = meta?.trainable_paths ? meta.trainable_paths.length > 0 : false;
   const selectedSingle =
     selection?.kind === "edge" && selection.agentPath === singlePath && Boolean(singlePath);
+  const activeAgentsKey = useMemo(
+    () => Array.from(activeAgents).sort().join(","),
+    [activeAgents],
+  );
 
   const nodes: Node[] = useMemo(() => {
     if (!single) return [];
@@ -410,39 +420,39 @@ function SingleLeafCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
           trainable,
           hashContent: lastHashContent,
           invocationCount,
-          onSelect: () =>
-            selectedSingle
-              ? clearSelection()
-              : setSelection({ kind: "edge", agentPath: single.path }),
         },
       } satisfies Node,
     ];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    single,
+    singlePath,
     selectedSingle,
-    activeAgents,
+    activeAgentsKey,
     trainable,
     lastHashContent,
     invocationCount,
-    setSelection,
-    clearSelection,
   ]);
+
+  const onNodeClick = useCallback(() => {
+    if (selectedSingle) clearSelection();
+    else if (singlePath) setSelection({ kind: "edge", agentPath: singlePath });
+  }, [selectedSingle, clearSelection, setSelection, singlePath]);
 
   return (
     <div className="relative h-full w-full">
       <ReactFlow
-        nodes={nodes}
-        edges={[]}
+        defaultNodes={nodes}
+        defaultEdges={[]}
+        onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.45, duration: 180 }}
+        fitViewOptions={SINGLE_FIT_VIEW_OPTIONS}
         panOnDrag
         zoomOnScroll
         minZoom={0.4}
         maxZoom={2.4}
         proOptions={{ hideAttribution: true }}
-        onPaneClick={() => clearSelection()}
+        onPaneClick={clearSelection}
         nodesDraggable={false}
         nodesConnectable={false}
       >
@@ -464,15 +474,19 @@ export function AgentFlowGraph({ agentGraph, runId }: AgentFlowGraphProps) {
       </div>
     );
   }
-  if (agentGraph.nodes.length === 1 && agentGraph.edges.length === 0) {
+  const [singleNode] = agentGraph.nodes;
+  if (agentGraph.nodes.length === 1 && agentGraph.edges.length === 0 && singleNode) {
+    // Re-key on the (run + path) so a different run gets a clean
+    // ReactFlow instance instead of trying to diff into a stale store —
+    // and make sure we never reuse internal state across runs.
     return (
-      <ReactFlowProvider>
+      <ReactFlowProvider key={`single-${runId}-${singleNode.path}`}>
         <SingleLeafCanvas agentGraph={agentGraph} runId={runId} />
       </ReactFlowProvider>
     );
   }
   return (
-    <ReactFlowProvider>
+    <ReactFlowProvider key={`group-${runId}`}>
       <GraphCanvas agentGraph={agentGraph} runId={runId} />
     </ReactFlowProvider>
   );

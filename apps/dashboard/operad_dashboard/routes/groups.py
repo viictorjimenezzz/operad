@@ -328,13 +328,41 @@ async def list_agent_classes(request: Request) -> JSONResponse:
     return JSONResponse(out)
 
 
+def _resolve_agent_hash(runs: list[RunInfo], raw: str) -> str | None:
+    """Resolve a hash_content (full or unique prefix) to the canonical full hash.
+
+    The dashboard sidebar truncates hashes (`f895c4…fa5fb`); a user who
+    types only the leading characters of a hash should still land on the
+    correct group instead of a 404. We accept any prefix of length ≥ 6
+    when it uniquely identifies a group; otherwise we require exact.
+    """
+    target = raw.strip()
+    if not target:
+        return None
+    seen: set[str] = set()
+    for info in runs:
+        if info.synthetic:
+            continue
+        hc = _latest_root_hash_content(info)
+        if hc:
+            seen.add(hc)
+    if target in seen:
+        return target
+    if len(target) < 6:
+        return None
+    matches = [hc for hc in seen if hc.startswith(target)]
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
 @router.get("/api/agents/{hash_content}")
 async def get_agent_group(request: Request, hash_content: str) -> JSONResponse:
     """Return aggregated KPIs for a single agent group + the runs in it."""
-    target = hash_content.strip()
-    if not target:
-        raise HTTPException(status_code=400, detail="hash_content is required")
     runs = _all_runs(request)
+    target = _resolve_agent_hash(runs, hash_content)
+    if target is None:
+        raise HTTPException(status_code=404, detail="no runs match this hash_content")
     group_runs: list[RunInfo] = []
     for info in runs:
         if info.is_algorithm and not _is_trainer(info):
@@ -394,10 +422,10 @@ async def get_agent_group(request: Request, hash_content: str) -> JSONResponse:
 @router.get("/api/agents/{hash_content}/runs")
 async def list_agent_group_runs(request: Request, hash_content: str) -> JSONResponse:
     """Return only the run summaries for an agent group (lighter payload)."""
-    target = hash_content.strip()
-    if not target:
-        raise HTTPException(status_code=400, detail="hash_content is required")
     runs = _all_runs(request)
+    target = _resolve_agent_hash(runs, hash_content)
+    if target is None:
+        raise HTTPException(status_code=404, detail="no runs match this hash_content")
     matches: list[RunInfo] = []
     for info in runs:
         if info.synthetic:
@@ -418,7 +446,8 @@ async def agent_group_metrics(
 ) -> JSONResponse:
     """Per-invocation metric series for the group sharing this hash."""
     obs = request.app.state.observer
-    runs = obs.registry.runs_by_hash_full(hash_content)
+    target = _resolve_agent_hash(_all_runs(request), hash_content) or hash_content
+    runs = obs.registry.runs_by_hash_full(target)
     runs = _range_limited_runs(runs, range)
     cost_totals: dict[str, Any] = {}
     cost = getattr(request.app.state, "cost_observer", None)
@@ -473,7 +502,7 @@ async def agent_group_metrics(
                     "value": value,
                 }
             )
-    return JSONResponse({"hash_content": hash_content, "metrics": metrics})
+    return JSONResponse({"hash_content": target, "metrics": metrics})
 
 
 @router.get("/api/agents/{hash_content}/parameters")
@@ -481,7 +510,8 @@ async def agent_group_parameters(
     request: Request,
     hash_content: str,
 ) -> JSONResponse:
-    runs = request.app.state.observer.registry.runs_by_hash_full(hash_content)
+    target = _resolve_agent_hash(_all_runs(request), hash_content) or hash_content
+    runs = request.app.state.observer.registry.runs_by_hash_full(target)
     paths: set[str] = set()
     series: list[dict[str, Any]] = []
     for info in runs:
@@ -504,7 +534,7 @@ async def agent_group_parameters(
         )
     return JSONResponse(
         {
-            "hash_content": hash_content,
+            "hash_content": target,
             "paths": sorted(paths),
             "series": series,
         }
@@ -531,20 +561,18 @@ _OPTIMIZER_PATHS = {
 async def list_algorithm_runs(request: Request, path: str | None = None) -> JSONResponse:
     """Return one entry per algorithm orchestrator run, grouped by class.
 
-    Optimizers (OPRO/EvoGradient/TextualGradientDescent/...) and the
-    `Trainer` belong to the Training rail (§7) and are intentionally
-    excluded here so the Algorithms rail stays focused on inference
-    orchestrators (Beam / Sweep / Debate / SelfRefine / AutoResearcher /
-    Verifier / TalkerReasoner).
+    The Algorithms rail is the inclusive view: every algorithm
+    orchestrator shows up here (Beam / Sweep / Debate / SelfRefine /
+    AutoResearcher / Verifier / TalkerReasoner / EvoGradient / OPRO /
+    Trainer / etc.). Specialized rails (`/opro`, `/training`) are then
+    carved out as filtered views over the same set, so a run is never
+    invisible to the user just because it also belongs to a sibling
+    rail.
     """
     if path is not None:
         match = lambda info: info.algorithm_path == path  # noqa: E731
     else:
-        match = lambda info: (  # noqa: E731
-            info.algorithm_path is not None
-            and info.algorithm_path not in _OPTIMIZER_PATHS
-            and not _is_trainer(info)
-        )
+        match = lambda info: info.algorithm_path is not None  # noqa: E731
     return JSONResponse(_algorithm_groups(request, match=match))
 
 
@@ -636,6 +664,11 @@ async def list_training_runs(request: Request) -> JSONResponse:
     """
     runs = _all_runs(request)
     groups: dict[str, list[RunInfo]] = {}
+    # Track which key is a real hash_content vs a synthetic grouping key
+    # (e.g. an algorithm_path used as a fallback for optimisers that don't
+    # advertise a trainee root hash). Without this split, the literal
+    # class name "OPROOptimizer" leaked into the hash column on the UI.
+    is_hash_key: dict[str, bool] = {}
     for info in runs:
         if not _is_training_run(info):
             continue
@@ -643,22 +676,28 @@ async def list_training_runs(request: Request) -> JSONResponse:
         # (parent_run_id is the Trainer's run id) but they're still
         # part of the training story — keep them.
         hc = _latest_root_hash_content(info)
-        # Optimizer runs may not carry a root agent hash; fall back to the
-        # algorithm class so the rail still groups them sensibly.
-        key = (
-            hc
-            or info.algorithm_path
-            or f"_pending_{info.run_id}"
-        )
+        if hc:
+            key = hc
+            is_hash_key[key] = True
+        elif info.algorithm_path:
+            # Group orphan optimisers by algorithm class but record that this
+            # key is *not* a hash_content; the frontend renders it as "—"
+            # (or "<class>" with the trainee column) instead of as a hash.
+            key = f"_alg_{info.algorithm_path}"
+            is_hash_key.setdefault(key, False)
+        else:
+            key = f"_pending_{info.run_id}"
+            is_hash_key.setdefault(key, False)
         groups.setdefault(key, []).append(info)
 
     out: list[dict[str, Any]] = []
     for key, members in groups.items():
         members.sort(key=lambda r: r.started_at)
         head = members[-1]
+        is_real_hash = is_hash_key.get(key, False)
         out.append(
             {
-                "hash_content": key if not key.startswith("_pending_") else None,
+                "hash_content": key if is_real_hash else None,
                 "class_name": _class_name_from_path(head.root_agent_path) or head.algorithm_class,
                 "root_agent_path": head.root_agent_path,
                 "algorithm_path": head.algorithm_path,
