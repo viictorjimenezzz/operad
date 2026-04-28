@@ -9,6 +9,7 @@ import {
 } from "@/components/ui";
 import { useRunEvents, useRunInvocations, useRunSummary } from "@/hooks/use-runs";
 import { resolveLayout } from "@/layouts";
+import { computeAlgorithmKpis } from "@/lib/algorithm-kpis";
 import type { RunSummary } from "@/lib/types";
 import {
   formatCostOrUnavailable,
@@ -136,6 +137,9 @@ function RunBreadcrumb({
               : {})}
           />
           <Metric label="$" value={formatCostOrUnavailable(cost)} />
+          {computeAlgorithmKpis(run).map((kpi) => (
+            <Metric key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} />
+          ))}
           {langfuseUrl ? (
             <a
               href={langfuseUrl}
