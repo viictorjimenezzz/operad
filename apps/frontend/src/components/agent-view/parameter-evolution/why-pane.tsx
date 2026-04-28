@@ -1,5 +1,5 @@
 import { EmptyState, MarkdownView, Metric } from "@/components/ui";
-import { langfuseUrlFor } from "@/lib/langfuse";
+import { langfuseLinkProps } from "@/lib/langfuse";
 import {
   cn,
   formatDurationMs,
@@ -80,20 +80,29 @@ function Header({
   point: ParameterEvolutionPoint;
   langfuseUrl?: string | null;
 }) {
-  const directLangfuseUrl = point.langfuseUrl ?? null;
-  const fallbackLangfuseUrl = langfuseUrl ? langfuseUrlFor(langfuseUrl, point.runId) : null;
-  const href = directLangfuseUrl ?? fallbackLangfuseUrl;
+  const directLink =
+    point.langfuseUrl != null
+      ? {
+          href: point.langfuseUrl,
+          target: "_blank" as const,
+          rel: "noopener noreferrer" as const,
+          title: "Open trace in Langfuse",
+        }
+      : null;
+  const fallbackLink = langfuseLinkProps(langfuseUrl, point.runId);
+  const link = directLink ?? fallbackLink;
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted">
       <span className="font-medium text-text">step {stepLabel(point)}</span>
       <span className="font-mono">{truncateMiddle(point.runId, 18)}</span>
       <span>{formatRelativeTime(point.startedAt)}</span>
-      {href ? (
+      {link ? (
         <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
+          href={link.href}
+          target={link.target}
+          rel={link.rel}
+          title={link.title}
           className="text-accent underline-offset-2 hover:underline"
         >
           langfuse -&gt;

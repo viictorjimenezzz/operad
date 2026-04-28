@@ -125,28 +125,43 @@ export function CategoricalEvolution({
           const previous = index > 0 ? stringifyValue(points[index - 1]?.value) : null;
           const changed = previous != null && previous !== label;
           return (
-            <button
+            <div
               key={`${point.runId}-${index}`}
-              type="button"
-              onClick={() => onSelectStep?.(index)}
               className={cn(
-                "flex min-h-[var(--row-h)] w-full items-center gap-2 px-2 text-left text-[12px] hover:bg-bg-2/60",
+                "flex min-h-[var(--row-h)] w-full items-center gap-2 px-2 text-[12px] hover:bg-bg-2/60",
                 selectedStep === index && "bg-bg-2",
               )}
             >
-              <span className="w-12 shrink-0 font-mono text-[11px] text-muted-2">step {index}</span>
-              <span
-                aria-hidden
-                className="h-2 w-2 shrink-0 rounded-full"
-                style={{ background: nodeColor(label) }}
-              />
-              <span className="min-w-0 flex-1 truncate font-mono text-text">{label}</span>
-              {changed ? (
-                <span className="truncate text-[11px] text-muted-2">
-                  changed from {truncateMiddle(previous, 24)}
-                </span>
+              <button
+                type="button"
+                onClick={() => onSelectStep?.(index)}
+                className="flex min-h-[var(--row-h)] min-w-0 flex-1 items-center gap-2 text-left"
+              >
+                <span className="w-12 shrink-0 font-mono text-[11px] text-muted-2">step {index}</span>
+                <span
+                  aria-hidden
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: nodeColor(label) }}
+                />
+                <span className="min-w-0 flex-1 truncate font-mono text-text">{label}</span>
+                {changed ? (
+                  <span className="truncate text-[11px] text-muted-2">
+                    changed from {truncateMiddle(previous, 24)}
+                  </span>
+                ) : null}
+              </button>
+              {point.langfuseUrl ? (
+                <a
+                  href={point.langfuseUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open trace in Langfuse"
+                  className="shrink-0 text-[11px] text-accent hover:underline"
+                >
+                  langfuse -&gt;
+                </a>
               ) : null}
-            </button>
+            </div>
           );
         })}
       </div>

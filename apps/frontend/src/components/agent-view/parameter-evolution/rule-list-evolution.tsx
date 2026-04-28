@@ -44,15 +44,30 @@ export function RuleListEvolution({ points, selectedStep, onSelectStep }: RuleLi
         >
           <span />
           {points.map((point, index) => (
-            <button
+            <div
               key={`${point.runId}-head`}
-              type="button"
-              onClick={() => onSelectStep(index)}
-              className="truncate px-1 text-center font-mono text-[10px] text-muted-2 hover:text-text"
-              aria-label={`select step ${index + 1}`}
+              className="flex min-h-7 flex-col items-center justify-center gap-0.5 px-1"
             >
-              {index + 1}
-            </button>
+              <button
+                type="button"
+                onClick={() => onSelectStep(index)}
+                className="truncate text-center font-mono text-[10px] text-muted-2 hover:text-text"
+                aria-label={`select step ${index + 1}`}
+              >
+                {index + 1}
+              </button>
+              {point.langfuseUrl ? (
+                <a
+                  href={point.langfuseUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open trace in Langfuse"
+                  className="text-[9px] text-accent hover:underline"
+                >
+                  lf
+                </a>
+              ) : null}
+            </div>
           ))}
           {rows.map((row) => (
             <RuleLifelineRow key={row.hash} row={row} steps={steps} onSelectStep={onSelectStep} />

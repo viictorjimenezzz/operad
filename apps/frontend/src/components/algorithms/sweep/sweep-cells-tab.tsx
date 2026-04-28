@@ -58,6 +58,9 @@ export function SweepCellsTab({ data, dataChildren, runId }: SweepCellsTabProps)
         run: href
           ? { kind: "link", label: "open", to: href }
           : { kind: "text", value: "-", mono: true },
+        langfuse: child?.langfuse_url
+          ? { kind: "link", label: "open", to: child.langfuse_url }
+          : { kind: "text", value: "—" },
       },
     };
   });
@@ -84,6 +87,7 @@ export function SweepCellsTab({ data, dataChildren, runId }: SweepCellsTabProps)
       align: "right",
       width: 88,
     },
+    { id: "langfuse", label: "Langfuse", source: "langfuse", width: 92 },
     { id: "run", label: "Run", source: "run", width: 64 },
   ];
 

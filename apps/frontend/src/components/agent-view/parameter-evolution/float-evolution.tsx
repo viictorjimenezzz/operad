@@ -8,6 +8,7 @@ export type ParameterEvolutionPoint = {
   startedAt: number;
   value: unknown;
   hash: string;
+  langfuseUrl?: string | null;
 };
 
 export type FloatConstraint = {
@@ -193,6 +194,24 @@ export function FloatEvolution({
         <Stat label="max" value={stats.max} />
         <Stat label="mean" value={stats.mean} />
       </div>
+      {points.some((point) => point.langfuseUrl) ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {points.map((point, index) =>
+            point.langfuseUrl ? (
+              <a
+                key={`${point.runId}-langfuse`}
+                href={point.langfuseUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open trace in Langfuse"
+                className="rounded border border-border px-1.5 py-0.5 text-[11px] text-accent hover:border-border-strong hover:underline"
+              >
+                step {index + 1} langfuse
+              </a>
+            ) : null,
+          )}
+        </div>
+      ) : null}
       {selectedStep != null && selectedValue != null ? (
         <div
           className="inline-flex items-center gap-2 rounded border border-border px-2 py-1 font-mono text-[11px]"

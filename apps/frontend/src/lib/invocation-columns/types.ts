@@ -96,3 +96,9 @@ export function metricNumber(child: InvocationChild, ...keys: string[]): number 
 export function diffField(value: string, previous?: string): Extract<RunFieldValue, { kind: "diff" }> {
   return previous === undefined ? { kind: "diff", value } : { kind: "diff", value, previous };
 }
+
+export function langfuseField(child: InvocationChild): RunFieldValue {
+  return child.langfuse_url
+    ? { kind: "link", label: "open", to: child.langfuse_url }
+    : { kind: "text", value: "—" };
+}

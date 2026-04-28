@@ -1,6 +1,7 @@
 import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
 import {
   baseRow,
+  langfuseField,
   metadataNumber,
   metadataString,
   metricNumber,
@@ -34,6 +35,7 @@ export const trainerColumns: AlgorithmColumns = {
     },
     { id: "valLoss", label: "Val loss", source: "valLoss", sortable: true, align: "right", width: 112 },
     { id: "lr", label: "LR", source: "lr", sortable: true, align: "right", width: 96 },
+    { id: "langfuse", label: "Langfuse", source: "langfuse", width: 92 },
   ],
   rowMapper: (child) => {
     const phase = metadataString(child, "phase") ?? "step";
@@ -46,6 +48,7 @@ export const trainerColumns: AlgorithmColumns = {
         trainLoss: { kind: "score", value: metricNumber(child, "train_loss", "loss"), min: 0 },
         valLoss: { kind: "score", value: metricNumber(child, "val_loss"), min: 0 },
         lr: { kind: "param", value: metricNumber(child, "lr"), format: "number" },
+        langfuse: langfuseField(child),
       },
     };
   },

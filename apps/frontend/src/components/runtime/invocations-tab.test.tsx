@@ -135,6 +135,25 @@ describe("<InvocationsTab />", () => {
     expect(resolveAlgorithmColumns("BeamSearch").algorithmClass).toBe("Beam");
   });
 
+  it("adds a langfuse column to every algorithm-specific descriptor", () => {
+    const classes = [
+      "Sweep",
+      "Beam",
+      "Debate",
+      "EvoGradient",
+      "Trainer",
+      "OPRO",
+      "SelfRefine",
+      "AutoResearcher",
+      "TalkerReasoner",
+      "Verifier",
+    ];
+    for (const algorithmClass of classes) {
+      const descriptor = resolveAlgorithmColumns(algorithmClass);
+      expect(descriptor.columns.some((column) => column.id === "langfuse")).toBe(true);
+    }
+  });
+
   it.each([
     {
       algorithmClass: "Sweep",

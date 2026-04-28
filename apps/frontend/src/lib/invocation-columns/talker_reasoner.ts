@@ -2,6 +2,7 @@ import type { AlgorithmColumns } from "@/lib/invocation-columns/types";
 import {
   baseRow,
   diffField,
+  langfuseField,
   metadataNumber,
   metadataString,
   metricNumber,
@@ -35,6 +36,7 @@ export const talkerReasonerColumns: AlgorithmColumns = {
       width: 110,
       defaultSort: "desc",
     },
+    { id: "langfuse", label: "Langfuse", source: "langfuse", width: 92 },
   ],
   rowMapper: (child, _parent, _index, previous) => {
     const choice = metadataString(child, "router_choice", "decision") ?? "unknown";
@@ -49,6 +51,7 @@ export const talkerReasonerColumns: AlgorithmColumns = {
           previous ? (metadataString(previous, "reason", "text") ?? undefined) : undefined,
         ),
         score: { kind: "score", value: metricNumber(child, "score") ?? child.algorithm_terminal_score ?? null },
+        langfuse: langfuseField(child),
       },
     };
   },

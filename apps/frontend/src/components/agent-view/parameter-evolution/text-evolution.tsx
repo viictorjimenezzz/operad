@@ -79,10 +79,11 @@ export function TextEvolution({ points, selectedStep, onSelectStep }: TextEvolut
                   <a
                     href={point.langfuseUrl}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
+                    title="Open trace in Langfuse"
                     className="text-accent hover:underline"
                   >
-                    langfuse
+                    langfuse -&gt;
                   </a>
                 ) : null}
               </div>
