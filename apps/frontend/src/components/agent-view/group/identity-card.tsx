@@ -14,7 +14,7 @@ export function AgentGroupIdentityCard({
   const trainable = meta?.trainable_paths.length ?? 0;
 
   return (
-    <section className="rounded-lg border border-border bg-bg-1 px-4 py-3">
+    <section className="border-b border-border pb-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
