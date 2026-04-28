@@ -124,7 +124,7 @@ describe("AgentGroupMetricsTab", () => {
   it("N=8: filters out metrics with fewer than 2 distinct values", () => {
     const runs = Array.from({ length: 8 }, (_, i) =>
       baseRun(`r${i + 1}`, 1000 + i * 100),
-    ).map((r) => ({ ...r, hash_output_schema: "same_hash", duration_ms: 400 }));
+    ).map((r) => ({ ...r, duration_ms: 400 }));
     mockUseAgentGroup.mockReturnValue({ data: baseGroup(runs) });
 
     renderTab();

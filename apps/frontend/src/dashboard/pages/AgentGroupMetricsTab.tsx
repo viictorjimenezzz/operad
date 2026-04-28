@@ -18,15 +18,6 @@ type MetricDef = {
   source: string;
 };
 
-const BUILT_IN_KEYS = new Set([
-  "latency_ms",
-  "prompt_tokens",
-  "completion_tokens",
-  "cost_usd",
-  "error_rate",
-  "schema_validation_rate",
-]);
-
 const BUILT_INS: MetricDef[] = [
   { key: "latency_ms", label: "Latency", format: "ms", source: "built-in" },
   { key: "prompt_tokens", label: "Prompt tokens", format: "tokens", source: "built-in" },
