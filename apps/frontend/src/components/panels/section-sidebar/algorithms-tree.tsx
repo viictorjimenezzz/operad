@@ -1,18 +1,12 @@
 import { GroupTreeSection, Pager, type GroupTreeRow } from "@/components/ui";
 import { useAlgorithmGroups } from "@/hooks/use-runs";
-import type { AlgorithmGroup, RunSummary } from "@/lib/types";
+import type { RunSummary } from "@/lib/types";
 import { formatRelativeTime, truncateMiddle } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 const PAGE_SIZE = 25;
 
-/**
- * Sidebar tree for the Algorithms rail.
- *   group  — algorithm class (Beam / Sweep / Debate / EvoGradient / SelfRefine / AutoResearcher)
- *   row    — one orchestrator invocation
- *   child  — synthetic inner agent invocations, on demand
- */
 export function AlgorithmsTree({ search }: { search: string }) {
   const { runId: activeRunId } = useParams();
   const navigate = useNavigate();
@@ -20,19 +14,30 @@ export function AlgorithmsTree({ search }: { search: string }) {
   const [page, setPage] = useState(0);
 
   const filtered = useMemo(() => {
-    if (!groups.data) return [] as AlgorithmGroup[];
+    if (!groups.data) return [] as RunSummary[];
     const q = search.trim().toLowerCase();
-    if (!q) return groups.data;
-    return groups.data
-      .map((g) => ({
-        ...g,
-        runs: g.runs.filter((r) => {
-          const hay = [g.class_name ?? "", r.run_id, r.script ?? ""].join(" ").toLowerCase();
-          return hay.includes(q);
-        }),
-      }))
-      .filter((g) => g.runs.length > 0);
+    const runs = groups.data.flatMap((group) =>
+      group.runs.map((run) => ({
+        ...run,
+        algorithm_class: run.algorithm_class ?? group.class_name ?? run.algorithm_class,
+      })),
+    );
+    if (!q) return runs;
+    return runs.filter((run) => {
+      const hay = [run.algorithm_class ?? "", run.run_id, run.script ?? ""].join(" ").toLowerCase();
+      return hay.includes(q);
+    });
   }, [groups.data, search]);
+
+  const paged = useMemo(() => {
+    const start = page * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
+
+  const rows = useMemo(
+    () => paged.map((run) => buildAlgorithmRow(run, activeRunId ?? null)),
+    [paged, activeRunId],
+  );
 
   const onSelect = (row: GroupTreeRow) => {
     navigate(`/algorithms/${row.id}`);
@@ -44,59 +49,21 @@ export function AlgorithmsTree({ search }: { search: string }) {
         {groups.isLoading ? (
           <div className="p-3 text-xs text-muted">loading algorithms…</div>
         ) : (
-          <>
-            {filtered.map((g) => (
-              <AlgorithmGroupSection
-                key={g.algorithm_path}
-                group={g}
-                page={page}
-                onPageChange={setPage}
-                pageSize={PAGE_SIZE}
-                activeRunId={activeRunId ?? null}
-                onSelect={onSelect}
-              />
-            ))}
-            {filtered.length === 0 ? (
-              <div className="p-3 text-xs text-muted-2">no algorithm runs</div>
-            ) : null}
-          </>
+          <GroupTreeSection
+            label="Algorithms"
+            count={filtered.length}
+            rows={rows}
+            onSelect={onSelect}
+            empty="no algorithm runs"
+          />
         )}
       </div>
-    </div>
-  );
-}
-
-function AlgorithmGroupSection({
-  group,
-  page,
-  pageSize,
-  onPageChange,
-  activeRunId,
-  onSelect,
-}: {
-  group: AlgorithmGroup;
-  page: number;
-  pageSize: number;
-  onPageChange: (p: number) => void;
-  activeRunId: string | null;
-  onSelect: (row: GroupTreeRow) => void;
-}) {
-  const slice = group.runs.slice(page * pageSize, page * pageSize + pageSize);
-  const rows: GroupTreeRow[] = slice.map((r) => buildAlgorithmRow(r, activeRunId));
-  return (
-    <div>
-      <GroupTreeSection
-        label={group.class_name ?? "Algorithm"}
-        count={group.count}
-        rows={rows}
-        onSelect={onSelect}
-      />
-      {group.count > pageSize ? (
+      {filtered.length > PAGE_SIZE ? (
         <Pager
           page={page}
-          pageSize={pageSize}
-          total={group.count}
-          onPageChange={onPageChange}
+          pageSize={PAGE_SIZE}
+          total={filtered.length}
+          onPageChange={setPage}
         />
       ) : null}
     </div>
@@ -112,13 +79,16 @@ function buildAlgorithmRow(r: RunSummary, activeRunId: string | null): GroupTree
       : r.event_total > 0
         ? `${r.event_total} ev`
         : undefined;
+  const className = r.algorithm_class ?? "Algorithm";
   return {
     id: r.run_id,
-    colorIdentity: r.run_id,
-    label: <span className="font-mono text-[11px]">{truncateMiddle(r.run_id, 14)}</span>,
-    meta: r.script
-      ? `${formatRelativeTime(r.started_at)} · ${r.script}`
-      : formatRelativeTime(r.started_at),
+    colorIdentity: className,
+    label: <span className="text-text">{className}</span>,
+    meta: (
+      <span className="font-mono text-[10px] text-muted-2">
+        {truncateMiddle(r.run_id, 12)} · {formatRelativeTime(r.started_at)}
+      </span>
+    ),
     state,
     trailing,
     active: activeRunId === r.run_id,

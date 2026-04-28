@@ -7,32 +7,39 @@ import { useNavigate, useParams } from "react-router-dom";
 
 const PAGE_SIZE = 30;
 
-/**
- * Sidebar tree for the Agents rail. Two levels:
- *   group  — agent instance keyed by `hash_content`
- *   child  — invocation (run_id) under that instance
- *
- * Single-invocation groups collapse into a single row with no
- * expansion arrow. Multi-invocation groups expand to show their
- * invocations indented underneath, mirroring W&B's "Group: …" + child
- * runs layout.
- */
 export function AgentsTree({ search }: { search: string }) {
-  const { hashContent: activeHash, runId: activeRunId } = useParams();
+  const {
+    hashContent: activeHash,
+    runId: activeRunId,
+    className: activeClassParam,
+  } = useParams<{ hashContent?: string; runId?: string; className?: string }>();
   const navigate = useNavigate();
   const groups = useAgentGroups();
   const [page, setPage] = useState(0);
 
+  const className = decodeURIComponent(activeClassParam ?? "");
+
   const filtered = useMemo(() => {
-    if (!groups.data) return [] as AgentGroupSummary[];
+    if (!groups.data) return [] as ClassGroup[];
     const q = search.trim().toLowerCase();
-    if (!q) return groups.data;
-    return groups.data.filter((g) => {
-      const hay = [g.class_name ?? "", g.root_agent_path ?? "", g.hash_content]
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
-    });
+    const grouped = groupByClass(groups.data);
+    if (!q) return grouped;
+    return grouped
+      .map((entry) => ({
+        ...entry,
+        instances: entry.instances.filter((instance) => {
+          const hay = [
+            entry.class_name,
+            instance.root_agent_path ?? "",
+            instance.hash_content,
+            ...instance.run_ids,
+          ]
+            .join(" ")
+            .toLowerCase();
+          return hay.includes(q);
+        }),
+      }))
+      .filter((entry) => entry.instances.length > 0);
   }, [groups.data, search]);
 
   const paged = useMemo(() => {
@@ -41,18 +48,28 @@ export function AgentsTree({ search }: { search: string }) {
   }, [filtered, page]);
 
   const rows: GroupTreeRow[] = useMemo(
-    () =>
-      paged.map((g) => buildRow(g, activeHash ?? null, activeRunId ?? null)),
-    [paged, activeHash, activeRunId],
+    () => paged.map((group) => buildClassRow(group, className, activeHash ?? null, activeRunId ?? null)),
+    [paged, className, activeHash, activeRunId],
   );
 
   const onSelect = (row: GroupTreeRow) => {
-    if (row.id.includes("::run::")) {
-      const [hash, runId] = row.id.split("::run::");
-      if (hash && runId) navigate(`/agents/${hash}/runs/${runId}`);
+    if (row.id.startsWith("run::")) {
+      const payload = row.id.slice("run::".length);
+      const splitAt = payload.indexOf("::");
+      const hashContent = splitAt >= 0 ? payload.slice(0, splitAt) : "";
+      const runId = splitAt >= 0 ? payload.slice(splitAt + 2) : "";
+      if (hashContent && runId) navigate(`/agents/${hashContent}/runs/${runId}`);
       return;
     }
-    navigate(`/agents/${row.id}`);
+    if (row.id.startsWith("instance::")) {
+      const hashContent = row.id.slice("instance::".length);
+      navigate(`/agents/${hashContent}`);
+      return;
+    }
+    if (row.id.startsWith("class::")) {
+      const decodedClassName = decodeURIComponent(row.id.slice("class::".length));
+      navigate(`/agents/_class_/${encodeURIComponent(decodedClassName)}`);
+    }
   };
 
   return (
@@ -62,7 +79,7 @@ export function AgentsTree({ search }: { search: string }) {
           <div className="p-3 text-xs text-muted">loading agents…</div>
         ) : (
           <GroupTreeSection
-            label="Instances"
+            label="Classes"
             count={filtered.length}
             rows={rows}
             onSelect={onSelect}
@@ -82,40 +99,54 @@ export function AgentsTree({ search }: { search: string }) {
   );
 }
 
-function buildRow(
+type ClassGroup = {
+  class_name: string;
+  instances: AgentGroupSummary[];
+};
+
+function buildClassRow(
+  group: ClassGroup,
+  activeClass: string,
+  activeHash: string | null,
+  activeRunId: string | null,
+): GroupTreeRow {
+  const running = group.instances.reduce((sum, instance) => sum + instance.running, 0);
+  const errors = group.instances.reduce((sum, instance) => sum + instance.errors, 0);
+  const state = running > 0 ? "running" : errors > 0 ? "error" : "ended";
+  return {
+    id: `class::${encodeURIComponent(group.class_name)}`,
+    label: group.class_name,
+    meta: `${group.instances.length} instance${group.instances.length === 1 ? "" : "s"}`,
+    colorIdentity: group.class_name,
+    state,
+    active: activeClass === group.class_name,
+    count: group.instances.length,
+    children: group.instances.map((instance) => buildInstanceRow(instance, activeHash, activeRunId)),
+  };
+}
+
+function buildInstanceRow(
   g: AgentGroupSummary,
   activeHash: string | null,
   activeRunId: string | null,
 ): GroupTreeRow {
   const isActive = activeHash === g.hash_content && !activeRunId;
-  const meta = g.is_trainer ? `Trainer · ${formatRelativeTime(g.last_seen)}` : formatRelativeTime(g.last_seen);
+  const meta = g.is_trainer
+    ? `Trainer · ${formatRelativeTime(g.last_seen)}`
+    : formatRelativeTime(g.last_seen);
   const sparkline = g.latencies.slice(-12);
   const state = g.running > 0 ? "running" : g.errors > 0 ? "error" : "ended";
-
-  if (g.count <= 1) {
-    return {
-      id: g.hash_content,
-      label: g.class_name ?? "Agent",
-      meta,
-      colorIdentity: g.hash_content,
-      sparkline,
-      state,
-      active: isActive,
-      count: g.count,
-    };
-  }
-  // Multi-invocation: build child rows for each known run id.
-  const children: GroupTreeRow[] = g.run_ids.slice(-12).reverse().map((runId) => ({
-    id: `${g.hash_content}::run::${runId}`,
+  const children: GroupTreeRow[] = g.run_ids.slice().reverse().map((runId) => ({
+    id: `run::${g.hash_content}::${runId}`,
     label: <span className="font-mono text-[11px]">{truncateMiddle(runId, 14)}</span>,
     meta: <span>invocation</span>,
-    colorIdentity: runId,
+    colorIdentity: g.hash_content,
     state: "ended",
-    active: activeRunId === runId,
+    active: activeHash === g.hash_content && activeRunId === runId,
   }));
   return {
-    id: g.hash_content,
-    label: g.class_name ?? "Agent",
+    id: `instance::${g.hash_content}`,
+    label: <span className="font-mono text-[11px]">{truncateMiddle(g.hash_content, 12)}</span>,
     meta,
     colorIdentity: g.hash_content,
     sparkline,
@@ -127,3 +158,24 @@ function buildRow(
   };
 }
 
+function groupByClass(groups: AgentGroupSummary[]): ClassGroup[] {
+  const byClass = new Map<string, AgentGroupSummary[]>();
+  for (const group of groups) {
+    const className = group.class_name ?? "Agent";
+    const existing = byClass.get(className);
+    if (existing) {
+      existing.push(group);
+    } else {
+      byClass.set(className, [group]);
+    }
+  }
+  return [...byClass.entries()]
+    .map(([class_name, instances]) => ({
+      class_name,
+      instances: instances.slice().sort((a, b) => b.last_seen - a.last_seen),
+    }))
+    .sort(
+      (a, b) =>
+        b.instances.length - a.instances.length || a.class_name.localeCompare(b.class_name),
+    );
+}
