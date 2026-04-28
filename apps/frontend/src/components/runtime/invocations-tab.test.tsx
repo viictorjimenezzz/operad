@@ -3,7 +3,7 @@ import {
   resolveAlgorithmColumns,
 } from "@/components/runtime/invocations-tab";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -268,5 +268,62 @@ describe("<InvocationsTab />", () => {
 
     expect((await screen.findAllByRole("button", { name: /Cell/i })).length).toBeGreaterThan(0);
     expect(await screen.findByText("9")).toBeTruthy();
+  });
+
+  it("shows sticky compare CTA when two invocations are selected", async () => {
+    const runId = "run-compare";
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith(`/runs/${runId}/summary`)) {
+        return new Response(
+          JSON.stringify({
+            run_id: runId,
+            started_at: 1,
+            last_event_at: 2,
+            state: "ended",
+            has_graph: true,
+            is_algorithm: true,
+            algorithm_path: "Sweep",
+            algorithm_kinds: [],
+            root_agent_path: null,
+            script: null,
+            event_counts: {},
+            event_total: 1,
+            duration_ms: 100,
+            generations: [],
+            iterations: [],
+            rounds: [],
+            candidates: [],
+            batches: [],
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            error: null,
+            algorithm_terminal_score: null,
+            synthetic: false,
+            parent_run_id: null,
+            algorithm_class: "Sweep",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.endsWith(`/runs/${runId}/children`)) {
+        return new Response(
+          JSON.stringify([
+            makeChild({ run_id: "child-a", metadata: { cell_index: 1 } }),
+            makeChild({ run_id: "child-b", metadata: { cell_index: 2 } }),
+          ]),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    renderTab(<InvocationsTab runId={runId} />);
+    const first = await screen.findByLabelText("select child-a");
+    const second = await screen.findByLabelText("select child-b");
+    fireEvent.click(first);
+    fireEvent.click(second);
+    expect(await screen.findByText("2 selected")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Compare" })).toBeTruthy();
   });
 });

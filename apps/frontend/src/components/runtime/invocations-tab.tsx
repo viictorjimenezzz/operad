@@ -1,4 +1,4 @@
-import { EmptyState, type RunRow, RunTable } from "@/components/ui";
+import { Button, EmptyState, type RunRow, RunTable } from "@/components/ui";
 import { useChildren } from "@/hooks/use-children";
 import { defaultColumns as defaultDescriptor } from "@/lib/invocation-columns/default";
 import { autoResearcherColumns } from "@/lib/invocation-columns/auto_researcher";
@@ -14,7 +14,8 @@ import { trainerColumns } from "@/lib/invocation-columns/trainer";
 import { verifierColumns } from "@/lib/invocation-columns/verifier";
 import { RunSummary as RunSummarySchema, type RunSummary } from "@/lib/types";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const DESCRIPTORS: Record<string, AlgorithmColumns> = {
   Sweep: sweepColumns,
@@ -44,7 +45,10 @@ export function resolveAlgorithmColumns(
 }
 
 export function InvocationsTab({ runId, algorithmClass, defaultGroupBy }: InvocationsTabProps) {
+  const navigate = useNavigate();
   const children = useChildren(runId);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [tableVersion, setTableVersion] = useState(0);
   const summary = useQuery({
     queryKey: ["run", "summary", runId] as const,
     queryFn: async () => {
@@ -98,12 +102,39 @@ export function InvocationsTab({ runId, algorithmClass, defaultGroupBy }: Invoca
 
   return (
     <div className="h-full overflow-auto p-4">
+      {selected.length >= 2 ? (
+        <div className="sticky bottom-0 z-10 mb-3 flex items-center gap-2 border border-border bg-bg-1 px-3 py-2 text-[12px] text-text">
+          <span className="font-mono">{selected.length} selected</span>
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() =>
+              navigate(`/experiments?runs=${selected.map(encodeURIComponent).join(",")}`)
+            }
+          >
+            Compare
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setSelected([]);
+              setTableVersion((current) => current + 1);
+            }}
+          >
+            Clear
+          </Button>
+        </div>
+      ) : null}
       <RunTable
+        key={tableVersion}
         rows={rows}
         columns={descriptor.columns}
         storageKey={`invocations:${storageClass}:${runId}`}
         rowHref={(row) => rowHref(row, parentSummary)}
         {...(groupBy ? { groupBy } : {})}
+        selectable
+        onSelectionChange={setSelected}
         emptyTitle="no invocations yet"
         emptyDescription="child invocations will appear here once the algorithm emits work units"
         pageSize={50}
