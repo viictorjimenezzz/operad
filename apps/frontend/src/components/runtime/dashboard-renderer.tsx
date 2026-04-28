@@ -115,6 +115,19 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
+  // Tab id -> layout element id. When the URL carries a tab id that
+  // doesn't exist in the current layout (e.g. user navigated from
+  // EvoGradient ?tab=lineage to OPRO whose tabs are different), we
+  // ignore it instead of leaving the page in an unrenderable state.
+  const knownTabIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const el of Object.values(layout.spec.elements)) {
+      if (isTabsElement(el)) {
+        for (const tab of el.props.tabs) ids.add(tab.id);
+      }
+    }
+    return ids;
+  }, [layout]);
   const setActiveTab = useCallback(
     (tabId: string) => {
       setSearchParams(
@@ -191,10 +204,11 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
       runEvents: runEvents as EventEnvelope[],
     };
     const elements: UITree["elements"] = {};
+    const safeTabParam = tabParam && knownTabIds.has(tabParam) ? tabParam : null;
     for (const [id, el] of Object.entries(layout.spec.elements)) {
       if (isTabsElement(el)) {
         const tabs = resolveTabs(el.props.tabs, el.children, ctx);
-        const activeTab = tabs.find((tab) => tab.id === tabParam)?.id ?? tabs[0]?.id ?? "";
+        const activeTab = tabs.find((tab) => tab.id === safeTabParam)?.id ?? tabs[0]?.id ?? "";
         const activeChildId = tabs.find((tab) => tab.id === activeTab)?.childId;
         elements[id] = {
           key: id,
@@ -217,7 +231,7 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
       elements[id] = node;
     }
     return { root: layout.spec.root, elements };
-  }, [entries, layout, runEvents, context, queryDatas, tabParam, setActiveTab]);
+  }, [entries, layout, runEvents, context, queryDatas, tabParam, knownTabIds, setActiveTab]);
 
   return (
     <JSONUIProvider registry={registry}>

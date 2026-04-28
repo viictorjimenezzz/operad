@@ -952,6 +952,7 @@ export const TrainingGroup = z.object({
   hash_content: stringOrNull.default(null),
   class_name: stringOrNull.default(null),
   root_agent_path: stringOrNull.default(null),
+  algorithm_path: stringOrNull.default(null),
   count: z.number(),
   running: z.number(),
   errors: z.number(),

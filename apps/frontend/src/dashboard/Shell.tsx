@@ -1,4 +1,5 @@
 import { CassetteRibbon } from "@/components/panels/cassette-ribbon";
+import { CompareBasket } from "@/components/panels/compare-basket";
 import { GlobalRail } from "@/components/panels/global-rail";
 import { GlobalStatsBar } from "@/components/panels/global-stats-bar";
 import { SectionSidebar } from "@/components/panels/section-sidebar/section-sidebar";
@@ -27,6 +28,7 @@ export function Shell() {
     path.startsWith("/agents") ||
     path.startsWith("/algorithms") ||
     path.startsWith("/training") ||
+    path.startsWith("/opro") ||
     path.startsWith("/runs");
 
   return (
@@ -47,6 +49,7 @@ export function Shell() {
           <Outlet />
         </main>
       </div>
+      <CompareBasket />
     </div>
   );
 }

@@ -57,31 +57,35 @@ export function AgentGroupOverviewTab() {
             value={detail.running > 0 ? "live" : detail.errors > 0 ? "error" : "ended"}
           />
         </div>
-        {N >= 2 ? (
-          <PanelCard title="Invocation series" eyebrow="per-invocation" bodyMinHeight={250}>
-            <div className="mb-2 flex gap-2">
-              {(["latency", "cost", "tokens"] as ToggleKey[]).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => toggleMetric(key)}
-                  className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                    visible.has(key)
-                      ? "bg-accent/15 text-accent"
-                      : "bg-bg-2 text-muted hover:text-text"
-                  }`}
-                >
-                  {key}
-                </button>
-              ))}
-            </div>
-            <MultiSeriesChart
-              series={buildSeries(runs, visible)}
-              height={220}
-              xLabel="invocation"
-            />
-          </PanelCard>
-        ) : null}
+        {N >= 2 ? (() => {
+          const series = buildSeries(runs, visible);
+          if (series.length === 0) return null;
+          return (
+            <PanelCard title="Invocation series" eyebrow="per-invocation" bodyMinHeight={250}>
+              <div className="mb-2 flex gap-2">
+                {(["latency", "cost", "tokens"] as ToggleKey[]).map((key) => {
+                  const active = visible.has(key);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => toggleMetric(key)}
+                      aria-pressed={active}
+                      className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors border ${
+                        active
+                          ? "border-accent/40 bg-accent/15 text-accent"
+                          : "border-border bg-bg-2 text-muted hover:border-border-strong hover:text-text"
+                      }`}
+                    >
+                      {key}
+                    </button>
+                  );
+                })}
+              </div>
+              <MultiSeriesChart series={series} height={220} xLabel="invocation" />
+            </PanelCard>
+          );
+        })() : null}
         {singleRun ? (
           <div className="space-y-3">
             <DefinitionPanel dataSummary={singleRun} runId={singleRun.run_id} />
@@ -117,12 +121,21 @@ function buildSeries(runs: RunSummary[], visible: Set<ToggleKey>) {
   ];
   return defs
     .filter((d) => visible.has(d.key))
-    .map((d) => ({
-      id: d.key,
-      label: d.key,
-      color: SERIES_COLORS[d.key],
-      points: runs.map((run, index) => ({ x: index + 1, y: d.getValue(run) })),
-    }));
+    .map((d) => {
+      const points = runs.map((run, index) => ({ x: index + 1, y: d.getValue(run) }));
+      return {
+        id: d.key,
+        label: d.key,
+        color: SERIES_COLORS[d.key],
+        points,
+        // The series is "useful" only if at least one point has a non-zero
+        // value. We don't drop the entry (so the toggle pill stays
+        // present) but signal "no data" by emptying the points; the chart
+        // y-axis won't collapse around zero anymore.
+        empty: points.every((p) => p.y == null || p.y === 0),
+      };
+    })
+    .filter((series) => !series.empty);
 }
 
 function median(values: number[]): number | null {

@@ -14,20 +14,18 @@ export type AgentNodeData = {
   trainable: boolean;
   hashContent: string | null;
   invocationCount: number;
-  onSelect: () => void;
 };
 
+// Click is handled at the React Flow level via `onNodeClick`. Keeping this
+// component free of inline event-handler closures is what lets the
+// `nodes` array stay referentially stable across renders, which is the
+// fix for the React #185 max-update-depth loop the previous build had.
 export function AgentNodeCard({ data }: NodeProps) {
   const d = data as AgentNodeData;
   return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        d.onSelect();
-      }}
+    <div
       className={cn(
-        "nodrag nopan flex h-full w-full flex-col items-stretch gap-1 rounded-md border bg-bg-1 px-2.5 py-1.5 text-left transition-colors",
+        "flex h-full w-full cursor-pointer flex-col items-stretch gap-1 rounded-md border bg-bg-1 px-2.5 py-1.5 text-left transition-colors",
         d.selected
           ? "border-accent ring-1 ring-[--color-accent-dim]"
           : "border-border hover:border-border-strong",
@@ -62,6 +60,6 @@ export function AgentNodeCard({ data }: NodeProps) {
         </div>
       ) : null}
       <Handle type="source" position={Position.Right} className="!h-2 !w-2 !border-0 !bg-muted-2" />
-    </button>
+    </div>
   );
 }

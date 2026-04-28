@@ -112,15 +112,14 @@ function MetricTable({
         const points = seriesPoints(runs, metric.key, endpoint?.metrics[metric.key]?.series);
         const value = points[0]?.y ?? null;
         return (
-          <div key={metric.key} className="grid grid-cols-[1fr_auto_80px] items-center gap-4 py-2 px-1">
+          <div key={metric.key} className="grid grid-cols-[1fr_auto] items-center gap-4 py-2 px-1">
             <div className="min-w-0">
               <Eyebrow>{metric.source}</Eyebrow>
               <span className="text-[13px] text-text">{metric.label}</span>
             </div>
-            <span className="text-[13px] text-muted">
+            <span className="font-mono tabular-nums text-[13px] text-text">
               {value != null ? formatMetric(value, metric.format) : "—"}
             </span>
-            <span className="text-[11px] text-muted-2 text-right">{metric.format}</span>
           </div>
         );
       })}
@@ -188,37 +187,73 @@ function SeriesCharts({
   endpoint: { metrics: Record<string, { series: Array<{ run_id: string; started_at: number; value: number | null }> }> } | undefined;
   hashContent: string;
 }) {
-  const filtered = metricDefs.filter((metric) => {
+  type DefWithPoints = {
+    metric: MetricDef;
+    points: Array<{ x: number; y: number | null; runId: string }>;
+    distinctValueCount: number;
+  };
+  const enriched: DefWithPoints[] = metricDefs.map((metric) => {
     const points = seriesPoints(runs, metric.key, endpoint?.metrics[metric.key]?.series);
     const distinct = new Set(points.map((p) => p.y).filter((v) => v != null));
-    return distinct.size >= 2;
+    return { metric, points, distinctValueCount: distinct.size };
   });
+  // Charts only make sense when there's variation; otherwise we collapse
+  // to a flat tile (the previous build silently dropped these metrics
+  // entirely on agents whose every invocation had identical zero values
+  // — the Metrics tab then rendered an empty area below the heading).
+  const charts = enriched.filter((row) => row.distinctValueCount >= 2);
+  const flat = enriched.filter((row) => row.distinctValueCount < 2);
   return (
-    <PanelGrid cols={2}>
-      {filtered.map((metric) => {
-        const points = seriesPoints(runs, metric.key, endpoint?.metrics[metric.key]?.series);
-        const p50 = median(
-          points.map((point) => point.y).filter((value): value is number => value != null),
-        );
-        return (
-          <PanelCard
-            key={metric.key}
-            title={metric.label}
-            eyebrow={metric.source}
-            bodyMinHeight={240}
-          >
-            <MetricSeriesChart
-              points={points}
-              identity={hashContent}
-              height={210}
-              formatY={(n) => formatMetric(n, metric.format)}
-              reference={p50 != null ? { y: p50, label: "group p50" } : undefined}
-              xLabel="invocation"
-            />
-          </PanelCard>
-        );
-      })}
-    </PanelGrid>
+    <div className="space-y-4">
+      <PanelGrid cols={2}>
+        {charts.map(({ metric, points }) => {
+          const p50 = median(
+            points.map((point) => point.y).filter((value): value is number => value != null),
+          );
+          return (
+            <PanelCard
+              key={metric.key}
+              title={metric.label}
+              eyebrow={metric.source}
+              bodyMinHeight={240}
+            >
+              <MetricSeriesChart
+                points={points}
+                identity={hashContent}
+                height={210}
+                formatY={(n) => formatMetric(n, metric.format)}
+                reference={p50 != null ? { y: p50, label: "group p50" } : undefined}
+                xLabel="invocation"
+              />
+            </PanelCard>
+          );
+        })}
+      </PanelGrid>
+      {flat.length > 0 ? (
+        <div className="divide-y divide-border rounded-md border border-border">
+          {flat.map(({ metric, points }) => {
+            const value = points.find((p) => p.y != null)?.y ?? null;
+            return (
+              <div
+                key={metric.key}
+                className="grid grid-cols-[1fr_auto] items-center gap-4 py-2 px-3"
+              >
+                <div className="min-w-0">
+                  <Eyebrow>{metric.source}</Eyebrow>
+                  <span className="text-[13px] text-text">{metric.label}</span>
+                </div>
+                <span
+                  className="font-mono tabular-nums text-[13px] text-muted-2"
+                  title="constant across invocations"
+                >
+                  {value != null ? formatMetric(value, metric.format) : "—"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

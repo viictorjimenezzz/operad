@@ -142,6 +142,39 @@ def create_app(
             except Exception:
                 continue
 
+    @app.on_event("startup")
+    async def _hydrate_registry_from_archive() -> None:
+        """Replay archived runs into the in-memory registry on startup.
+
+        The dashboard's RunRegistry is in-memory; restarting the server
+        loses the rich aggregation views (`/api/agents`, `/api/algorithms`,
+        `/api/trainings`, `/api/opro`) until new runs come in.  We
+        rehydrate from the SQLite archive so users see their runs across
+        restarts. The archive is the source of truth for the Archive rail
+        either way; this just lets the live aggregations match.
+        """
+        if archive_store is None:
+            return
+        try:
+            records = archive_store.iter_export_records()
+        except Exception:
+            return
+        for record in records:
+            events = record.get("events")
+            if not isinstance(events, list):
+                continue
+            for envelope in events:
+                if not isinstance(envelope, dict):
+                    continue
+                if envelope.get("type") not in _KNOWN_ENVELOPE_TYPES:
+                    continue
+                try:
+                    await obs.broadcast(envelope)
+                except Exception:
+                    # Skip bad events; never fail startup over a single
+                    # malformed envelope.
+                    continue
+
     # SPA assets first so /assets/X resolves without hitting the catch-all.
     if _WEB_ASSETS.is_dir():
         app.mount("/assets", StaticFiles(directory=str(_WEB_ASSETS)), name="assets")

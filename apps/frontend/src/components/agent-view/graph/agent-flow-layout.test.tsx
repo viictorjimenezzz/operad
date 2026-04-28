@@ -9,15 +9,30 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@xyflow/react", () => ({
   ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  ReactFlow: ({ nodes }: { nodes: Array<{ id: string; data: { onSelect?: () => void } }> }) => (
-    <div>
-      {nodes.map((node) => (
-        <button key={node.id} type="button" onClick={() => node.data.onSelect?.()}>
-          {node.id}
-        </button>
-      ))}
-    </div>
-  ),
+  ReactFlow: ({
+    defaultNodes,
+    nodes,
+    onNodeClick,
+  }: {
+    defaultNodes?: Array<{ id: string; type?: string; data: unknown }>;
+    nodes?: Array<{ id: string; type?: string; data: unknown }>;
+    onNodeClick?: (e: unknown, node: { id: string; type?: string }) => void;
+  }) => {
+    const list = defaultNodes ?? nodes ?? [];
+    return (
+      <div>
+        {list.map((node) => (
+          <button
+            key={node.id}
+            type="button"
+            onClick={(e) => onNodeClick?.(e, node)}
+          >
+            {node.id}
+          </button>
+        ))}
+      </div>
+    );
+  },
   Background: () => null,
   Controls: () => null,
   MiniMap: () => null,

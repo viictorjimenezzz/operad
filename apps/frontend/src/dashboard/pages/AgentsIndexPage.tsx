@@ -11,22 +11,22 @@ import { useAgentClasses, type AgentClassSummary } from "@/hooks/use-runs";
 import { formatCost, formatTokens } from "@/lib/utils";
 
 const columns: RunTableColumn[] = [
-  { id: "state", label: "State", source: "_state", sortable: true, width: 80 },
+  { id: "state", label: "State", source: "_state", sortable: true, width: 86 },
   { id: "class", label: "Class", source: "class", sortable: true, width: "1fr" },
-  { id: "instances", label: "Instances", source: "instances", align: "right", sortable: true, width: 90 },
-  { id: "invocations", label: "Invocations", source: "invocations", align: "right", sortable: true, width: 110 },
+  { id: "instances", label: "Instances", source: "instances", align: "right", sortable: true, width: 76 },
+  { id: "invocations", label: "Invocations", source: "invocations", align: "right", sortable: true, width: 88 },
   {
     id: "last",
     label: "Last seen",
     source: "_ended",
     sortable: true,
     defaultSort: "desc",
-    width: 90,
+    width: 96,
   },
-  { id: "running", label: "Running", source: "running", align: "right", sortable: true, width: 90 },
-  { id: "errors", label: "Errors", source: "errors", align: "right", sortable: true, width: 70 },
-  { id: "tokens", label: "Tokens", source: "tokens", align: "right", sortable: true, width: 100 },
-  { id: "cost", label: "Cost", source: "cost", align: "right", sortable: true, width: 90 },
+  { id: "running", label: "Running", source: "running", align: "right", sortable: true, width: 70 },
+  { id: "errors", label: "Errors", source: "errors", align: "right", sortable: true, width: 64 },
+  { id: "tokens", label: "Tokens", source: "tokens", align: "right", sortable: true, width: 84 },
+  { id: "cost", label: "Cost", source: "cost", align: "right", sortable: true, width: 76 },
 ];
 
 export function AgentsIndexPage() {
@@ -106,7 +106,7 @@ function classRow(group: AgentClassSummary): RunRow {
     endedAt: group.last_seen,
     durationMs: median(latencies),
     fields: {
-      class: { kind: "hash", value: group.class_name },
+      class: { kind: "text", value: group.class_name },
       instances: { kind: "num", value: group.instance_count, format: "int" },
       invocations: { kind: "num", value: invocations, format: "int" },
       running: { kind: "num", value: running, format: "int" },

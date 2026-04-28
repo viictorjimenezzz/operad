@@ -1,6 +1,7 @@
 import { Button, EmptyState, type RunRow, RunTable } from "@/components/ui";
 import { useChildren } from "@/hooks/use-children";
 import { defaultColumns as defaultDescriptor } from "@/lib/invocation-columns/default";
+import { useUIStore } from "@/stores";
 import { autoResearcherColumns } from "@/lib/invocation-columns/auto_researcher";
 import { beamColumns } from "@/lib/invocation-columns/beam";
 import { debateColumns } from "@/lib/invocation-columns/debate";
@@ -49,6 +50,7 @@ export function InvocationsTab({ runId, algorithmClass, defaultGroupBy }: Invoca
   const children = useChildren(runId);
   const [selected, setSelected] = useState<string[]>([]);
   const [tableVersion, setTableVersion] = useState(0);
+  const addToCompare = useUIStore((s) => s.addToCompare);
   const summary = useQuery({
     queryKey: ["run", "summary", runId] as const,
     queryFn: async () => {
@@ -102,17 +104,28 @@ export function InvocationsTab({ runId, algorithmClass, defaultGroupBy }: Invoca
 
   return (
     <div className="h-full overflow-auto p-4">
-      {selected.length >= 2 ? (
-        <div className="sticky bottom-0 z-10 mb-3 flex items-center gap-2 border border-border bg-bg-1 px-3 py-2 text-[12px] text-text">
+      {selected.length >= 1 ? (
+        <div className="sticky bottom-0 z-10 mb-3 flex flex-wrap items-center gap-2 border border-border bg-bg-1 px-3 py-2 text-[12px] text-text">
           <span className="font-mono">{selected.length} selected</span>
+          {selected.length >= 2 ? (
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() =>
+                navigate(`/experiments?runs=${selected.map(encodeURIComponent).join(",")}`)
+              }
+            >
+              Compare
+            </Button>
+          ) : null}
           <Button
             size="sm"
-            variant="primary"
-            onClick={() =>
-              navigate(`/experiments?runs=${selected.map(encodeURIComponent).join(",")}`)
-            }
+            variant="ghost"
+            onClick={() => {
+              for (const id of selected) addToCompare(id);
+            }}
           >
-            Compare
+            + add to basket
           </Button>
           <Button
             size="sm"

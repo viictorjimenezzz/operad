@@ -17,7 +17,7 @@ def _store(request: Request) -> BenchmarkStore:
     return request.app.state.benchmark_store
 
 
-@router.post("/benchmarks/_ingest")
+@router.post("/api/benchmarks/_ingest")
 async def benchmarks_ingest(request: Request) -> JSONResponse:
     payload = await request.json()
     store = _store(request)
@@ -28,12 +28,12 @@ async def benchmarks_ingest(request: Request) -> JSONResponse:
     return JSONResponse({"id": bench_id})
 
 
-@router.get("/benchmarks")
+@router.get("/api/benchmarks")
 async def benchmarks_list(request: Request) -> JSONResponse:
     return JSONResponse(_store(request).list())
 
 
-@router.get("/benchmarks/{bench_id}")
+@router.get("/api/benchmarks/{bench_id}")
 async def benchmarks_detail(request: Request, bench_id: str) -> JSONResponse:
     store = _store(request)
     detail = store.get(bench_id)
@@ -65,7 +65,7 @@ async def benchmarks_detail(request: Request, bench_id: str) -> JSONResponse:
     )
 
 
-@router.post("/benchmarks/{bench_id}/tag")
+@router.post("/api/benchmarks/{bench_id}/tag")
 async def benchmarks_tag(request: Request, bench_id: str) -> JSONResponse:
     payload = await request.json()
     if not isinstance(payload, dict):
@@ -80,7 +80,7 @@ async def benchmarks_tag(request: Request, bench_id: str) -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
-@router.delete("/benchmarks/{bench_id}")
+@router.delete("/api/benchmarks/{bench_id}")
 async def benchmarks_delete(request: Request, bench_id: str) -> JSONResponse:
     ok = _store(request).delete(bench_id)
     if not ok:

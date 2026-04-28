@@ -8,6 +8,7 @@ import { AgentGroupTrainTab } from "@/dashboard/pages/AgentGroupTrainTab";
 import { AgentsByClassPage } from "@/dashboard/pages/AgentsByClassPage";
 import { AgentsIndexPage } from "@/dashboard/pages/AgentsIndexPage";
 import { AlgorithmsIndexPage } from "@/dashboard/pages/AlgorithmsIndexPage";
+import { ArchivePage } from "@/dashboard/pages/ArchivePage";
 import { BenchmarkDetailPage } from "@/dashboard/pages/BenchmarkDetailPage";
 import { BenchmarksPage } from "@/dashboard/pages/BenchmarksPage";
 import { CassetteDetailPage } from "@/dashboard/pages/CassetteDetailPage";
@@ -42,10 +43,23 @@ export const dashboardRoutes = [
         element: <AgentGroupPage />,
         children: [
           { index: true, element: <AgentGroupOverviewTab /> },
-          { path: "runs", element: <AgentGroupRunsTab /> },
+          { path: "invocations", element: <AgentGroupRunsTab /> },
           { path: "metrics", element: <AgentGroupMetricsTab /> },
-          { path: "train", element: <AgentGroupTrainTab /> },
-          { path: "graph", element: <AgentGroupGraphTab /> },
+          { path: "training", element: <AgentGroupTrainTab /> },
+          {
+            path: "graph",
+            element: <AgentGroupGraphTab />,
+            errorElement: <GraphRouteErrorBoundary />,
+          },
+          // Legacy aliases — old links/bookmarks should not 404.
+          {
+            path: "runs",
+            element: <Navigate to="../invocations" relative="path" replace />,
+          },
+          {
+            path: "train",
+            element: <Navigate to="../training" relative="path" replace />,
+          },
         ],
       },
       {
@@ -87,6 +101,7 @@ export const dashboardRoutes = [
       { path: "cassettes", element: <CassettesPage /> },
       { path: "cassettes/*", element: <CassetteDetailPage /> },
       { path: "experiments", element: <ExperimentsPage /> },
+      { path: "archive", element: <ArchivePage /> },
       ...(import.meta.env.DEV
         ? [{ path: "__dev/primitives", element: <PrimitivesGallery /> }]
         : []),

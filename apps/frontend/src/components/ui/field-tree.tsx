@@ -15,6 +15,15 @@ export interface FieldTreeProps {
   descriptions?: Record<string, string>;
   /** Full inspectors can disable string truncation while compact previews keep it on. */
   truncateStrings?: boolean;
+  /**
+   * Layout mode for scalar leaves:
+   *   - "inline" (default): `attr: value` on a single line.
+   *   - "stacked": label on its own line, value indented below — better
+   *     for long strings or rich values where horizontal wrapping looks
+   *     cramped. Containers always behave like "inline" so the chevron
+   *     stays beside the key name.
+   */
+  layout?: "inline" | "stacked";
 }
 
 type NodeProps = {
@@ -26,6 +35,7 @@ type NodeProps = {
   hideCopy: boolean;
   descriptions?: Record<string, string> | undefined;
   truncateStrings: boolean;
+  layout: "inline" | "stacked";
 };
 
 function isObj(v: unknown): v is Record<string, unknown> {
@@ -75,6 +85,7 @@ function Node({
   hideCopy,
   descriptions,
   truncateStrings,
+  layout,
 }: NodeProps) {
   const isContainer = isObj(value) || Array.isArray(value);
   const [open, setOpen] = useState(depth < defaultDepth);
@@ -89,6 +100,20 @@ function Node({
           : typeof value === "boolean"
             ? "text-[--color-warn]"
             : "text-muted-2";
+    if (layout === "stacked") {
+      return (
+        <div className="group py-1 font-mono text-[12px]">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.06em] text-muted-2">
+            <span>{label}</span>
+            {hideCopy ? null : <CopyButton value={value} />}
+            {desc ? <span className="text-muted">— {desc}</span> : null}
+          </div>
+          <div className={cn("mt-0.5 whitespace-pre-wrap break-words text-[13px]", valueClass)}>
+            {valueLabel(value, truncateStrings)}
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="group flex items-baseline gap-2 py-0.5 font-mono text-[12px]">
         <span className="flex-shrink-0 text-muted">{label}:</span>
@@ -133,6 +158,7 @@ function Node({
                   hideCopy={hideCopy}
                   descriptions={descriptions}
                   truncateStrings={truncateStrings}
+                  layout={layout}
                 />
               ))
             : Object.entries(value as Record<string, unknown>).map(([k, v]) => (
@@ -146,6 +172,7 @@ function Node({
                   hideCopy={hideCopy}
                   descriptions={descriptions}
                   truncateStrings={truncateStrings}
+                  layout={layout}
                 />
               ))}
         </div>
@@ -162,6 +189,7 @@ export function FieldTree({
   preview = false,
   descriptions,
   truncateStrings = true,
+  layout = "inline",
 }: FieldTreeProps) {
   if (data === null || data === undefined) {
     return <span className="text-[12px] text-muted-2">—</span>;
@@ -187,7 +215,7 @@ export function FieldTree({
   }
   if (isObj(data) || Array.isArray(data)) {
     return (
-      <div className={cn("space-y-0.5", className)}>
+      <div className={cn(layout === "stacked" ? "space-y-1" : "space-y-0.5", className)}>
         {Array.isArray(data)
           ? data.map((v, i) => (
               <Node
@@ -200,6 +228,7 @@ export function FieldTree({
                 hideCopy={hideCopy}
                 descriptions={descriptions}
                 truncateStrings={truncateStrings}
+                layout={layout}
               />
             ))
           : Object.entries(data as Record<string, unknown>).map(([k, v]) => (
@@ -213,6 +242,7 @@ export function FieldTree({
                 hideCopy={hideCopy}
                 descriptions={descriptions}
                 truncateStrings={truncateStrings}
+                layout={layout}
               />
             ))}
       </div>

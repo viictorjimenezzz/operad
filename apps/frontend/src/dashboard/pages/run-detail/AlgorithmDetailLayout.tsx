@@ -7,7 +7,7 @@ import {
   Metric,
   Pill,
 } from "@/components/ui";
-import { useRunEvents, useRunInvocations, useRunSummary } from "@/hooks/use-runs";
+import { useManifest, useRunEvents, useRunInvocations, useRunSummary } from "@/hooks/use-runs";
 import { resolveLayout } from "@/layouts";
 import { computeAlgorithmKpis } from "@/lib/algorithm-kpis";
 import type { RunSummary } from "@/lib/types";
@@ -31,6 +31,7 @@ export function AlgorithmDetailLayout() {
   const summary = useRunSummary(runId);
   const events = useRunEvents(runId);
   const invocations = useRunInvocations(runId);
+  const manifest = useManifest();
   const ingest = useEventBufferStore((s) => s.ingest);
 
   useEffect(() => {
@@ -47,6 +48,18 @@ export function AlgorithmDetailLayout() {
     const rows = invocations.data?.invocations ?? [];
     return rows[rows.length - 1] ?? null;
   }, [invocations.data]);
+
+  // Optimisers and pure-orchestrator algorithms (OPRO, EvoGradient,
+  // Sweep, ...) often have no agent_event under the algorithm's *own*
+  // root_agent_path, so `latest.langfuse_url` is null. Fall back to
+  // deriving the deep-link from the manifest base URL + run_id so the
+  // breadcrumb still gets a langfuse jump-out.
+  const derivedLangfuseUrl = useMemo(() => {
+    if (latest?.langfuse_url) return latest.langfuse_url;
+    if (!runId) return null;
+    const base = manifest.data?.langfuseUrl;
+    return base ? `${base.replace(/\/$/, "")}/trace/${runId}` : null;
+  }, [latest, runId, manifest.data?.langfuseUrl]);
 
   if (!runId) return <EmptyState title="missing run id" />;
   if (summary.isLoading) {
@@ -77,11 +90,16 @@ export function AlgorithmDetailLayout() {
       <RunBreadcrumb
         run={run}
         breadcrumbs={breadcrumbs}
-        langfuseUrl={latest?.langfuse_url ?? null}
+        langfuseUrl={derivedLangfuseUrl}
         hashContent={latest?.hash_content ?? run.run_id}
       />
       <div className="flex-1 overflow-hidden">
+        {/* Key on runId so swapping between two OPROOptimizer (or any
+            two algo) instances fully remounts the renderer; otherwise
+            the stale query cache from the previous run flashes the
+            old tabs and data. */}
         <DashboardRenderer
+          key={runId}
           layout={layout}
           context={{ runId, algorithmPath: run.algorithm_path ?? "" }}
         />
@@ -104,10 +122,30 @@ function RunBreadcrumb({
   const className = run.algorithm_class ?? run.algorithm_path?.split(".").at(-1) ?? "Algorithm";
   const totalTokens = run.prompt_tokens + run.completion_tokens;
   const cost = run.cost?.cost_usd;
+  // Show a truncated id in the breadcrumb so two distinct OPROOptimizer
+  // (or any two algo) instances are visually distinguishable without
+  // overflowing the row with a full hash.
+  const shortRunId = run.run_id.length > 12 ? `${run.run_id.slice(0, 8)}…${run.run_id.slice(-4)}` : run.run_id;
+  // For optimisers (OPRO/EvoGradient) include the parameter path being
+  // optimised. Without this the breadcrumb of two optimiser sessions that
+  // target different params reads identically.
+  const paramPath = (() => {
+    for (const it of run.iterations ?? []) {
+      const meta = (it as { metadata?: { param_path?: unknown } }).metadata;
+      const pp = meta?.param_path;
+      if (typeof pp === "string" && pp) return pp;
+    }
+    return null;
+  })();
 
   return (
     <Breadcrumb
-      items={[...breadcrumbs, { label: className }, { label: run.run_id, mono: true }]}
+      items={[
+        ...breadcrumbs,
+        { label: className },
+        ...(paramPath ? [{ label: paramPath, mono: true }] : []),
+        { label: shortRunId, mono: true },
+      ]}
       trailing={
         <>
           <HashTag hash={hashContent ?? run.run_id} dotOnly size="sm" />
@@ -127,19 +165,21 @@ function RunBreadcrumb({
           <Pill tone="algo" size="sm">
             algo
           </Pill>
-          <Metric label="ago" value={formatRelativeTime(run.started_at)} />
-          <Metric label="dur" value={formatDurationMs(run.duration_ms)} />
-          <Metric
-            label="tok"
-            value={formatTokensOrUnavailable(totalTokens)}
-            {...(hasTokenUsage(run.prompt_tokens, run.completion_tokens)
-              ? { sub: formatTokenPairOrUnavailable(run.prompt_tokens, run.completion_tokens) }
-              : {})}
-          />
-          <Metric label="$" value={formatCostOrUnavailable(cost)} />
-          {computeAlgorithmKpis(run).map((kpi) => (
-            <Metric key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} />
-          ))}
+            <Metric label="ago" value={formatRelativeTime(run.started_at)} />
+            <Metric label="dur" value={formatDurationMs(run.duration_ms)} />
+            {hasTokenUsage(run.prompt_tokens, run.completion_tokens) ? (
+              <Metric
+                label="tok"
+                value={formatTokensOrUnavailable(totalTokens)}
+                sub={formatTokenPairOrUnavailable(run.prompt_tokens, run.completion_tokens)}
+              />
+            ) : null}
+            {typeof cost === "number" && Number.isFinite(cost) && cost > 0 ? (
+              <Metric label="$" value={formatCostOrUnavailable(cost)} />
+            ) : null}
+            {computeAlgorithmKpis(run).map((kpi) => (
+              <Metric key={kpi.label} label={kpi.label} value={kpi.value} sub={kpi.sub} />
+            ))}
           {langfuseUrl ? (
             <a
               href={langfuseUrl}
