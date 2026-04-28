@@ -41,7 +41,13 @@ export const beamRegistry: ComponentRegistry = {
   },
   BeamScoreHistogram: ({ element }) => {
     const p = element.props as { data?: unknown; dataIterations?: unknown; bins?: number };
-    return <BeamScoreHistogramTab data={p.data} dataIterations={p.dataIterations} bins={p.bins} />;
+    return (
+      <BeamScoreHistogramTab
+        data={p.data}
+        dataIterations={p.dataIterations}
+        {...(p.bins === undefined ? {} : { bins: p.bins })}
+      />
+    );
   },
   CriticRationaleCard: ({ element }) => {
     const p = element.props as ComponentProps<typeof CriticRationaleCard>;
