@@ -11,6 +11,7 @@ Owner: 1-1-skeleton.
 """
 
 import os
+from collections.abc import Mapping
 from typing import Any
 
 from operad import Configuration
@@ -61,13 +62,25 @@ def tier_to_config(
 
     config = Configuration(**kwargs)
     for path, value in (overrides or {}).items():
-        _set_path(config, path, value)
+        _apply_override(config, path, value)
     return config
 
 
-def _set_path(root: object, path: str, value: Any) -> None:
+def _apply_override(root: object, path: str, value: Any) -> None:
+    """Apply an override expressed as either a dotted path or a nested mapping.
+
+    Dotted form: ``"sampling.temperature": 0.5`` -> ``root.sampling.temperature = 0.5``.
+    Nested form: ``"sampling": {"temperature": 0.2}`` -> ``root.sampling.temperature = 0.2``.
+    """
+
     parent: object = root
     segments = path.split(".")
     for segment in segments[:-1]:
         parent = getattr(parent, segment)
-    setattr(parent, segments[-1], value)
+    leaf = segments[-1]
+    if isinstance(value, Mapping):
+        target = getattr(parent, leaf)
+        for sub_key, sub_value in value.items():
+            _apply_override(target, sub_key, sub_value)
+        return
+    setattr(parent, leaf, value)

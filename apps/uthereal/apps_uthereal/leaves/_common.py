@@ -97,6 +97,7 @@ class _YamlMetadata:
     rules: list[str]
     examples: list[dict[str, Any]]
     tier: str
+    templated_examples: bool = False
 
 
 def load_yaml(
@@ -110,7 +111,7 @@ def load_yaml(
 
     yaml_path = Path(path)
     source_bytes = yaml_path.read_bytes()
-    data = _load_yaml_bytes(source_bytes, yaml_path)
+    data, templated_examples = _load_yaml_bytes_resilient(source_bytes, yaml_path)
     prompt = _required_mapping(data, "prompt", yaml_path, field="prompt")
     config_data = _required_mapping(data, "config", yaml_path, field="config")
 
@@ -154,6 +155,7 @@ def load_yaml(
         rules=rules,
         examples=_dump_examples(examples),
         tier=tier,
+        templated_examples=templated_examples,
     )
     object.__setattr__(agent, "_uthereal_yaml_metadata", metadata)
     return agent
@@ -251,12 +253,54 @@ def _yaml() -> YAML:
 
 
 def _load_yaml_bytes(source: bytes, path: Path) -> CommentedMap:
+    data, _ = _load_yaml_bytes_resilient(source, path)
+    return data
+
+
+def _load_yaml_bytes_resilient(
+    source: bytes,
+    path: Path,
+) -> tuple[CommentedMap, bool]:
+    """Parse YAML, retrying with a stripped ``examples:`` block on Jinja errors.
+
+    uthereal's selfserve YAMLs (e.g. ``retrieval/agents/agent_talker.yaml``)
+    embed Jinja2 ``[% for example in examples %]`` blocks that ruamel.yaml
+    cannot scan. We can't run them through Jinja at load time (the bridge has
+    no rendering context), so we strip the templated ``examples:`` block and
+    treat its examples as empty. ``_YamlMetadata`` records the original bytes
+    so `dump_yaml` can replay them when no parameter changed.
+    """
+
     try:
-        data = _yaml().load(source.decode("utf-8"))
-    except (UnicodeDecodeError, YAMLError) as exc:
+        text = source.decode("utf-8")
+    except UnicodeDecodeError as exc:
         raise LoaderError(path, "yaml_parse_failed", parser_error=str(exc)) from exc
+
+    try:
+        data = _yaml().load(text)
+        return _validate_root(data, path), False
+    except YAMLError as first_exc:
+        if not _has_template_markers(text):
+            raise LoaderError(
+                path,
+                "yaml_parse_failed",
+                parser_error=str(first_exc),
+            ) from first_exc
+        stripped = _strip_templated_examples(text)
+        try:
+            data = _yaml().load(stripped)
+        except YAMLError as second_exc:
+            raise LoaderError(
+                path,
+                "yaml_parse_failed",
+                parser_error=str(second_exc),
+            ) from second_exc
+        return _validate_root(data, path), True
+
+
+def _validate_root(data: Any, path: Path) -> CommentedMap:
     if data is None:
-        data = CommentedMap()
+        return CommentedMap()
     if not isinstance(data, CommentedMap):
         raise LoaderError(
             path,
@@ -264,6 +308,55 @@ def _load_yaml_bytes(source: bytes, path: Path) -> CommentedMap:
             parser_error="root is not a mapping",
         )
     return data
+
+
+_TEMPLATE_MARKER_RE = re.compile(r"\[%|\{%|\[\[|\{\{")
+
+
+def _has_template_markers(text: str) -> bool:
+    return bool(_TEMPLATE_MARKER_RE.search(text))
+
+
+def _strip_templated_examples(text: str) -> str:
+    """Replace any ``examples:`` block containing Jinja markers with ``examples: []``.
+
+    The block is identified by its leading indent: every subsequent line that
+    is blank or indented more than the ``examples:`` key is part of the block.
+    """
+
+    lines = text.splitlines(keepends=True)
+    output: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        match = re.match(r"^(?P<indent>\s*)examples:\s*$", line)
+        if match is None:
+            output.append(line)
+            index += 1
+            continue
+
+        indent = match.group("indent")
+        block_start = index + 1
+        block_end = block_start
+        while block_end < len(lines):
+            candidate = lines[block_end]
+            if candidate.strip() == "":
+                block_end += 1
+                continue
+            stripped_indent = len(candidate) - len(candidate.lstrip(" "))
+            if stripped_indent <= len(indent):
+                break
+            block_end += 1
+
+        block_text = "".join(lines[block_start:block_end])
+        if _has_template_markers(block_text):
+            output.append(f"{indent}examples: []\n")
+            index = block_end
+            continue
+
+        output.append(line)
+        index += 1
+    return "".join(output)
 
 
 def _required_mapping(
