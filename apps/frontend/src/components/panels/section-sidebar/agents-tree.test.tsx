@@ -29,15 +29,6 @@ function renderTree(initialPath = "/agents") {
           }
         />
         <Route
-          path="/agents/_class_/:className"
-          element={
-            <>
-              <AgentsTree search="" />
-              <LocationProbe />
-            </>
-          }
-        />
-        <Route
           path="/agents/:hashContent"
           element={
             <>
@@ -86,7 +77,7 @@ afterEach(() => {
 });
 
 describe("<AgentsTree />", () => {
-  it("always renders class -> instance -> invocation rows and routes each level", async () => {
+  it("renders instance -> invocation rows and routes each level", async () => {
     useAgentGroupsMock.mockReturnValue({
       data: [sampleGroup()],
       isLoading: false,
@@ -99,11 +90,6 @@ describe("<AgentsTree />", () => {
     expect(screen.getByText("run-001")).toBeTruthy();
 
     fireEvent.click(screen.getByText("research_analyst"));
-    await waitFor(() => {
-      expect(screen.getByTestId("location").textContent).toBe("/agents/_class_/research_analyst");
-    });
-
-    fireEvent.click(screen.getByText("abc123hash"));
     await waitFor(() => {
       expect(screen.getByTestId("location").textContent).toBe("/agents/abc123hash");
     });

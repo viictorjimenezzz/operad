@@ -477,9 +477,9 @@ function RunTableFooter({
         <Popover.Trigger asChild>
           <button
             type="button"
-            className="mr-2 inline-flex h-7 items-center gap-1.5 rounded border border-border bg-bg-2 px-2 text-[11px] text-muted transition-colors hover:border-border-strong hover:text-text"
+            className="mr-2 inline-flex h-6 items-center gap-1 rounded border border-border bg-bg-2 px-1.5 text-[10px] text-muted transition-colors hover:border-border-strong hover:text-text"
           >
-            <Columns3 size={13} />
+            <Columns3 size={11} />
             Columns
           </button>
         </Popover.Trigger>

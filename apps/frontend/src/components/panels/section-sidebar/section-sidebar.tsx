@@ -50,34 +50,37 @@ export function SectionSidebar() {
         : rail === "opro"
           ? "OPRO"
           : "Agents";
+  const showTitleBar = rail !== "agents" || sidebarCollapsed;
 
   return (
     <aside
       className="relative flex h-full flex-col border-r border-border bg-bg-1"
       style={{ transition: "width 200ms ease" }}
     >
-      <div className="flex items-center gap-1.5 border-b border-border px-2 py-2">
-        {!sidebarCollapsed ? (
-          <>
-            <span className="px-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text">
-              {railTitle}
-            </span>
+      {showTitleBar ? (
+        <div className="flex items-center gap-1.5 border-b border-border px-2 py-2">
+          {!sidebarCollapsed ? (
+            <>
+              <span className="px-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text">
+                {railTitle}
+              </span>
+              <span className="ml-auto" />
+            </>
+          ) : (
             <span className="ml-auto" />
-          </>
-        ) : (
-          <span className="ml-auto" />
-        )}
-        <IconButton
-          ref={toggleButtonRef}
-          aria-label={sidebarCollapsed ? "expand sidebar" : "collapse sidebar"}
-          aria-expanded={!sidebarCollapsed}
-          onClick={toggleSidebar}
-          title="toggle (cmd+\\)"
-          size="sm"
-        >
-          {sidebarCollapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
-        </IconButton>
-      </div>
+          )}
+          <IconButton
+            ref={toggleButtonRef}
+            aria-label={sidebarCollapsed ? "expand sidebar" : "collapse sidebar"}
+            aria-expanded={!sidebarCollapsed}
+            onClick={toggleSidebar}
+            title="toggle (cmd+\\)"
+            size="sm"
+          >
+            {sidebarCollapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+          </IconButton>
+        </div>
+      ) : null}
 
       {!sidebarCollapsed ? (
         <>
@@ -92,6 +95,18 @@ export function SectionSidebar() {
                 className="ml-1.5 w-full bg-transparent text-[12px] text-text outline-none placeholder:text-muted-2"
               />
             </div>
+            {!showTitleBar ? (
+              <IconButton
+                ref={toggleButtonRef}
+                aria-label="collapse sidebar"
+                aria-expanded
+                onClick={toggleSidebar}
+                title="toggle (cmd+\\)"
+                size="sm"
+              >
+                <ChevronLeft size={13} />
+              </IconButton>
+            ) : null}
           </div>
           <div className="flex-1 overflow-auto">
             {rail === "agents" ? <AgentsTree search={search} /> : null}

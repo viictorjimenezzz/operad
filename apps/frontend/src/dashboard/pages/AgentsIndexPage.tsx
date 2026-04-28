@@ -1,20 +1,20 @@
-import {
-  Breadcrumb,
-  EmptyState,
-  Metric,
-  PanelSection,
-  type RunRow,
-  RunTable,
-  type RunTableColumn,
-} from "@/components/ui";
-import { useAgentClasses, type AgentClassSummary } from "@/hooks/use-runs";
+import { EmptyState, Metric, type RunRow, RunTable, type RunTableColumn } from "@/components/ui";
+import { useAgentGroups } from "@/hooks/use-runs";
+import type { AgentGroupSummary } from "@/lib/types";
 import { formatCost, formatTokens } from "@/lib/utils";
 
 const columns: RunTableColumn[] = [
   { id: "state", label: "State", source: "_state", sortable: true, width: 86 },
-  { id: "class", label: "Class", source: "class", sortable: true, width: "1fr" },
-  { id: "instances", label: "Instances", source: "instances", align: "right", sortable: true, width: 76 },
-  { id: "invocations", label: "Invocations", source: "invocations", align: "right", sortable: true, width: 88 },
+  { id: "class", label: "Class", source: "class", sortable: true, width: 150 },
+  { id: "instance", label: "Instance", source: "instance", sortable: true, width: "1fr" },
+  {
+    id: "invocations",
+    label: "Invocations",
+    source: "invocations",
+    align: "right",
+    sortable: true,
+    width: 88,
+  },
   {
     id: "last",
     label: "Last seen",
@@ -30,32 +30,21 @@ const columns: RunTableColumn[] = [
 ];
 
 export function AgentsIndexPage() {
-  const classes = useAgentClasses();
-  const data = classes.data ?? [];
-  const rows = data.map(classRow);
+  const groups = useAgentGroups();
+  const data = groups.data ?? [];
+  const rows = data.map(instanceRow);
   const totalTokens = data.reduce(
-    (acc, group) => acc + group.instances.reduce((sum, instance) => sum + instance.prompt_tokens + instance.completion_tokens, 0),
+    (acc, instance) => acc + instance.prompt_tokens + instance.completion_tokens,
     0,
   );
-  const totalCost = data.reduce(
-    (acc, group) => acc + group.instances.reduce((sum, instance) => sum + instance.cost_usd, 0),
-    0,
-  );
-  const instances = data.reduce((acc, group) => acc + group.instance_count, 0);
-  const invocations = data.reduce(
-    (acc, group) => acc + group.instances.reduce((sum, instance) => sum + instance.count, 0),
-    0,
-  );
-  const errors = data.reduce(
-    (acc, group) => acc + group.instances.reduce((sum, instance) => sum + instance.errors, 0),
-    0,
-  );
+  const totalCost = data.reduce((acc, instance) => acc + instance.cost_usd, 0);
+  const invocations = data.reduce((acc, instance) => acc + instance.count, 0);
+  const errors = data.reduce((acc, instance) => acc + instance.errors, 0);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <Breadcrumb items={[{ label: "Agents" }]} />
       <div className="flex-1 overflow-auto p-4">
-        {classes.isLoading ? (
+        {groups.isLoading ? (
           <div className="text-xs text-muted">loading agents...</div>
         ) : data.length === 0 ? (
           <EmptyState
@@ -64,21 +53,18 @@ export function AgentsIndexPage() {
           />
         ) : (
           <div className="space-y-4">
-            <PanelSection label="Agents">
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-border bg-bg-1 px-3 py-2">
-                <Metric label="classes" value={data.length} />
-                <Metric label="instances" value={instances} />
-                <Metric label="invocations" value={invocations} />
-                <Metric label="tokens" value={formatTokens(totalTokens)} />
-                <Metric label="cost" value={formatCost(totalCost)} />
-                <Metric label="errors" value={errors} />
-              </div>
-            </PanelSection>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-border bg-bg-1 px-3 py-2">
+              <Metric label="instances" value={data.length} />
+              <Metric label="invocations" value={invocations} />
+              <Metric label="tokens" value={formatTokens(totalTokens)} />
+              <Metric label="cost" value={formatCost(totalCost)} />
+              <Metric label="errors" value={errors} />
+            </div>
             <RunTable
               rows={rows}
               columns={columns}
               storageKey="agents-index"
-              rowHref={(row) => `/agents/_class_/${encodeURIComponent(row.id)}`}
+              rowHref={(row) => `/agents/${row.id}`}
               emptyTitle="no agents yet"
               emptyDescription="run an agent or replay a cassette to populate this view"
             />
@@ -89,30 +75,28 @@ export function AgentsIndexPage() {
   );
 }
 
-function classRow(group: AgentClassSummary): RunRow {
-  const running = group.instances.reduce((sum, instance) => sum + instance.running, 0);
-  const errors = group.instances.reduce((sum, instance) => sum + instance.errors, 0);
-  const invocations = group.instances.reduce((sum, instance) => sum + instance.count, 0);
-  const promptTokens = group.instances.reduce((sum, instance) => sum + instance.prompt_tokens, 0);
-  const completionTokens = group.instances.reduce((sum, instance) => sum + instance.completion_tokens, 0);
-  const cost = group.instances.reduce((sum, instance) => sum + instance.cost_usd, 0);
-  const state = running > 0 ? "running" : errors > 0 ? "error" : "ended";
-  const latencies = group.instances.flatMap((instance) => instance.latencies);
+function instanceRow(instance: AgentGroupSummary): RunRow {
+  const className = instance.class_name ?? "Agent";
+  const state = instance.running > 0 ? "running" : instance.errors > 0 ? "error" : "ended";
   return {
-    id: group.class_name,
-    identity: group.class_name,
+    id: instance.hash_content,
+    identity: instance.hash_content,
     state,
-    startedAt: group.first_seen,
-    endedAt: group.last_seen,
-    durationMs: median(latencies),
+    startedAt: instance.first_seen,
+    endedAt: instance.last_seen,
+    durationMs: median(instance.latencies),
     fields: {
-      class: { kind: "text", value: group.class_name },
-      instances: { kind: "num", value: group.instance_count, format: "int" },
-      invocations: { kind: "num", value: invocations, format: "int" },
-      running: { kind: "num", value: running, format: "int" },
-      errors: { kind: "num", value: errors, format: "int" },
-      tokens: { kind: "num", value: promptTokens + completionTokens, format: "tokens" },
-      cost: { kind: "num", value: cost, format: "cost" },
+      class: { kind: "text", value: className },
+      instance: { kind: "hash", value: instance.hash_content },
+      invocations: { kind: "num", value: instance.count, format: "int" },
+      running: { kind: "num", value: instance.running, format: "int" },
+      errors: { kind: "num", value: instance.errors, format: "int" },
+      tokens: {
+        kind: "num",
+        value: instance.prompt_tokens + instance.completion_tokens,
+        format: "tokens",
+      },
+      cost: { kind: "num", value: instance.cost_usd, format: "cost" },
     },
   };
 }

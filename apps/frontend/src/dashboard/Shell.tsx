@@ -23,6 +23,7 @@ export function Shell() {
   useDashboardStream("/stream");
 
   const path = location.pathname;
+  const isAgentsPage = path.startsWith("/agents");
   const showSectionSidebar =
     path === "/" ||
     path.startsWith("/agents") ||
@@ -33,7 +34,7 @@ export function Shell() {
 
   return (
     <div className="flex h-screen flex-col bg-bg">
-      <GlobalStatsBar subtitle="dashboard" />
+      {isAgentsPage ? null : <GlobalStatsBar subtitle="dashboard" />}
       <CassetteRibbon />
       <div className="flex flex-1 overflow-hidden">
         <GlobalRail />
