@@ -64,7 +64,7 @@ describe("Agent overview sparse states", () => {
     mockUseAgentGroupMetrics.mockReturnValue({ data: undefined });
   });
 
-  it("does not count blank hashes as reproducibility stability", () => {
+  it("does not render blank hashes as valid chip values", () => {
     render(
       <ReproducibilityBlock
         dataInvocations={{
@@ -83,7 +83,11 @@ describe("Agent overview sparse states", () => {
       />,
     );
 
-    expect(screen.getByText(/1 baseline hash/)).toBeTruthy();
+    // hash_content chip is present and shows a value
+    expect(screen.getByLabelText("hash_content hash")).toBeTruthy();
+    // blank/empty hash chips render with "—" placeholder, not a real hash
+    const modelChip = screen.getByLabelText("hash_model hash");
+    expect(modelChip.textContent).toContain("—");
   });
 
   it("shows single-invocation metrics with custom values", () => {
