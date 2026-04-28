@@ -225,7 +225,8 @@ export const catalog = createCatalog({
         runId: z.string().optional(),
       }),
     },
-    VerifierIterations: { props: z.object({ source: sourceExpr }) },
+    VerifierIterationsTab: { props: z.object({ source: sourceExpr }) },
+    VerifierAcceptanceTab: { props: z.object({ source: sourceExpr }) },
     AgentGraph: {
       props: z.object({
         source: sourceExpr,

@@ -1,5 +1,6 @@
+import { VerifierAcceptanceTab } from "@/components/algorithms/verifier/acceptance-tab";
 import { VerifierDetailOverview } from "@/components/algorithms/verifier/verifier-detail-overview";
-import { VerifierIterations } from "@/components/algorithms/verifier/verifier-iterations";
+import { VerifierIterationsTab } from "@/components/algorithms/verifier/iterations-tab";
 import type { ComponentRegistry } from "@json-render/react";
 
 export const verifierRegistry: ComponentRegistry = {
@@ -17,8 +18,12 @@ export const verifierRegistry: ComponentRegistry = {
       />
     );
   },
-  VerifierIterations: ({ element }) => {
+  VerifierIterationsTab: ({ element }) => {
     const p = element.props as { data?: unknown };
-    return <VerifierIterations data={p.data} />;
+    return <VerifierIterationsTab data={p.data} />;
+  },
+  VerifierAcceptanceTab: ({ element }) => {
+    const p = element.props as { data?: unknown };
+    return <VerifierAcceptanceTab data={p.data} />;
   },
 };

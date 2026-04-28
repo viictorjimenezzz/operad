@@ -7,8 +7,7 @@
       "endpoint": "/runs/$context.runId/iterations.json",
       "stream": "/runs/$context.runId/iterations.sse"
     },
-    "children": { "endpoint": "/runs/$context.runId/children" },
-    "graph": { "endpoint": "/graph/$context.runId" }
+    "children": { "endpoint": "/runs/$context.runId/children" }
   },
   "spec": {
     "root": "page",
@@ -17,40 +16,29 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "overview", "label": "Overview" },
             { "id": "iterations", "label": "Iterations" },
+            { "id": "acceptance", "label": "Acceptance" },
+            { "id": "parameters", "label": "Parameters" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
-            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
-            { "id": "graph", "label": "Graph" }
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
-        "children": ["overview", "iterations", "agents", "events", "graph"]
-      },
-      "overview": {
-        "type": "VerifierDetailOverview",
-        "props": {
-          "sourceSummary": "$queries.summary",
-          "sourceIterations": "$queries.iterations",
-          "runId": "$context.runId"
-        }
+        "children": ["iterations", "acceptance", "parameters", "agents", "events"]
       },
       "iterations": {
-        "type": "PanelCard",
-        "props": { "title": "iterations", "bodyMinHeight": 320 },
-        "children": ["iterations-view"]
-      },
-      "iterations-view": {
-        "type": "VerifierIterations",
+        "type": "VerifierIterationsTab",
         "props": { "source": "$queries.iterations" }
       },
-      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
-      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
-      "graph": {
-        "type": "PanelCard",
-        "props": { "title": "agent graph" },
-        "children": ["graph-view"]
+      "acceptance": {
+        "type": "VerifierAcceptanceTab",
+        "props": { "source": "$queries.iterations" }
       },
-      "graph-view": { "type": "AgentGraph", "props": { "source": "$queries.graph" } }
+      "parameters": {
+        "type": "ParametersTab",
+        "props": { "runId": "$context.runId", "scope": "run" }
+      },
+      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } }
     }
   }
 }

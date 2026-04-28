@@ -1,30 +1,30 @@
-import { VerifierIterations } from "@/components/algorithms/verifier/verifier-iterations";
+import { VerifierIterationsTab } from "@/components/algorithms/verifier/iterations-tab";
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
 afterEach(cleanup);
 
-describe("VerifierIterations", () => {
-  it("renders per-iteration accept and reject states against threshold", () => {
+describe("VerifierIterationsTab", () => {
+  it("renders per-iteration candidate, score, and acceptance", () => {
     render(
       <MemoryRouter>
-        <VerifierIterations
+        <VerifierIterationsTab
           data={{
             threshold: 0.8,
             converged: true,
             iterations: [
-              { iter_index: 0, phase: "verify", score: 0.5, text: "first", metadata: {} },
-              { iter_index: 1, phase: "verify", score: 0.9, text: "second", metadata: {} },
+              { iter_index: 0, phase: "verify", score: 0.5, text: "first candidate", metadata: {} },
+              { iter_index: 1, phase: "verify", score: 0.9, text: "second candidate", metadata: {} },
             ],
           }}
         />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText(/Reject/)).toBeTruthy();
-    expect(screen.getByText(/Accept/)).toBeTruthy();
-    expect(screen.getByText("first")).toBeTruthy();
-    expect(screen.getByText("second")).toBeTruthy();
+    expect(screen.getAllByText("first candidate").length).toBeGreaterThan(0);
+    expect(screen.getByText("second candidate")).toBeTruthy();
+    expect(screen.getAllByText("accepted").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("rejected").length).toBeGreaterThan(0);
   });
 });
