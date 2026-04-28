@@ -116,8 +116,9 @@ describe("resolveLayout integration (real layouts/)", () => {
     expect(beam.dataSources.iterations?.endpoint).toContain("/iterations.json");
     expect(beam.spec.elements["candidate-leaderboard"]?.type).toBe("BeamLeaderboard");
     expect(beam.spec.elements["histogram-view"]?.type).toBe("BeamScoreHistogram");
-    expect(verifier.spec.elements.overview?.type).toBe("VerifierDetailOverview");
-    expect(verifier.spec.elements["iterations-view"]?.type).toBe("VerifierIterations");
+    expect(verifier.spec.elements.iterations?.type).toBe("VerifierIterationsTab");
+    expect(verifier.spec.elements.acceptance?.type).toBe("VerifierAcceptanceTab");
+    expect(verifier.spec.elements.parameters?.type).toBe("ParametersTab");
     expect(selfrefine.dataSources.iterations?.endpoint).toContain("/iterations.json");
     expect(selfrefine.spec.elements.iterations?.type).toBe("IterationLadder");
     expect(selfrefine.spec.elements["convergence-view"]?.type).toBe("SelfRefineConvergence");
