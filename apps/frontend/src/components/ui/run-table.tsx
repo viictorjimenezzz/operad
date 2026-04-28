@@ -41,6 +41,10 @@ export type RunFieldValue =
       value: number | null;
       format?: "tokens" | "cost" | "ms" | "score" | "int" | "float";
     }
+  | { kind: "param"; value: unknown; previous?: unknown; format?: "auto" | "text" | "number" }
+  | { kind: "score"; value: number | null; min?: number; max?: number }
+  | { kind: "diff"; value: string; previous?: string }
+  | { kind: "image"; src: string; alt: string; width?: number; height?: number }
   | { kind: "pill"; value: string; tone: "ok" | "warn" | "error" | "live" | "accent" | "default" }
   | { kind: "hash"; value: string }
   | { kind: "sparkline"; values: (number | null)[] }
@@ -502,6 +506,104 @@ function renderCell(row: RunRow, column: RunTableColumn): ReactNode {
       return (
         <span className="font-mono tabular-nums">{formatRunNumber(value.value, value.format)}</span>
       );
+    case "param": {
+      const current = formatParam(value.value, value.format);
+      const previous = formatParam(value.previous, value.format);
+      const changed = value.previous !== undefined && !isSameParam(value.previous, value.value);
+      const numericDelta =
+        changed && typeof value.value === "number" && typeof value.previous === "number"
+          ? value.value - value.previous
+          : null;
+      return (
+        <span className="inline-flex items-center gap-1.5 font-mono tabular-nums">
+          <span className="truncate" title={current.raw}>
+            {current.text}
+          </span>
+          {changed ? (
+            numericDelta != null ? (
+              <span className="text-[11px] text-muted">
+                {numericDelta > 0 ? "↑" : numericDelta < 0 ? "↓" : "•"} {formatSignedDelta(numericDelta)}
+              </span>
+            ) : (
+              <span
+                aria-label={`param changed from ${previous.text} to ${current.text}`}
+                className="h-1.5 w-1.5 rounded-full bg-[--color-warn]"
+              />
+            )
+          ) : null}
+        </span>
+      );
+    }
+    case "score": {
+      const min = Number.isFinite(value.min) ? (value.min as number) : 0;
+      const max = Number.isFinite(value.max) ? (value.max as number) : 1;
+      const span = Math.max(max - min, 1e-9);
+      const scoreValue = value.value;
+      const normalized =
+        scoreValue != null && Number.isFinite(scoreValue) ? (scoreValue - min) / span : null;
+      const width = normalized == null ? 0 : Math.max(0, Math.min(1, normalized)) * 100;
+      const tone =
+        scoreValue == null ? "var(--color-muted-2)" : scoreValue > 0 ? "var(--color-ok)" : scoreValue < 0 ? "var(--color-err)" : "var(--color-warn)";
+      return (
+        <span className="inline-flex w-full min-w-0 items-center gap-2">
+          <span className="w-12 flex-shrink-0 text-right font-mono tabular-nums">
+            {scoreValue == null ? "—" : scoreValue.toFixed(3)}
+          </span>
+          <span className="h-1 w-full rounded-full bg-bg-3">
+            <span
+              aria-label="score bar"
+              className="block h-1 rounded-full"
+              style={{ width: `${width}%`, background: tone }}
+            />
+          </span>
+        </span>
+      );
+    }
+    case "diff": {
+      const next = truncateText(value.value, 80);
+      const prev = value.previous != null ? truncateText(value.previous, 80) : null;
+      const hasOverflow =
+        next.truncated || (value.previous != null ? value.previous.length > 80 : false);
+      return (
+        <div className="max-w-full">
+          <span className="inline-flex min-w-0 items-center gap-1">
+            {prev ? (
+              <>
+                <span className="truncate text-muted-2 line-through" title={value.previous}>
+                  {prev.text}
+                </span>
+                <span className="text-muted-2">→</span>
+              </>
+            ) : null}
+            <span className="truncate text-[--color-ok]" title={value.value}>
+              {next.text}
+            </span>
+          </span>
+          {hasOverflow ? (
+            <details className="mt-1 text-[11px] text-muted">
+              <summary className="cursor-pointer select-none">full diff</summary>
+              <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap rounded border border-border bg-bg-inset p-1.5 text-[10px] leading-relaxed text-text">
+                {value.previous != null ? `- ${value.previous}\n+ ${value.value}` : value.value}
+              </pre>
+            </details>
+          ) : null}
+        </div>
+      );
+    }
+    case "image":
+      return (
+        <img
+          src={value.src}
+          alt={value.alt}
+          width={value.width ?? 24}
+          height={value.height ?? 24}
+          className="rounded object-contain bg-bg-inset"
+          style={{
+            maxWidth: value.width ?? 24,
+            maxHeight: value.height ?? 24,
+          }}
+        />
+      );
     case "pill":
       return <Pill tone={value.tone}>{value.value}</Pill>;
     case "hash":
@@ -582,6 +684,14 @@ function comparable(value: RunFieldValue | string | number | null): string | num
   switch (value.kind) {
     case "num":
       return value.value;
+    case "param":
+      return paramComparable(value.value);
+    case "score":
+      return value.value;
+    case "diff":
+      return value.value;
+    case "image":
+      return null;
     case "sparkline":
       for (let i = value.values.length - 1; i >= 0; i -= 1) {
         const item = value.values[i];
@@ -694,6 +804,80 @@ function formatRunNumber(
     default:
       return formatNumber(value);
   }
+}
+
+function formatParam(value: unknown, format: Extract<RunFieldValue, { kind: "param" }>["format"]) {
+  if (value === null || value === undefined) return { text: "—", raw: "—" };
+  if (format === "text") return { text: String(value), raw: String(value) };
+  if (format === "number") {
+    const numberValue = typeof value === "number" ? value : Number(value);
+    if (Number.isFinite(numberValue)) {
+      const formatted = formatNumber(numberValue);
+      return { text: formatted, raw: formatted };
+    }
+    const fallback = String(value);
+    return { text: fallback, raw: fallback };
+  }
+  if (typeof value === "number") {
+    const formatted = formatNumber(value);
+    return { text: formatted, raw: formatted };
+  }
+  if (typeof value === "string" || typeof value === "boolean") {
+    return { text: String(value), raw: String(value) };
+  }
+  try {
+    const json = JSON.stringify(value);
+    return { text: json ?? String(value), raw: json ?? String(value) };
+  } catch {
+    const fallback = String(value);
+    return { text: fallback, raw: fallback };
+  }
+}
+
+function isSameParam(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (
+    typeof a === "number" &&
+    typeof b === "number" &&
+    Number.isFinite(a) &&
+    Number.isFinite(b) &&
+    a === b
+  ) {
+    return true;
+  }
+  if (a == null || b == null) return false;
+  if (typeof a === "object" || typeof b === "object") {
+    try {
+      return JSON.stringify(a) === JSON.stringify(b);
+    } catch {
+      return false;
+    }
+  }
+  return String(a) === String(b);
+}
+
+function formatSignedDelta(delta: number): string {
+  if (delta === 0) return "0";
+  const sign = delta > 0 ? "+" : "−";
+  const abs = Math.abs(delta);
+  const base = formatNumber(abs);
+  return `${sign}${base}`;
+}
+
+function paramComparable(value: unknown): string | number | null {
+  if (value == null) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value) ?? null;
+  } catch {
+    return String(value);
+  }
+}
+
+function truncateText(value: string, max: number): { text: string; truncated: boolean } {
+  if (value.length <= max) return { text: value, truncated: false };
+  return { text: `${value.slice(0, max)}…`, truncated: true };
 }
 
 function stateTone(state: RunRow["state"]): Extract<RunFieldValue, { kind: "pill" }>["tone"] {

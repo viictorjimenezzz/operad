@@ -23,6 +23,11 @@ export interface MultiSeriesPoint {
 export interface MultiSeries {
   id: string;
   label?: string;
+  /**
+   * Optional explicit color for this series.
+   * When omitted, the chart resolves color from `hashColor(id)` so identity is stable.
+   */
+  color?: string;
   points: MultiSeriesPoint[];
 }
 
@@ -136,9 +141,14 @@ export function MultiSeriesChart({
             bestDx = dx;
           }
         }
-        return nearest != null ? { id: s.id, label: s.label ?? s.id, point: nearest } : null;
+        return nearest != null
+          ? { id: s.id, label: s.label ?? s.id, point: nearest, color: s.color ?? hashColor(s.id) }
+          : null;
       })
-      .filter((x): x is { id: string; label: string; point: MultiSeriesPoint } => x != null)
+      .filter(
+        (x): x is { id: string; label: string; point: MultiSeriesPoint; color: string } =>
+          x != null,
+      )
       .sort((a, b) => (b.point.y ?? 0) - (a.point.y ?? 0));
   }, [hoverX, series]);
 
@@ -214,7 +224,7 @@ export function MultiSeriesChart({
         />
         {/* Series */}
         {series.map((s) => {
-          const color = hashColor(s.id);
+          const color = s.color ?? hashColor(s.id);
           const pts = s.points
             .filter((p) => p.y != null && Number.isFinite(p.x))
             .sort((a, b) => a.x - b.x);
@@ -267,7 +277,7 @@ export function MultiSeriesChart({
                 cx={xToPx(cp.point.x)}
                 cy={yToPx(cp.point.y as number)}
                 r={3}
-                fill={hashColor(cp.id)}
+                fill={cp.color}
                 stroke="var(--color-bg-1)"
                 strokeWidth={1.5}
               />
@@ -299,7 +309,7 @@ export function MultiSeriesChart({
               <span
                 aria-hidden
                 className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full"
-                style={{ background: hashColor(cp.id) }}
+                style={{ background: cp.color }}
               />
               <span className="min-w-0 flex-1 truncate font-mono text-text">{cp.label}</span>
               <span className="font-mono tabular-nums text-text">

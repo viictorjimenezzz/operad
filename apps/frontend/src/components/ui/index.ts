@@ -42,6 +42,8 @@ export type {
 } from "@/components/ui/run-table";
 export { HashTag } from "@/components/ui/hash-tag";
 export type { HashTagProps } from "@/components/ui/hash-tag";
+export { HashRow } from "@/components/ui/hash-row";
+export type { HashKey, HashRowProps } from "@/components/ui/hash-row";
 export { Pill } from "@/components/ui/pill";
 export type { PillProps, PillTone } from "@/components/ui/pill";
 export { IconButton } from "@/components/ui/icon-button";
