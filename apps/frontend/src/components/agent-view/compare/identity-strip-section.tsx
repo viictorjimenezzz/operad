@@ -18,7 +18,7 @@ export function IdentityStripSection({ runs }: { runs: CompareRun[] }) {
               <div className="text-muted">agent path</div>
               <div className="font-mono text-text">{run.summary.root_agent_path ?? "—"}</div>
             </div>
-            <HashRow current={run.hashes} previous={reference?.hashes} />
+            <HashRow current={run.hashes} {...(reference ? { previous: reference.hashes } : {})} />
             <div className="space-y-1">
               <div className="text-[10px] uppercase tracking-[0.06em] text-muted">Input</div>
               <ValuePreview value={run.latestInvocation?.input ?? null} />

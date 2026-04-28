@@ -11,7 +11,7 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { dashboardApi } from "@/lib/api/dashboard";
 import type { HashKey } from "@/components/ui";
-import type { AgentGraphResponse, EventEnvelope } from "@/lib/types";
+import type { AgentGraphResponse, Envelope } from "@/lib/types";
 import { useQueries } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -214,7 +214,7 @@ function leafAgentPaths(graph: AgentGraphResponse): string[] {
     .sort((a, b) => a.localeCompare(b));
 }
 
-function extractOps(events: EventEnvelope[]): string[] {
+function extractOps(events: Envelope[]): string[] {
   const out: string[] = [];
   for (const event of events) {
     if (event.type !== "algo_event") continue;
