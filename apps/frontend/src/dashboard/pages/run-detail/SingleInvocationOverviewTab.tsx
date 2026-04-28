@@ -1,12 +1,11 @@
-import {
-  DefinitionSection,
-  ReproducibilitySection,
-} from "@/components/agent-view/overview/definition-section";
+import { DefinitionPanel } from "@/components/agent-view/overview/definition-section";
 import { IOHero } from "@/components/agent-view/overview/io-hero";
-import { NotesSection } from "@/components/agent-view/overview/notes-section";
-import { RunStatusStrip } from "@/components/agent-view/overview/run-status-strip";
-import { EmptyState } from "@/components/ui";
+import { ActivityStrip } from "@/components/agent-view/overview/run-status-strip";
+import { StructureOverview } from "@/components/agent-view/overview/structure-overview";
+import { EmptyState, Eyebrow } from "@/components/ui";
+import { HashRow, type HashKey } from "@/components/ui/hash-row";
 import { useRunInvocations, useRunSummary } from "@/hooks/use-runs";
+import { RunInvocationsResponse } from "@/lib/types";
 import { useParams } from "react-router-dom";
 
 export function SingleInvocationOverviewTab() {
@@ -18,7 +17,7 @@ export function SingleInvocationOverviewTab() {
   if (summary.isLoading || invocations.isLoading) {
     return (
       <div className="h-full overflow-auto p-4">
-        <div className="h-11 animate-pulse rounded-lg bg-bg-2" />
+        <div className="h-9 animate-pulse rounded bg-bg-2" />
       </div>
     );
   }
@@ -30,26 +29,49 @@ export function SingleInvocationOverviewTab() {
     );
   }
 
+  const parsed = RunInvocationsResponse.safeParse(invocations.data);
+  const rows = parsed.success ? parsed.data.invocations : [];
+  const latest = rows[rows.length - 1] ?? null;
+  const previous = rows.length >= 2 ? rows[rows.length - 2] : null;
+
+  const hashKeys: HashKey[] = [
+    "hash_content",
+    "hash_model",
+    "hash_prompt",
+    "hash_input",
+    "hash_output_schema",
+    "hash_graph",
+    "hash_config",
+  ];
+
+  const hashCurrent: Partial<Record<HashKey, string | null>> = Object.fromEntries(
+    hashKeys.map((k) => [k, (latest as Record<string, unknown> | null)?.[k] as string | null ?? null]),
+  );
+  const hashPrevious: Partial<Record<HashKey, string | null>> | undefined = previous
+    ? Object.fromEntries(
+        hashKeys.map((k) => [k, (previous as Record<string, unknown>)[k] as string | null ?? null]),
+      )
+    : undefined;
+
   return (
     <div className="h-full overflow-auto">
       <div className="mx-auto flex max-w-[1180px] flex-col gap-4 p-4">
-        <RunStatusStrip
+        <ActivityStrip
           dataSummary={summary.data}
           dataInvocations={invocations.data}
           runId={runId}
         />
-        <IOHero dataSummary={summary.data} dataInvocations={invocations.data} runId={runId} />
-        <NotesSection dataSummary={summary.data} runId={runId} />
-        <DefinitionSection
+        <IOHero dataInvocations={invocations.data} runId={runId} />
+        <DefinitionPanel
           dataSummary={summary.data}
           dataInvocations={invocations.data}
           runId={runId}
         />
-        <ReproducibilitySection
-          dataSummary={summary.data}
-          dataInvocations={invocations.data}
-          runId={runId}
-        />
+        <section className="space-y-2 border-t border-border pt-4">
+          <Eyebrow>reproducibility</Eyebrow>
+          <HashRow current={hashCurrent} previous={hashPrevious} />
+        </section>
+        <StructureOverview runId={runId} hashContent={summary.data.hash_content ?? null} />
       </div>
     </div>
   );

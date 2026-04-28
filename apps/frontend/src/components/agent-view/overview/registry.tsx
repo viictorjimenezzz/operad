@@ -1,9 +1,6 @@
 import { BackendBlock } from "@/components/agent-view/overview/backend-block";
 import { ConfigBlock } from "@/components/agent-view/overview/config-block";
-import {
-  DefinitionSection,
-  ReproducibilitySection,
-} from "@/components/agent-view/overview/definition-section";
+import { DefinitionPanel } from "@/components/agent-view/overview/definition-section";
 import { DriftBlock } from "@/components/agent-view/overview/drift-block";
 import { ExamplesBlock } from "@/components/agent-view/overview/examples-block";
 import { IdentityBlock } from "@/components/agent-view/overview/identity-block";
@@ -13,7 +10,7 @@ import { IOHero } from "@/components/agent-view/overview/io-hero";
 import { MetricsValueTable } from "@/components/agent-view/overview/metrics-value-table";
 import { NotesSection } from "@/components/agent-view/overview/notes-section";
 import { ReproducibilityBlock } from "@/components/agent-view/overview/reproducibility-block";
-import { RunStatusStrip } from "@/components/agent-view/overview/run-status-strip";
+import { ActivityStrip } from "@/components/agent-view/overview/run-status-strip";
 import { TrainableParamsBlock } from "@/components/agent-view/overview/trainable-params-block";
 import type { ComponentRegistry } from "@json-render/react";
 
@@ -110,12 +107,12 @@ export const overviewRegistry: ComponentRegistry = {
       />
     );
   },
-  RunStatusStrip: ({ element }) => {
+  ActivityStrip: ({ element }) => {
     const p = element.props as Record<string, unknown>;
     return (
-      <RunStatusStrip
-        dataSummary={p.dataSummary}
-        dataInvocations={p.dataInvocations}
+      <ActivityStrip
+        dataSummary={p.dataSummary ?? p.sourceSummary}
+        dataInvocations={p.dataInvocations ?? p.sourceInvocations}
         {...defined({ runId: strProp(p, "runId") })}
       />
     );
@@ -124,8 +121,7 @@ export const overviewRegistry: ComponentRegistry = {
     const p = element.props as Record<string, unknown>;
     return (
       <IOHero
-        dataSummary={p.dataSummary}
-        dataInvocations={p.dataInvocations}
+        dataInvocations={p.dataInvocations ?? p.sourceInvocations}
         {...defined({ runId: strProp(p, "runId") })}
       />
     );
@@ -136,22 +132,12 @@ export const overviewRegistry: ComponentRegistry = {
       <NotesSection dataSummary={p.dataSummary} {...defined({ runId: strProp(p, "runId") })} />
     );
   },
-  DefinitionSection: ({ element }) => {
+  DefinitionPanel: ({ element }) => {
     const p = element.props as Record<string, unknown>;
     return (
-      <DefinitionSection
-        dataSummary={p.dataSummary}
-        dataInvocations={p.dataInvocations}
-        {...defined({ runId: strProp(p, "runId") })}
-      />
-    );
-  },
-  ReproducibilitySection: ({ element }) => {
-    const p = element.props as Record<string, unknown>;
-    return (
-      <ReproducibilitySection
-        dataSummary={p.dataSummary}
-        dataInvocations={p.dataInvocations}
+      <DefinitionPanel
+        dataSummary={p.dataSummary ?? p.sourceSummary}
+        dataInvocations={p.dataInvocations ?? p.sourceInvocations}
         {...defined({ runId: strProp(p, "runId") })}
       />
     );

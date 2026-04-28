@@ -1,6 +1,6 @@
 {
   "algorithm": "agent.single-invocation.overview",
-  "version": 1,
+  "version": 2,
   "dataSources": {
     "summary": { "endpoint": "/runs/$context.runId/summary" },
     "invocations": { "endpoint": "/runs/$context.runId/invocations" }
@@ -11,10 +11,10 @@
       "page": {
         "type": "Stack",
         "props": { "gap": 16 },
-        "children": ["status", "io", "notes", "definition", "repro"]
+        "children": ["status", "io", "definition", "repro"]
       },
       "status": {
-        "type": "RunStatusStrip",
+        "type": "ActivityStrip",
         "props": {
           "sourceSummary": "$queries.summary",
           "sourceInvocations": "$queries.invocations",
@@ -24,20 +24,12 @@
       "io": {
         "type": "IOHero",
         "props": {
-          "sourceSummary": "$queries.summary",
           "sourceInvocations": "$queries.invocations",
           "runId": "$context.runId"
         }
       },
-      "notes": {
-        "type": "NotesSection",
-        "props": {
-          "sourceSummary": "$queries.summary",
-          "runId": "$context.runId"
-        }
-      },
       "definition": {
-        "type": "DefinitionSection",
+        "type": "DefinitionPanel",
         "props": {
           "sourceSummary": "$queries.summary",
           "sourceInvocations": "$queries.invocations",
@@ -45,9 +37,9 @@
         }
       },
       "repro": {
-        "type": "ReproducibilitySection",
+        "type": "ReproducibilityBlock",
         "props": {
-          "sourceInvocations": "$queries.invocations"
+          "dataInvocations": "$queries.invocations"
         }
       }
     }
