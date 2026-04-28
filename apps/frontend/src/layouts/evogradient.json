@@ -12,8 +12,7 @@
       "stream": "/runs/$context.runId/mutations.sse"
     },
     "events": { "endpoint": "/runs/$context.runId/events?limit=1000" },
-    "children": { "endpoint": "/runs/$context.runId/children" },
-    "graph": { "endpoint": "/graph/$context.runId" }
+    "children": { "endpoint": "/runs/$context.runId/children" }
   },
   "spec": {
     "root": "page",
@@ -22,42 +21,18 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "overview", "label": "Overview" },
-            { "id": "evolution", "label": "Evolution" },
+            { "id": "lineage", "label": "Lineage" },
             { "id": "population", "label": "Population" },
             { "id": "operators", "label": "Operators" },
-            { "id": "lineage", "label": "Lineage" },
-            { "id": "best-diff", "label": "Best diff" },
             { "id": "parameters", "label": "Parameters" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
-            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
-            { "id": "graph", "label": "Graph" }
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
-        "children": [
-          "overview",
-          "evolution",
-          "population",
-          "operators",
-          "lineage",
-          "best-diff",
-          "parameters",
-          "agents",
-          "events",
-          "graph"
-        ]
+        "children": ["lineage", "population", "operators", "parameters", "agents", "events"]
       },
-      "overview": {
-        "type": "EvoDetailOverview",
-        "props": {
-          "sourceSummary": "$queries.summary",
-          "sourceFitness": "$queries.fitness",
-          "sourceMutations": "$queries.mutations",
-          "sourceEvents": "$queries.events"
-        }
-      },
-      "evolution": {
-        "type": "EvoEvolutionTab",
+      "lineage": {
+        "type": "EvoLineageTab",
         "props": {
           "sourceSummary": "$queries.summary",
           "sourceFitness": "$queries.fitness",
@@ -80,22 +55,6 @@
           "sourceEvents": "$queries.events"
         }
       },
-      "lineage": {
-        "type": "EvoLineageTab",
-        "props": {
-          "sourceSummary": "$queries.summary",
-          "sourceFitness": "$queries.fitness",
-          "sourceEvents": "$queries.events"
-        }
-      },
-      "best-diff": {
-        "type": "EvoBestDiffTab",
-        "props": {
-          "sourceSummary": "$queries.summary",
-          "sourceFitness": "$queries.fitness",
-          "sourceEvents": "$queries.events"
-        }
-      },
       "parameters": {
         "type": "ParametersTab",
         "props": { "runId": "$context.runId", "scope": "run" }
@@ -108,19 +67,7 @@
           "extraColumns": ["gen", "individual_id"]
         }
       },
-      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
-      "graph": {
-        "type": "PanelCard",
-        "props": { "title": "agent graph" },
-        "children": ["graph-view"]
-      },
-      "graph-view": {
-        "type": "AgentGraph",
-        "props": {
-          "source": "$queries.graph",
-          "sourceMutations": "$queries.mutations"
-        }
-      }
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } }
     }
   }
 }

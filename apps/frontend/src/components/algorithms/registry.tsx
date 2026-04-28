@@ -2,6 +2,7 @@ import { autoResearcherRegistry } from "@/components/algorithms/auto_researcher/
 import { beamRegistry } from "@/components/algorithms/beam/registry";
 import { debateRegistry } from "@/components/algorithms/debate/registry";
 import { evoGradientRegistry } from "@/components/algorithms/evogradient/registry";
+import { EvoLineageTab } from "@/components/algorithms/evogradient/lineage-tab";
 import { oproRegistry } from "@/components/algorithms/opro/registry";
 import { selfRefineRegistry } from "@/components/algorithms/selfrefine/registry";
 import { sweepRegistry } from "@/components/algorithms/sweep/registry";
@@ -21,4 +22,12 @@ export const algorithmsRegistry: ComponentRegistry = {
   ...sweepRegistry,
   ...verifierRegistry,
   ...talkerReasonerRegistry,
+  EvoLineageTab: ({ element }) => {
+    const p = element.props as {
+      dataSummary?: unknown;
+      dataFitness?: unknown;
+      dataEvents?: unknown;
+    };
+    return <EvoLineageTab summary={p.dataSummary} fitness={p.dataFitness} events={p.dataEvents} />;
+  },
 };
