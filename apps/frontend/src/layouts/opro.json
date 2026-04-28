@@ -5,8 +5,7 @@
     "summary": { "endpoint": "/runs/$context.runId/summary" },
     "iterations": { "endpoint": "/runs/$context.runId/iterations.json" },
     "events": { "endpoint": "/runs/$context.runId/events?limit=500" },
-    "children": { "endpoint": "/runs/$context.runId/children" },
-    "graph": { "endpoint": "/graph/$context.runId" }
+    "children": { "endpoint": "/runs/$context.runId/children" }
   },
   "spec": {
     "root": "page",
@@ -15,60 +14,27 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "overview", "label": "Overview" },
-            { "id": "history", "label": "History" },
-            { "id": "candidates", "label": "Candidates" },
-            { "id": "parameter", "label": "Parameter" },
+            { "id": "history", "label": "Prompt history" },
+            { "id": "score", "label": "Score curve" },
             { "id": "parameters", "label": "Parameters" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
-            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
-            { "id": "graph", "label": "Graph" }
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
-        "children": [
-          "overview",
-          "history",
-          "candidates",
-          "parameter",
-          "parameters",
-          "agents",
-          "events",
-          "graph"
-        ]
-      },
-      "overview": {
-        "type": "OPRODetailOverview",
-        "props": {
-          "sourceSummary": "$queries.summary",
-          "sourceIterations": "$queries.iterations",
-          "sourceEvents": "$queries.events",
-          "sourceChildren": "$queries.children",
-          "runId": "$context.runId"
-        }
+        "children": ["history", "score", "parameters", "agents", "events"]
       },
       "history": {
-        "type": "OPROHistoryTab",
+        "type": "OPROPromptHistoryTab",
         "props": {
           "sourceIterations": "$queries.iterations",
-          "sourceEvents": "$queries.events",
-          "sourceChildren": "$queries.children"
+          "sourceEvents": "$queries.events"
         }
       },
-      "candidates": {
-        "type": "OPROCandidatesTab",
+      "score": {
+        "type": "OPROScoreCurveTab",
         "props": {
           "sourceIterations": "$queries.iterations",
-          "sourceEvents": "$queries.events",
-          "sourceChildren": "$queries.children",
-          "runId": "$context.runId"
-        }
-      },
-      "parameter": {
-        "type": "OPROParameterTab",
-        "props": {
-          "sourceIterations": "$queries.iterations",
-          "sourceEvents": "$queries.events",
-          "sourceChildren": "$queries.children"
+          "sourceEvents": "$queries.events"
         }
       },
       "parameters": {
@@ -84,13 +50,7 @@
           "emptyDescription": "proposer and evaluator child runs appear after OPRO emits synthetic invocations"
         }
       },
-      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
-      "graph": {
-        "type": "PanelCard",
-        "props": { "title": "agent graph" },
-        "children": ["graph-view"]
-      },
-      "graph-view": { "type": "AgentGraph", "props": { "source": "$queries.graph" } }
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } }
     }
   }
 }
