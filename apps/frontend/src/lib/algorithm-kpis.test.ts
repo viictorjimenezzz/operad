@@ -92,9 +92,10 @@ describe("computeAlgorithmKpis()", () => {
         ],
       });
       const kpis = computeAlgorithmKpis(run);
+      const consensusKpi = kpis.at(1);
       expect(kpis[0]).toMatchObject({ label: "rounds", value: "2" });
-      expect(kpis[1].label).toBe("consensus");
-      expect(parseFloat(kpis[1].value)).toBeCloseTo(0, 3);
+      expect(consensusKpi?.label).toBe("consensus");
+      expect(parseFloat(consensusKpi?.value ?? "")).toBeCloseTo(0, 3);
     });
 
     it("shows - for consensus with no rounds", () => {
