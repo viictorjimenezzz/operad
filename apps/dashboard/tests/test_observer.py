@@ -94,11 +94,17 @@ async def test_run_registry_tracks_state_transitions() -> None:
 
 async def test_run_registry_tracks_metadata_metrics() -> None:
     obs = WebDashboardObserver()
-    await obs.on_event(_agent_event(kind="end", is_root=True, metrics={"quality": 0.75}))
+    await obs.on_event(
+        _agent_event(
+            kind="end",
+            is_root=True,
+            metrics={"quality": 0.75, "count": 4, "flag": True, "note": "skip"},
+        )
+    )
     info = obs.registry.get("r1")
     assert info is not None
-    assert info.metrics == {"quality": 0.75}
-    assert info.summary()["metrics"] == {"quality": 0.75}
+    assert info.metrics == {"quality": 0.75, "count": 4.0}
+    assert info.summary()["metrics"] == {"quality": 0.75, "count": 4.0}
 
 
 async def test_run_registry_tracks_traceback_path() -> None:

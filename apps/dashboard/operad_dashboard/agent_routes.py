@@ -280,7 +280,7 @@ def _build_invocations(
     return out
 
 
-def _latest_terminal_metadata(events: list[dict[str, Any]], path: str) -> dict[str, Any] | None:
+def _latest_terminal_envelope(events: list[dict[str, Any]], path: str) -> dict[str, Any] | None:
     for env in reversed(events):
         if env.get("type") != "agent_event":
             continue
@@ -288,10 +288,164 @@ def _latest_terminal_metadata(events: list[dict[str, Any]], path: str) -> dict[s
             continue
         if env.get("kind") != "end":
             continue
-        metadata = env.get("metadata")
-        if isinstance(metadata, dict):
-            return metadata
+        return env
     return None
+
+
+def _latest_terminal_metadata(events: list[dict[str, Any]], path: str) -> dict[str, Any] | None:
+    env = _latest_terminal_envelope(events, path)
+    if env is None:
+        return None
+    metadata = env.get("metadata")
+    return metadata if isinstance(metadata, dict) else None
+
+
+def _event_timestamp(env: dict[str, Any]) -> float:
+    finished = env.get("finished_at")
+    if isinstance(finished, (int, float)):
+        return float(finished)
+    started = env.get("started_at")
+    if isinstance(started, (int, float)):
+        return float(started)
+    return 0.0
+
+
+def _severity_label(value: Any) -> str | None:
+    if isinstance(value, str):
+        lowered = value.lower().strip()
+        if lowered in {"low", "medium", "high"}:
+            return lowered
+        return None
+    if isinstance(value, (int, float)):
+        score = float(value)
+        if score < 0.34:
+            return "low"
+        if score < 0.67:
+            return "medium"
+        return "high"
+    return None
+
+
+def _normalize_tape_link(raw: Any) -> dict[str, int] | None:
+    if not isinstance(raw, dict):
+        return None
+    out: dict[str, int] = {}
+    mapping = {
+        "epoch": "epoch",
+        "batch": "batch",
+        "iter": "iter",
+        "optimizer_step": "optimizer_step",
+        "optimizerStep": "optimizer_step",
+    }
+    for source_key, target_key in mapping.items():
+        value = raw.get(source_key)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            out[target_key] = value
+            continue
+        if isinstance(value, float):
+            out[target_key] = int(value)
+    return out or None
+
+
+def _normalize_gradient(raw: Any, *, default_target: str | None = None) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    message = raw.get("message")
+    severity = _severity_label(raw.get("severity"))
+    target_paths = raw.get("target_paths")
+    targets: list[str] = []
+    if isinstance(target_paths, list):
+        targets = [item for item in target_paths if isinstance(item, str) and item]
+    if not targets and default_target is not None:
+        targets = [default_target]
+    if not isinstance(message, str):
+        message = ""
+    if severity is None:
+        return None
+    return {
+        "message": message,
+        "severity": severity,
+        "target_paths": targets,
+    }
+
+
+def _path_matches(target: str, candidate: str) -> bool:
+    if target == candidate:
+        return True
+    if target.endswith(f".{candidate}") or candidate.endswith(f".{target}"):
+        return True
+    return False
+
+
+def _gradient_targets(payload: dict[str, Any]) -> list[str]:
+    targets = payload.get("target_paths")
+    if isinstance(targets, list):
+        return [item for item in targets if isinstance(item, str) and item]
+    by_field = payload.get("by_field")
+    if isinstance(by_field, dict):
+        return [str(key) for key in by_field.keys() if isinstance(key, str) and key]
+    return []
+
+
+def _latest_gradient_event_for_param(
+    *,
+    events: list[dict[str, Any]],
+    param_path: str,
+    before_ts: float | None,
+) -> dict[str, Any] | None:
+    for env in reversed(events):
+        if env.get("type") != "algo_event":
+            continue
+        if env.get("kind") != "gradient_applied":
+            continue
+        timestamp = _event_timestamp(env)
+        if before_ts is not None and timestamp > before_ts:
+            continue
+        payload = env.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        targets = _gradient_targets(payload)
+        if any(_path_matches(param_path, candidate) for candidate in targets):
+            return env
+    return None
+
+
+def _value_for_path(values: dict[str, Any], requested_path: str) -> tuple[str, Any] | None:
+    if requested_path in values:
+        return requested_path, values[requested_path]
+    tail = requested_path.rsplit(".", 1)[-1]
+    if tail in values:
+        return tail, values[tail]
+    for key, value in values.items():
+        if not isinstance(key, str):
+            continue
+        if _path_matches(requested_path, key):
+            return key, value
+    return None
+
+
+def _parameter_type(value: Any) -> str:
+    if isinstance(value, str):
+        return "text"
+    if isinstance(value, list):
+        if all(isinstance(item, str) for item in value):
+            return "rule_list"
+        if all(isinstance(item, dict) for item in value):
+            return "example_list"
+        return "categorical"
+    if isinstance(value, bool):
+        return "categorical"
+    if isinstance(value, (int, float)):
+        return "float"
+    if isinstance(value, dict):
+        return "configuration"
+    return "categorical"
+
+
+def _short_hash(value: Any) -> str:
+    return uuid.uuid5(uuid.NAMESPACE_OID, repr(value)).hex[:16]
 
 
 def _invocation_id_map(
@@ -690,18 +844,152 @@ async def agent_parameters(request: Request, run_id: str, path: str) -> JSONResp
     ctx = _resolve_run_context(request, run_id)
     if ctx is None:
         return _not_found("unknown run_id")
-    metadata = _latest_terminal_metadata(ctx.events, path)
-    if metadata is None:
+    terminal = _latest_terminal_envelope(ctx.events, path)
+    if terminal is None:
+        return _not_found("unknown agent_path")
+    metadata = terminal.get("metadata")
+    if not isinstance(metadata, dict):
         return _not_found("unknown agent_path")
     raw = metadata.get("parameters")
     if not isinstance(raw, list):
         return JSONResponse({"agent_path": path, "parameters": []})
-    params = [
-        entry
-        for entry in raw
-        if isinstance(entry, dict) and bool(entry.get("requires_grad"))
-    ]
+    terminal_ts = _event_timestamp(terminal)
+    params: list[dict[str, Any]] = []
+    for entry in raw:
+        if not isinstance(entry, dict) or not bool(entry.get("requires_grad")):
+            continue
+        param_path = entry.get("path")
+        if not isinstance(param_path, str) or not param_path:
+            continue
+        gradient_event = _latest_gradient_event_for_param(
+            events=ctx.events,
+            param_path=param_path,
+            before_ts=terminal_ts,
+        )
+        gradient = _normalize_gradient(entry.get("gradient") or entry.get("grad"), default_target=param_path)
+        tape_link = _normalize_tape_link(entry.get("tape_link"))
+        if gradient_event is not None:
+            payload = gradient_event.get("payload")
+            if isinstance(payload, dict):
+                event_gradient = _normalize_gradient(payload, default_target=param_path)
+                if event_gradient is not None:
+                    gradient = event_gradient
+                event_tape_link = _normalize_tape_link(payload)
+                if event_tape_link is not None:
+                    tape_link = event_tape_link
+        params.append(
+            {
+                "requires_grad": True,
+                "path": param_path,
+                "value": entry.get("value"),
+                "hash": entry.get("hash"),
+                "tape_link": tape_link,
+                "gradient": gradient,
+            }
+        )
     return JSONResponse({"agent_path": path, "parameters": params})
+
+
+@router.get("/runs/{run_id}/parameter-evolution/{path:path}")
+async def parameter_evolution(request: Request, run_id: str, path: str) -> JSONResponse:
+    ctx = _resolve_run_context(request, run_id)
+    if ctx is None:
+        return _not_found("unknown run_id")
+
+    lineage: list[RunInfo] = []
+    if ctx.info is not None:
+        root_path = ctx.info.root_agent_path
+        root_hash: str | None = None
+        if isinstance(root_path, str):
+            root_env = _latest_terminal_envelope(ctx.info.events, root_path)
+            if isinstance(root_env, dict):
+                root_meta = root_env.get("metadata")
+                if isinstance(root_meta, dict):
+                    hash_content = root_meta.get("hash_content")
+                    if isinstance(hash_content, str) and hash_content:
+                        root_hash = hash_content
+        if root_hash is not None:
+            lineage = list(request.app.state.observer.registry.runs_by_hash_full(root_hash))
+        if not lineage:
+            lineage = [ctx.info]
+
+    points: list[dict[str, Any]] = []
+    inferred_type: str | None = None
+    langfuse_base = getattr(request.app.state, "langfuse_url", None)
+    requested_agent_path = path.rsplit(".", 1)[0] if "." in path else None
+    for info in lineage:
+        chosen_snapshot: dict[str, Any] | None = None
+        matched_key: str | None = None
+        value: Any = None
+        for snapshot in reversed(info.parameter_snapshots):
+            values = snapshot.get("values")
+            if not isinstance(values, dict):
+                continue
+            snapshot_agent_path = snapshot.get("agent_path")
+            if isinstance(snapshot_agent_path, str) and snapshot_agent_path:
+                if requested_agent_path is not None and snapshot_agent_path != requested_agent_path:
+                    continue
+            match = _value_for_path(values, path)
+            if match is None:
+                continue
+            matched_key, value = match
+            chosen_snapshot = snapshot
+            break
+        if chosen_snapshot is None or matched_key is None:
+            continue
+
+        if inferred_type is None:
+            inferred_type = _parameter_type(value)
+        details = chosen_snapshot.get("details")
+        detail = details.get(matched_key) if isinstance(details, dict) else None
+        detail = detail if isinstance(detail, dict) else {}
+        tape_link = _normalize_tape_link(detail.get("tape_link") or chosen_snapshot.get("tape_link"))
+        gradient = _normalize_gradient(detail.get("gradient"), default_target=path)
+        snapshot_ts = chosen_snapshot.get("timestamp")
+        before_ts = float(snapshot_ts) if isinstance(snapshot_ts, (int, float)) else None
+        gradient_event = _latest_gradient_event_for_param(
+            events=list(info.events),
+            param_path=path,
+            before_ts=before_ts,
+        )
+        if gradient_event is not None:
+            payload = gradient_event.get("payload")
+            if isinstance(payload, dict):
+                event_gradient = _normalize_gradient(payload, default_target=path)
+                if event_gradient is not None:
+                    gradient = event_gradient
+                event_tape_link = _normalize_tape_link(payload)
+                if event_tape_link is not None:
+                    tape_link = event_tape_link
+
+        metric_snapshot = info.metrics or None
+        hash_value = detail.get("hash")
+        if not isinstance(hash_value, str) or not hash_value:
+            hash_value = _short_hash(value)
+
+        points.append(
+            {
+                "run_id": info.run_id,
+                "started_at": info.started_at,
+                "value": value,
+                "hash": hash_value,
+                "gradient": gradient,
+                "source_tape_step": tape_link,
+                "langfuse_url": (
+                    f"{langfuse_base}/trace/{info.run_id}" if isinstance(langfuse_base, str) else None
+                ),
+                "metric_snapshot": metric_snapshot,
+            }
+        )
+
+    points.sort(key=lambda row: float(row.get("started_at") or 0.0))
+    return JSONResponse(
+        {
+            "path": path,
+            "type": inferred_type or "categorical",
+            "points": points,
+        }
+    )
 
 
 @router.get("/runs/{run_id}/agent/{path:path}/diff")

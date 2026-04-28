@@ -210,6 +210,121 @@ async def list_agent_groups(request: Request) -> JSONResponse:
     return JSONResponse(out)
 
 
+@router.get("/api/agent-classes")
+async def list_agent_classes(request: Request) -> JSONResponse:
+    """Return one entry per agent class with nested instance summaries."""
+    runs = _all_runs(request)
+    classes: dict[str, dict[str, Any]] = {}
+    for info in runs:
+        if info.is_algorithm and not _is_trainer(info):
+            continue
+        if info.synthetic:
+            continue
+        hc = _latest_root_hash_content(info)
+        if hc is None:
+            hc = f"_pending_{info.run_id}"
+        class_name = _agent_class_name(info) or "Agent"
+        class_bucket = classes.setdefault(
+            class_name,
+            {
+                "class_name": class_name,
+                "root_agent_path": info.root_agent_path,
+                "instance_count": 0,
+                "count": 0,
+                "running": 0,
+                "errors": 0,
+                "last_seen": 0.0,
+                "first_seen": float("inf"),
+                "instances": {},
+            },
+        )
+        class_bucket["count"] += 1
+        if info.state == "running":
+            class_bucket["running"] += 1
+        elif info.state == "error":
+            class_bucket["errors"] += 1
+        class_bucket["last_seen"] = max(class_bucket["last_seen"], info.last_event_at)
+        if info.started_at < class_bucket["first_seen"]:
+            class_bucket["first_seen"] = info.started_at
+        if not class_bucket["root_agent_path"] and info.root_agent_path:
+            class_bucket["root_agent_path"] = info.root_agent_path
+
+        instances: dict[str, dict[str, Any]] = class_bucket["instances"]
+        instance_bucket = instances.setdefault(
+            hc,
+            {
+                "hash_content": hc,
+                "class_name": class_name,
+                "root_agent_path": info.root_agent_path,
+                "count": 0,
+                "running": 0,
+                "errors": 0,
+                "last_seen": 0.0,
+                "first_seen": float("inf"),
+                "latencies": [],
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "cost_usd": 0.0,
+                "run_ids": [],
+                "is_trainer": False,
+                "notes_markdown_count": 0,
+            },
+        )
+        instance_bucket["count"] += 1
+        if info.state == "running":
+            instance_bucket["running"] += 1
+        elif info.state == "error":
+            instance_bucket["errors"] += 1
+        instance_bucket["last_seen"] = max(instance_bucket["last_seen"], info.last_event_at)
+        if info.started_at < instance_bucket["first_seen"]:
+            instance_bucket["first_seen"] = info.started_at
+        instance_bucket["latencies"].append(info.duration_ms)
+        instance_bucket["prompt_tokens"] += info.total_prompt_tokens
+        instance_bucket["completion_tokens"] += info.total_completion_tokens
+        instance_bucket["run_ids"].append(info.run_id)
+        if info.notes_markdown.strip():
+            instance_bucket["notes_markdown_count"] += 1
+        if _is_trainer(info):
+            instance_bucket["is_trainer"] = True
+        if not instance_bucket["root_agent_path"] and info.root_agent_path:
+            instance_bucket["root_agent_path"] = info.root_agent_path
+
+    cost = getattr(request.app.state, "cost_observer", None)
+    totals: dict[str, Any] = {}
+    if cost is not None:
+        try:
+            totals = cost.totals()
+        except Exception:
+            totals = {}
+    for class_bucket in classes.values():
+        instances = class_bucket["instances"]
+        for instance_bucket in instances.values():
+            for run_id in instance_bucket["run_ids"]:
+                total = totals.get(run_id) or {}
+                if isinstance(total, dict):
+                    value = total.get("cost_usd") or 0.0
+                    if isinstance(value, (int, float)):
+                        instance_bucket["cost_usd"] += float(value)
+
+    out: list[dict[str, Any]] = []
+    for class_bucket in classes.values():
+        raw_instances = class_bucket.pop("instances")
+        instances = list(raw_instances.values())
+        for instance_bucket in instances:
+            if instance_bucket["first_seen"] == float("inf"):
+                instance_bucket["first_seen"] = instance_bucket["last_seen"]
+            instance_bucket["run_ids"] = instance_bucket["run_ids"][-50:]
+            instance_bucket["latencies"] = instance_bucket["latencies"][-50:]
+        instances.sort(key=lambda row: row["last_seen"], reverse=True)
+        class_bucket["instance_count"] = len(instances)
+        class_bucket["instances"] = instances
+        if class_bucket["first_seen"] == float("inf"):
+            class_bucket["first_seen"] = class_bucket["last_seen"]
+        out.append(class_bucket)
+    out.sort(key=lambda row: row["last_seen"], reverse=True)
+    return JSONResponse(out)
+
+
 @router.get("/api/agents/{hash_content}")
 async def get_agent_group(request: Request, hash_content: str) -> JSONResponse:
     """Return aggregated KPIs for a single agent group + the runs in it."""
