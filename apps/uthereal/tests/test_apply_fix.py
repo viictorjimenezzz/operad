@@ -46,6 +46,8 @@ class _FakeTape:
         grad: TextualGradient,
         *,
         parameters: list[Parameter[Any]],
+        propagator_factory: Any = None,
+        parameter_grad_factory: Any = None,
     ) -> None:
         for parameter in parameters:
             parameter.grad = TextualGradient(
@@ -56,9 +58,16 @@ class _FakeTape:
 
 
 class _FakeTextualGradientDescent:
-    def __init__(self, params: list[Parameter[Any]], lr: float = 1.0) -> None:
+    def __init__(
+        self,
+        params: list[Parameter[Any]],
+        lr: float = 1.0,
+        *,
+        config: Any = None,
+    ) -> None:
         self.params = params
         self.lr = lr
+        self.config = config
 
     async def step(self) -> None:
         for parameter in self.params:
@@ -73,12 +82,24 @@ class _AssertingRetrieval:
         self,
         spec: RetrievalSpecification,
         *,
-        workspace_id: str,
+        id_tenant: str,
+        id_workspace: str,
+        id_assistant: str,
     ) -> RetrievalResult:
         raise AssertionError("network retrieval should not be called")
 
-    async def get_workspace_metadata(self, workspace_id: str) -> WorkspaceMetadata:
-        return WorkspaceMetadata(workspace_id=workspace_id)
+    async def get_workspace_metadata(
+        self,
+        *,
+        id_tenant: str,
+        id_workspace: str,
+        id_assistant: str,
+    ) -> WorkspaceMetadata:
+        return WorkspaceMetadata(
+            workspace_id=id_workspace,
+            id_tenant=id_tenant,
+            id_assistant=id_assistant,
+        )
 
 
 class _NoopLeaf(Agent[ArtemisInput, ArtemisFinalAnswer]):
@@ -166,6 +187,21 @@ def _patch_optimizer(monkeypatch: pytest.MonkeyPatch) -> None:
         apply_fix_module,
         "TextualGradientDescent",
         _FakeTextualGradientDescent,
+    )
+
+    class _OfflineAgent:
+        async def abuild(self) -> "_OfflineAgent":
+            return self
+
+    def _offline_factory(*_args: Any, **_kwargs: Any) -> _OfflineAgent:
+        return _OfflineAgent()
+
+    monkeypatch.setattr(apply_fix_module, "BackpropAgent", _offline_factory)
+    monkeypatch.setattr(apply_fix_module, "ParameterGradAgent", _offline_factory)
+    monkeypatch.setattr(
+        apply_fix_module,
+        "tier_to_config",
+        lambda *_a, **_kw: None,
     )
 
 

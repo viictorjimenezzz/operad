@@ -115,6 +115,22 @@ async def run(args: argparse.Namespace) -> int:
         mode=args.cassette_mode,
     )
     runner = ArtemisRunner(selfserve_root=selfserve_root, retrieval=retrieval)
+
+    # If the entry didn't ship a `workspace` block and we have a path to fetch one
+    # (live RAG service or a previously-recorded cassette), pull rules + tags now
+    # so the rule_classifier and retrieval_orchestrator see them. Falls back to
+    # the stub workspace silently when no metadata is reachable (e.g. hermetic
+    # DIRECT_ANSWER demo without --rag-base-url).
+    if not _entry_has_workspace_block(raw_entry) and entry.id_tenant and entry.workspace_id:
+        try:
+            fetched = await retrieval.get_workspace_metadata(
+                id_tenant=entry.id_tenant,
+                id_workspace=entry.workspace_id,
+                id_assistant=entry.id_assistant,
+            )
+            workspace = _merge_workspace(fetched, workspace)
+        except RetrievalError:
+            pass
     artemis_input = ArtemisInput(entry=entry, workspace=workspace)
     llm_mode = (
         "record" if args.cassette_mode in {"record", "record-missing"} else "replay"
@@ -142,41 +158,88 @@ async def run(args: argparse.Namespace) -> int:
 
 
 class LiveRetrievalClient:
-    """HTTP-backed retrieval client used only when ``--rag-base-url`` is set."""
+    """HTTP-backed retrieval client used only when ``--rag-base-url`` is set.
 
-    def __init__(self, base_url: str) -> None:
+    Talks to uthereal's `/retrieve` API:
+        POST /retrieve/{id_tenant}/{id_workspace}      -> one retrieval result
+        GET  /retrieve/{id_tenant}/{id_workspace}/metadata?id_assistant=...
+
+    Auth follows the standard uthereal-apps convention: the ``X-API-Key``
+    header is set from ``UTHEREAL_API_KEY`` (which is ``test-api-key`` in
+    the canonical local-dev env). The composite auth path on the server
+    accepts an API key alone and returns the local sentinel JwtContext
+    (see ``uthereal_apps.api.auth.composite.do_validate_auth``).
+
+    A bearer JWT may also be passed explicitly via ``api_key`` -- but
+    for local dev no extra config is needed beyond exporting
+    ``UTHEREAL_API_KEY`` (and the rest of ``env_local_dev.sh``).
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        *,
+        api_key: str | None = None,
+        timeout: float = 60.0,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
+        resolved_key = api_key if api_key is not None else os.environ.get("UTHEREAL_API_KEY")
+        self._headers: dict[str, str] = {}
+        if resolved_key:
+            self._headers["X-API-Key"] = resolved_key
+        self._timeout = timeout
 
     async def retrieve(
         self,
         spec: RetrievalSpecification,
         *,
-        workspace_id: str,
+        id_tenant: str,
+        id_workspace: str,
+        id_assistant: str,
     ) -> RetrievalResult:
         """Retrieve one specification from the live RAG service."""
 
-        async with httpx.AsyncClient(base_url=self.base_url) as client:
+        async with httpx.AsyncClient(
+            base_url=self.base_url,
+            headers=self._headers,
+            timeout=self._timeout,
+        ) as client:
             response = await client.post(
-                "/retrieve",
+                f"/retrieve/{id_tenant}/{id_workspace}",
                 json={
-                    "workspace_id": workspace_id,
+                    "id_assistant": id_assistant,
                     "spec": spec.model_dump(mode="json", by_alias=True),
                 },
             )
         if response.status_code >= 400:
             raise RetrievalError(spec, response.status_code, response.text)
-        return RetrievalResult.model_validate(response.json())
+        body = response.json()
+        result_payload = body.get("result", body)
+        return RetrievalResult.model_validate(result_payload)
 
-    async def get_workspace_metadata(self, workspace_id: str) -> WorkspaceMetadata:
+    async def get_workspace_metadata(
+        self,
+        *,
+        id_tenant: str,
+        id_workspace: str,
+        id_assistant: str,
+    ) -> WorkspaceMetadata:
         """Load workspace metadata from the live RAG service."""
 
-        async with httpx.AsyncClient(base_url=self.base_url) as client:
-            response = await client.get(f"/workspaces/{workspace_id}/metadata")
+        async with httpx.AsyncClient(
+            base_url=self.base_url,
+            headers=self._headers,
+            timeout=self._timeout,
+        ) as client:
+            response = await client.get(
+                f"/retrieve/{id_tenant}/{id_workspace}/metadata",
+                params={"id_assistant": id_assistant},
+            )
         if response.status_code >= 400:
             raise RetrievalError(
                 RetrievalSpecification(
                     spec_id="workspace_metadata",
-                    intent=workspace_id,
+                    intent=f"{id_tenant}/{id_workspace}",
                 ),
                 response.status_code,
                 response.text,
@@ -202,33 +265,76 @@ class CassetteRetrievalClient:
         self,
         spec: RetrievalSpecification,
         *,
-        workspace_id: str,
+        id_tenant: str,
+        id_workspace: str,
+        id_assistant: str,
     ) -> RetrievalResult:
         """Replay or record one retrieval result."""
 
-        path = self.cassette_dir / f"{_retrieval_key(workspace_id, spec)}.json"
+        path = self.cassette_dir / f"{_retrieval_key(id_tenant, id_workspace, id_assistant, spec)}.json"
         if path.exists():
             return RetrievalResult.model_validate_json(path.read_text(encoding="utf-8"))
         if self.mode == "replay" or self.inner is None:
             raise RetrievalError(spec, 404, f"retrieval cassette miss: {path}")
-        result = await self.inner.retrieve(spec, workspace_id=workspace_id)
+        result = await self.inner.retrieve(
+            spec,
+            id_tenant=id_tenant,
+            id_workspace=id_workspace,
+            id_assistant=id_assistant,
+        )
         _write_json(path, result.model_dump(mode="json", by_alias=True))
         return result
 
-    async def get_workspace_metadata(self, workspace_id: str) -> WorkspaceMetadata:
+    async def get_workspace_metadata(
+        self,
+        *,
+        id_tenant: str,
+        id_workspace: str,
+        id_assistant: str,
+    ) -> WorkspaceMetadata:
         """Replay or record workspace metadata."""
 
-        spec = RetrievalSpecification(spec_id="workspace_metadata", intent=workspace_id)
-        path = self.cassette_dir / f"metadata-{_hash_text(workspace_id)}.json"
+        spec = RetrievalSpecification(
+            spec_id="workspace_metadata",
+            intent=f"{id_tenant}/{id_workspace}",
+        )
+        key = _hash_text(f"{id_tenant}|{id_workspace}|{id_assistant}")
+        path = self.cassette_dir / f"metadata-{key}.json"
         if path.exists():
             return WorkspaceMetadata.model_validate_json(
                 path.read_text(encoding="utf-8")
             )
         if self.mode == "replay" or self.inner is None:
             raise RetrievalError(spec, 404, f"metadata cassette miss: {path}")
-        metadata = await self.inner.get_workspace_metadata(workspace_id)
+        metadata = await self.inner.get_workspace_metadata(
+            id_tenant=id_tenant,
+            id_workspace=id_workspace,
+            id_assistant=id_assistant,
+        )
         _write_json(path, metadata.model_dump(mode="json"))
         return metadata
+
+
+def _entry_has_workspace_block(raw_entry: dict[str, Any]) -> bool:
+    return isinstance(raw_entry.get("workspace"), dict)
+
+
+def _merge_workspace(
+    fetched: WorkspaceMetadata,
+    fallback: WorkspaceMetadata,
+) -> WorkspaceMetadata:
+    """Use ``fetched`` as the base; fill missing ids from ``fallback``."""
+
+    update: dict[str, Any] = {}
+    if not fetched.workspace_id and fallback.workspace_id:
+        update["workspace_id"] = fallback.workspace_id
+    if not fetched.id_tenant and fallback.id_tenant:
+        update["id_tenant"] = fallback.id_tenant
+    if not fetched.id_assistant and fallback.id_assistant:
+        update["id_assistant"] = fallback.id_assistant
+    if update:
+        return fetched.model_copy(update=update)
+    return fetched
 
 
 def _workspace_from_entry(
@@ -239,8 +345,14 @@ def _workspace_from_entry(
     if isinstance(workspace_payload, dict):
         payload = dict(workspace_payload)
         payload.setdefault("workspace_id", entry.workspace_id)
+        payload.setdefault("id_tenant", entry.id_tenant)
+        payload.setdefault("id_assistant", entry.id_assistant)
         return WorkspaceMetadata.model_validate(payload)
-    return WorkspaceMetadata(workspace_id=entry.workspace_id)
+    return WorkspaceMetadata(
+        workspace_id=entry.workspace_id,
+        id_tenant=entry.id_tenant,
+        id_assistant=entry.id_assistant,
+    )
 
 
 def _resolve_selfserve_root(raw_path: Path | None) -> Path | None:
@@ -278,9 +390,14 @@ def _restore_env(name: str, value: str | None) -> None:
     os.environ[name] = value
 
 
-def _retrieval_key(workspace_id: str, spec: RetrievalSpecification) -> str:
+def _retrieval_key(
+    id_tenant: str,
+    id_workspace: str,
+    id_assistant: str,
+    spec: RetrievalSpecification,
+) -> str:
     spec_json = _canonical_json(spec.model_dump(mode="json", by_alias=True))
-    payload = f"{workspace_id}|{spec_json}"
+    payload = f"{id_tenant}|{id_workspace}|{id_assistant}|{spec_json}"
     return _hash_text(payload)
 
 

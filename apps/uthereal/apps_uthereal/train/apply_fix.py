@@ -5,6 +5,7 @@ from __future__ import annotations
 Owner: 4-2-apply-fix.
 """
 
+import contextlib
 import difflib
 from collections.abc import Iterable
 from pathlib import Path
@@ -12,8 +13,10 @@ from typing import Any
 
 from operad import Agent
 import operad.optim.backprop
+from operad.optim.backprop.grad import BackpropAgent, ParameterGradAgent
 from operad.optim.optimizers.tgd import TextualGradientDescent
 from operad.optim.parameter import Parameter
+from operad.utils.cassette import cassette_context
 from pydantic import BaseModel, ConfigDict
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedSeq
@@ -26,6 +29,7 @@ from apps_uthereal.feedback.loss import (
 from apps_uthereal.feedback.schema import HumanFeedback
 from apps_uthereal.leaves._common import dump_yaml, load_yaml, split_closure_from_task
 from apps_uthereal.leaves.registry import LEAF_REGISTRY, LEAF_STEP_NAMES
+from apps_uthereal.tiers import TIER_THINKING_LOW, tier_to_config
 from apps_uthereal.workflow.runner import ArtemisRunner
 
 
@@ -55,10 +59,19 @@ async def apply_fix(
     yaml_root: Path,
     dry_run: bool = False,
     lr: float = 1.0,
+    llm_cassette_path: Path | None = None,
+    gradient_agents: tuple[BackpropAgent, ParameterGradAgent] | None = None,
 ) -> FixReport:
     """Run targeted backward propagation, rewrite one leaf, and dump YAML.
 
     The caller owns building ``runner`` before calling this function.
+
+    ``llm_cassette_path`` scopes a replay-mode cassette around the runner pass
+    only. The gradient-propagation and rewriter LLM calls run live, since the
+    original cassette only contains the leaf calls.
+
+    ``gradient_agents`` lets callers (mostly tests) inject pre-built propagator
+    / parameter-grad agents instead of constructing live Gemini-backed ones.
     """
 
     if target_path in SPECIAL_TARGETS:
@@ -84,13 +97,34 @@ async def apply_fix(
             target_path=target_path,
         )
 
+        runner_cassette = (
+            cassette_context(llm_cassette_path, mode="replay")
+            if llm_cassette_path is not None
+            else contextlib.nullcontext()
+        )
         async with operad.optim.backprop.tape() as taped:
-            answer, _trace = await runner.run_with_trace(artemis_input)
+            with runner_cassette:
+                answer, _trace = await runner.run_with_trace(artemis_input)
 
         feedback_for_loss = feedback.model_copy(update={"target_path": target_path})
         _score, grad = await HumanFeedbackLoss().compute(answer, feedback_for_loss)
-        await taped.backward(grad, parameters=parameters)
-        await TextualGradientDescent(parameters, lr=lr).step()
+        gradient_config = tier_to_config(
+            TIER_THINKING_LOW,
+            overrides={"sampling.max_tokens": 8192},
+        )
+        if gradient_agents is None:
+            propagator = await BackpropAgent(config=gradient_config).abuild()
+            param_grad = await ParameterGradAgent(config=gradient_config).abuild()
+        else:
+            propagator, param_grad = gradient_agents
+
+        await taped.backward(
+            grad,
+            parameters=parameters,
+            propagator_factory=lambda: propagator,
+            parameter_grad_factory=lambda _kind: param_grad,
+        )
+        await TextualGradientDescent(parameters, lr=lr, config=gradient_config).step()
 
         _assert_only_target_changed(
             runner,

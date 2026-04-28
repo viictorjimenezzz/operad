@@ -39,7 +39,9 @@ class ArtemisRunState(BaseModel):
     # --- inputs (set at construction; never mutated post-init) -----------
 
     input_message: str = ""
+    id_tenant: str = ""
     workspace_id: str = ""
+    id_assistant: str = ""
     context: str = ""
     workspace_guide: str = ""
     exit_strategy: str = ""
@@ -91,7 +93,9 @@ class ArtemisRunState(BaseModel):
         entry = x.entry
         return cls(
             input_message=entry.user_message,
-            workspace_id=entry.workspace_id,
+            id_tenant=entry.id_tenant or x.workspace.id_tenant,
+            workspace_id=entry.workspace_id or x.workspace.workspace_id,
+            id_assistant=entry.id_assistant or x.workspace.id_assistant,
             context=entry.context,
             workspace_guide=entry.workspace_guide,
             exit_strategy=entry.exit_strategy,

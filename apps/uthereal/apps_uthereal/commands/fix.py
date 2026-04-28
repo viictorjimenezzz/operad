@@ -6,26 +6,23 @@ Owner: 4-2-apply-fix.
 """
 
 import argparse
-import hashlib
 import json
 import os
-import re
 import sys
 from pathlib import Path
 from typing import Any
 
-from operad.utils.cassette import CassetteMiss, cassette_context
+from operad.utils.cassette import CassetteMiss
 
+from apps_uthereal.commands.run import CassetteRetrievalClient
 from apps_uthereal.feedback.blamer import BlamerOutput
 from apps_uthereal.feedback.loss import SPECIAL_TARGETS, UnactionableFeedback
 from apps_uthereal.feedback.schema import HumanFeedback
 from apps_uthereal.paths import runs_dir
 from apps_uthereal.retrieval.client import RetrievalClient, RetrievalError
-from apps_uthereal.schemas.retrieval import RetrievalResult, RetrievalSpecification
 from apps_uthereal.schemas.workflow import (
     ArtemisInput,
     DatasetEntry,
-    WorkspaceMetadata,
 )
 from apps_uthereal.train.apply_fix import FixReport, apply_fix
 from apps_uthereal.workflow.runner import ArtemisRunner
@@ -36,9 +33,6 @@ _DEFAULT_SELFSERVE_ROOT = Path(
     "/Users/viictorjimenezzz/Documents/uthereal/uthereal-src/"
     "uthereal_workflow/agentic_workflows/chat/selfserve"
 )
-_SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9_.-]+")
-
-
 class _UsageError(Exception):
     """Command-line usage error."""
 
@@ -72,8 +66,10 @@ async def run(args: argparse.Namespace) -> int:
             )
 
         selfserve_root = _resolve_selfserve_root(args.selfserve_root)
-        retrieval: RetrievalClient = _ReplayRetrievalClient(
-            run_dir / "cassettes" / "rag"
+        retrieval: RetrievalClient = CassetteRetrievalClient(
+            cassette_dir=run_dir / "cassettes" / "rag",
+            inner=None,
+            mode="replay",
         )
         artemis_input = await _load_artemis_input(run_dir, retrieval)
         runner = ArtemisRunner(selfserve_root=selfserve_root, retrieval=retrieval)
@@ -84,16 +80,16 @@ async def run(args: argparse.Namespace) -> int:
             target_path=target_path,
             blame=blame,
         )
-        with cassette_context(_llm_cassette_path(run_dir), mode="replay"):
-            report = await apply_fix(
-                runner=runner,
-                artemis_input=artemis_input,
-                feedback=feedback,
-                target_path=target_path,
-                yaml_root=selfserve_root,
-                dry_run=bool(args.dry_run),
-                lr=float(args.lr),
-            )
+        report = await apply_fix(
+            runner=runner,
+            artemis_input=artemis_input,
+            feedback=feedback,
+            target_path=target_path,
+            yaml_root=selfserve_root,
+            dry_run=bool(args.dry_run),
+            lr=float(args.lr),
+            llm_cassette_path=_llm_cassette_path(run_dir),
+        )
 
         _write_artifacts(run_dir, report)
         _print_report(report)
@@ -164,10 +160,37 @@ async def _load_artemis_input(
     run_dir: Path,
     retrieval: RetrievalClient,
 ) -> ArtemisInput:
+    """Reconstruct the ArtemisInput from disk + the metadata cassette.
+
+    Falls back to a stub WorkspaceMetadata when the metadata cassette
+    isn't present so that older runs (recorded before the metadata
+    cassette existed) still replay cleanly.
+    """
+
+    from apps_uthereal.schemas.workflow import WorkspaceMetadata
+
     entry = DatasetEntry.from_json(run_dir / "entry.json")
-    workspace = await retrieval.get_workspace_metadata(entry.workspace_id)
+    try:
+        workspace = await retrieval.get_workspace_metadata(
+            id_tenant=entry.id_tenant,
+            id_workspace=entry.workspace_id,
+            id_assistant=entry.id_assistant,
+        )
+    except RetrievalError:
+        workspace = WorkspaceMetadata(
+            workspace_id=entry.workspace_id,
+            id_tenant=entry.id_tenant,
+            id_assistant=entry.id_assistant,
+        )
+    update: dict[str, Any] = {}
     if not workspace.workspace_id:
-        workspace = workspace.model_copy(update={"workspace_id": entry.workspace_id})
+        update["workspace_id"] = entry.workspace_id
+    if not workspace.id_tenant:
+        update["id_tenant"] = entry.id_tenant
+    if not workspace.id_assistant:
+        update["id_assistant"] = entry.id_assistant
+    if update:
+        workspace = workspace.model_copy(update=update)
     return ArtemisInput(entry=entry, workspace=workspace)
 
 
@@ -206,60 +229,29 @@ def _print_report(report: FixReport) -> None:
 
 
 def _llm_cassette_path(run_dir: Path) -> Path:
+    """Resolve the leaf-call cassette produced by ``run``.
+
+    The fix command replays the original leaf calls (recorded as
+    ``cassettes/llm/calls.jsonl`` by ``commands/run.py``). We must NOT
+    return ``blame.jsonl`` -- that one only holds the Blamer LLM call
+    and uses unrelated keys. Prefer ``calls.jsonl`` when present, then
+    any other ``*.jsonl`` that isn't ``blame.jsonl``.
+    """
+
     cassette_root = run_dir / "cassettes" / "llm"
     if cassette_root.is_file():
         return cassette_root
-    existing = sorted(cassette_root.glob("*.jsonl")) if cassette_root.exists() else []
+    if not cassette_root.exists():
+        return cassette_root / "calls.jsonl"
+    preferred = cassette_root / "calls.jsonl"
+    if preferred.exists():
+        return preferred
+    existing = sorted(
+        path for path in cassette_root.glob("*.jsonl") if path.name != "blame.jsonl"
+    )
     if existing:
         return existing[0]
-    return cassette_root / "cassette.jsonl"
-
-
-class _ReplayRetrievalClient:
-    """Replay retrieval responses from the task-1 cassette layout."""
-
-    def __init__(self, cassette_dir: Path) -> None:
-        self.cassette_dir = cassette_dir
-
-    async def retrieve(
-        self,
-        spec: RetrievalSpecification,
-        *,
-        workspace_id: str,
-    ) -> RetrievalResult:
-        key = _retrieve_key(workspace_id=workspace_id, spec=spec)
-        path = self.cassette_dir / "retrieve" / f"{key}.json"
-        if not path.exists():
-            raise RetrievalError(spec, 404, f"retrieval cassette miss: {key}")
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        return RetrievalResult.model_validate(payload.get("result", payload))
-
-    async def get_workspace_metadata(self, workspace_id: str) -> WorkspaceMetadata:
-        path = self.cassette_dir / "metadata" / f"{_metadata_key(workspace_id)}.json"
-        if not path.exists():
-            return WorkspaceMetadata(workspace_id=workspace_id)
-        payload = json.loads(path.read_text(encoding="utf-8"))
-        return WorkspaceMetadata.model_validate(payload.get("result", payload))
-
-
-def _retrieve_key(
-    *,
-    workspace_id: str,
-    spec: RetrievalSpecification,
-) -> str:
-    canonical = json.dumps(
-        spec.model_dump(mode="json"),
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return hashlib.sha256(f"{workspace_id}{canonical}".encode("utf-8")).hexdigest()[
-        :16
-    ]
-
-
-def _metadata_key(workspace_id: str) -> str:
-    return _SAFE_FILENAME_RE.sub("_", workspace_id).strip("_") or "default"
+    return preferred
 
 
 __all__ = ["add_parser", "run"]

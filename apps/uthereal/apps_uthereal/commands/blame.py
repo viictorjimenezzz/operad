@@ -24,7 +24,7 @@ from apps_uthereal.feedback.blamer import (
     render_blamer_input,
 )
 from apps_uthereal.feedback.schema import HumanFeedback
-from apps_uthereal.leaves.registry import load_all_leaves
+from apps_uthereal.leaves.registry import aload_all_leaves, load_all_leaves
 from apps_uthereal.paths import runs_dir
 from apps_uthereal.workflow.trace import WorkflowTrace
 
@@ -176,7 +176,7 @@ async def _blamer_verdict(
     selfserve_root: Path,
 ) -> BlamerOutput:
     try:
-        leaf_directory = load_all_leaves(selfserve_root)
+        leaf_directory = await aload_all_leaves(selfserve_root)
     except (OSError, LoaderError, ValidationError) as exc:
         message = f"Could not load leaves from {selfserve_root}: {exc}"
         raise _UsageError(message) from exc

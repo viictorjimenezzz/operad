@@ -1,0 +1,14 @@
+{
+  "id_tenant": "demo-tenant",
+  "workspace_id": "demo-workspace",
+  "id_assistant": "demo-assistant",
+  "user_message": "Hi! Can you briefly tell me what you can help me with in this workspace?",
+  "chat_history": "",
+  "session_memory_context": "",
+  "prior_beliefs_context": "",
+  "context": "You are a helpful, concise assistant for an industrial-equipment maintenance team. You answer questions about safety procedures and routine maintenance for factory machinery.",
+  "workspace_guide": "This workspace contains internal procedure documents for industrial machinery maintenance and safety.",
+  "exit_strategy": "If the user wants to end the conversation, politely thank them and conclude.",
+  "target_language": "en",
+  "character_limit": 4000
+}

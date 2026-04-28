@@ -4,8 +4,16 @@ from __future__ import annotations
 
 The phase-1 tier model strings are:
 - fast: gemini-2.5-flash
+- fast_3.1: gemini-2.5-flash (alias for the upstream `fast_3.1` tier
+  which targets ``gemini-3.1-flash-lite-preview``; we keep parity with
+  ``fast`` for the bridge to avoid pinning to a preview model.)
 - thinking_low: gemini-2.5-pro
-- thinking_high: gemini-2.5-pro-thinking
+- thinking_high: gemini-2.5-pro
+  (Upstream uses ``gemini-2.5-flash`` with ``reasoning_effort="high"``.
+  Operad does not surface ``reasoning_effort`` on the Gemini backend,
+  so the bridge upgrades to ``gemini-2.5-pro`` to approximate the
+  "more reasoning" intent without depending on a non-existent
+  ``-thinking`` model variant.)
 
 Owner: 1-1-skeleton.
 """
@@ -21,16 +29,18 @@ from apps_uthereal.errors import LoaderError
 
 
 TIER_FAST: str = "fast"
+TIER_FAST_3_1: str = "fast_3.1"
 TIER_THINKING_LOW: str = "thinking_low"
 TIER_THINKING_HIGH: str = "thinking_high"
 RECOGNIZED_TIERS: frozenset[str] = frozenset(
-    {TIER_FAST, TIER_THINKING_LOW, TIER_THINKING_HIGH}
+    {TIER_FAST, TIER_FAST_3_1, TIER_THINKING_LOW, TIER_THINKING_HIGH}
 )
 
 _MODEL_BY_TIER: dict[str, str] = {
     TIER_FAST: "gemini-2.5-flash",
+    TIER_FAST_3_1: "gemini-2.5-flash",
     TIER_THINKING_LOW: "gemini-2.5-pro",
-    TIER_THINKING_HIGH: "gemini-2.5-pro-thinking",
+    TIER_THINKING_HIGH: "gemini-2.5-pro",
 }
 
 

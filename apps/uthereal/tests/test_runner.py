@@ -104,15 +104,17 @@ class RecordingRetrieval:
     """Retrieval client that records calls and returns canned results."""
 
     def __init__(self) -> None:
-        self.calls: list[tuple[RetrievalSpecification, str]] = []
+        self.calls: list[tuple[RetrievalSpecification, str, str, str]] = []
 
     async def retrieve(
         self,
         spec: RetrievalSpecification,
         *,
-        workspace_id: str,
+        id_tenant: str,
+        id_workspace: str,
+        id_assistant: str,
     ) -> RetrievalResult:
-        self.calls.append((spec, workspace_id))
+        self.calls.append((spec, id_tenant, id_workspace, id_assistant))
         return RetrievalResult(
             spec_id=spec.spec_id,
             intent=spec.intent,
@@ -126,8 +128,18 @@ class RecordingRetrieval:
             image_rag_results={},
         )
 
-    async def get_workspace_metadata(self, workspace_id: str) -> WorkspaceMetadata:
-        return WorkspaceMetadata(workspace_id=workspace_id)
+    async def get_workspace_metadata(
+        self,
+        *,
+        id_tenant: str,
+        id_workspace: str,
+        id_assistant: str,
+    ) -> WorkspaceMetadata:
+        return WorkspaceMetadata(
+            workspace_id=id_workspace,
+            id_tenant=id_tenant,
+            id_assistant=id_assistant,
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -185,11 +197,11 @@ async def test_rag_path(selfserve_root: Path) -> None:
     assert answer.final_step == "rag_talker"
     assert answer.references == {"c-0": ["f-0"]}
     assert answer.utterance == "RAG answer with citations."
-    assert [spec.spec_id for spec, _workspace in retrieval.calls] == [
+    assert [call[0].spec_id for call in retrieval.calls] == [
         "spec_b",
         "spec_a",
     ]
-    assert {workspace for _spec, workspace in retrieval.calls} == {"workspace-1"}
+    assert {call[2] for call in retrieval.calls} == {"workspace-1"}
     assert [frame.step_name for frame in trace.frames] == [
         "context_safeguard",
         "reasoner",
@@ -292,8 +304,11 @@ async def test_runner_under_tape_records_entries(selfserve_root: Path) -> None:
     async with tape() as t:
         _answer, trace = await runner.run_with_trace(_input_from_fixture("rag_needed"))
 
-    assert len(t.entries) == len(trace.frames)
-    assert all(entry.is_leaf for entry in t.entries)
+    leaf_entries = [entry for entry in t.entries if entry.is_leaf]
+    composite_entries = [entry for entry in t.entries if not entry.is_leaf]
+    assert len(leaf_entries) == len(trace.frames)
+    assert len(composite_entries) == 1
+    assert composite_entries[0].agent_path == runner.name
 
 
 def test_render_each_leaf_input_is_pure_function() -> None:
