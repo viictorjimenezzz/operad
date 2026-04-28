@@ -184,6 +184,7 @@ export function buildLineageGraph(generations: EvoGeneration[]): LineageGraph {
 
   for (let genIndex = 0; genIndex < generations.length; genIndex += 1) {
     const generation = generations[genIndex];
+    if (!generation) continue;
     const scores = generation?.scores ?? [];
     for (let individualId = 0; individualId < scores.length; individualId += 1) {
       const score = scores[individualId] ?? null;
@@ -212,7 +213,7 @@ export function buildLineageGraph(generations: EvoGeneration[]): LineageGraph {
         parentId,
       });
 
-      if (parentId != null) {
+      if (parentId != null && parentIndividual != null) {
         const sourceX = MARGIN_LEFT + (genIndex - 1) * COLUMN_GAP;
         const sourceY = MARGIN_TOP + parentIndividual * ROW_GAP;
         edges.push({
