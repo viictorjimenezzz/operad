@@ -3,11 +3,6 @@
   "version": 1,
   "dataSources": {
     "summary": { "endpoint": "/runs/$context.runId/summary" },
-    "events": { "endpoint": "/runs/$context.runId/events?limit=1000" },
-    "progress": {
-      "endpoint": "/runs/$context.runId/progress.json",
-      "stream": "/runs/$context.runId/progress.sse"
-    },
     "fitness": {
       "endpoint": "/runs/$context.runId/fitness.json",
       "stream": "/runs/$context.runId/fitness.sse"
@@ -20,12 +15,7 @@
       "endpoint": "/runs/$context.runId/checkpoints.json",
       "stream": "/runs/$context.runId/checkpoints.sse"
     },
-    "gradients": {
-      "endpoint": "/runs/$context.runId/gradients.json",
-      "stream": "/runs/$context.runId/gradients.sse"
-    },
-    "children": { "endpoint": "/runs/$context.runId/children" },
-    "graph": { "endpoint": "/graph/$context.runId" }
+    "children": { "endpoint": "/runs/$context.runId/children" }
   },
   "spec": {
     "root": "page",
@@ -34,140 +24,56 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "workspace", "label": "Workspace" },
             { "id": "loss", "label": "Loss" },
+            { "id": "schedule", "label": "Schedule" },
             { "id": "drift", "label": "Drift" },
-            { "id": "gradients", "label": "Gradients" },
-            { "id": "checkpoints", "label": "Checkpoints" },
-            { "id": "progress", "label": "Progress" },
+            { "id": "parameters", "label": "Parameters" },
             {
               "id": "traceback",
               "label": "Traceback",
-              "condition": "$queries.summary.has_traceback"
+              "badge": "$queries.summary.has_traceback"
             },
-            { "id": "parameters", "label": "Parameters" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
-            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
-            { "id": "graph", "label": "Graph" }
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
-        "children": [
-          "workspace",
-          "loss",
-          "drift",
-          "gradients",
-          "checkpoints",
-          "progress",
-          "traceback",
-          "parameters",
-          "agents",
-          "events",
-          "graph"
-        ]
+        "children": ["loss", "schedule", "drift", "parameters", "traceback", "agents", "events"]
       },
-
-      "workspace": {
-        "type": "TrainingWorkspace",
+      "loss": {
+        "type": "TrainerLossTab",
         "props": {
           "sourceFitness": "$queries.fitness",
           "sourceCheckpoints": "$queries.checkpoints",
-          "sourceDrift": "$queries.drift",
-          "sourceGradients": "$queries.gradients",
-          "sourceProgress": "$queries.progress",
-          "sourceSummary": "$queries.summary",
-          "runId": "$context.runId"
+          "sourceSummary": "$queries.summary"
         }
       },
-
-      "loss": {
-        "type": "Stack",
-        "props": { "gap": 16 },
-        "children": ["loss-grid"]
-      },
-      "loss-grid": {
-        "type": "PanelGrid",
-        "props": { "cols": 2 },
-        "children": ["loss-card", "lr-card"]
-      },
-      "loss-card": {
-        "type": "PanelCard",
-        "props": { "title": "loss curve", "bodyMinHeight": 300 },
-        "children": ["loss-chart"]
-      },
-      "loss-chart": {
-        "type": "TrainingLossCurve",
+      "schedule": {
+        "type": "TrainerScheduleTab",
         "props": {
-          "source": "$queries.fitness",
-          "sourceCheckpoint": "$queries.checkpoints",
-          "height": 280
+          "sourceFitness": "$queries.fitness",
+          "sourceCheckpoints": "$queries.checkpoints"
         }
       },
-      "lr-card": {
-        "type": "PanelCard",
-        "props": { "title": "learning rate", "bodyMinHeight": 300 },
-        "children": ["lr-chart"]
+      "drift": {
+        "type": "TrainerDriftTab",
+        "props": { "sourceDrift": "$queries.drift" }
       },
-      "lr-chart": {
-        "type": "LrScheduleCurve",
-        "props": { "source": "$queries.fitness", "height": 280 }
-      },
-
       "parameters": {
         "type": "ParametersTab",
         "props": { "runId": "$context.runId", "scope": "run" }
       },
-
-      "drift": {
-        "type": "PanelCard",
-        "props": { "title": "prompt drift" },
-        "children": ["drift-view"]
-      },
-      "drift-view": { "type": "DriftTimeline", "props": { "source": "$queries.drift" } },
-
-      "gradients": {
-        "type": "PanelCard",
-        "props": { "title": "gradient log" },
-        "children": ["gradients-view"]
-      },
-      "gradients-view": { "type": "GradientLog", "props": { "source": "$queries.gradients" } },
-
-      "checkpoints": {
-        "type": "PanelCard",
-        "props": { "title": "checkpoints" },
-        "children": ["checkpoints-view"]
-      },
-      "checkpoints-view": {
-        "type": "CheckpointTimeline",
-        "props": { "source": "$queries.checkpoints" }
-      },
-
-      "progress": {
-        "type": "TrainingProgressPanel",
-        "props": {
-          "sourceProgress": "$queries.progress",
-          "sourceEvents": "$queries.events.events"
-        }
-      },
-
       "traceback": {
-        "type": "TrainingTracebackTab",
+        "type": "TrainerTracebackTab",
         "props": {
           "runId": "$context.runId",
           "sourceSummary": "$queries.summary"
         }
       },
-
       "agents": {
         "type": "AgentsTab",
         "props": { "runId": "$context.runId", "groupBy": "hash" }
       },
-      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
-      "graph": {
-        "type": "PanelCard",
-        "props": { "title": "agent graph" },
-        "children": ["graph-view"]
-      },
-      "graph-view": { "type": "AgentGraph", "props": { "source": "$queries.graph" } }
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } }
     }
   }
 }

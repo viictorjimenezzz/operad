@@ -1,4 +1,8 @@
 import { ParameterEvolutionMultiples } from "@/components/algorithms/trainer/parameter-evolution-multiples";
+import { TrainerDriftTab } from "@/components/algorithms/trainer/trainer-drift-tab";
+import { TrainerLossTab } from "@/components/algorithms/trainer/trainer-loss-tab";
+import { TrainerScheduleTab } from "@/components/algorithms/trainer/trainer-schedule-tab";
+import { TrainerTracebackTab } from "@/components/algorithms/trainer/trainer-traceback-tab";
 import {
   TrainingProgressPanel,
   TrainingWorkspace,
@@ -9,7 +13,6 @@ import { GradientLog } from "@/components/charts/gradient-log";
 import { LrScheduleCurve } from "@/components/charts/lr-schedule-curve";
 import { TrainingLossCurve } from "@/components/charts/training-loss-curve";
 import { TrainingProgress } from "@/components/charts/training-progress";
-import { TrainingTracebackTab } from "@/dashboard/pages/run-detail/TrainingTracebackTab";
 import type { ComponentRegistry } from "@json-render/react";
 
 export const trainerRegistry: ComponentRegistry = {
@@ -37,10 +40,41 @@ export const trainerRegistry: ComponentRegistry = {
     const p = element.props as { dataProgress?: unknown; dataEvents?: unknown };
     return <TrainingProgressPanel {...p} />;
   },
+  TrainerLossTab: ({ element }) => {
+    const p = element.props as {
+      dataFitness?: unknown;
+      dataCheckpoints?: unknown;
+      dataSummary?: unknown;
+    };
+    return (
+      <TrainerLossTab
+        dataFitness={p.dataFitness}
+        dataCheckpoints={p.dataCheckpoints}
+        dataSummary={p.dataSummary}
+      />
+    );
+  },
+  TrainerScheduleTab: ({ element }) => {
+    const p = element.props as { dataFitness?: unknown; dataCheckpoints?: unknown };
+    return <TrainerScheduleTab dataFitness={p.dataFitness} dataCheckpoints={p.dataCheckpoints} />;
+  },
+  TrainerDriftTab: ({ element }) => {
+    const p = element.props as { dataDrift?: unknown };
+    return <TrainerDriftTab dataDrift={p.dataDrift} />;
+  },
+  TrainerTracebackTab: ({ element }) => {
+    const p = element.props as { runId?: string; dataSummary?: unknown };
+    return (
+      <TrainerTracebackTab
+        {...(p.runId !== undefined ? { runId: p.runId } : {})}
+        dataSummary={p.dataSummary}
+      />
+    );
+  },
   TrainingTracebackTab: ({ element }) => {
     const p = element.props as { runId?: string; dataSummary?: unknown };
     return (
-      <TrainingTracebackTab
+      <TrainerTracebackTab
         {...(p.runId !== undefined ? { runId: p.runId } : {})}
         dataSummary={p.dataSummary}
       />
