@@ -1,14 +1,12 @@
-import { ParallelCoordinates } from "@/components/algorithms/sweep/parallel-coordinates";
 import {
   type SweepAggregation,
   SweepDimensionPicker,
 } from "@/components/algorithms/sweep/sweep-dimension-picker";
 import { SweepHeatmap } from "@/components/charts/sweep-heatmap";
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useUrlState } from "@/hooks/use-url-state";
 import { RunSummary as RunSummarySchema, SweepSnapshot } from "@/lib/types";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { z } from "zod";
 
 const ChildRunSummary = RunSummarySchema.passthrough().extend({
@@ -24,7 +22,6 @@ export function SweepHeatmapTab({ data, dataChildren }: SweepHeatmapTabProps) {
   const parsed = SweepSnapshot.safeParse(data);
   const [dimParam, setDimParam] = useUrlState("dim");
   const [aggParam, setAggParam] = useUrlState("agg");
-  const [parallel, setParallel] = useState(false);
 
   const snap = parsed.success ? parsed.data : null;
   const defaults = useMemo(
@@ -66,43 +63,28 @@ export function SweepHeatmapTab({ data, dataChildren }: SweepHeatmapTabProps) {
   return (
     <div className="flex flex-col gap-3">
       {snap.axes.length >= 3 ? (
-        <div className="flex flex-col gap-2">
-          <SweepDimensionPicker
-            axes={snap.axes.map((axis) => ({
-              name: axis.name,
-              values: axis.values.map((value) =>
-                value == null || ["string", "number", "boolean"].includes(typeof value)
-                  ? (value as string | number | boolean | null)
-                  : String(value),
-              ),
-            }))}
-            selected={selected}
-            onChange={setSelected}
-            aggregations={aggregations}
-            onAggregationsChange={setAggregations}
-          />
-          <div className="flex justify-end">
-            <Button
-              size="sm"
-              variant={parallel ? "primary" : "default"}
-              onClick={() => setParallel((v) => !v)}
-            >
-              parallel coordinates
-            </Button>
-          </div>
-        </div>
-      ) : null}
-      {parallel && snap.axes.length > 2 ? (
-        <ParallelCoordinates data={snap} />
-      ) : (
-        <SweepHeatmap
-          data={snap}
-          xAxis={selected[0]}
-          yAxis={selected[1]}
+        <SweepDimensionPicker
+          axes={snap.axes.map((axis) => ({
+            name: axis.name,
+            values: axis.values.map((value) =>
+              value == null || ["string", "number", "boolean"].includes(typeof value)
+                ? (value as string | number | boolean | null)
+                : String(value),
+            ),
+          }))}
+          selected={selected}
+          onChange={setSelected}
           aggregations={aggregations}
-          cellHrefs={cellHrefs}
+          onAggregationsChange={setAggregations}
         />
-      )}
+      ) : null}
+      <SweepHeatmap
+        data={snap}
+        xAxis={selected[0]}
+        yAxis={selected[1]}
+        aggregations={aggregations}
+        cellHrefs={cellHrefs}
+      />
     </div>
   );
 }
