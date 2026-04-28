@@ -1,3 +1,4 @@
+import { HashRow, type HashKey } from "@/components/ui/hash-row";
 import { MarkdownView } from "@/components/ui/markdown";
 import { Pager } from "@/components/ui/pager";
 import { Pill } from "@/components/ui/pill";
@@ -47,6 +48,11 @@ export type RunFieldValue =
   | { kind: "image"; src: string; alt: string; width?: number; height?: number }
   | { kind: "pill"; value: string; tone: "ok" | "warn" | "error" | "live" | "accent" | "default" }
   | { kind: "hash"; value: string }
+  | {
+      kind: "hashDriftStrip";
+      current: Partial<Record<HashKey, string | null>>;
+      previous?: Partial<Record<HashKey, string | null>>;
+    }
   | { kind: "sparkline"; values: (number | null)[] }
   | { kind: "link"; label: string; to: string }
   | { kind: "markdown"; value: string };
@@ -80,6 +86,13 @@ export interface RunTableProps {
 type SortState = { id: string; source: string; dir: "asc" | "desc" } | null;
 
 const STORAGE_PREFIX = "operad.dashboard.runtable.cols.";
+const DRIFT_COLUMN: RunTableColumn = {
+  id: "drift",
+  label: "Drift",
+  source: "_drift",
+  width: 80,
+  defaultVisible: true,
+};
 
 export function RunTable({
   rows,
@@ -103,7 +116,20 @@ export function RunTable({
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
 
-  const tableColumns = useMemo(() => columns.filter((column) => !column.isColorRail), [columns]);
+  const invocationsRunId = useMemo(() => parseInvocationRunId(storageKey), [storageKey]);
+  const rowsWithDrift = useMemo(
+    () => attachDriftFields(rows, invocationsRunId != null),
+    [rows, invocationsRunId],
+  );
+  const columnsWithDrift = useMemo(
+    () => attachDriftColumn(columns, invocationsRunId != null),
+    [columns, invocationsRunId],
+  );
+
+  const tableColumns = useMemo(
+    () => columnsWithDrift.filter((column) => !column.isColorRail),
+    [columnsWithDrift],
+  );
   const allColumnIds = useMemo(() => tableColumns.map((column) => column.id), [tableColumns]);
   const storageId = `${STORAGE_PREFIX}${storageKey}`;
 
@@ -122,7 +148,7 @@ export function RunTable({
   );
 
   const sort = useMemo(() => resolveSort(sortParam, tableColumns), [sortParam, tableColumns]);
-  const sortedRows = useMemo(() => sortRows(rows, sort), [rows, sort]);
+  const sortedRows = useMemo(() => sortRows(rowsWithDrift, sort), [rowsWithDrift, sort]);
   const pageRows = useMemo(
     () => sortedRows.slice(page * pageSize, page * pageSize + pageSize),
     [sortedRows, page, pageSize],
@@ -244,7 +270,7 @@ export function RunTable({
     }
   };
 
-  if (rows.length === 0) {
+  if (rowsWithDrift.length === 0) {
     return (
       <div className="overflow-hidden rounded-lg border border-border bg-bg-1">
         <div className="min-h-40">
@@ -256,7 +282,7 @@ export function RunTable({
         <RunTableFooter
           page={page}
           pageSize={pageSize}
-          total={rows.length}
+          total={rowsWithDrift.length}
           onPageChange={setPage}
           showPager={false}
           columns={tableColumns}
@@ -617,6 +643,14 @@ function renderCell(row: RunRow, column: RunTableColumn): ReactNode {
           {value.value}
         </span>
       );
+    case "hashDriftStrip":
+      return (
+        <HashRow
+          variant="strip"
+          current={value.current}
+          {...(value.previous ? { previous: value.previous } : {})}
+        />
+      );
     case "sparkline":
       return (
         <Sparkline values={value.values} width={60} height={16} color={hashColor(row.identity)} />
@@ -692,6 +726,8 @@ function comparable(value: RunFieldValue | string | number | null): string | num
       return value.value;
     case "image":
       return null;
+    case "hashDriftStrip":
+      return Object.values(value.current).filter((item) => typeof item === "string").join("|");
     case "sparkline":
       for (let i = value.values.length - 1; i >= 0; i -= 1) {
         const item = value.values[i];
@@ -731,6 +767,64 @@ function resolveSort(sortParam: string | null, columns: RunTableColumn[]): SortS
   return fallback?.defaultSort
     ? { id: fallback.id, source: fallback.source, dir: fallback.defaultSort }
     : null;
+}
+
+function parseInvocationRunId(storageKey: string): string | null {
+  if (!storageKey.startsWith("invocations:")) return null;
+  const parts = storageKey.split(":");
+  const runId = parts.slice(2).join(":");
+  return runId.length > 0 ? runId : null;
+}
+
+function attachDriftColumn(columns: RunTableColumn[], enabled: boolean): RunTableColumn[] {
+  if (!enabled || columns.some((column) => column.id === DRIFT_COLUMN.id)) return columns;
+  const runIndex = columns.findIndex((column) => column.id === "run" || column.source === "_id");
+  if (runIndex < 0) return [...columns, DRIFT_COLUMN];
+  return [...columns.slice(0, runIndex + 1), DRIFT_COLUMN, ...columns.slice(runIndex + 1)];
+}
+
+function toRowHashes(row: RunRow): Partial<Record<HashKey, string | null>> {
+  const read = (key: HashKey): string | null => {
+    const value = row.fields[key];
+    if (!value) return null;
+    if (value.kind === "text") return value.value;
+    if (value.kind === "hash") return value.value;
+    if (value.kind === "param") return typeof value.value === "string" ? value.value : null;
+    if (value.kind === "link") return value.to;
+    return null;
+  };
+  return {
+    hash_model: read("hash_model"),
+    hash_prompt: read("hash_prompt"),
+    hash_input: read("hash_input"),
+    hash_output_schema: read("hash_output_schema"),
+    hash_config: read("hash_config"),
+    hash_graph: read("hash_graph"),
+    hash_content: read("hash_content") ?? row.identity,
+  };
+}
+
+function attachDriftFields(
+  rows: RunRow[],
+  enabled: boolean,
+): RunRow[] {
+  if (!enabled) return rows;
+  return rows.map((row, index) => {
+    const current = toRowHashes(row);
+    const previousRow = index > 0 ? rows[index - 1] : null;
+    const previous = previousRow ? toRowHashes(previousRow) : undefined;
+    return {
+      ...row,
+      fields: {
+        ...row.fields,
+        _drift: {
+          kind: "hashDriftStrip",
+          current,
+          ...(previous ? { previous } : {}),
+        },
+      },
+    };
+  });
 }
 
 function parseVisibleIds(raw: string, columns: RunTableColumn[]): Set<string> {
