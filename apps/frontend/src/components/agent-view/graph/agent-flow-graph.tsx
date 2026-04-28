@@ -343,28 +343,26 @@ function SingleLeafCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
   const singlePath = single?.path ?? "";
 
   const invocationQueries = useQueries({
-    queries: single
-      ? [
-          {
-            queryKey: ["graph", "agent-invocations", runId, single.path] as const,
-            queryFn: () => dashboardApi.agentInvocations(runId, single.path),
-            staleTime: 30_000,
-            retry: false,
-          },
-        ]
-      : [],
+    queries: [
+      {
+        queryKey: ["graph", "agent-invocations", runId, singlePath] as const,
+        queryFn: () => dashboardApi.agentInvocations(runId, singlePath),
+        staleTime: 30_000,
+        retry: false as const,
+        enabled: Boolean(single),
+      },
+    ],
   });
   const metaQueries = useQueries({
-    queries: single
-      ? [
-          {
-            queryKey: ["graph", "agent-meta", runId, single.path] as const,
-            queryFn: () => dashboardApi.agentMeta(runId, single.path),
-            staleTime: 60_000,
-            retry: false,
-          },
-        ]
-      : [],
+    queries: [
+      {
+        queryKey: ["graph", "agent-meta", runId, singlePath] as const,
+        queryFn: () => dashboardApi.agentMeta(runId, singlePath),
+        staleTime: 60_000,
+        retry: false as const,
+        enabled: Boolean(single),
+      },
+    ],
   });
 
   // Auto-select the leaf exactly once per mount; using a ref instead of a
