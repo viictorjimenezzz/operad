@@ -93,6 +93,18 @@ export function AgentGroupOverviewTab() {
   );
 }
 
+function hashesForRun(run: RunSummary): Partial<Record<HashKey, string | null>> {
+  return {
+    hash_content: run.hash_content ?? null,
+    hash_model: run.hash_model ?? null,
+    hash_prompt: run.hash_prompt ?? null,
+    hash_input: run.hash_input ?? null,
+    hash_output_schema: run.hash_output_schema ?? null,
+    hash_graph: run.hash_graph ?? null,
+    hash_config: run.hash_config ?? null,
+  };
+}
+
 function buildSeries(runs: RunSummary[], visible: Set<ToggleKey>) {
   const defs: Array<{ key: ToggleKey; getValue: (r: RunSummary) => number | null }> = [
     { key: "latency", getValue: (r) => r.duration_ms },
@@ -111,18 +123,6 @@ function buildSeries(runs: RunSummary[], visible: Set<ToggleKey>) {
       color: SERIES_COLORS[d.key],
       points: runs.map((run, index) => ({ x: index + 1, y: d.getValue(run) })),
     }));
-}
-
-function hashesForRun(run: RunSummary): Partial<Record<HashKey, string | null>> {
-  return {
-    hash_content: run.hash_content ?? null,
-    hash_model: run.hash_model ?? null,
-    hash_prompt: run.hash_prompt ?? null,
-    hash_input: run.hash_input ?? null,
-    hash_output_schema: run.hash_output_schema ?? null,
-    hash_graph: run.hash_graph ?? null,
-    hash_config: run.hash_config ?? null,
-  };
 }
 
 function median(values: number[]): number | null {
