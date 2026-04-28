@@ -213,8 +213,10 @@ function buildCumulativeTrend(entries: IterationSummary[]): Array<{ index: numbe
 
 function trendPolylinePoints(trend: Array<{ index: number; rate: number }>): string {
   if (trend.length === 1) {
+    const only = trend[0];
+    if (!only) return "";
     const x = TREND_PAD_X;
-    const y = TREND_PAD_Y + (1 - trend[0].rate) * (TREND_HEIGHT - TREND_PAD_Y * 2);
+    const y = TREND_PAD_Y + (1 - only.rate) * (TREND_HEIGHT - TREND_PAD_Y * 2);
     return `${x},${y} ${TREND_WIDTH - TREND_PAD_X},${y}`;
   }
 
