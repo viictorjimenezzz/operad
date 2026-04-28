@@ -119,8 +119,8 @@ describe("resolveLayout integration (real layouts/)", () => {
     expect(verifier.spec.elements.overview?.type).toBe("VerifierDetailOverview");
     expect(verifier.spec.elements["iterations-view"]?.type).toBe("VerifierIterations");
     expect(selfrefine.dataSources.iterations?.endpoint).toContain("/iterations.json");
-    expect(selfrefine.spec.elements.iterations?.type).toBe("IterationLadder");
-    expect(selfrefine.spec.elements["convergence-view"]?.type).toBe("SelfRefineConvergence");
+    expect(selfrefine.spec.elements.ladder?.type).toBe("SelfRefineLadderTab");
+    expect(selfrefine.spec.elements.iterations?.type).toBe("SelfRefineIterationsTab");
   });
 
   it("debate and autoresearcher layouts expose their algorithm-specific tabs", async () => {
