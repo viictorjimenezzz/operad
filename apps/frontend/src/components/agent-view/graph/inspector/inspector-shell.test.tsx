@@ -36,8 +36,16 @@ const baseMeta = {
   rules: [],
   examples: [],
   config: null,
-  input_schema: null,
-  output_schema: null,
+  input_schema: {
+    key: "tests.Input",
+    name: "Input",
+    fields: [{ name: "text", type: "str", description: "Prompt text.", system: false }],
+  },
+  output_schema: {
+    key: "tests.Output",
+    name: "Output",
+    fields: [{ name: "answer", type: "str", description: "Answer text.", system: false }],
+  },
   forward_in_overridden: false,
   forward_out_overridden: false,
   trainable_paths: [],
@@ -89,17 +97,19 @@ describe("InspectorShell", () => {
     expect(screen.queryByText(/^langfuse$/i)).toBeNull();
   });
 
-  it("renders the vertical overview tab by default", () => {
+  it("renders the schema overview tab by default", () => {
     render(wrapper(<InspectorShell runId="run-1" ioGraph={ioGraph} onClose={vi.fn()} />));
-    expect(screen.getByText("identity")).toBeTruthy();
-    expect(screen.getByText("hooks")).toBeTruthy();
+    expect(screen.getByText("tests.Input")).toBeTruthy();
+    expect(screen.getByText("tests.Output")).toBeTruthy();
+    expect(screen.getByText("text")).toBeTruthy();
+    expect(screen.queryByText("hooks")).toBeNull();
   });
 
   it("switches to events tab on click", () => {
     render(wrapper(<InspectorShell runId="run-1" ioGraph={ioGraph} onClose={vi.fn()} />));
     fireEvent.click(screen.getByRole("button", { name: "Events" }));
     // empty events → empty state message (overview no longer visible)
-    expect(screen.queryByText("identity")).toBeNull();
+    expect(screen.queryByText("tests.Input")).toBeNull();
     expect(screen.getByText(/no agent events recorded/i)).toBeTruthy();
   });
 

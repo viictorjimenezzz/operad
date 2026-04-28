@@ -1,7 +1,18 @@
 import { ActivityStrip } from "@/components/agent-view/overview/run-status-strip";
+import { SingleInvocationOverviewTab } from "@/dashboard/pages/run-detail/SingleInvocationOverviewTab";
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const hookMocks = vi.hoisted(() => ({
+  useRunSummary: vi.fn(),
+  useRunInvocations: vi.fn(),
+}));
+
+vi.mock("@/hooks/use-runs", () => ({
+  useRunSummary: hookMocks.useRunSummary,
+  useRunInvocations: hookMocks.useRunInvocations,
+}));
 
 const summary = {
   run_id: "run-1",
@@ -45,11 +56,26 @@ const invocations = {
       completion_tokens: 198,
       cost_usd: 0.0042,
       hash_content: "abc123",
+      config: {
+        backend: "llamacpp",
+        model: "test-model",
+        sampling: { temperature: 0 },
+        io: { renderer: "xml" },
+      },
+      prompt_system: "system prompt for this invocation",
+      prompt_user: "user prompt for this invocation",
+      input: { text: "hello" },
+      output: { value: "world" },
     },
   ],
 };
 
 describe("ActivityStrip", () => {
+  beforeEach(() => {
+    hookMocks.useRunSummary.mockReset();
+    hookMocks.useRunInvocations.mockReset();
+  });
+
   it("renders state pill, duration, tokens, and cost", () => {
     render(
       <MemoryRouter>
@@ -94,8 +120,35 @@ describe("ActivityStrip", () => {
 
     const link = screen.getByText("langfuse");
     expect(link).toBeTruthy();
-    expect(link.closest("a")?.getAttribute("href")).toBe(
-      "https://langfuse.example.com/trace/123",
+    expect(link.closest("a")?.getAttribute("href")).toBe("https://langfuse.example.com/trace/123");
+  });
+});
+
+describe("SingleInvocationOverviewTab", () => {
+  beforeEach(() => {
+    hookMocks.useRunSummary.mockReturnValue({ isLoading: false, data: summary });
+    hookMocks.useRunInvocations.mockReturnValue({ isLoading: false, data: invocations });
+  });
+
+  it("shows invocation values, prompt, and runtime config without instance sections", () => {
+    render(
+      <MemoryRouter initialEntries={["/agents/abc123/runs/run-1"]}>
+        <Routes>
+          <Route
+            path="/agents/:hashContent/runs/:runId"
+            element={<SingleInvocationOverviewTab />}
+          />
+        </Routes>
+      </MemoryRouter>,
     );
+
+    expect(screen.getByText((text) => text.includes("hello"))).toBeTruthy();
+    expect(screen.getByText((text) => text.includes("world"))).toBeTruthy();
+    expect(screen.getByText("system prompt for this invocation")).toBeTruthy();
+    expect(screen.getByText("user prompt for this invocation")).toBeTruthy();
+    expect(screen.getByText((text) => text.includes("test-model"))).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "role" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "task" })).toBeNull();
+    expect(screen.queryByText("structure")).toBeNull();
   });
 });

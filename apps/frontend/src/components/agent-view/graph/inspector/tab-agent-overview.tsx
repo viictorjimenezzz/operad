@@ -1,6 +1,20 @@
-import { Eyebrow, FieldTree, MarkdownView, Pill } from "@/components/ui";
-import { HashRow } from "@/components/ui/hash-row";
+import { Eyebrow } from "@/components/ui";
 import { useAgentMeta } from "@/hooks/use-runs";
+
+type SchemaField = {
+  name: string;
+  type?: string | undefined;
+  description?: string | undefined;
+  system?: boolean | undefined;
+  has_default?: boolean | undefined;
+  default?: unknown;
+};
+
+type TypeSchema = {
+  key: string;
+  name: string;
+  fields: SchemaField[];
+};
 
 export function TabAgentOverview({ runId, agentPath }: { runId: string; agentPath: string }) {
   const meta = useAgentMeta(runId, agentPath);
@@ -12,119 +26,139 @@ export function TabAgentOverview({ runId, agentPath }: { runId: string; agentPat
     return <div className="p-5 text-[12px] text-[--color-err]">failed to load metadata</div>;
   }
 
-  const m = meta.data;
+  const inputSchema = coerceTypeSchema(meta.data.input_schema);
+  const outputSchema = coerceTypeSchema(meta.data.output_schema);
 
   return (
-    <div className="divide-y divide-border">
-      <section className="px-5 py-4">
-        <Eyebrow>identity</Eyebrow>
-        <div className="mt-2 space-y-1.5">
-          <div>
-            <div className="text-[10px] text-muted-2">class</div>
-            <div className="text-[13px]">{m.class_name}</div>
-          </div>
-          <div>
-            <div className="text-[10px] text-muted-2">kind</div>
-            <div className="text-[13px]">{m.kind}</div>
-          </div>
-          <div>
-            <div className="text-[10px] text-muted-2">agent path</div>
-            <div className="font-mono text-[11px] text-muted">{m.agent_path}</div>
-          </div>
-          <div>
-            <div className="mb-1 text-[10px] text-muted-2">hash content</div>
-            <HashRow current={{ hash_content: m.hash_content }} size="sm" />
-          </div>
-        </div>
-      </section>
-
-      {m.input_schema ? (
-        <section className="px-5 py-4">
-          <Eyebrow>input</Eyebrow>
-          <div className="mt-2">
-            <FieldTree data={m.input_schema} defaultDepth={2} hideCopy layout="stacked" />
-          </div>
-        </section>
-      ) : null}
-
-      {m.output_schema ? (
-        <section className="px-5 py-4">
-          <Eyebrow>output</Eyebrow>
-          <div className="mt-2">
-            <FieldTree data={m.output_schema} defaultDepth={2} hideCopy layout="stacked" />
-          </div>
-        </section>
-      ) : null}
-
-      {m.role ? (
-        <section className="px-5 py-4">
-          <Eyebrow>role</Eyebrow>
-          <div className="mt-2 text-[13px]">
-            <MarkdownView value={m.role} />
-          </div>
-        </section>
-      ) : null}
-
-      {m.task ? (
-        <section className="px-5 py-4">
-          <Eyebrow>task</Eyebrow>
-          <div className="mt-2 text-[13px]">
-            <MarkdownView value={m.task} />
-          </div>
-        </section>
-      ) : null}
-
-      {m.rules.length > 0 ? (
-        <section className="px-5 py-4">
-          <Eyebrow>rules ({m.rules.length})</Eyebrow>
-          <ol className="mt-2 ml-4 list-decimal space-y-1 text-[13px] marker:text-muted-2">
-            {m.rules.map((rule, i) => (
-              <li key={i}>{rule}</li>
-            ))}
-          </ol>
-        </section>
-      ) : null}
-
-      {m.examples.length > 0 ? (
-        <section className="px-5 py-4">
-          <Eyebrow>examples ({m.examples.length})</Eyebrow>
-          <div className="mt-2 space-y-2">
-            {m.examples.slice(0, 3).map((ex, i) => (
-              <div key={i} className="grid grid-cols-2 gap-2 border-b border-border pb-2 last:border-0 last:pb-0">
-                <div>
-                  <div className="mb-1 text-[10px] text-muted-2">in</div>
-                  <FieldTree data={ex.input} defaultDepth={1} hideCopy />
-                </div>
-                <div>
-                  <div className="mb-1 text-[10px] text-muted-2">out</div>
-                  <FieldTree data={ex.output} defaultDepth={1} hideCopy />
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {m.config ? (
-        <section className="px-5 py-4">
-          <Eyebrow>config</Eyebrow>
-          <div className="mt-2">
-            <FieldTree data={m.config} defaultDepth={1} hideCopy />
-          </div>
-        </section>
-      ) : null}
-
-      <section className="px-5 py-4">
-        <Eyebrow>hooks</Eyebrow>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Pill tone={m.forward_in_overridden ? "accent" : "default"}>
-            forward_in {m.forward_in_overridden ? "overridden" : "default"}
-          </Pill>
-          <Pill tone={m.forward_out_overridden ? "accent" : "default"}>
-            forward_out {m.forward_out_overridden ? "overridden" : "default"}
-          </Pill>
-        </div>
-      </section>
+    <div className="space-y-4 p-5">
+      <SchemaSummary title="input" schema={inputSchema} />
+      <SchemaSummary title="output" schema={outputSchema} />
     </div>
   );
+}
+
+function SchemaSummary({ title, schema }: { title: string; schema: TypeSchema | null }) {
+  return (
+    <section className="rounded-md border border-border bg-bg-2">
+      <div className="border-b border-border/60 px-3 py-2">
+        <Eyebrow>{title}</Eyebrow>
+      </div>
+      {schema ? (
+        <div className="space-y-4 px-3 py-3">
+          <div className="space-y-2">
+            <MetaLine label="key" value={schema.key} mono />
+            <MetaLine label="name" value={schema.name} />
+          </div>
+          <div>
+            <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.08em] text-muted">
+              fields
+            </div>
+            {schema.fields.length > 0 ? (
+              <ul className="space-y-3">
+                {schema.fields.map((field) => (
+                  <FieldLine key={field.name} field={field} />
+                ))}
+              </ul>
+            ) : (
+              <div className="text-[12px] text-muted-2">no fields</div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="px-3 py-3 text-[12px] text-muted-2">no schema captured</div>
+      )}
+    </section>
+  );
+}
+
+function MetaLine({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div>
+      <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-2">
+        {label}
+      </div>
+      <div
+        className={mono ? "break-all font-mono text-[11px] text-muted" : "text-[13px] text-text"}
+      >
+        {value || "—"}
+      </div>
+    </div>
+  );
+}
+
+function FieldLine({ field }: { field: SchemaField }) {
+  const system = Boolean(field.system);
+  const description = field.description?.trim() || "No description.";
+
+  return (
+    <li className="border-l border-border pl-3">
+      <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.08em]">
+        <span
+          aria-hidden
+          className={
+            system ? "h-2 w-2 rounded-full bg-[--color-warn]" : "h-2 w-2 rounded-full bg-accent"
+          }
+        />
+        <span className={system ? "text-[--color-warn]" : "text-accent"}>
+          {system ? "system" : "user"}
+        </span>
+      </div>
+      <div className="mt-1 text-[12px] leading-5 text-muted">
+        <span className="font-mono text-[13px] font-medium text-text">{field.name}</span>{" "}
+        <span className="font-mono text-[11px] text-muted-2">
+          &lt;{field.type || "unknown"}&gt;
+        </span>
+        {": "}
+        <span>{description}</span>
+      </div>
+      {field.has_default ? (
+        <div className="mt-1 font-mono text-[11px] text-muted-2">
+          default {formatDefault(field.default)}
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+function coerceTypeSchema(raw: unknown): TypeSchema | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const obj = raw as Record<string, unknown>;
+  const key = typeof obj.key === "string" ? obj.key : "";
+  const name = typeof obj.name === "string" ? obj.name : (key.split(".").at(-1) ?? "");
+  const rawFields = Array.isArray(obj.fields) ? obj.fields : [];
+  const fields = rawFields.flatMap((field) => {
+    if (!field || typeof field !== "object" || Array.isArray(field)) return [];
+    const row = field as Record<string, unknown>;
+    const fieldName = typeof row.name === "string" ? row.name : null;
+    if (!fieldName) return [];
+    return [
+      {
+        name: fieldName,
+        type: typeof row.type === "string" ? row.type : undefined,
+        description: typeof row.description === "string" ? row.description : undefined,
+        system: typeof row.system === "boolean" ? row.system : undefined,
+        has_default: typeof row.has_default === "boolean" ? row.has_default : undefined,
+        default: row.default,
+      },
+    ];
+  });
+  return { key, name, fields };
+}
+
+function formatDefault(value: unknown): string {
+  if (value === undefined) return "undefined";
+  if (typeof value === "string") return JSON.stringify(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }

@@ -219,6 +219,9 @@ export const RunInvocation = z.object({
   backend: z.string().nullable().optional().default(null),
   model: z.string().nullable().optional().default(null),
   renderer: z.string().nullable().optional().default(null),
+  config: z.record(z.unknown()).nullable().optional().default(null),
+  prompt_system: z.string().nullable().optional().default(null),
+  prompt_user: z.string().nullable().optional().default(null),
   input: z.unknown().optional(),
   output: z.unknown().optional(),
 });
@@ -601,6 +604,9 @@ export const AgentInvocation = z.object({
   error: z.string().nullable().default(null),
   langfuse_url: z.string().nullable().default(null),
   script: z.string().nullable().default(null),
+  config: z.record(z.unknown()).nullable().default(null),
+  prompt_system: z.string().nullable().default(null),
+  prompt_user: z.string().nullable().default(null),
   input: z.unknown().optional(),
   output: z.unknown().optional(),
 });
