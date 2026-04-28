@@ -5,14 +5,26 @@ import { AutoResearcherBestTab } from "./best-tab";
 afterEach(cleanup);
 
 describe("<AutoResearcherBestTab />", () => {
-  it("shows the winning attempt reasoning and answer", () => {
+  it("shows the winning attempt reasoning and answer from agent events", () => {
     render(
       <AutoResearcherBestTab
         dataSummary={{ algorithm_terminal_score: 0.88 }}
         dataIterations={{
           iterations: [
-            { iter_index: 0, phase: "reason", score: 0.61, text: null, metadata: { attempt_index: 0 } },
-            { iter_index: 0, phase: "reason", score: 0.88, text: null, metadata: { attempt_index: 1 } },
+            {
+              iter_index: 0,
+              phase: "reason",
+              score: 0.61,
+              text: null,
+              metadata: { attempt_index: 0 },
+            },
+            {
+              iter_index: 0,
+              phase: "reason",
+              score: 0.88,
+              text: null,
+              metadata: { attempt_index: 1 },
+            },
           ],
           max_iter: 1,
           threshold: 0.8,
@@ -22,20 +34,34 @@ describe("<AutoResearcherBestTab />", () => {
           events: [
             {
               type: "algo_event",
-              kind: "iteration",
-              payload: {
-                attempt_index: 1,
-                phase: "reason",
-                reasoning: "Reasoning trace for winner",
-              },
+              kind: "plan",
+              payload: { attempt_index: 0, plan: { query: "first attempt" } },
             },
             {
               type: "algo_event",
-              kind: "iteration",
-              payload: {
-                attempt_index: 1,
-                phase: "reflect",
-                answer: "Final winning answer",
+              kind: "plan",
+              payload: { attempt_index: 1, plan: { query: "second attempt" } },
+            },
+            {
+              type: "agent_event",
+              agent_path: "Reasoner",
+              kind: "end",
+              output: {
+                response: {
+                  reasoning: "Reasoning trace for first attempt",
+                  answer: "First answer",
+                },
+              },
+            },
+            {
+              type: "agent_event",
+              agent_path: "Reasoner",
+              kind: "end",
+              output: {
+                response: {
+                  reasoning: "Reasoning trace for winner",
+                  answer: "Final winning answer",
+                },
               },
             },
           ],

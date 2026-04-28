@@ -167,14 +167,18 @@ export const catalog = createCatalog({
     },
     AutoResearcherPlanTab: {
       props: z.object({
+        sourceSummary: sourceExpr,
+        sourceIterations: sourceExpr,
         sourceEvents: sourceExpr,
-        sourceChildren: sourceExpr,
+        sourceChildren: sourceExpr.optional(),
+        sourceLangfuseUrl: sourceExpr.optional(),
       }),
     },
     AutoResearcherAttemptsTab: {
       props: z.object({
         sourceIterations: sourceExpr,
-        sourceChildren: sourceExpr,
+        sourceEvents: sourceExpr.optional(),
+        sourceChildren: sourceExpr.optional(),
       }),
     },
     AutoResearcherBestAnswer: {

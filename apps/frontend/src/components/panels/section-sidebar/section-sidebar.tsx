@@ -61,7 +61,7 @@ export function SectionSidebar() {
         <div className="flex items-center gap-1.5 border-b border-border px-2 py-2">
           {!sidebarCollapsed ? (
             <>
-              <span className="px-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-text">
+              <span className="px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-text">
                 {railTitle}
               </span>
               <span className="ml-auto" />
