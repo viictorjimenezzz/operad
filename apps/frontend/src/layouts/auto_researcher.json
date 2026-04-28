@@ -8,8 +8,7 @@
       "stream": "/runs/$context.runId/iterations.sse"
     },
     "runEvents": { "endpoint": "/runs/$context.runId/events?limit=500" },
-    "children": { "endpoint": "/runs/$context.runId/children" },
-    "graph": { "endpoint": "/graph/$context.runId" }
+    "children": { "endpoint": "/runs/$context.runId/children" }
   },
   "spec": {
     "root": "page",
@@ -18,44 +17,31 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "overview", "label": "Overview" },
             { "id": "plan", "label": "Plan" },
             { "id": "attempts", "label": "Attempts" },
-            { "id": "best", "label": "Best answer" },
+            { "id": "best", "label": "Best" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
-            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
-            { "id": "graph", "label": "Graph" }
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
-        "children": ["overview", "plan", "attempts", "best", "agents", "events", "graph"]
+        "children": ["plan", "attempts", "best", "agents", "events"]
       },
 
-      "overview": {
-        "type": "AutoResearcherDetailOverview",
-        "props": {
-          "sourceSummary": "$queries.summary",
-          "sourceIterations": "$queries.iterations",
-          "sourceEvents": "$queries.runEvents",
-          "sourceChildren": "$queries.children"
-        }
-      },
       "plan": {
         "type": "AutoResearcherPlanTab",
-        "props": {
-          "sourceEvents": "$queries.runEvents",
-          "sourceChildren": "$queries.children"
-        }
+        "props": { "sourceEvents": "$queries.runEvents" }
       },
       "attempts": {
         "type": "AutoResearcherAttemptsTab",
-        "props": {
-          "sourceIterations": "$queries.iterations",
-          "sourceChildren": "$queries.children"
-        }
+        "props": { "sourceIterations": "$queries.iterations" }
       },
       "best": {
-        "type": "AutoResearcherBestAnswer",
-        "props": { "sourceChildren": "$queries.children" }
+        "type": "AutoResearcherBestTab",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceIterations": "$queries.iterations",
+          "sourceEvents": "$queries.runEvents"
+        }
       },
 
       "agents": {
@@ -66,13 +52,7 @@
           "extraColumns": ["attempt_index"]
         }
       },
-      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
-      "graph": {
-        "type": "PanelCard",
-        "props": { "title": "agent graph" },
-        "children": ["graph-view"]
-      },
-      "graph-view": { "type": "AgentGraph", "props": { "source": "$queries.graph" } }
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } }
     }
   }
 }
