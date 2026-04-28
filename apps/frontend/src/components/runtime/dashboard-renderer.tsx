@@ -1,5 +1,6 @@
 import { ParametersTab } from "@/components/agent-view/parameter-evolution/parameters-tab";
 import { registry as baseRegistry } from "@/components/registry";
+import { InvocationsTab } from "@/components/runtime/invocations-tab";
 import {
   type ResolveContext,
   resolveProps,
@@ -60,6 +61,20 @@ const registry: ComponentRegistry = {
           scope={props.scope ?? "run"}
         />
       </div>
+    );
+  },
+  InvocationsTab: ({ element }) => {
+    const props = element.props as {
+      runId?: string;
+      algorithmClass?: string | null;
+      defaultGroupBy?: string;
+    };
+    return (
+      <InvocationsTab
+        runId={props.runId ?? ""}
+        algorithmClass={props.algorithmClass ?? null}
+        {...(props.defaultGroupBy ? { defaultGroupBy: props.defaultGroupBy } : {})}
+      />
     );
   },
 };
