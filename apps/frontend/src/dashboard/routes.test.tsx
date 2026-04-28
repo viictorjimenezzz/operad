@@ -25,6 +25,17 @@ describe("dashboardRouter", () => {
     expect(graph && "errorElement" in graph ? graph.errorElement : undefined).toBeDefined();
   });
 
+  it("registers the agent class route between the index and instance routes", () => {
+    const root = dashboardRouter.routes[0];
+    if (!root || !("children" in root) || !root.children) {
+      throw new Error("missing root children");
+    }
+    const paths = root.children.map((r) => r.path ?? "");
+    expect(paths).toContain("agents");
+    expect(paths).toContain("agents/_class_/:className");
+    expect(paths).toContain("agents/:hashContent");
+  });
+
   it("registers algorithm, training, and OPRO detail routes without the legacy /runs route", () => {
     const root = dashboardRouter.routes[0];
     if (!root || !("children" in root) || !root.children) {

@@ -5,6 +5,7 @@ import { AgentGroupOverviewTab } from "@/dashboard/pages/AgentGroupOverviewTab";
 import { AgentGroupPage } from "@/dashboard/pages/AgentGroupPage";
 import { AgentGroupRunsTab } from "@/dashboard/pages/AgentGroupRunsTab";
 import { AgentGroupTrainTab } from "@/dashboard/pages/AgentGroupTrainTab";
+import { AgentsByClassPage } from "@/dashboard/pages/AgentsByClassPage";
 import { AgentsIndexPage } from "@/dashboard/pages/AgentsIndexPage";
 import { AlgorithmsIndexPage } from "@/dashboard/pages/AlgorithmsIndexPage";
 import { BenchmarkDetailPage } from "@/dashboard/pages/BenchmarkDetailPage";
@@ -35,6 +36,7 @@ export const dashboardRoutes = [
 
       // Agents rail.
       { path: "agents", element: <AgentsIndexPage /> },
+      { path: "agents/_class_/:className", element: <AgentsByClassPage /> },
       {
         path: "agents/:hashContent",
         element: <AgentGroupPage />,

@@ -1,5 +1,15 @@
 import { dashboardApi } from "@/lib/api/dashboard";
+import type { AgentGroupSummary } from "@/lib/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+export type AgentClassSummary = {
+  class_name: string;
+  root_agent_path: string | null;
+  instance_count: number;
+  first_seen: number;
+  last_seen: number;
+  instances: AgentGroupSummary[];
+};
 
 export function useRuns() {
   return useQuery({
@@ -20,6 +30,29 @@ export function useAgentGroups() {
   return useQuery({
     queryKey: ["agents"] as const,
     queryFn: () => dashboardApi.agentGroups(),
+    refetchInterval: 5_000,
+  });
+}
+
+export function useAgentClasses() {
+  return useQuery({
+    queryKey: ["agent-classes"] as const,
+    queryFn: async () => {
+      try {
+        const response = await fetch("/api/agent-classes", {
+          headers: { accept: "application/json" },
+        });
+        if (response.ok) {
+          const raw: unknown = await response.json();
+          const parsed = parseAgentClasses(raw);
+          if (parsed) return parsed;
+        }
+      } catch {
+        // fallback below
+      }
+      const groups = await dashboardApi.agentGroups();
+      return groupAgentClasses(groups);
+    },
     refetchInterval: 5_000,
   });
 }
@@ -326,6 +359,120 @@ export function useArchiveRuns(params: {
     queryKey: ["archive", "list", params] as const,
     queryFn: () => dashboardApi.archive(params),
   });
+}
+
+function parseAgentClasses(raw: unknown): AgentClassSummary[] | null {
+  if (!Array.isArray(raw)) return null;
+  const parsed: AgentClassSummary[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") return null;
+    const record = item as Record<string, unknown>;
+    const className =
+      typeof record.class_name === "string" && record.class_name.trim().length > 0
+        ? record.class_name
+        : "Agent";
+    const firstSeen = asNumber(record.first_seen);
+    const lastSeen = asNumber(record.last_seen);
+    const instanceCount = asNumber(record.instance_count);
+    if (
+      firstSeen == null ||
+      lastSeen == null ||
+      instanceCount == null ||
+      !Array.isArray(record.instances)
+    ) {
+      return null;
+    }
+    const instances = parseInstances(record.instances);
+    if (!instances) return null;
+    parsed.push({
+      class_name: className,
+      root_agent_path: typeof record.root_agent_path === "string" ? record.root_agent_path : null,
+      instance_count: instanceCount,
+      first_seen: firstSeen,
+      last_seen: lastSeen,
+      instances,
+    });
+  }
+  return parsed
+    .slice()
+    .sort(
+      (a, b) =>
+        b.last_seen - a.last_seen || b.instance_count - a.instance_count || a.class_name.localeCompare(b.class_name),
+    );
+}
+
+function parseInstances(items: unknown[]): AgentGroupSummary[] | null {
+  const instances: AgentGroupSummary[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") return null;
+    const record = item as Record<string, unknown>;
+    if (
+      typeof record.hash_content !== "string" ||
+      !Array.isArray(record.run_ids) ||
+      !Array.isArray(record.latencies)
+    ) {
+      return null;
+    }
+    const runIds = record.run_ids.filter((value): value is string => typeof value === "string");
+    const latencies = record.latencies.filter((value): value is number => typeof value === "number");
+    instances.push({
+      hash_content: record.hash_content,
+      class_name: typeof record.class_name === "string" ? record.class_name : null,
+      root_agent_path: typeof record.root_agent_path === "string" ? record.root_agent_path : null,
+      count: asNumber(record.count) ?? runIds.length,
+      running: asNumber(record.running) ?? 0,
+      errors: asNumber(record.errors) ?? 0,
+      last_seen: asNumber(record.last_seen) ?? 0,
+      first_seen: asNumber(record.first_seen) ?? 0,
+      latencies,
+      prompt_tokens: asNumber(record.prompt_tokens) ?? 0,
+      completion_tokens: asNumber(record.completion_tokens) ?? 0,
+      cost_usd: asNumber(record.cost_usd) ?? 0,
+      run_ids: runIds,
+      is_trainer: Boolean(record.is_trainer),
+      notes_markdown_count: asNumber(record.notes_markdown_count) ?? 0,
+    });
+  }
+  return instances;
+}
+
+function groupAgentClasses(groups: AgentGroupSummary[]): AgentClassSummary[] {
+  const map = new Map<string, AgentClassSummary>();
+  for (const group of groups) {
+    const className = group.class_name ?? "Agent";
+    const current = map.get(className);
+    if (!current) {
+      map.set(className, {
+        class_name: className,
+        root_agent_path: group.root_agent_path,
+        instance_count: 1,
+        first_seen: group.first_seen,
+        last_seen: group.last_seen,
+        instances: [group],
+      });
+      continue;
+    }
+    current.instance_count += 1;
+    current.first_seen = Math.min(current.first_seen, group.first_seen);
+    current.last_seen = Math.max(current.last_seen, group.last_seen);
+    if (!current.root_agent_path && group.root_agent_path) {
+      current.root_agent_path = group.root_agent_path;
+    }
+    current.instances.push(group);
+  }
+  return [...map.values()]
+    .map((group) => ({
+      ...group,
+      instances: group.instances.slice().sort((a, b) => b.last_seen - a.last_seen),
+    }))
+    .sort(
+      (a, b) =>
+        b.last_seen - a.last_seen || b.instance_count - a.instance_count || a.class_name.localeCompare(b.class_name),
+    );
+}
+
+function asNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 export function useArchivedRun(runId: string | null | undefined) {
