@@ -1,4 +1,5 @@
-import { registry } from "@/components/registry";
+import { ParametersTab } from "@/components/agent-view/parameter-evolution/parameters-tab";
+import { registry as baseRegistry } from "@/components/registry";
 import {
   type ResolveContext,
   resolveProps,
@@ -31,6 +32,7 @@ import { useEventBufferStore } from "@/stores";
  */
 import type { UITree } from "@json-render/core";
 import { JSONUIProvider, Renderer } from "@json-render/react";
+import type { ComponentRegistry } from "@json-render/react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -42,6 +44,25 @@ interface DashboardRendererProps {
 }
 
 const passThrough = z.unknown();
+const registry: ComponentRegistry = {
+  ...baseRegistry,
+  ParametersTab: ({ element }) => {
+    const props = element.props as {
+      runId?: string;
+      hashContent?: string;
+      scope?: "run" | "group";
+    };
+    return (
+      <div className="h-full overflow-auto p-4">
+        <ParametersTab
+          {...(props.runId ? { runId: props.runId } : {})}
+          {...(props.hashContent ? { hashContent: props.hashContent } : {})}
+          scope={props.scope ?? "run"}
+        />
+      </div>
+    );
+  },
+};
 
 export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
   const entries = useMemo(() => Object.entries(layout.dataSources), [layout]);

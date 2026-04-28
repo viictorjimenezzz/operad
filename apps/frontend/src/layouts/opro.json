@@ -19,12 +19,22 @@
             { "id": "history", "label": "History" },
             { "id": "candidates", "label": "Candidates" },
             { "id": "parameter", "label": "Parameter" },
+            { "id": "parameters", "label": "Parameters" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
             { "id": "graph", "label": "Graph" }
           ]
         },
-        "children": ["overview", "history", "candidates", "parameter", "agents", "events", "graph"]
+        "children": [
+          "overview",
+          "history",
+          "candidates",
+          "parameter",
+          "parameters",
+          "agents",
+          "events",
+          "graph"
+        ]
       },
       "overview": {
         "type": "OPRODetailOverview",
@@ -60,6 +70,10 @@
           "sourceEvents": "$queries.events",
           "sourceChildren": "$queries.children"
         }
+      },
+      "parameters": {
+        "type": "ParametersTab",
+        "props": { "runId": "$context.runId", "scope": "run" }
       },
       "agents": {
         "type": "AgentsTab",
