@@ -118,7 +118,7 @@ export function SelfRefineLadderTab({ dataIterations }: { dataIterations?: unkno
         open={selected != null}
         identity={selected ? `selfrefine:${selected.iterIndex}:${selected.phaseLabel}` : "selfrefine"}
         title={selected ? `Iteration ${selected.iterIndex} · ${selected.phaseLabel}` : "phase output"}
-        subtitle={selected ? `score ${formatScore(selected.score)}` : undefined}
+        {...(selected ? { subtitle: `score ${formatScore(selected.score)}` } : {})}
         onClose={() => setSelected(null)}
       >
         <div className="p-5">

@@ -16,6 +16,11 @@ export const selfRefineRegistry: ComponentRegistry = {
       dataIterations?: unknown;
       runId?: string;
     };
-    return <SelfRefineIterationsTab dataIterations={p.dataIterations} runId={p.runId} />;
+    return (
+      <SelfRefineIterationsTab
+        dataIterations={p.dataIterations}
+        {...(p.runId ? { runId: p.runId } : {})}
+      />
+    );
   },
 };
