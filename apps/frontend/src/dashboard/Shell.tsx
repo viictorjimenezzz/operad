@@ -1,3 +1,4 @@
+import { CassetteRibbon } from "@/components/panels/cassette-ribbon";
 import { GlobalRail } from "@/components/panels/global-rail";
 import { GlobalStatsBar } from "@/components/panels/global-stats-bar";
 import { SectionSidebar } from "@/components/panels/section-sidebar/section-sidebar";
@@ -31,6 +32,7 @@ export function Shell() {
   return (
     <div className="flex h-screen flex-col bg-bg">
       <GlobalStatsBar subtitle="dashboard" />
+      <CassetteRibbon />
       <div className="flex flex-1 overflow-hidden">
         <GlobalRail />
         {showSectionSidebar ? (
