@@ -114,8 +114,9 @@ describe("resolveLayout integration (real layouts/)", () => {
     const selfrefine = resolveLayout("SelfRefine");
 
     expect(beam.dataSources.iterations?.endpoint).toContain("/iterations.json");
-    expect(beam.spec.elements["leaderboard-view"]?.type).toBe("BeamLeaderboard");
-    expect(beam.spec.elements["histogram-view"]?.type).toBe("BeamScoreHistogram");
+    expect(beam.spec.elements.leaderboard?.type).toBe("BeamLeaderboardTab");
+    expect(beam.spec.elements.candidates?.type).toBe("BeamCandidatesTab");
+    expect(beam.spec.elements.histogram?.type).toBe("BeamHistogramTab");
     expect(verifier.spec.elements.iterations?.type).toBe("VerifierIterationsTab");
     expect(verifier.spec.elements.acceptance?.type).toBe("VerifierAcceptanceTab");
     expect(verifier.spec.elements.parameters?.type).toBe("ParametersTab");
@@ -130,9 +131,9 @@ describe("resolveLayout integration (real layouts/)", () => {
     const autoResearcher = resolveLayout("AutoResearcher");
 
     expect(debate.dataSources.debate?.endpoint).toContain("/debate.json");
-    expect(debate.spec.elements["rounds-view"]?.type).toBe("DebateRoundView");
-    expect(debate.spec.elements["transcript-view"]?.type).toBe("DebateTranscript");
-    expect(debate.spec.elements["consensus-view"]?.type).toBe("DebateConsensusTracker");
+    expect(debate.spec.elements.rounds?.type).toBe("DebateRoundsTab");
+    expect(debate.spec.elements.transcript?.type).toBe("DebateTranscriptTab");
+    expect(debate.spec.elements.consensus?.type).toBe("DebateConsensusTab");
     expect(
       ((debate.spec.elements.page?.props as { tabs?: Array<{ id: string }> }).tabs ?? []).map(
         (tab) => tab.id,
@@ -142,5 +143,43 @@ describe("resolveLayout integration (real layouts/)", () => {
     expect(autoResearcher.dataSources.runEvents?.endpoint).toContain("/events");
     expect(autoResearcher.spec.elements.plan?.type).toBe("AutoResearcherPlanTab");
     expect(autoResearcher.spec.elements.attempts?.type).toBe("AutoResearcherAttemptsTab");
+  });
+
+  it("registers every reserved per-algorithm component type", async () => {
+    const { algorithmsRegistry } = await import("@/components/algorithms/registry");
+    expect(Object.keys(algorithmsRegistry)).toEqual(
+      expect.arrayContaining([
+        "SweepDetailOverview",
+        "SweepHeatmapTab",
+        "SweepCellsTab",
+        "SweepCostTab",
+        "SweepParallelCoordsTab",
+        "BeamLeaderboardTab",
+        "BeamCandidatesTab",
+        "BeamHistogramTab",
+        "DebateRoundsTab",
+        "DebateTranscriptTab",
+        "DebateConsensusTab",
+        "EvoLineageTab",
+        "EvoPopulationTab",
+        "EvoOperatorsTab",
+        "TrainerLossTab",
+        "TrainerScheduleTab",
+        "TrainerDriftTab",
+        "TrainerTracebackTab",
+        "OPROPromptHistoryTab",
+        "OPROScoreCurveTab",
+        "SelfRefineLadderTab",
+        "SelfRefineIterationsTab",
+        "AutoResearcherPlanTab",
+        "AutoResearcherAttemptsTab",
+        "AutoResearcherBestTab",
+        "TalkerTreeTab",
+        "TalkerTranscriptTab",
+        "TalkerDecisionsTab",
+        "VerifierIterationsTab",
+        "VerifierAcceptanceTab",
+      ]),
+    );
   });
 });

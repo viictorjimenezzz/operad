@@ -30,8 +30,8 @@ export function ReplayControls({
           <span
             className={`rounded-md border px-2 py-1 text-[10px] uppercase tracking-[0.08em] ${
               result.ok
-                ? "border-ok bg-ok-dim text-[#aaf0be]"
-                : "border-err bg-err-dim text-[#ffc0c8]"
+                ? "border-ok bg-ok-dim text-ok"
+                : "border-err bg-err-dim text-err"
             }`}
           >
             {result.ok ? "byte-equal" : "drift"}

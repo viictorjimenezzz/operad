@@ -26,31 +26,16 @@
         "children": ["rounds", "transcript", "consensus", "agents", "events"]
       },
       "rounds": {
-        "type": "PanelCard",
-        "props": { "title": "round-by-round scoring", "bodyMinHeight": 320 },
-        "children": ["rounds-view"]
-      },
-      "rounds-view": {
-        "type": "DebateRoundView",
+        "type": "DebateRoundsTab",
         "props": { "source": "$queries.debate" }
       },
       "transcript": {
-        "type": "PanelCard",
-        "props": { "title": "transcript by round", "bodyMinHeight": 320 },
-        "children": ["transcript-view"]
-      },
-      "transcript-view": {
-        "type": "DebateTranscript",
+        "type": "DebateTranscriptTab",
         "props": { "source": "$queries.debate" }
       },
       "consensus": {
-        "type": "PanelCard",
-        "props": { "title": "consensus arc", "bodyMinHeight": 320 },
-        "children": ["consensus-view"]
-      },
-      "consensus-view": {
-        "type": "DebateConsensusTracker",
-        "props": { "source": "$queries.debate", "height": 300 }
+        "type": "DebateConsensusTab",
+        "props": { "source": "$queries.debate" }
       },
 
       "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId", "groupBy": "hash" } },

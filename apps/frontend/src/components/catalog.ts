@@ -73,6 +73,15 @@ export const catalog = createCatalog({
         description: z.string().optional(),
       }),
     },
+    HashRow: {
+      props: z.object({
+        sourceCurrent: sourceExpr,
+        sourcePrevious: sourceExpr,
+        current: z.record(z.string().nullable()).optional(),
+        previous: z.record(z.string().nullable()).optional(),
+        size: z.enum(["sm", "md"]).optional(),
+      }),
+    },
 
     // Header / KPI tiles
     KPI: {
@@ -104,7 +113,6 @@ export const catalog = createCatalog({
     GradientLog: { props: z.object({ source: sourceExpr }) },
     LrScheduleCurve: { props: z.object({ source: sourceExpr, height: z.number().optional() }) },
     CheckpointTimeline: { props: z.object({ source: sourceExpr }) },
-    DebateRoundView: { props: z.object({ source: sourceExpr }) },
     DebateDetailOverview: {
       props: z.object({
         sourceSummary: sourceExpr,
@@ -114,11 +122,12 @@ export const catalog = createCatalog({
       }),
     },
     DebateRoundsTab: { props: z.object({ source: sourceExpr }) },
+    DebateTranscriptTab: { props: z.object({ source: sourceExpr }) },
     DebateConsensusTab: { props: z.object({ source: sourceExpr }) },
-    BeamCandidateChart: {
+    BeamCandidatesTab: {
       props: z.object({
         source: sourceExpr,
-        iterationsSource: sourceExpr,
+        sourceIterations: sourceExpr,
         height: z.number().optional(),
       }),
     },
@@ -204,7 +213,7 @@ export const catalog = createCatalog({
         sourceChildren: sourceExpr,
       }),
     },
-    BeamLeaderboard: {
+    BeamLeaderboardTab: {
       props: z.object({
         source: sourceExpr,
         sourceIterations: sourceExpr,
@@ -212,10 +221,11 @@ export const catalog = createCatalog({
         runId: z.string().optional(),
       }),
     },
-    BeamScoreHistogram: {
+    BeamHistogramTab: {
       props: z.object({
         source: sourceExpr,
         sourceIterations: sourceExpr,
+        bins: z.number().optional(),
       }),
     },
     VerifierDetailOverview: {
@@ -269,6 +279,20 @@ export const catalog = createCatalog({
     },
 
     // Universal tabs
+    InvocationsTab: {
+      props: z.object({
+        runId: z.string().optional(),
+        algorithmClass: z.string().nullable().optional(),
+        defaultGroupBy: z.string().optional(),
+      }),
+    },
+    ParametersTab: {
+      props: z.object({
+        runId: z.string().optional(),
+        hashContent: z.string().optional(),
+        scope: z.enum(["run", "group"]).optional(),
+      }),
+    },
     AgentsTab: {
       props: z.object({
         runId: z.string().optional(),

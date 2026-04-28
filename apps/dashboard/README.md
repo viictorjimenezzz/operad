@@ -1,9 +1,9 @@
 # operad-dashboard
 
 Local-first web dashboard for [operad](../../README.md): live event
-stream, agent graph (Mermaid, lazy-loaded), per-algorithm panels
-(fitness curves, mutation heatmap, training progress, prompt drift,
-debate rounds, beam candidates), and JSONL trace replay.
+stream, agent graph (Mermaid, lazy-loaded), agent identity rails,
+per-algorithm invocation tabs, training/parameter evolution views, and
+JSONL trace replay.
 
 The frontend is the React 19 SPA in [`apps/frontend/`](../frontend/),
 shared with `operad-studio`. The Python side is FastAPI + SSE; the
@@ -77,18 +77,36 @@ Open http://localhost:5173/index.dashboard.html.
 
 - **Topbar** — global stats (runs, live, ended, errors, events,
   tokens, cost) and connection status badge.
-- **Left sidebar** — list of runs with filter chips
-  (all / algorithms / agents).
-- **Run detail** — algorithm-specific layout chosen from
-  `apps/frontend/src/layouts/`:
-  - `EvoGradient` — fitness curve (best/mean/worst), population
-    scatter, mutation heatmap, op success table.
-  - `Trainer` — progress bars (epoch + batch + ETA), loss curve,
-    drift timeline.
-  - `Debate` — per-round score bars.
-  - `Beam` — candidate scatter + top-K table.
-  - default fallback — overview KPIs, agent graph, event timeline,
-    raw envelope.
+- **Agents rail** — three levels: class, agent instance
+  (`hash_content`), then invocation. Instance pages expose Overview,
+  Runs, Metrics, Training, and Graph tabs when the underlying run data
+  supports them.
+- **Algorithms rail** — one row per algorithm invocation, with layouts
+  chosen from `apps/frontend/src/layouts/`:
+  - `Sweep` — Overview, Heatmap, Cells, Parallel coords, Cost, Agents,
+    Events.
+  - `Beam` — Leaderboard, Candidates, Score distribution, Agents,
+    Events.
+  - `Debate` — Rounds, Transcript, Consensus, Agents, Events.
+  - `EvoGradient` — Lineage, Population, Operators, Parameters,
+    Agents, Events.
+  - `Trainer` — Loss, Schedule, Drift, Tape, Parameters, Traceback,
+    Agents, Events.
+  - `OPRO` — Prompt history, Score curve, Parameters, Agents, Events.
+  - `SelfRefine` — Refine ladder, Iterations, Parameters, Agents,
+    Events.
+  - `AutoResearcher` — Plan, Attempts, Best, Agents, Events.
+  - `TalkerReasoner` — Tree, Transcript, Decisions, Agents, Events.
+  - `VerifierAgent` — Iterations, Acceptance, Parameters, Agents,
+    Events.
+- **Training rail** — trainer runs grouped by trainable agent identity,
+  with parameter snapshots, textual gradients, tape entries, and
+  traceback artifacts when present.
+- **OPRO rail** — prompt-optimization runs grouped separately for quick
+  comparison of prompt history, score curves, and parent/child agent
+  context.
+- **Shared tabs** — Agents and Events are monitor-only drilldowns; the
+  dashboard never invokes, replays, or edits an operad run from the SPA.
 
 ## API surface (preserved)
 
