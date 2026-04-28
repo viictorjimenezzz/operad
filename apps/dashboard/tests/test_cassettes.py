@@ -58,7 +58,7 @@ def test_cassettes_discovery_uses_env_root(app_and_obs, tmp_path: Path, monkeypa
     monkeypatch.setenv("OPERAD_DASHBOARD_CASSETTE_DIR", str(root))
 
     with TestClient(app) as client:
-        r = client.get("/cassettes")
+        r = client.get("/api/cassettes")
         assert r.status_code == 200
         body = r.json()
 
@@ -75,7 +75,7 @@ def test_cassettes_discovery_uses_default_root(app_and_obs, tmp_path: Path, monk
     _write_jsonl(tmp_path / ".cassettes" / "default.jsonl", _trace_rows())
 
     with TestClient(app) as client:
-        r = client.get("/cassettes")
+        r = client.get("/api/cassettes")
         assert r.status_code == 200
         body = r.json()
 
@@ -90,7 +90,7 @@ def test_cassette_replay_creates_run_and_emits(app_and_obs, tmp_path: Path, monk
 
     q = obs.subscribe()
     with TestClient(app) as client:
-        r = client.post("/cassettes/replay?delay_ms=0", json={"path": "replay.jsonl"})
+        r = client.post("/api/cassettes/replay?delay_ms=0", json={"path": "replay.jsonl"})
         assert r.status_code == 200
         run_id = r.json()["run_id"]
 
@@ -107,7 +107,7 @@ def test_determinism_check_passes_for_valid_cassette(app_and_obs, tmp_path: Path
     monkeypatch.setenv("OPERAD_DASHBOARD_CASSETTE_DIR", str(root))
 
     with TestClient(app) as client:
-        r = client.post("/cassettes/determinism-check", json={"path": "ok.jsonl"})
+        r = client.post("/api/cassettes/determinism-check", json={"path": "ok.jsonl"})
         assert r.status_code == 200
         body = r.json()
 
@@ -127,7 +127,7 @@ def test_determinism_check_fails_for_tampered_cassette(app_and_obs, tmp_path: Pa
     monkeypatch.setenv("OPERAD_DASHBOARD_CASSETTE_DIR", str(root))
 
     with TestClient(app) as client:
-        r = client.post("/cassettes/determinism-check", json={"path": "tampered.jsonl"})
+        r = client.post("/api/cassettes/determinism-check", json={"path": "tampered.jsonl"})
         assert r.status_code == 200
         body = r.json()
 
@@ -145,5 +145,5 @@ def test_cassette_path_traversal_rejected(app_and_obs, tmp_path: Path, monkeypat
     monkeypatch.setenv("OPERAD_DASHBOARD_CASSETTE_DIR", str(root))
 
     with TestClient(app) as client:
-        r = client.post("/cassettes/replay?delay_ms=0", json={"path": "../outside.jsonl"})
+        r = client.post("/api/cassettes/replay?delay_ms=0", json={"path": "../outside.jsonl"})
     assert r.status_code == 400

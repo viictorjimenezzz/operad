@@ -12,7 +12,8 @@
       "stream": "/runs/$context.runId/mutations.sse"
     },
     "events": { "endpoint": "/runs/$context.runId/events?limit=1000" },
-    "children": { "endpoint": "/runs/$context.runId/children" }
+    "children": { "endpoint": "/runs/$context.runId/children" },
+    "agentsSummary": { "endpoint": "/runs/$context.runId/agents-summary" }
   },
   "spec": {
     "root": "page",
@@ -25,7 +26,7 @@
             { "id": "population", "label": "Population" },
             { "id": "operators", "label": "Operators" },
             { "id": "parameters", "label": "Parameters" },
-            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
+            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.agentsSummary.agents)", "condition": "$expr:count($queries.agentsSummary.agents)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },

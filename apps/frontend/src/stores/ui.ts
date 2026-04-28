@@ -47,6 +47,8 @@ interface UIState {
   graphInspectorTab: GraphInspectorTab;
   /** Inspector pane width as a fraction of viewport (0.25–0.75). */
   graphSplitFraction: number;
+  /** Run ids tagged for cross-page comparison. */
+  compareBasket: string[];
   setCurrentTab: (tab: string) => void;
   setEventKindFilter: (f: EventKindFilter) => void;
   setEventSearch: (s: string) => void;
@@ -62,6 +64,10 @@ interface UIState {
   clearGraphSelection: () => void;
   setGraphInspectorTab: (tab: GraphInspectorTab) => void;
   setGraphSplitFraction: (f: number) => void;
+  addToCompare: (runId: string) => void;
+  removeFromCompare: (runId: string) => void;
+  toggleCompare: (runId: string) => void;
+  clearCompare: () => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -80,6 +86,7 @@ export const useUIStore = create<UIState>()(
       graphSelection: null,
       graphInspectorTab: "overview",
       graphSplitFraction: SPLIT_DEFAULT,
+      compareBasket: [],
       setCurrentTab: (tab) => set({ currentTab: tab }),
       setEventKindFilter: (f) => set({ eventKindFilter: f }),
       setEventSearch: (s) => set({ eventSearch: s }),
@@ -109,6 +116,17 @@ export const useUIStore = create<UIState>()(
       clearGraphSelection: () => set({ graphSelection: null }),
       setGraphInspectorTab: (tab) => set({ graphInspectorTab: tab }),
       setGraphSplitFraction: (f) => set({ graphSplitFraction: clampSplitFraction(f) }),
+      addToCompare: (runId) =>
+        set((s) => (s.compareBasket.includes(runId) ? s : { compareBasket: [...s.compareBasket, runId] })),
+      removeFromCompare: (runId) =>
+        set((s) => ({ compareBasket: s.compareBasket.filter((id) => id !== runId) })),
+      toggleCompare: (runId) =>
+        set((s) =>
+          s.compareBasket.includes(runId)
+            ? { compareBasket: s.compareBasket.filter((id) => id !== runId) }
+            : { compareBasket: [...s.compareBasket, runId] },
+        ),
+      clearCompare: () => set({ compareBasket: [] }),
     }),
     {
       name: "operad.ui",
@@ -118,6 +136,7 @@ export const useUIStore = create<UIState>()(
         eventsFollow: s.eventsFollow,
         sidebarCollapsed: s.sidebarCollapsed,
         graphSplitFraction: s.graphSplitFraction,
+        compareBasket: s.compareBasket,
       }),
     },
   ),

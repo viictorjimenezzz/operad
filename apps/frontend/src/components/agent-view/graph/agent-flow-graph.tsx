@@ -20,7 +20,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Copy, Maximize2, Minimize2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface AgentFlowGraphProps {
   agentGraph: AgentGraphResponse;
@@ -42,8 +42,8 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
     [agentGraph.nodes, agentGraph.root],
   );
 
-  // Composite-path → expanded? Default: every composite collapsed.
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  // Default: every composite expanded so the user sees the full agent graph.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(composites.map((c) => c.path)));
 
   const toggleComposite = useCallback((path: string) => {
     setExpanded((curr) => {
@@ -72,10 +72,14 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
     [agentGraph, expanded],
   );
 
-  // Per-leaf invocation stats (latency / count).
+  // Per-leaf invocation stats (latency / count). Use a stable `pathsKey` so
+  // memos don't re-fire when the underlying array identity changes but the
+  // path set is unchanged (the root cause of the React #185 loop).
   const visibleLeafPaths = useMemo(() => {
-    return layout.nodes.filter((n) => n.kind === "leaf" && !n.hidden).map((n) => n.path);
+    const paths = layout.nodes.filter((n) => n.kind === "leaf" && !n.hidden).map((n) => n.path);
+    return paths.sort();
   }, [layout.nodes]);
+  const pathsKey = useMemo(() => visibleLeafPaths.join("|"), [visibleLeafPaths]);
 
   const invocationQueries = useQueries({
     queries: visibleLeafPaths.map((path) => ({
@@ -95,6 +99,16 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
     })),
   });
 
+  // Build a content-hashed signature so the stats memo only re-emits when
+  // actual data changes — not on every render where `useQueries` returned
+  // a new array reference for the same payload.
+  const invocationsSignature = invocationQueries
+    .map((q) => (q.data?.invocations.length ?? 0))
+    .join(",");
+  const metaSignature = metaQueries
+    .map((q) => (q.data?.trainable_paths.length ?? 0))
+    .join(",");
+
   const statsByPath = useMemo(() => {
     const out: Record<
       string,
@@ -112,7 +126,10 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
       };
     });
     return out;
-  }, [visibleLeafPaths, invocationQueries, metaQueries]);
+    // The signatures + pathsKey capture every relevant change without
+    // depending on the unstable array identities `useQueries` returns.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathsKey, invocationsSignature, metaSignature]);
 
   const childCounts = useMemo(() => {
     const out: Record<string, number> = {};
@@ -222,10 +239,13 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
     });
   }, [visibleEdges, selection, activeAgents]);
 
-  const fitViewTrigger = `${selection?.kind ?? "none"}:${selection?.kind === "edge" ? selection.agentPath : ""}:${expanded.size}:${nodes.length}:${edges.length}`;
+  // Fit-view trigger keyed only on user-initiated changes (selection,
+  // expansion). Re-running fitView on every nodes/edges array identity
+  // change drove the React #185 loop because nodes is recomputed every
+  // render via useMemo deps that themselves churn.
+  const fitViewTrigger = `${selection?.kind ?? "none"}:${selection?.kind === "edge" ? selection.agentPath : ""}:${expanded.size}:${pathsKey}`;
 
   useEffect(() => {
-    void fitViewTrigger;
     const id = window.setTimeout(() => {
       fitView({ padding: 0.18, duration: 180 });
     }, 240);
@@ -312,48 +332,49 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
 }
 
 function SingleLeafCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
-  const single = agentGraph.nodes[0];
-  if (!single) return null;
-
   const selection = useUIStore((s) => s.graphSelection);
   const setSelection = useUIStore((s) => s.setGraphSelection);
   const clearSelection = useUIStore((s) => s.clearGraphSelection);
   const activeAgents = useActiveAgents(runId);
   const { fitView } = useReactFlow();
-  const [didAutoSelect, setDidAutoSelect] = useState(false);
+  const autoSelectedRef = useRef(false);
+
+  const single = agentGraph.nodes[0] ?? null;
+  const singlePath = single?.path ?? "";
 
   const invocationQueries = useQueries({
     queries: [
       {
-        queryKey: ["graph", "agent-invocations", runId, single.path] as const,
-        queryFn: () => dashboardApi.agentInvocations(runId, single.path),
+        queryKey: ["graph", "agent-invocations", runId, singlePath] as const,
+        queryFn: () => dashboardApi.agentInvocations(runId, singlePath),
         staleTime: 30_000,
-        retry: false,
+        retry: false as const,
+        enabled: Boolean(single),
       },
     ],
   });
   const metaQueries = useQueries({
     queries: [
       {
-        queryKey: ["graph", "agent-meta", runId, single.path] as const,
-        queryFn: () => dashboardApi.agentMeta(runId, single.path),
+        queryKey: ["graph", "agent-meta", runId, singlePath] as const,
+        queryFn: () => dashboardApi.agentMeta(runId, singlePath),
         staleTime: 60_000,
-        retry: false,
+        retry: false as const,
+        enabled: Boolean(single),
       },
     ],
   });
 
+  // Auto-select the leaf exactly once per mount; using a ref instead of a
+  // useState flag avoids the rerender-after-setState that triggers the
+  // React #185 max-update-depth loop.
   useEffect(() => {
-    if (!single || didAutoSelect) return;
-    if (selection?.kind === "edge" && selection.agentPath === single.path) {
-      setDidAutoSelect(true);
-      return;
-    }
+    if (!singlePath || autoSelectedRef.current) return;
+    autoSelectedRef.current = true;
     if (selection == null) {
-      setSelection({ kind: "edge", agentPath: single.path });
-      setDidAutoSelect(true);
+      setSelection({ kind: "edge", agentPath: singlePath });
     }
-  }, [didAutoSelect, selection, setSelection, single]);
+  }, [singlePath, selection, setSelection]);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
@@ -362,14 +383,16 @@ function SingleLeafCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
     return () => window.clearTimeout(id);
   }, [fitView]);
 
+  const inv = invocationQueries[0]?.data;
+  const meta = metaQueries[0]?.data;
+  const invocationCount = inv?.invocations.length ?? 0;
+  const lastHashContent = inv?.invocations[invocationCount - 1]?.hash_content ?? null;
+  const trainable = meta?.trainable_paths ? meta.trainable_paths.length > 0 : false;
+  const selectedSingle =
+    selection?.kind === "edge" && selection.agentPath === singlePath && Boolean(singlePath);
+
   const nodes: Node[] = useMemo(() => {
     if (!single) return [];
-    const inv = invocationQueries[0]?.data;
-    const meta = metaQueries[0]?.data;
-    const rows = inv?.invocations ?? [];
-    const last = rows[rows.length - 1] ?? null;
-    const selected = selection?.kind === "edge" && selection.agentPath === single.path;
-
     return [
       {
         id: single.path,
@@ -381,23 +404,27 @@ function SingleLeafCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
           className: single.class_name,
           inputLabel: single.input_label,
           outputLabel: single.output_label,
-          selected,
+          selected: selectedSingle,
           dimmed: false,
           active: activeAgents.has(single.path),
-          trainable: meta?.trainable_paths ? meta.trainable_paths.length > 0 : false,
-          hashContent: last?.hash_content ?? null,
-          invocationCount: rows.length,
+          trainable,
+          hashContent: lastHashContent,
+          invocationCount,
           onSelect: () =>
-            selected ? clearSelection() : setSelection({ kind: "edge", agentPath: single.path }),
+            selectedSingle
+              ? clearSelection()
+              : setSelection({ kind: "edge", agentPath: single.path }),
         },
       } satisfies Node,
     ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     single,
-    invocationQueries,
-    metaQueries,
-    selection,
+    selectedSingle,
     activeAgents,
+    trainable,
+    lastHashContent,
+    invocationCount,
     setSelection,
     clearSelection,
   ]);

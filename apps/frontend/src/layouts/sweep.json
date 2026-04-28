@@ -7,7 +7,8 @@
       "endpoint": "/runs/$context.runId/sweep.json",
       "stream": "/runs/$context.runId/sweep.sse"
     },
-    "children": { "endpoint": "/runs/$context.runId/children" }
+    "children": { "endpoint": "/runs/$context.runId/children" },
+    "agentsSummary": { "endpoint": "/runs/$context.runId/agents-summary" }
   },
   "spec": {
     "root": "page",
@@ -21,7 +22,7 @@
             { "id": "cells", "label": "Cells" },
             { "id": "parallel", "label": "Parallel coords" },
             { "id": "cost", "label": "Cost" },
-            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
+            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.agentsSummary.agents)", "condition": "$expr:count($queries.agentsSummary.agents)" },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },

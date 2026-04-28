@@ -196,29 +196,29 @@ export const dashboardApi = {
   drift: (runId: string) => getJson(`/runs/${runId}/drift.json`, z.array(DriftEntry)),
   progress: (runId: string) => getJson(`/runs/${runId}/progress.json`, ProgressSnapshot),
   gradients: (runId: string) => getJson(`/runs/${runId}/gradients.json`, z.array(GradientEntry)),
-  benchmarks: () => getJson("/benchmarks", z.array(BenchmarkListItem)),
+  benchmarks: () => getJson("/api/benchmarks", z.array(BenchmarkListItem)),
   benchmarkDetail: (benchmarkId: string) =>
-    getJson(`/benchmarks/${benchmarkId}`, BenchmarkDetailResponse),
+    getJson(`/api/benchmarks/${benchmarkId}`, BenchmarkDetailResponse),
   benchmarkIngest: (report: unknown) =>
-    sendJson("POST", "/benchmarks/_ingest", BenchmarkIngestResponse, report),
+    sendJson("POST", "/api/benchmarks/_ingest", BenchmarkIngestResponse, report),
   benchmarkTag: (benchmarkId: string, tag: string) =>
-    sendJson("POST", `/benchmarks/${benchmarkId}/tag`, BenchmarkOkResponse, { tag }),
+    sendJson("POST", `/api/benchmarks/${benchmarkId}/tag`, BenchmarkOkResponse, { tag }),
   benchmarkDelete: (benchmarkId: string) =>
-    sendJson("DELETE", `/benchmarks/${benchmarkId}`, BenchmarkOkResponse),
+    sendJson("DELETE", `/api/benchmarks/${benchmarkId}`, BenchmarkOkResponse),
   stats: () => getJson("/stats", StatsResponse),
   evolution: () => getJson("/evolution", EvolutionResponse),
-  cassettes: () => getJson("/cassettes", z.array(CassetteSummary)),
+  cassettes: () => getJson("/api/cassettes", z.array(CassetteSummary)),
   cassetteReplay: (params: { path: string; runIdOverride?: string; delayMs?: number }) =>
     postJson(
-      `/cassettes/replay?delay_ms=${params.delayMs ?? 50}`,
+      `/api/cassettes/replay?delay_ms=${params.delayMs ?? 50}`,
       { path: params.path, run_id_override: params.runIdOverride ?? null },
       CassetteReplayResponse,
     ),
   cassetteDeterminism: (path: string) =>
-    postJson("/cassettes/determinism-check", { path }, CassetteDeterminismResponse),
+    postJson("/api/cassettes/determinism-check", { path }, CassetteDeterminismResponse),
   cassettePreview: (path: string, limit = 100) =>
     getJson(
-      `/cassettes/preview?path=${encodeURIComponent(path)}&limit=${limit}`,
+      `/api/cassettes/preview?path=${encodeURIComponent(path)}&limit=${limit}`,
       CassettePreviewResponse,
     ),
   manifest: () => getJson("/api/manifest", Manifest),
@@ -229,11 +229,11 @@ export const dashboardApi = {
     if (params.algorithm) qs.set("algorithm", params.algorithm);
     if (params.limit != null) qs.set("limit", String(params.limit));
     const suffix = qs.size > 0 ? `?${qs.toString()}` : "";
-    return getJson(`/archive${suffix}`, z.array(RunSummary));
+    return getJson(`/api/archive${suffix}`, z.array(RunSummary));
   },
-  archivedRun: (runId: string) => getJson(`/archive/${runId}`, ArchivedRunRecord),
+  archivedRun: (runId: string) => getJson(`/api/archive/${runId}`, ArchivedRunRecord),
   restoreArchivedRun: async (runId: string) => {
-    const url = `/archive/${runId}/restore`;
+    const url = `/api/archive/${runId}/restore`;
     const r = await fetch(url, { method: "POST", headers: { accept: "application/json" } });
     if (!r.ok) throw new HttpError(r.status, `${r.status} ${r.statusText} ← ${url}`);
     const raw: unknown = await r.json();
@@ -242,20 +242,20 @@ export const dashboardApi = {
     return parsed.data;
   },
   deleteArchivedRun: async (runId: string) => {
-    const r = await fetch(`/archive/${runId}`, { method: "DELETE" });
-    if (!r.ok) throw new HttpError(r.status, `${r.status} ${r.statusText} ← /archive/${runId}`);
+    const r = await fetch(`/api/archive/${runId}`, { method: "DELETE" });
+    if (!r.ok) throw new HttpError(r.status, `${r.status} ${r.statusText} ← /api/archive/${runId}`);
     const raw: unknown = await r.json();
     const parsed = z.object({ ok: z.boolean() }).safeParse(raw);
-    if (!parsed.success) throw new ParseError(`/archive/${runId}`, parsed.error);
+    if (!parsed.success) throw new ParseError(`/api/archive/${runId}`, parsed.error);
     return parsed.data;
   },
   exportArchiveJsonl: async () => {
-    const r = await fetch("/archive/_export?format=jsonl", {
+    const r = await fetch("/api/archive/_export?format=jsonl", {
       method: "POST",
       headers: { accept: "application/x-ndjson" },
     });
     if (!r.ok)
-      throw new HttpError(r.status, `${r.status} ${r.statusText} ← /archive/_export?format=jsonl`);
+      throw new HttpError(r.status, `${r.status} ${r.statusText} ← /api/archive/_export?format=jsonl`);
     return r.text();
   },
 } as const;

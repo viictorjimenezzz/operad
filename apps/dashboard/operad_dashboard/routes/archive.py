@@ -29,7 +29,7 @@ def _observer(request: Request) -> WebDashboardObserver:
     return obs
 
 
-@router.get("/archive")
+@router.get("/api/archive")
 async def archive_list(
     request: Request,
     from_ts: float | None = Query(default=None, alias="from"),
@@ -46,7 +46,7 @@ async def archive_list(
     return JSONResponse(rows)
 
 
-@router.get("/archive/{run_id}")
+@router.get("/api/archive/{run_id}")
 async def archive_detail(request: Request, run_id: str) -> JSONResponse:
     record = _archive_store(request).get_run(run_id)
     if record is None:
@@ -54,13 +54,13 @@ async def archive_detail(request: Request, run_id: str) -> JSONResponse:
     return JSONResponse(record)
 
 
-@router.delete("/archive/{run_id}")
+@router.delete("/api/archive/{run_id}")
 async def archive_delete(request: Request, run_id: str) -> JSONResponse:
     _archive_store(request).delete_run(run_id)
     return JSONResponse({"ok": True})
 
 
-@router.post("/archive/{run_id}/restore")
+@router.post("/api/archive/{run_id}/restore")
 async def archive_restore(request: Request, run_id: str) -> JSONResponse:
     record = _archive_store(request).get_run(run_id)
     if record is None:
@@ -73,7 +73,7 @@ async def archive_restore(request: Request, run_id: str) -> JSONResponse:
     return JSONResponse({"ok": True, "run": info.summary()})
 
 
-@router.post("/archive/_export")
+@router.post("/api/archive/_export")
 async def archive_export(request: Request, format: str = "jsonl") -> StreamingResponse:
     if format != "jsonl":
         raise HTTPException(status_code=400, detail="format must be 'jsonl'")

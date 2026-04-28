@@ -46,13 +46,13 @@ interface LineageGraph {
   maxIndividuals: number;
 }
 
-const MARGIN_LEFT = 84;
+const MARGIN_LEFT = 64;
 const MARGIN_RIGHT = 24;
-const MARGIN_TOP = 40;
-const MARGIN_BOTTOM = 36;
-const COLUMN_GAP = 180;
-const ROW_GAP = 44;
-const NODE_RADIUS = 10;
+const MARGIN_TOP = 32;
+const MARGIN_BOTTOM = 24;
+const COLUMN_GAP = 132;
+const ROW_GAP = 36;
+const NODE_RADIUS = 9;
 
 export function EvoLineageTab({ summary, fitness, events }: EvoLineageTabProps) {
   const generations = buildEvoGenerations(summary, fitness, events);
@@ -80,15 +80,30 @@ export function EvoLineageTab({ summary, fitness, events }: EvoLineageTabProps) 
   }
 
   const graph = buildLineageGraph(generations);
+  // Don't stretch the canvas to a fixed minimum — small lineages should
+  // hug their data so the panel doesn't look 80% empty. Pad just enough
+  // for the gen labels and node circles.
+  const canvasWidth = graph.width + NODE_RADIUS * 2;
+  const canvasHeight = graph.height + NODE_RADIUS * 2;
 
   return (
     <div className="h-full overflow-auto p-4">
-      <svg
-        width={Math.max(graph.width, 920)}
-        height={Math.max(graph.height, 360)}
-        role="img"
-        aria-label="evogradient lineage graph"
-      >
+      <div className="rounded-md border border-border bg-bg-1 p-3">
+        <div className="mb-2 flex items-center justify-between text-[11px] text-muted">
+          <span>
+            <span className="font-medium text-text">{generations.length}</span>{" "}
+            generation{generations.length === 1 ? "" : "s"} ·{" "}
+            <span className="font-medium text-text">{graph.maxIndividuals}</span>{" "}
+            individual{graph.maxIndividuals === 1 ? "" : "s"} per generation
+          </span>
+          <span className="font-mono text-muted-2">{graph.nodes.length} candidates</span>
+        </div>
+        <svg
+          width={canvasWidth}
+          height={canvasHeight}
+          role="img"
+          aria-label="evogradient lineage graph"
+        >
         <g>
           {generations.map((generation) => (
             <text
@@ -162,7 +177,8 @@ export function EvoLineageTab({ summary, fitness, events }: EvoLineageTabProps) 
             );
           })}
         </g>
-      </svg>
+        </svg>
+      </div>
     </div>
   );
 }

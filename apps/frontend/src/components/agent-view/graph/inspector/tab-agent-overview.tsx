@@ -42,7 +42,7 @@ export function TabAgentOverview({ runId, agentPath }: { runId: string; agentPat
         <section className="px-5 py-4">
           <Eyebrow>input</Eyebrow>
           <div className="mt-2">
-            <FieldTree data={m.input_schema} defaultDepth={2} hideCopy />
+            <FieldTree data={m.input_schema} defaultDepth={2} hideCopy layout="stacked" />
           </div>
         </section>
       ) : null}
@@ -51,7 +51,7 @@ export function TabAgentOverview({ runId, agentPath }: { runId: string; agentPat
         <section className="px-5 py-4">
           <Eyebrow>output</Eyebrow>
           <div className="mt-2">
-            <FieldTree data={m.output_schema} defaultDepth={2} hideCopy />
+            <FieldTree data={m.output_schema} defaultDepth={2} hideCopy layout="stacked" />
           </div>
         </section>
       ) : null}

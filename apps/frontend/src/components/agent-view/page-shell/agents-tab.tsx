@@ -4,6 +4,34 @@ import { SweepSnapshot } from "@/lib/types";
 import { formatDurationMs, truncateMiddle } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { z } from "zod";
+
+const AgentsSummary = z.object({
+  run_id: z.string(),
+  agents: z
+    .array(
+      z.object({
+        agent_path: z.string(),
+        class_name: z.string().nullable().optional().default(null),
+        kind: z.string().nullable().optional().default(null),
+        hash_content: z.string().nullable().optional().default(null),
+        first_seen: z.number(),
+        last_seen: z.number(),
+        invocations: z.number(),
+        errors: z.number().optional().default(0),
+        latency_p50_ms: z.number().nullable().optional().default(null),
+        latency_avg_ms: z.number().nullable().optional().default(null),
+        prompt_tokens: z.number().optional().default(0),
+        completion_tokens: z.number().optional().default(0),
+        backend: z.string().nullable().optional().default(null),
+        model: z.string().nullable().optional().default(null),
+        renderer: z.string().nullable().optional().default(null),
+        langfuse_url: z.string().nullable().optional().default(null),
+      }),
+    )
+    .default([]),
+});
+type AggregatedAgentRow = z.infer<typeof AgentsSummary>["agents"][number];
 
 interface AgentsTabProps {
   runId: string;
@@ -71,9 +99,24 @@ export function AgentsTab({
   groupBy = "hash",
   extraColumns = [],
   emptyTitle = "no agent invocations yet",
-  emptyDescription = "this algorithm has not spawned synthetic children yet; the first algo_emit lands as soon as the algorithm enters its main loop",
+  emptyDescription = "this algorithm has not invoked any sub-agents yet; rows appear as soon as the algorithm enters its main loop",
 }: AgentsTabProps) {
   const children = useChildren(runId);
+  const aggregated = useQuery({
+    queryKey: ["run", "agents-summary", runId] as const,
+    queryFn: async () => {
+      const response = await fetch(`/runs/${runId}/agents-summary`);
+      if (!response.ok) {
+        throw new Error(
+          `${response.status} ${response.statusText} <- /runs/${runId}/agents-summary`,
+        );
+      }
+      return AgentsSummary.parse(await response.json());
+    },
+    enabled: runId.length > 0,
+    staleTime: 15_000,
+    refetchInterval: 5_000,
+  });
   const sweep = useQuery({
     queryKey: ["run", "sweep", runId] as const,
     queryFn: async () => {
@@ -94,23 +137,31 @@ export function AgentsTab({
   }, [groupBy]);
 
   const columns = useMemo(() => buildColumns(extraColumns), [extraColumns]);
-  const rows = useMemo(
+  const childRows = useMemo(
     () =>
       (children.data ?? []).map((child, index) =>
         childToRow(child, extraColumns, index, sweep.data),
       ),
     [children.data, extraColumns, sweep.data],
   );
+  const aggregatedRows = useMemo(
+    () => (aggregated.data?.agents ?? []).map(aggregatedToRow),
+    [aggregated.data],
+  );
+  // Prefer real synthetic-child runs (when the optimiser opts into them).
+  // Fall back to per-event aggregation so OPRO/EvoGradient/Trainer always
+  // surface the agents they touched.
+  const rows = childRows.length > 0 ? childRows : aggregatedRows;
   const groupLabels = useMemo(() => buildGroupLabels(rows), [rows]);
 
-  if (children.isLoading) {
+  if (children.isLoading || (childRows.length === 0 && aggregated.isLoading)) {
     return <div className="p-4 text-xs text-muted">loading child agents...</div>;
   }
-  if (children.error) {
+  if (children.error && aggregated.error) {
     return (
       <EmptyState
         title="child agents unavailable"
-        description="the dashboard could not load synthetic child runs for this algorithm"
+        description="the dashboard could not load child runs or aggregated invocations for this algorithm"
       />
     );
   }
@@ -150,6 +201,35 @@ function buildColumns(extraColumns: string[]): RunTableColumn[] {
     return spec ? [spec] : [];
   });
   return [...defaultColumns, ...extras];
+}
+
+function aggregatedToRow(row: AggregatedAgentRow): RunRow {
+  const className = row.class_name ?? row.agent_path.split(".").at(-1) ?? "Agent";
+  const hash = row.hash_content ?? row.agent_path;
+  const totalTokens = row.prompt_tokens + row.completion_tokens;
+  return {
+    id: row.agent_path + ":" + hash,
+    identity: hash,
+    state: row.errors > 0 ? "error" : "ended",
+    startedAt: row.first_seen,
+    endedAt: row.last_seen,
+    durationMs: row.latency_avg_ms,
+    fields: {
+      agent: { kind: "text", value: className, mono: true },
+      hash: { kind: "hash", value: hash },
+      group: { kind: "text", value: hash, mono: true },
+      groupLabel: { kind: "text", value: className },
+      invocations: { kind: "num", value: row.invocations, format: "int" },
+      latency: { kind: "num", value: row.latency_p50_ms ?? row.latency_avg_ms, format: "ms" },
+      tokens: { kind: "num", value: totalTokens, format: "tokens" },
+      cost: { kind: "num", value: null, format: "cost" },
+      route: {
+        kind: "text",
+        value: hash ? `/agents/${hash}` : `/agents`,
+        mono: true,
+      },
+    },
+  };
 }
 
 function childToRow(
