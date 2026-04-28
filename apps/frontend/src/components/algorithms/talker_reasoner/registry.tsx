@@ -1,36 +1,21 @@
-import { DecisionsView } from "@/components/algorithms/talker_reasoner/decisions-view";
-import { TalkerTreeTab } from "@/components/algorithms/talker_reasoner/scenario-tree-view";
-import { TalkerDetailOverview } from "@/components/algorithms/talker_reasoner/talker-detail-overview";
-import { TranscriptView } from "@/components/algorithms/talker_reasoner/transcript-view";
+import { TalkerDecisionsTab } from "@/components/algorithms/talker_reasoner/decisions-tab";
+import { TalkerTranscriptTab } from "@/components/algorithms/talker_reasoner/transcript-tab";
+import { TalkerTreeTab } from "@/components/algorithms/talker_reasoner/tree-tab";
 import type { ComponentRegistry } from "@json-render/react";
 
 export const talkerReasonerRegistry: ComponentRegistry = {
-  TalkerDetailOverview: ({ element }) => {
-    const p = element.props as { dataSummary?: unknown; dataEvents?: unknown };
-    return <TalkerDetailOverview summary={p.dataSummary} events={p.dataEvents} />;
-  },
   TalkerTreeTab: ({ element }) => {
     const p = element.props as { dataSummary?: unknown; dataEvents?: unknown };
-    return <TalkerTreeTab summary={p.dataSummary} events={p.dataEvents} />;
+    return <TalkerTreeTab dataSummary={p.dataSummary} dataEvents={p.dataEvents} />;
   },
-  TranscriptView: ({ element }) => {
+  TalkerTranscriptTab: ({ element }) => {
     const p = element.props as { dataSummary?: unknown; dataEvents?: unknown };
-    return <TranscriptView summary={p.dataSummary} events={p.dataEvents} />;
+    return <TalkerTranscriptTab dataSummary={p.dataSummary} dataEvents={p.dataEvents} />;
   },
-  DecisionsView: ({ element }) => {
-    const p = element.props as {
-      runId?: string;
-      dataSummary?: unknown;
-      dataEvents?: unknown;
-      dataChildren?: unknown;
-    };
+  TalkerDecisionsTab: ({ element }) => {
+    const p = element.props as { runId?: string; dataSummary?: unknown; dataEvents?: unknown };
     return (
-      <DecisionsView
-        runId={p.runId ?? ""}
-        summary={p.dataSummary}
-        events={p.dataEvents}
-        childRuns={p.dataChildren}
-      />
+      <TalkerDecisionsTab runId={p.runId} dataSummary={p.dataSummary} dataEvents={p.dataEvents} />
     );
   },
 };

@@ -4,8 +4,7 @@
   "dataSources": {
     "summary": { "endpoint": "/runs/$context.runId/summary" },
     "events": { "endpoint": "/runs/$context.runId/events?limit=1000" },
-    "children": { "endpoint": "/runs/$context.runId/children" },
-    "graph": { "endpoint": "/graph/$context.runId" }
+    "children": { "endpoint": "/runs/$context.runId/children" }
   },
   "spec": {
     "root": "page",
@@ -14,23 +13,14 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "overview", "label": "Overview" },
             { "id": "tree", "label": "Tree" },
             { "id": "transcript", "label": "Transcript" },
             { "id": "decisions", "label": "Decisions" },
             { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.children)" },
-            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" },
-            { "id": "graph", "label": "Graph" }
+            { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
-        "children": ["overview", "tree", "transcript", "decisions", "agents", "events", "graph"]
-      },
-      "overview": {
-        "type": "TalkerDetailOverview",
-        "props": {
-          "sourceSummary": "$queries.summary",
-          "sourceEvents": "$queries.events"
-        }
+        "children": ["tree", "transcript", "decisions", "agents", "events"]
       },
       "tree": {
         "type": "TalkerTreeTab",
@@ -40,29 +30,22 @@
         }
       },
       "transcript": {
-        "type": "TranscriptView",
+        "type": "TalkerTranscriptTab",
         "props": {
           "sourceSummary": "$queries.summary",
           "sourceEvents": "$queries.events"
         }
       },
       "decisions": {
-        "type": "DecisionsView",
+        "type": "TalkerDecisionsTab",
         "props": {
           "runId": "$context.runId",
           "sourceSummary": "$queries.summary",
-          "sourceEvents": "$queries.events",
-          "sourceChildren": "$queries.children"
+          "sourceEvents": "$queries.events"
         }
       },
       "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId", "groupBy": "hash" } },
-      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } },
-      "graph": {
-        "type": "PanelCard",
-        "props": { "title": "agent graph" },
-        "children": ["graph-view"]
-      },
-      "graph-view": { "type": "AgentGraph", "props": { "source": "$queries.graph" } }
+      "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } }
     }
   }
 }
