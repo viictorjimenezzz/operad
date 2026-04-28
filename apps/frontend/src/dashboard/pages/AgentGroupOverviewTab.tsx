@@ -1,6 +1,6 @@
 import { AgentGroupIdentityCard } from "@/components/agent-view/group/identity-card";
 import { DefinitionPanel } from "@/components/agent-view/overview/definition-section";
-import { Eyebrow, Metric, MultiSeriesChart, PanelCard } from "@/components/ui";
+import { Metric, MultiSeriesChart, PanelCard } from "@/components/ui";
 import { type HashKey, HashRow } from "@/components/ui/hash-row";
 import { useAgentGroup, useAgentMeta } from "@/hooks/use-runs";
 import type { RunSummary } from "@/lib/types";
@@ -85,10 +85,7 @@ export function AgentGroupOverviewTab() {
         {singleRun ? (
           <div className="space-y-3">
             <DefinitionPanel dataSummary={singleRun} runId={singleRun.run_id} />
-            <section className="space-y-2 border-t border-border pt-4">
-              <Eyebrow>reproducibility</Eyebrow>
-              <HashRow current={hashesForRun(singleRun)} />
-            </section>
+            <HashRow current={hashesForRun(singleRun)} />
           </div>
         ) : null}
       </div>
