@@ -14,10 +14,10 @@ const HASH_KEYS: HashKey[] = [
   "hash_content",
 ];
 
-function makeHashes(seed: string): Partial<Record<HashKey, string | null>> {
+function makeHashes(seed: string): Record<HashKey, string> {
   return Object.fromEntries(
     HASH_KEYS.map((key, index) => [key, `${seed}-${index.toString(16).repeat(32)}`]),
-  );
+  ) as Record<HashKey, string>;
 }
 
 describe("HashRow", () => {
