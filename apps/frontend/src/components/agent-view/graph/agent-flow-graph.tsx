@@ -474,12 +474,13 @@ export function AgentFlowGraph({ agentGraph, runId }: AgentFlowGraphProps) {
       </div>
     );
   }
-  if (agentGraph.nodes.length === 1 && agentGraph.edges.length === 0) {
+  const [singleNode] = agentGraph.nodes;
+  if (agentGraph.nodes.length === 1 && agentGraph.edges.length === 0 && singleNode) {
     // Re-key on the (run + path) so a different run gets a clean
     // ReactFlow instance instead of trying to diff into a stale store —
     // and make sure we never reuse internal state across runs.
     return (
-      <ReactFlowProvider key={`single-${runId}-${agentGraph.nodes[0].path}`}>
+      <ReactFlowProvider key={`single-${runId}-${singleNode.path}`}>
         <SingleLeafCanvas agentGraph={agentGraph} runId={runId} />
       </ReactFlowProvider>
     );
