@@ -1,10 +1,13 @@
 import { EmptyState } from "@/components/ui/empty-state";
 import { type DebateRound, DebateRoundsResponse } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { X } from "lucide-react";
 import { useState } from "react";
 
 export function DebateTranscript({ data }: { data: unknown }) {
   const parsed = DebateRoundsResponse.safeParse(data);
   const [expandedRound, setExpandedRound] = useState<number | null>(null);
+  const [openCritiques, setOpenCritiques] = useState<Record<string, boolean>>({});
 
   if (!parsed.success || parsed.data.length === 0) {
     return <EmptyState title="no transcript yet" description="round events haven't arrived yet" />;
@@ -67,50 +70,53 @@ export function DebateTranscript({ data }: { data: unknown }) {
                     round.critiques[pIdx] ??
                     null;
                   const isWinner = pIdx === winnerIdx && maxScore > 0;
+                  const proposer = proposal.author || `Proposer ${pIdx + 1}`;
+                  const critiqueKey = `${idx}:${pIdx}`;
+                  const showCritique = Boolean(openCritiques[critiqueKey]);
+                  const body = showCritique
+                    ? critique?.comments || "No critique recorded for this proposal."
+                    : proposal.content || "no content";
 
                   return (
                     <div
                       key={pIdx}
-                      className={`rounded border p-2 ${
-                        isWinner ? "border-ok/40 bg-ok/5" : "border-border bg-bg-3"
-                      }`}
+                      aria-label={`Transcript entry for ${proposer}`}
+                      className={cn(
+                        "flex h-48 flex-col rounded border p-2",
+                        isWinner ? "border-ok/40 bg-ok/5" : "border-border bg-bg-3",
+                      )}
                     >
-                      <div className="mb-1 flex items-center justify-between">
-                        <span className="font-mono font-medium text-text">
-                          {proposal.author || `Proposer ${pIdx + 1}`}
-                        </span>
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="font-mono font-medium text-text">{proposer}</span>
                         {score !== null && (
-                          <div className="flex items-center gap-2">
-                            <div className="h-1.5 w-20 overflow-hidden rounded-full bg-bg-1">
-                              <div
-                                className="h-full rounded-full transition-all"
-                                style={{
-                                  width: `${Math.min(100, score * 100)}%`,
-                                  background: isWinner ? "var(--color-ok)" : "var(--color-accent)",
-                                }}
-                              />
-                            </div>
-                            <span className="w-10 text-right font-mono tabular-nums text-text">
-                              {score.toFixed(2)}
-                            </span>
-                          </div>
+                          <button
+                            type="button"
+                            className={cn(
+                              "inline-flex h-7 min-w-11 items-center justify-center rounded px-2 font-mono text-[11px] tabular-nums transition-colors",
+                              isWinner
+                                ? "bg-[var(--color-ok)]/15 text-[var(--color-ok)] hover:bg-[var(--color-ok)]/25"
+                                : "bg-bg-1 text-text hover:bg-bg-2",
+                            )}
+                            aria-label={
+                              showCritique
+                                ? `show proposal for ${proposer}`
+                                : `show critic feedback for ${proposer}`
+                            }
+                            onClick={() =>
+                              setOpenCritiques((current) => ({
+                                ...current,
+                                [critiqueKey]: !current[critiqueKey],
+                              }))
+                            }
+                          >
+                            {showCritique ? <X size={13} /> : score.toFixed(2)}
+                          </button>
                         )}
                       </div>
 
-                      <p className="whitespace-pre-wrap text-text/80 leading-relaxed">
-                        {proposal.content || <span className="text-muted italic">no content</span>}
+                      <p className="m-0 min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words text-[12px] leading-5 text-text/80">
+                        {body}
                       </p>
-
-                      {critique && (
-                        <details className="mt-2">
-                          <summary className="cursor-pointer text-muted hover:text-text">
-                            critic feedback
-                          </summary>
-                          <p className="mt-1 whitespace-pre-wrap text-text/70 leading-relaxed">
-                            {critique.comments}
-                          </p>
-                        </details>
-                      )}
                     </div>
                   );
                 })}

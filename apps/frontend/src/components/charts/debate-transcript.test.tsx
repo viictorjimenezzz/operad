@@ -62,7 +62,7 @@ describe("<DebateTranscript />", () => {
 
   it("clicking a round header collapses it", () => {
     render(<DebateTranscript data={oneRound} />);
-    const btn = screen.getByRole("button");
+    const btn = screen.getByRole("button", { name: /round 1/i });
     fireEvent.click(btn);
     expect(screen.queryByText("My argument for A")).toBeNull();
   });
@@ -73,8 +73,27 @@ describe("<DebateTranscript />", () => {
     expect(screen.getByText(/round 2/i)).toBeDefined();
   });
 
+  it("toggles fixed proposal cards between proposal content and critic feedback from the score", () => {
+    render(<DebateTranscript data={oneRound} />);
+
+    expect(screen.getByLabelText("Transcript entry for alice")).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "show critic feedback for alice" }));
+
+    expect(screen.getByText("Strong reasoning.")).toBeDefined();
+    expect(screen.queryByText("My argument for A")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "show proposal for alice" }));
+
+    expect(screen.getByText("My argument for A")).toBeDefined();
+    expect(screen.queryByText("Strong reasoning.")).toBeNull();
+  });
+
   it("deduplicates repeated streamed rounds by round_index", () => {
-    render(<DebateTranscript data={[...twoRounds, oneRound[0]!]} />);
+    const repeated = oneRound[0];
+    if (!repeated) throw new Error("expected repeated round fixture");
+
+    render(<DebateTranscript data={[...twoRounds, repeated]} />);
     expect(screen.getAllByText(/round 1/i)).toHaveLength(1);
   });
 

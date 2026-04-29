@@ -21,11 +21,11 @@ import { PrimitivesGallery } from "@/dashboard/pages/__dev/PrimitivesGallery";
 import { AgentRunDetailLayout } from "@/dashboard/pages/run-detail/AgentRunDetailLayout";
 import { AlgorithmDetailLayout } from "@/dashboard/pages/run-detail/AlgorithmDetailLayout";
 import { SingleInvocationDriftTab } from "@/dashboard/pages/run-detail/SingleInvocationDriftTab";
-import { SingleInvocationGraphTab } from "@/dashboard/pages/run-detail/SingleInvocationGraphTab";
+import { SingleInvocationHistoryTab } from "@/dashboard/pages/run-detail/SingleInvocationHistoryTab";
 import { SingleInvocationMetricsTab } from "@/dashboard/pages/run-detail/SingleInvocationMetricsTab";
 import { SingleInvocationOverviewTab } from "@/dashboard/pages/run-detail/SingleInvocationOverviewTab";
 import { TrainingDetailLayout } from "@/dashboard/pages/run-detail/TrainingDetailLayout";
-import { Navigate, createBrowserRouter, useRouteError } from "react-router-dom";
+import { Navigate, createBrowserRouter, useParams, useRouteError } from "react-router-dom";
 
 export const dashboardRoutes = [
   {
@@ -67,10 +67,10 @@ export const dashboardRoutes = [
         element: <AgentRunDetailLayout />,
         children: [
           { index: true, element: <SingleInvocationOverviewTab /> },
+          { path: "history", element: <SingleInvocationHistoryTab /> },
           {
             path: "graph",
-            element: <SingleInvocationGraphTab />,
-            errorElement: <GraphRouteErrorBoundary />,
+            element: <RunGraphRedirect />,
           },
           { path: "metrics", element: <SingleInvocationMetricsTab /> },
           { path: "drift", element: <SingleInvocationDriftTab /> },
@@ -130,4 +130,9 @@ function GraphRouteErrorBoundary() {
       </div>
     </div>
   );
+}
+
+function RunGraphRedirect() {
+  const { hashContent } = useParams<{ hashContent: string }>();
+  return <Navigate to={`/agents/${encodeURIComponent(hashContent ?? "")}/graph`} replace />;
 }

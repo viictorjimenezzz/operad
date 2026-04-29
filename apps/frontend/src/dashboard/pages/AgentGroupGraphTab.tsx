@@ -6,10 +6,12 @@ import { useParams } from "react-router-dom";
 export function AgentGroupGraphTab() {
   const { hashContent } = useParams<{ hashContent: string }>();
   const group = useAgentGroup(hashContent);
-  const latestRun = group.data?.runs.at(-1) ?? null;
+  const runs = group.data?.runs ?? [];
+  const newestRuns = [...runs].sort((a, b) => b.started_at - a.started_at);
+  const latestGraphRun = newestRuns.find((run) => run.has_graph) ?? newestRuns[0] ?? null;
 
   if (!hashContent) return null;
-  if (!latestRun) {
+  if (!latestGraphRun) {
     return (
       <div className="flex h-full items-center justify-center">
         <EmptyState
@@ -19,5 +21,5 @@ export function AgentGroupGraphTab() {
       </div>
     );
   }
-  return <GraphPage runId={latestRun.run_id} />;
+  return <GraphPage runId={latestGraphRun.run_id} />;
 }
