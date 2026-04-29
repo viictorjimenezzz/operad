@@ -23,6 +23,7 @@ from operad.core.view import to_agent_graph_from_json, to_io_graph_from_json
 from operad.core.state import AgentState
 from operad.runtime.observers.base import suppress_notifications
 
+from .opro_sessions import find_opro_session, merged_opro_events, merged_opro_summary
 from .runs import RunInfo
 
 
@@ -73,6 +74,17 @@ def _not_found(reason: str) -> JSONResponse:
 
 def _resolve_run_context(request: Request, run_id: str) -> _RunContext | None:
     obs = request.app.state.observer
+    session = find_opro_session(obs.registry, run_id)
+    if session is not None:
+        summary = merged_opro_summary(session)
+        return _RunContext(
+            run_id=run_id,
+            info=session.members[0],
+            summary=summary,
+            events=merged_opro_events(session),
+            graph_json=session.members[0].graph_json,
+        )
+
     info = obs.registry.get(run_id)
     if info is not None:
         return _RunContext(

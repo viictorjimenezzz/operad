@@ -192,7 +192,112 @@ async def test_opro_session_emits_algorithm_events(cfg: Any) -> None:
     kinds = [event.kind for event in events]
     assert kinds == ["algo_start", "iteration", "iteration", "algo_end"]
     assert events[1].payload["phase"] == "propose"
+    assert events[1].payload["current_value"] == "start"
     assert events[2].payload["phase"] == "evaluate"
     assert events[2].payload["accepted"] is True
     assert len({event.run_id for event in events}) == 1
     assert events[-1].payload["final_values"] == {"role": "cand-1"}
+
+
+async def test_opro_empty_session_does_not_emit_algorithm_run(cfg: Any) -> None:
+    _leaf, p = _make_role_param(cfg, "start")
+    opro = await _built_opro(cfg, [])
+    events: list[AlgorithmEvent] = []
+
+    class _Collector:
+        async def on_event(self, event: object) -> None:
+            if isinstance(event, AlgorithmEvent):
+                events.append(event)
+
+    async def evaluator(param: TextParameter, candidate: str) -> float:
+        return 0.0
+
+    opt = OPROOptimizer(
+        [p],
+        objective_metric=_DummyMetric(),
+        evaluator=evaluator,
+        opro_factory=lambda: opro,
+    )
+    obs_registry.clear()
+    obs_registry.register(_Collector())
+    try:
+        async with opt.session():
+            pass
+    finally:
+        obs_registry.clear()
+
+    assert events == []
+
+
+async def test_opro_standalone_steps_share_one_algorithm_run(cfg: Any) -> None:
+    _leaf, p = _make_role_param(cfg, "start")
+    opro = await _built_opro(cfg, ["cand-1", "cand-2"])
+    events: list[AlgorithmEvent] = []
+
+    class _Collector:
+        async def on_event(self, event: object) -> None:
+            if isinstance(event, AlgorithmEvent):
+                events.append(event)
+
+    async def evaluator(param: TextParameter, candidate: str) -> float:
+        return {"cand-1": 0.8, "cand-2": 0.9}[candidate]
+
+    opt = OPROOptimizer(
+        [p],
+        objective_metric=_DummyMetric(),
+        evaluator=evaluator,
+        opro_factory=lambda: opro,
+    )
+    obs_registry.clear()
+    obs_registry.register(_Collector())
+    try:
+        await opt.step()
+        await opt.step()
+        async with opt.session():
+            pass
+    finally:
+        obs_registry.clear()
+
+    kinds = [event.kind for event in events]
+    assert kinds == [
+        "algo_start",
+        "iteration",
+        "iteration",
+        "iteration",
+        "iteration",
+        "algo_end",
+    ]
+    assert len({event.run_id for event in events}) == 1
+    assert [event.payload.get("step_index") for event in events[1:5]] == [1, 1, 2, 2]
+    assert events[-1].payload["steps"] == 2
+    assert events[-1].payload["final_values"] == {"role": "cand-2"}
+
+
+async def test_opro_evaluator_can_emit_tracking_metrics(cfg: Any) -> None:
+    _leaf, p = _make_role_param(cfg, "start")
+    opro = await _built_opro(cfg, ["cand-1"])
+    events: list[AlgorithmEvent] = []
+
+    class _Collector:
+        async def on_event(self, event: object) -> None:
+            if isinstance(event, AlgorithmEvent):
+                events.append(event)
+
+    async def evaluator(param: TextParameter, candidate: str) -> tuple[float, dict[str, float]]:
+        return 0.8, {"length_mean": 240, "length_max": 301}
+
+    opt = OPROOptimizer(
+        [p],
+        objective_metric=_DummyMetric(),
+        evaluator=evaluator,
+        opro_factory=lambda: opro,
+    )
+    obs_registry.clear()
+    obs_registry.register(_Collector())
+    try:
+        await opt.step()
+    finally:
+        obs_registry.clear()
+
+    evaluate_event = next(event for event in events if event.payload.get("phase") == "evaluate")
+    assert evaluate_event.payload["metrics"] == {"length_mean": 240.0, "length_max": 301.0}

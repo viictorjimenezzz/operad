@@ -16,6 +16,7 @@ export interface OPROStep {
   iterIndex: number;
   stepIndex: number;
   paramPath: string;
+  currentValue: string | null;
   candidateValue: string;
   historySize: number | null;
   score: number | null;
@@ -203,6 +204,7 @@ export function buildOPROSteps(
       iterIndex: row.iterIndex,
       stepIndex: row.stepIndex,
       paramPath: row.paramPath ?? current.paramPath ?? "-",
+      currentValue: row.currentValue ?? current.currentValue ?? null,
       candidateValue: row.candidateValue ?? current.candidateValue ?? "",
       historySize: row.historySize ?? current.historySize ?? null,
       score: row.score ?? current.score ?? null,
@@ -218,6 +220,7 @@ export function buildOPROSteps(
       iterIndex: item.iterIndex ?? index,
       stepIndex: item.stepIndex ?? item.iterIndex ?? index,
       paramPath: item.paramPath ?? "-",
+      currentValue: item.currentValue ?? null,
       candidateValue: item.candidateValue ?? "",
       historySize: item.historySize ?? null,
       score: item.score ?? null,
@@ -246,7 +249,7 @@ export function parseChildren(dataChildren: unknown): RunSummary[] {
 }
 
 export function childHref(run: RunSummary): string {
-  if (run.algorithm_path === "OPRO") return `/opro/${encodeURIComponent(run.run_id)}`;
+  if (isOPROAlgorithm(run.algorithm_path)) return `/opro/${encodeURIComponent(run.run_id)}`;
   if (run.algorithm_path === "Trainer" || run.algorithm_path?.endsWith(".Trainer")) {
     return `/training/${encodeURIComponent(run.run_id)}`;
   }
@@ -266,6 +269,7 @@ type OPROEntry = {
   stepIndex: number;
   phase: string | null;
   paramPath: string | null;
+  currentValue: string | null;
   candidateValue: string | null;
   historySize: number | null;
   score: number | null;
@@ -278,8 +282,12 @@ function eventEntries(dataEvents: unknown): OPROEntry[] {
   if (!parsed.success) return [];
   return parsed.data.events
     .filter((event): event is z.infer<typeof AlgoEventEnvelope> => event.type === "algo_event")
-    .filter((event) => event.kind === "iteration" && event.algorithm_path === "OPRO")
+    .filter((event) => event.kind === "iteration" && isOPROAlgorithm(event.algorithm_path))
     .map((event) => entryFromPayload(event.payload, event.started_at));
+}
+
+export function isOPROAlgorithm(path: string | null | undefined): boolean {
+  return path === "OPRO" || path === "OPROOptimizer";
 }
 
 function iterationEntries(dataIterations: unknown): OPROEntry[] {
@@ -305,6 +313,7 @@ function entryFromPayload(
     stepIndex: numberValue(payload.step_index) ?? iterIndex,
     phase: stringValue(payload.phase),
     paramPath: stringValue(payload.param_path),
+    currentValue: stringValue(payload.current_value),
     candidateValue: stringValue(payload.candidate_value) ?? stringValue(payload.text),
     historySize: numberValue(payload.history_size),
     score: numberValue(payload.score),
