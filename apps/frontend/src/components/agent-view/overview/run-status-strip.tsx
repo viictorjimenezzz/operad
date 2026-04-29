@@ -31,7 +31,7 @@ export function ActivityStrip(props: ActivityStripProps) {
   const startedAt = run?.started_at ?? null;
 
   return (
-    <div className="flex min-h-9 flex-wrap items-center gap-x-4 gap-y-1.5 px-[--panel-pad-x] py-2">
+    <div className="flex min-h-8 flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-border px-0 py-2">
       <span className="inline-flex items-center gap-1.5">
         <StatusDot
           identity={hash}

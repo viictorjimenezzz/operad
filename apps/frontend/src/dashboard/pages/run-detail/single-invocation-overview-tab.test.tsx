@@ -1,15 +1,22 @@
 import { ActivityStrip } from "@/components/agent-view/overview/run-status-strip";
+import { AgentRunDetailLayout } from "@/dashboard/pages/run-detail/AgentRunDetailLayout";
 import { SingleInvocationOverviewTab } from "@/dashboard/pages/run-detail/SingleInvocationOverviewTab";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hookMocks = vi.hoisted(() => ({
+  useAgentMeta: vi.fn(),
+  useDrift: vi.fn(),
+  useRunEvents: vi.fn(),
   useRunSummary: vi.fn(),
   useRunInvocations: vi.fn(),
 }));
 
 vi.mock("@/hooks/use-runs", () => ({
+  useAgentMeta: hookMocks.useAgentMeta,
+  useDrift: hookMocks.useDrift,
+  useRunEvents: hookMocks.useRunEvents,
   useRunSummary: hookMocks.useRunSummary,
   useRunInvocations: hookMocks.useRunInvocations,
 }));
@@ -70,6 +77,8 @@ const invocations = {
   ],
 };
 
+afterEach(cleanup);
+
 describe("ActivityStrip", () => {
   beforeEach(() => {
     hookMocks.useRunSummary.mockReset();
@@ -126,6 +135,9 @@ describe("ActivityStrip", () => {
 
 describe("SingleInvocationOverviewTab", () => {
   beforeEach(() => {
+    hookMocks.useAgentMeta.mockReturnValue({ data: { hash_content: "abc123" } });
+    hookMocks.useDrift.mockReturnValue({ data: [] });
+    hookMocks.useRunEvents.mockReturnValue({ data: { events: [] } });
     hookMocks.useRunSummary.mockReturnValue({ isLoading: false, data: summary });
     hookMocks.useRunInvocations.mockReturnValue({ isLoading: false, data: invocations });
   });
@@ -150,5 +162,26 @@ describe("SingleInvocationOverviewTab", () => {
     expect(screen.queryByRole("button", { name: "role" })).toBeNull();
     expect(screen.queryByRole("button", { name: "task" })).toBeNull();
     expect(screen.queryByText("structure")).toBeNull();
+  });
+
+  it("renders invocation tabs without a graph tab", () => {
+    render(
+      <MemoryRouter initialEntries={["/agents/abc123/runs/run-1"]}>
+        <Routes>
+          <Route path="/agents/:hashContent/runs/:runId" element={<AgentRunDetailLayout />}>
+            <Route index element={<div>overview body</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const sections = screen.getByRole("navigation", { name: /agent invocation path/i });
+    expect(within(sections).getByText("Agents")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Overview" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "History" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Metrics" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Graph" })).toBeNull();
+    expect(screen.queryByText("langfuse")).toBeNull();
+    expect(screen.queryByText("duration")).toBeNull();
   });
 });

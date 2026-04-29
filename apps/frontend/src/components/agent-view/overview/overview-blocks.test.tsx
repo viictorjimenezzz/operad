@@ -198,7 +198,10 @@ describe("Agent overview sparse states", () => {
 
     expect(within(view.container).queryByText("show full")).toBeNull();
     expect(within(view.container).queryByText("preview")).toBeNull();
+    expect(within(view.container).queryByText("Copy as JSON")).toBeNull();
     expect(within(view.container).queryByLabelText(/collapse input/i)).toBeNull();
+    expect(within(view.container).getByText("Input")).toBeTruthy();
+    expect(within(view.container).getByText("Output")).toBeTruthy();
     expect(
       within(view.container).getAllByText((text) => text.includes("-end")).length,
     ).toBeGreaterThan(0);
