@@ -1,9 +1,9 @@
-import { ExternalLink } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { z } from "zod";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { type RunRow, RunTable, type RunTableColumn } from "@/components/ui/run-table";
+import { agentsSummaryLangfuse, parseTopIndices, rankBeamCandidates } from "@/lib/beam-data";
 import { Candidate, RunSummary as RunSummarySchema } from "@/lib/types";
 
 const CandidateArray = z.array(Candidate);
@@ -18,7 +18,7 @@ type ChildRunSummary = z.infer<typeof ChildRunSummary>;
 const columns: RunTableColumn[] = [
   { id: "rank", label: "Rank", source: "rank", sortable: true, align: "right", width: 64 },
   { id: "score", label: "Score", source: "score", sortable: true, width: 180 },
-  { id: "text", label: "Text preview", source: "text", sortable: true, width: "1fr" },
+  { id: "diff", label: "Diff preview", source: "diff", sortable: true, width: "1fr" },
   { id: "selected", label: "Selected", source: "selected", sortable: true, width: 92 },
   { id: "langfuse", label: "Langfuse", source: "langfuse", width: 84 },
 ];
@@ -27,6 +27,7 @@ interface BeamLeaderboardTabProps {
   data: unknown;
   dataIterations?: unknown;
   dataChildren?: unknown;
+  dataAgentsSummary?: unknown;
   runId: string;
 }
 
@@ -34,6 +35,7 @@ export function BeamLeaderboardTab({
   data,
   dataIterations,
   dataChildren,
+  dataAgentsSummary,
   runId,
 }: BeamLeaderboardTabProps) {
   const parsed = CandidateArray.safeParse(data);
@@ -42,89 +44,60 @@ export function BeamLeaderboardTab({
   }
 
   const children = parseChildren(dataChildren);
+  const childrenByCandidate = useMemo(() => mapChildrenByCandidate(children), [children]);
   const topIndices = useMemo(() => parseTopIndices(dataIterations), [dataIterations]);
-  const sorted = sortCandidates(parsed.data);
-  const k = topIndices.size > 0 ? topIndices.size : Math.min(5, sorted.length);
-  const topRows = sorted.slice(0, k);
-  const [showAll, setShowAll] = useState(false);
+  const ranked = useMemo(
+    () => rankBeamCandidates(parsed.data, topIndices),
+    [parsed.data, topIndices],
+  );
+  const fallbackLangfuse = agentsSummaryLangfuse(dataAgentsSummary);
 
-  const scoreBounds = scoreRange(sorted);
-  const rowFor = (candidate: z.infer<typeof Candidate>, rank: number): RunRow => {
-    const candidateIndex = candidate.candidate_index ?? rank;
-    const child = children[candidateIndex] ?? null;
-    const selected = topIndices.size > 0 ? topIndices.has(candidateIndex) : rank < k;
+  const scoreBounds = scoreRange(parsed.data);
+  const rows = ranked.map((entry): RunRow => {
+    const { candidate, candidateIndex, rank, previousText, selected } = entry;
+    const child = childrenByCandidate.get(candidateIndex) ?? null;
     const text = candidate.text ?? "";
     const score = candidate.score;
+    const langfuseUrl = child?.langfuse_url ?? fallbackLangfuse;
 
     return {
       id: `candidate-${candidateIndex}`,
       identity: child?.hash_content ?? `${runId}:${candidateIndex}`,
       state: "ended",
       startedAt: child?.started_at ?? null,
-      endedAt: child?.started_at != null && child.duration_ms != null
-        ? child.started_at + child.duration_ms / 1000
-        : null,
+      endedAt:
+        child?.started_at != null && child.duration_ms != null
+          ? child.started_at + child.duration_ms / 1000
+          : null,
       durationMs: child?.duration_ms ?? null,
       fields: {
-        rank: { kind: "num", value: rank + 1, format: "int" },
+        rank: { kind: "num", value: rank, format: "int" },
         score: {
           kind: "score",
           value: score,
           min: scoreBounds.min,
           max: scoreBounds.max,
         },
-        text: { kind: "diff", value: text },
+        diff: { kind: "diff", value: text, ...(previousText ? { previous: previousText } : {}) },
         selected: selected
           ? { kind: "pill", value: "✓", tone: "ok" }
           : { kind: "text", value: "-", mono: true },
-        langfuse: child?.langfuse_url
-          ? { kind: "link", label: "→", to: child.langfuse_url }
+        langfuse: langfuseUrl
+          ? { kind: "link", label: "open", to: langfuseUrl }
           : { kind: "text", value: "-", mono: true },
       },
     };
-  };
-
-  const topKRows = topRows.map((candidate, rank) => rowFor(candidate, rank));
-  const allRows = sorted.map((candidate, rank) => rowFor(candidate, rank));
+  });
 
   return (
     <div className="h-full overflow-auto p-4">
-      <div className="sticky top-0 z-10 mb-3 border-b border-border bg-bg pb-2">
-        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-bg-2 px-2.5 py-1 text-[11px] font-medium text-text">
-          K = {k} of {sorted.length}
-        </span>
-      </div>
-
       <RunTable
-        rows={topKRows}
+        rows={rows}
         columns={columns}
-        storageKey={`beam-leaderboard-topk:${runId}`}
+        storageKey={`beam-leaderboard:${runId}`}
         emptyTitle="no leaderboard"
         emptyDescription="beam leaderboard appears after candidate scores are emitted"
       />
-
-      {showAll ? (
-        <div className="mt-3">
-          <RunTable
-            rows={allRows}
-            columns={columns}
-            storageKey={`beam-leaderboard-all:${runId}`}
-            emptyTitle="no candidates"
-            emptyDescription="beam candidates appear after candidate events are emitted"
-          />
-        </div>
-      ) : (
-        <div className="mt-3">
-          <button
-            type="button"
-            onClick={() => setShowAll(true)}
-            className="inline-flex items-center gap-1 rounded-full border border-border bg-bg-2 px-2.5 py-1 text-[11px] text-muted transition-colors hover:text-text"
-          >
-            show all candidates
-            <ExternalLink size={12} />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -136,30 +109,21 @@ function parseChildren(data: unknown): ChildRunSummary[] {
     : [];
 }
 
-function parseTopIndices(data: unknown): Set<number> {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return new Set();
-  const rows = (data as Record<string, unknown>).iterations;
-  if (!Array.isArray(rows)) return new Set();
-  for (let i = rows.length - 1; i >= 0; i -= 1) {
-    const row = rows[i];
-    if (!row || typeof row !== "object") continue;
-    const metadata = (row as Record<string, unknown>).metadata;
-    if (!metadata || typeof metadata !== "object") continue;
-    const top = (metadata as Record<string, unknown>).top_indices;
-    if (Array.isArray(top)) {
-      return new Set(top.filter((value): value is number => typeof value === "number"));
-    }
-  }
-  return new Set();
-}
-
-function sortCandidates(candidates: z.infer<typeof Candidate>[]): z.infer<typeof Candidate>[] {
-  return [...candidates].sort((a, b) => {
-    const scoreA = a.score ?? Number.NEGATIVE_INFINITY;
-    const scoreB = b.score ?? Number.NEGATIVE_INFINITY;
-    if (scoreA !== scoreB) return scoreB - scoreA;
-    return (a.candidate_index ?? 0) - (b.candidate_index ?? 0);
+function mapChildrenByCandidate(children: ChildRunSummary[]): Map<number, ChildRunSummary> {
+  const out = new Map<number, ChildRunSummary>();
+  children.forEach((child, fallbackIndex) => {
+    const metadata = recordAt(child, "metadata");
+    const algorithmMetadata = recordAt(child, "algorithm_metadata");
+    const parentRunMetadata = recordAt(child, "parent_run_metadata");
+    const index =
+      numberAt(child, "candidate_index") ??
+      numberAt(metadata, "candidate_index") ??
+      numberAt(algorithmMetadata, "candidate_index") ??
+      numberAt(parentRunMetadata, "candidate_index") ??
+      fallbackIndex;
+    out.set(index, child);
   });
+  return out;
 }
 
 function scoreRange(candidates: z.infer<typeof Candidate>[]): { min: number; max: number } {
@@ -171,4 +135,20 @@ function scoreRange(candidates: z.infer<typeof Candidate>[]): { min: number; max
     min: Math.min(...scores),
     max: Math.max(...scores),
   };
+}
+
+function recordAt(source: unknown, key: string): Record<string, unknown> | null {
+  if (!isRecord(source)) return null;
+  const value = source[key];
+  return isRecord(value) ? value : null;
+}
+
+function numberAt(source: unknown, key: string): number | null {
+  if (!isRecord(source)) return null;
+  const value = source[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

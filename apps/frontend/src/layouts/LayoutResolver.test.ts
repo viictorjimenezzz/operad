@@ -116,7 +116,8 @@ describe("resolveLayout integration (real layouts/)", () => {
     expect(beam.dataSources.iterations?.endpoint).toContain("/iterations.json");
     expect(beam.spec.elements.leaderboard?.type).toBe("BeamLeaderboardTab");
     expect(beam.spec.elements.candidates?.type).toBe("BeamCandidatesTab");
-    expect(beam.spec.elements.histogram?.type).toBe("BeamHistogramTab");
+    expect(beam.spec.elements.metrics?.type).toBe("BeamMetricsTab");
+    expect(beam.spec.elements.histogram).toBeUndefined();
     expect(verifier.spec.elements.iterations?.type).toBe("VerifierIterationsTab");
     expect(verifier.spec.elements.acceptance?.type).toBe("VerifierAcceptanceTab");
     expect(verifier.spec.elements.parameters?.type).toBe("ParametersTab");
@@ -157,7 +158,7 @@ describe("resolveLayout integration (real layouts/)", () => {
         "SweepParallelCoordsTab",
         "BeamLeaderboardTab",
         "BeamCandidatesTab",
-        "BeamHistogramTab",
+        "BeamMetricsTab",
         "DebateRoundsTab",
         "DebateTranscriptTab",
         "DebateConsensusTab",

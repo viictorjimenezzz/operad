@@ -1,5 +1,10 @@
 import { Button, EmptyState, type RunRow, RunTable, type RunTableColumn } from "@/components/ui";
 import { type ChildRunSummary, useChildren } from "@/hooks/use-children";
+import {
+  agentsSummaryLangfuse,
+  beamAgentInvocationsFromEvents,
+  type BeamAgentInvocation,
+} from "@/lib/beam-data";
 import { SweepSnapshot } from "@/lib/types";
 import { formatDurationMs, truncateMiddle } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -35,6 +40,9 @@ type AggregatedAgentRow = z.infer<typeof AgentsSummary>["agents"][number];
 
 interface AgentsTabProps {
   runId: string;
+  mode?: "summary" | "invocations";
+  dataEvents?: unknown;
+  dataAgentsSummary?: unknown;
   groupBy?: "hash" | "none";
   extraColumns?: string[];
   emptyTitle?: string;
@@ -94,8 +102,39 @@ const extraColumnSpecs: Record<string, RunTableColumn> = {
   },
 };
 
+const invocationColumns: RunTableColumn[] = [
+  { id: "state", label: "State", source: "_state", sortable: true, width: 86 },
+  { id: "agent", label: "Agent", source: "agent", sortable: true, width: 130 },
+  {
+    id: "invocation",
+    label: "Invocation",
+    source: "invocation",
+    sortable: true,
+    align: "right",
+    width: 92,
+  },
+  { id: "started", label: "Started", source: "_started", sortable: true, width: 110 },
+  {
+    id: "latency",
+    label: "Latency",
+    source: "latency",
+    sortable: true,
+    align: "right",
+    width: 92,
+  },
+  { id: "tokens", label: "Tokens", source: "tokens", sortable: true, align: "right", width: 86 },
+  { id: "cost", label: "Cost", source: "cost", sortable: true, align: "right", width: 78 },
+  { id: "backend", label: "Backend", source: "backend", sortable: true, width: 92 },
+  { id: "model", label: "Model", source: "model", sortable: true, width: 140 },
+  { id: "promptHash", label: "hash_prompt", source: "promptHash", width: 120 },
+  { id: "langfuse", label: "Langfuse", source: "langfuse", width: 92 },
+];
+
 export function AgentsTab({
   runId,
+  mode = "summary",
+  dataEvents,
+  dataAgentsSummary,
   groupBy = "hash",
   extraColumns = [],
   emptyTitle = "no agent invocations yet",
@@ -154,6 +193,31 @@ export function AgentsTab({
   const rows = childRows.length > 0 ? childRows : aggregatedRows;
   const groupLabels = useMemo(() => buildGroupLabels(rows), [rows]);
 
+  if (mode === "invocations") {
+    const fallbackLangfuse = agentsSummaryLangfuse(dataAgentsSummary ?? aggregated.data);
+    const invocationRows = beamAgentInvocationsFromEvents(dataEvents, fallbackLangfuse).map(
+      invocationToRow,
+    );
+    return (
+      <div className="h-full overflow-auto p-4">
+        <div className="mb-3 text-[12px] text-muted">
+          {invocationRows.length === 1
+            ? "1 agent invocation"
+            : `${invocationRows.length} agent invocations`}
+        </div>
+        <RunTable
+          rows={invocationRows}
+          columns={invocationColumns}
+          storageKey={`agents-invocations:${runId}`}
+          rowHref={(row) => invocationHref(row)}
+          emptyTitle="no agent invocations yet"
+          emptyDescription="agent invocations appear after Beam generator and critic calls finish"
+          pageSize={50}
+        />
+      </div>
+    );
+  }
+
   if (children.isLoading || (childRows.length === 0 && aggregated.isLoading)) {
     return <div className="p-4 text-xs text-muted">loading child agents...</div>;
   }
@@ -193,6 +257,50 @@ export function AgentsTab({
       />
     </div>
   );
+}
+
+function invocationToRow(invocation: BeamAgentInvocation, index: number): RunRow {
+  const totalTokens =
+    invocation.promptTokens != null || invocation.completionTokens != null
+      ? (invocation.promptTokens ?? 0) + (invocation.completionTokens ?? 0)
+      : null;
+  return {
+    id: invocation.id,
+    identity: invocation.hashContent ?? invocation.agentPath,
+    state: invocation.state,
+    startedAt: invocation.startedAt,
+    endedAt: invocation.finishedAt,
+    durationMs: invocation.latencyMs,
+    fields: {
+      agent: { kind: "text", value: invocation.className, mono: true },
+      invocation: { kind: "num", value: index + 1, format: "int" },
+      latency: { kind: "num", value: invocation.latencyMs, format: "ms" },
+      tokens: { kind: "num", value: totalTokens, format: "tokens" },
+      cost: { kind: "num", value: invocation.costUsd, format: "cost" },
+      backend: { kind: "text", value: invocation.backend ?? "-", mono: true },
+      model: { kind: "text", value: invocation.model ?? "-", mono: true },
+      promptHash: invocation.promptHash
+        ? { kind: "hash", value: invocation.promptHash }
+        : { kind: "text", value: "-", mono: true },
+      route: invocation.hashContent
+        ? {
+            kind: "text",
+            value: invocation.runId
+              ? `/agents/${encodeURIComponent(invocation.hashContent)}/runs/${encodeURIComponent(invocation.runId)}`
+              : `/agents/${encodeURIComponent(invocation.hashContent)}`,
+            mono: true,
+          }
+        : { kind: "text", value: "", mono: true },
+      langfuse: invocation.langfuseUrl
+        ? { kind: "link", label: "open", to: invocation.langfuseUrl }
+        : { kind: "text", value: "-", mono: true },
+    },
+  };
+}
+
+function invocationHref(row: RunRow): string | null {
+  const route = textField(row.fields.route);
+  return route && route.length > 0 ? route : null;
 }
 
 function buildColumns(extraColumns: string[]): RunTableColumn[] {

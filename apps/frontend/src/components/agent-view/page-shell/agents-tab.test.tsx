@@ -119,4 +119,66 @@ describe("<AgentsTab />", () => {
 
     expect(await screen.findByText("no agent invocations yet")).toBeTruthy();
   });
+
+  it("renders Beam event invocations as a flat RunTable", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ run_id: "parent-run", agents: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    renderTab(
+      <AgentsTab
+        runId="parent-run"
+        mode="invocations"
+        dataEvents={[
+          {
+            type: "agent_event",
+            run_id: "parent-run",
+            agent_path: "Reasoner",
+            kind: "end",
+            input: { goal: "x" },
+            output: {
+              response: { answer: "candidate" },
+              latency_ms: 123,
+              prompt_tokens: 10,
+              completion_tokens: 5,
+              cost_usd: 0.01,
+              backend: "gemini",
+              model: "gemini-2.5-flash",
+              hash_prompt: "prompt-hash",
+            },
+            started_at: 10,
+            finished_at: 11,
+            metadata: {
+              invoke_id: "inv-1",
+              class_name: "Reasoner",
+              hash_content: "hash-reasoner",
+            },
+          },
+        ]}
+        dataAgentsSummary={{
+          run_id: "parent-run",
+          agents: [{ agent_path: "Reasoner", langfuse_url: "https://langfuse.test/trace/parent" }],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("1 agent invocation")).toBeTruthy();
+    expect(screen.getByText("Reasoner")).toBeTruthy();
+    expect(screen.getByText("gemini")).toBeTruthy();
+    expect(screen.getByText("gemini-2.5-flash")).toBeTruthy();
+    expect(screen.getByText("prompt-hash")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "open" }).getAttribute("href")).toBe(
+      "https://langfuse.test/trace/parent",
+    );
+    fireEvent.click(screen.getByText("Reasoner"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/agents/hash-reasoner/runs/parent-run",
+      );
+    });
+  });
 });
