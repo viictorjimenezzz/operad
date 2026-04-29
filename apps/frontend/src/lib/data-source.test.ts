@@ -14,6 +14,10 @@ describe("findPrimaryKey", () => {
     expect(findPrimaryKey({ iter_index: 1, score: 0.7 })).toBe("iter_index");
   });
 
+  it("returns round_index for debate round deltas", () => {
+    expect(findPrimaryKey({ round_index: 1, scores: [0.7, 0.8] })).toBe("round_index");
+  });
+
   it("returns null when no known key present", () => {
     expect(findPrimaryKey({ foo: "bar" })).toBeNull();
   });
@@ -37,6 +41,12 @@ describe("appendDedupe", () => {
     const arr = [{ epoch: 1, loss: 0.5 }];
     expect(appendDedupe(arr, { epoch: 1, loss: 0.4 })).toHaveLength(1);
     expect(appendDedupe(arr, { epoch: 2, loss: 0.4 })).toHaveLength(2);
+  });
+
+  it("deduplicates debate rounds by round_index", () => {
+    const arr = [{ round_index: 0, scores: [0.7, 0.8] }];
+    expect(appendDedupe(arr, { round_index: 0, scores: [0.7, 0.8] })).toHaveLength(1);
+    expect(appendDedupe(arr, { round_index: 1, scores: [0.8, 0.75] })).toHaveLength(2);
   });
 
   it("keeps distinct phases for the same iter_index", () => {
@@ -71,6 +81,27 @@ describe("autoMerge", () => {
     const delta = { gen_index: 0, best: 0.85 };
     const result = autoMerge(current, delta) as unknown[];
     expect(result).toHaveLength(1);
+  });
+
+  it("deduplicates streamed debate rounds by round_index", () => {
+    const current = [{ round_index: 0, scores: [0.7, 0.8] }];
+    const delta = { round_index: 0, scores: [0.7, 0.8] };
+    const result = autoMerge(current, delta) as unknown[];
+    expect(result).toHaveLength(1);
+  });
+
+  it("appends debate round deltas into a Debate snapshot", () => {
+    const current = {
+      rounds: [],
+      final_answer: null,
+    };
+    const result = autoMerge(current, { round_index: 0, scores: [0.7, 0.8] }) as {
+      rounds: unknown[];
+      final_answer: null;
+    };
+
+    expect(result.rounds).toHaveLength(1);
+    expect(result.final_answer).toBeNull();
   });
 
   it("replaces when delta is an array (full snapshot from server)", () => {

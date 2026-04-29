@@ -134,6 +134,7 @@ describe("resolveLayout integration (real layouts/)", () => {
     expect(debate.spec.elements.rounds?.type).toBe("DebateRoundsTab");
     expect(debate.spec.elements.transcript?.type).toBe("DebateTranscriptTab");
     expect(debate.spec.elements.consensus?.type).toBe("DebateConsensusTab");
+    expect((debate.spec.elements.agents?.props as { groupBy?: string }).groupBy).toBe("none");
     expect(
       ((debate.spec.elements.page?.props as { tabs?: Array<{ id: string }> }).tabs ?? []).map(
         (tab) => tab.id,

@@ -13,12 +13,13 @@
 
 export type MergeMode = "replace" | "append" | "map";
 
-const PRIMARY_KEYS = ["gen_index", "epoch", "iter_index", "batch_index"] as const;
+const PRIMARY_KEYS = ["gen_index", "epoch", "iter_index", "round_index", "batch_index"] as const;
 const ARRAY_FIELDS_BY_PRIMARY_KEY: Record<string, readonly string[]> = {
   batch_index: ["batches"],
   epoch: ["iterations"],
   gen_index: ["generations"],
   iter_index: ["iterations"],
+  round_index: ["rounds"],
 };
 
 export function findPrimaryKey(obj: Record<string, unknown>): string | null {

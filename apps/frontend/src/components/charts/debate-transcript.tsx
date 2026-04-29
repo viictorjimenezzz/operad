@@ -1,33 +1,39 @@
 import { EmptyState } from "@/components/ui/empty-state";
-import { DebateRoundsResponse } from "@/lib/types";
+import { type DebateRound, DebateRoundsResponse } from "@/lib/types";
 import { useState } from "react";
 
 export function DebateTranscript({ data }: { data: unknown }) {
   const parsed = DebateRoundsResponse.safeParse(data);
-  const [expandedRound, setExpandedRound] = useState<number>(0);
+  const [expandedRound, setExpandedRound] = useState<number | null>(null);
 
   if (!parsed.success || parsed.data.length === 0) {
     return <EmptyState title="no transcript yet" description="round events haven't arrived yet" />;
   }
 
-  const rounds = parsed.data;
+  const rounds = uniqueRounds(parsed.data);
+  const firstRound = rounds[0];
+  if (!firstRound) {
+    return <EmptyState title="no transcript yet" description="round events haven't arrived yet" />;
+  }
+  const activeRound = expandedRound ?? roundNumber(firstRound, 0);
 
   return (
     <ol className="flex flex-col gap-3 text-xs">
       {rounds.map((round, roundIdx) => {
-        const idx = round.round_index ?? roundIdx;
+        const idx = roundNumber(round, roundIdx);
         const scores = round.scores;
         const maxScore = scores.length > 0 ? Math.max(...scores) : 0;
         const winnerIdx = scores.indexOf(maxScore);
         const winner =
-          round.proposals[winnerIdx]?.author || (winnerIdx >= 0 ? `#${winnerIdx}` : null);
+          round.proposals[winnerIdx]?.author ||
+          (winnerIdx >= 0 ? `Proposer ${winnerIdx + 1}` : null);
 
         const mean = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
         const variance =
           scores.length > 1 ? scores.reduce((a, s) => a + (s - mean) ** 2, 0) / scores.length : 0;
         const agreement = Math.max(0, Math.min(1, 1 - Math.sqrt(variance) / 0.5));
 
-        const isExpanded = expandedRound === idx;
+        const isExpanded = activeRound === idx;
 
         return (
           <li key={idx} className="rounded-md border border-border bg-bg-2">
@@ -37,7 +43,7 @@ export function DebateTranscript({ data }: { data: unknown }) {
               onClick={() => setExpandedRound(isExpanded ? -1 : idx)}
             >
               <span className="text-[0.68rem] uppercase tracking-[0.08em] text-muted">
-                round {idx}
+                Round {idx}
               </span>
               <div className="flex items-center gap-3">
                 {winner && (
@@ -71,7 +77,7 @@ export function DebateTranscript({ data }: { data: unknown }) {
                     >
                       <div className="mb-1 flex items-center justify-between">
                         <span className="font-mono font-medium text-text">
-                          {proposal.author || `proposer ${pIdx}`}
+                          {proposal.author || `Proposer ${pIdx + 1}`}
                         </span>
                         {score !== null && (
                           <div className="flex items-center gap-2">
@@ -115,4 +121,26 @@ export function DebateTranscript({ data }: { data: unknown }) {
       })}
     </ol>
   );
+}
+
+function roundNumber(round: DebateRound, index: number): number {
+  return (round.round_index ?? index) + 1;
+}
+
+function uniqueRounds(rounds: DebateRound[]): DebateRound[] {
+  const seen = new Set<number>();
+  const unique: DebateRound[] = [];
+  for (const round of rounds) {
+    if (round.round_index != null) {
+      if (seen.has(round.round_index)) continue;
+      seen.add(round.round_index);
+    }
+    unique.push(round);
+  }
+  return unique.sort((a, b) => {
+    if (a.round_index == null && b.round_index == null) return 0;
+    if (a.round_index == null) return 1;
+    if (b.round_index == null) return -1;
+    return a.round_index - b.round_index;
+  });
 }

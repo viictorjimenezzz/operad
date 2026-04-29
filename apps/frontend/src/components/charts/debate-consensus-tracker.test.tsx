@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { DebateConsensusTracker } from "./debate-consensus-tracker";
+import { DebateConsensusTracker, formatRoundTick } from "./debate-consensus-tracker";
 
 afterEach(cleanup);
 
@@ -28,7 +28,7 @@ describe("<DebateConsensusTracker />", () => {
   });
 
   it("shows empty state for a single round", () => {
-    render(<DebateConsensusTracker data={[twoRounds[0]]} />);
+    render(<DebateConsensusTracker data={[twoRounds[0]!]} />);
     expect(screen.getByText("not enough rounds")).toBeDefined();
   });
 
@@ -41,5 +41,10 @@ describe("<DebateConsensusTracker />", () => {
     // recharts does not render SVG in happy-dom; just verify no error is thrown
     const { container } = render(<DebateConsensusTracker data={twoRounds} />);
     expect(container.firstChild).not.toBeNull();
+  });
+
+  it("formats x-axis ticks as human round labels", () => {
+    expect(formatRoundTick(1)).toBe("Round 1");
+    expect(formatRoundTick(2)).toBe("Round 2");
   });
 });

@@ -20,7 +20,12 @@
             { "id": "rounds", "label": "Rounds" },
             { "id": "transcript", "label": "Transcript" },
             { "id": "consensus", "label": "Consensus" },
-            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.agentsSummary.agents)", "condition": "$expr:count($queries.agentsSummary.agents)" },
+            {
+              "id": "agents",
+              "label": "Agents",
+              "badge": "$expr:count($queries.agentsSummary.agents)",
+              "condition": "$expr:count($queries.agentsSummary.agents)"
+            },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
@@ -39,7 +44,7 @@
         "props": { "source": "$queries.debate" }
       },
 
-      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId", "groupBy": "hash" } },
+      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId", "groupBy": "none" } },
       "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } }
     }
   }

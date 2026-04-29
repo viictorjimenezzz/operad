@@ -50,7 +50,7 @@ describe("<DebateTranscript />", () => {
 
   it("renders round header with winner badge", () => {
     render(<DebateTranscript data={oneRound} />);
-    expect(screen.getByText(/round 0/i)).toBeDefined();
+    expect(screen.getByText(/round 1/i)).toBeDefined();
     expect(screen.getByText(/winner: alice/i)).toBeDefined();
   });
 
@@ -69,13 +69,18 @@ describe("<DebateTranscript />", () => {
 
   it("renders multiple rounds", () => {
     render(<DebateTranscript data={twoRounds} />);
-    expect(screen.getByText(/round 0/i)).toBeDefined();
     expect(screen.getByText(/round 1/i)).toBeDefined();
+    expect(screen.getByText(/round 2/i)).toBeDefined();
+  });
+
+  it("deduplicates repeated streamed rounds by round_index", () => {
+    render(<DebateTranscript data={[...twoRounds, oneRound[0]!]} />);
+    expect(screen.getAllByText(/round 1/i)).toHaveLength(1);
   });
 
   it("renders gracefully with missing proposals", () => {
     const sparse = [{ round_index: 0, proposals: [], critiques: [], scores: [], timestamp: null }];
     render(<DebateTranscript data={sparse} />);
-    expect(screen.getByText(/round 0/i)).toBeDefined();
+    expect(screen.getByText(/round 1/i)).toBeDefined();
   });
 });
