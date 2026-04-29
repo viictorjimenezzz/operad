@@ -1530,9 +1530,12 @@ class Agent(Generic[In, Out]):
             start_meta, retry_meta, tokens,
         ) = self._enter_run(path, track_retry=True)
         algo_parent = _obs._ALGO_RUN_ID.get()
+        algo_metadata = _obs._ALGO_METADATA.get()
         invoke_id = _obs._INVOKE_ID.get() or ""
         if algo_parent is not None and algo_parent != run_id:
             start_meta["parent_run_id"] = algo_parent
+            if algo_metadata:
+                start_meta.update(algo_metadata)
         usage_token = _LAST_MODEL_USAGE.set(None)
         try:
             await _obs.registry.notify(
@@ -1576,6 +1579,8 @@ class Agent(Generic[In, Out]):
                 envelope.completion_tokens = usage[1]
             if algo_parent is not None and algo_parent != run_id:
                 end_meta["parent_run_id"] = algo_parent
+                if algo_metadata:
+                    end_meta.update(algo_metadata)
             await _obs.registry.notify(
                 _obs.AgentEvent(
                     run_id, path, "end", x, envelope, None, started_wall, finished_wall, end_meta
@@ -1589,6 +1594,8 @@ class Agent(Generic[In, Out]):
             err_meta.update(retry_meta)
             if algo_parent is not None and algo_parent != run_id:
                 err_meta["parent_run_id"] = algo_parent
+                if algo_metadata:
+                    err_meta.update(algo_metadata)
             await _obs.registry.notify(
                 _obs.AgentEvent(
                     run_id, path, "error", x, None, e, started_wall, time.time(), err_meta
@@ -1707,9 +1714,12 @@ class Agent(Generic[In, Out]):
             start_meta, _retry_meta, tokens,
         ) = self._enter_run(path, track_retry=False)
         algo_parent_s = _obs._ALGO_RUN_ID.get()
+        algo_metadata_s = _obs._ALGO_METADATA.get()
         invoke_id_s = _obs._INVOKE_ID.get() or ""
         if algo_parent_s is not None and algo_parent_s != run_id:
             start_meta["parent_run_id"] = algo_parent_s
+            if algo_metadata_s:
+                start_meta.update(algo_metadata_s)
         usage_token = _LAST_MODEL_USAGE.set(None)
 
         # Bounded so a slow consumer applies backpressure to the producer
@@ -1800,6 +1810,8 @@ class Agent(Generic[In, Out]):
             end_meta.update(self._dashboard_end_metadata(x))
             if algo_parent_s is not None and algo_parent_s != run_id:
                 end_meta["parent_run_id"] = algo_parent_s
+                if algo_metadata_s:
+                    end_meta.update(algo_metadata_s)
             finished_wall = time.time()
             await _obs.registry.notify(
                 _obs.AgentEvent(
@@ -1813,6 +1825,8 @@ class Agent(Generic[In, Out]):
                 err_meta["invoke_id"] = invoke_id_s
             if algo_parent_s is not None and algo_parent_s != run_id:
                 err_meta["parent_run_id"] = algo_parent_s
+                if algo_metadata_s:
+                    err_meta.update(algo_metadata_s)
             await _obs.registry.notify(
                 _obs.AgentEvent(
                     run_id, path, "error", x, None, e, started_wall, time.time(), err_meta

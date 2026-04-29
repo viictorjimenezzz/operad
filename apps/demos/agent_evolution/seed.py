@@ -1,8 +1,8 @@
 """Offline seed agent for the agent_evolution showcase.
 
-The leaf's output is a deterministic function of its `rules` length.
-That lets `Evolutionary` drive fitness upward by appending rules,
-without ever contacting a model server.
+The leaf's output is a deterministic function of prompt/config state.
+That lets `EvoGradient` drive fitness upward by accumulating useful
+mutations without ever contacting a model server.
 """
 
 from __future__ import annotations
@@ -18,17 +18,24 @@ class Q(BaseModel):
 
 
 class R(BaseModel):
-    value: int = Field(default=0, description="Answer derived from the leaf's rule count.")
+    value: int = Field(default=0, description="Answer derived from the leaf's mutation state.")
 
 
 class RuleCountLeaf(Agent[Q, R]):
-    """A synthetic leaf whose output equals `len(self.rules)`."""
+    """A synthetic leaf whose output rewards accumulated useful mutations."""
 
     input = Q
     output = R
 
     async def forward(self, x: Q) -> R:  # type: ignore[override]
-        return R.model_construct(value=len(self.rules))
+        score = len(self.rules)
+        if "precise" in (self.role or "").lower():
+            score += 1
+        if "rank" in (self.task or "").lower():
+            score += 1
+        if self.config is not None and 0.2 <= self.config.sampling.temperature <= 0.5:
+            score += 1
+        return R.model_construct(value=score)
 
 
 def build_seed() -> RuleCountLeaf:
@@ -44,5 +51,8 @@ def build_seed() -> RuleCountLeaf:
         sampling=Sampling(temperature=0.0, max_tokens=16),
     )
     seed = RuleCountLeaf(config=cfg)
-    seed.rules = []
+    seed.role = "You are a concise evaluator."
+    seed.task = "Score the answer."
+    seed.rules = ["Answer directly.", "Use evidence when available."]
+    seed.mark_trainable(role=True, task=True, rules=True, temperature=True)
     return seed

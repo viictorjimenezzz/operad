@@ -1382,6 +1382,188 @@ async def agents_summary(request: Request, run_id: str) -> JSONResponse:
     return JSONResponse({"run_id": run_id, "agents": rows})
 
 
+@router.get("/runs/{run_id}/agent-invocations")
+async def agent_invocations_flat(request: Request, run_id: str) -> JSONResponse:
+    """Return every nested agent invocation in one RunTable-friendly list."""
+    ctx = _resolve_run_context(request, run_id)
+    if ctx is None:
+        return _not_found("unknown run_id")
+    langfuse_url = getattr(request.app.state, "langfuse_url", None)
+    generation_index = _generation_individual_index(ctx.events)
+    starts_by_invoke: dict[str, dict[str, Any]] = {}
+    pending_by_path: dict[str, list[dict[str, Any]]] = {}
+    rows: list[dict[str, Any]] = []
+
+    events = sorted(
+        [env for env in ctx.events if env.get("type") == "agent_event"],
+        key=_env_sort_key,
+    )
+    for env in events:
+        path = env.get("agent_path")
+        if not isinstance(path, str):
+            continue
+        meta = env.get("metadata")
+        meta = meta if isinstance(meta, dict) else {}
+        invoke_id = meta.get("invoke_id")
+        if env.get("kind") == "start":
+            if isinstance(invoke_id, str) and invoke_id:
+                starts_by_invoke[invoke_id] = env
+            pending_by_path.setdefault(path, []).append(env)
+            continue
+        if env.get("kind") not in {"end", "error"}:
+            continue
+
+        start = starts_by_invoke.pop(invoke_id, None) if isinstance(invoke_id, str) else None
+        if start is None:
+            pending = pending_by_path.get(path) or []
+            start = pending.pop(0) if pending else None
+        start_meta = start.get("metadata") if isinstance(start, dict) else None
+        start_meta = start_meta if isinstance(start_meta, dict) else {}
+        merged_meta = {**start_meta, **meta}
+        gen_index = _number_from_any(
+            merged_meta.get("gen_index", merged_meta.get("gen"))
+        )
+        individual_id = _number_from_any(merged_meta.get("individual_id"))
+        generation_record = (
+            generation_index.get((int(gen_index), int(individual_id)))
+            if gen_index is not None and individual_id is not None
+            else None
+        )
+        output = env.get("output") if isinstance(env.get("output"), dict) else {}
+        started_at = (
+            float(start["started_at"])
+            if isinstance(start, dict) and isinstance(start.get("started_at"), (int, float))
+            else float(env.get("started_at") or 0.0)
+        )
+        finished_at = env.get("finished_at")
+        latency_ms = None
+        if isinstance(finished_at, (int, float)):
+            latency_ms = max(0.0, (float(finished_at) - started_at) * 1000.0)
+        elif isinstance(output.get("latency_ms"), (int, float)):
+            latency_ms = float(output["latency_ms"])
+
+        cfg = meta.get("config") if isinstance(meta.get("config"), dict) else {}
+        cfg_io = cfg.get("io") if isinstance(cfg, dict) else None
+        rows.append(
+            {
+                "id": str(invoke_id or f"{path}:{len(rows)}"),
+                "agent_path": path,
+                "class_name": meta.get("class_name"),
+                "status": "ok" if env.get("kind") == "end" else "error",
+                "started_at": started_at,
+                "finished_at": (
+                    float(finished_at) if isinstance(finished_at, (int, float)) else None
+                ),
+                "latency_ms": latency_ms,
+                "prompt_tokens": int(output.get("prompt_tokens") or 0),
+                "completion_tokens": int(output.get("completion_tokens") or 0),
+                "hash_content": meta.get("hash_content"),
+                "hash_prompt": output.get("hash_prompt"),
+                "backend": (
+                    output.get("backend")
+                    or (cfg.get("backend") if isinstance(cfg, dict) else None)
+                ),
+                "model": (
+                    output.get("model")
+                    or (cfg.get("model") if isinstance(cfg, dict) else None)
+                ),
+                "renderer": (
+                    cfg_io.get("renderer")
+                    if isinstance(cfg_io, dict) and isinstance(cfg_io.get("renderer"), str)
+                    else None
+                ),
+                "gen_index": gen_index,
+                "individual_id": individual_id,
+                "lineage_id": merged_meta.get("lineage_id")
+                or (generation_record or {}).get("lineage_id"),
+                "parent_lineage_id": merged_meta.get("parent_lineage_id")
+                or (generation_record or {}).get("parent_lineage_id"),
+                "operator": merged_meta.get("operator")
+                or (generation_record or {}).get("op"),
+                "mutation_path": merged_meta.get("mutation_path")
+                or (generation_record or {}).get("path"),
+                "score": (generation_record or {}).get("score"),
+                "selected": (generation_record or {}).get("selected"),
+                "langfuse_url": (
+                    f"{langfuse_url}/trace/{run_id}" if langfuse_url is not None else None
+                ),
+                "input": start.get("input") if isinstance(start, dict) else None,
+                "output": output.get("response"),
+                "metadata": merged_meta,
+            }
+        )
+
+    rows.sort(key=lambda row: float(row.get("started_at") or 0.0), reverse=True)
+    return JSONResponse({"run_id": run_id, "invocations": rows})
+
+
+def _generation_individual_index(
+    events: list[dict[str, Any]],
+) -> dict[tuple[int, int], dict[str, Any]]:
+    out: dict[tuple[int, int], dict[str, Any]] = {}
+    for env in events:
+        if env.get("type") != "algo_event" or env.get("kind") != "generation":
+            continue
+        payload = env.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        gen_index = _number_from_any(payload.get("gen_index"))
+        if gen_index is None:
+            continue
+        individuals = payload.get("individuals")
+        if isinstance(individuals, list):
+            for raw in individuals:
+                if not isinstance(raw, dict):
+                    continue
+                individual_id = _number_from_any(raw.get("individual_id"))
+                if individual_id is None:
+                    continue
+                out[(int(gen_index), int(individual_id))] = dict(raw)
+            continue
+
+        scores = payload.get("population_scores")
+        mutations = payload.get("mutations")
+        survivors = payload.get("survivor_indices")
+        survivor_set = {
+            int(item)
+            for item in survivors
+            if isinstance(item, (int, float)) and not isinstance(item, bool)
+        } if isinstance(survivors, list) else set()
+        mutation_by_id: dict[int, dict[str, Any]] = {}
+        if isinstance(mutations, list):
+            for raw in mutations:
+                if not isinstance(raw, dict):
+                    continue
+                individual_id = _number_from_any(raw.get("individual_id"))
+                if individual_id is not None:
+                    mutation_by_id[int(individual_id)] = raw
+        if isinstance(scores, list):
+            for index, score in enumerate(scores):
+                if not isinstance(score, (int, float)) or isinstance(score, bool):
+                    continue
+                mutation = mutation_by_id.get(index, {})
+                out[(int(gen_index), index)] = {
+                    "individual_id": index,
+                    "score": float(score),
+                    "selected": index in survivor_set,
+                    **mutation,
+                }
+    return out
+
+
+def _number_from_any(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
 @router.get("/runs/{run_id}/agent/{path:path}/events")
 async def agent_events(
     request: Request,

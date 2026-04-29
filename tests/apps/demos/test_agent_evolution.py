@@ -96,9 +96,17 @@ async def test_generation_events_have_required_keys(cfg) -> None:
         assert "population_scores" in p
         assert "survivor_indices" in p
         assert "mutations" in p
+        assert "individuals" in p
+        assert "selected_lineage_id" in p
         assert "op_attempt_counts" in p
         assert "op_success_counts" in p
         assert len(p["population_scores"]) == POPULATION_SIZE
+        assert len(p["individuals"]) == POPULATION_SIZE
+        assert all("lineage_id" in row for row in p["individuals"])
+    assert any(
+        row["parent_lineage_id"] is not None
+        for row in collector.events[1].payload["individuals"]
+    )
 
 
 async def test_fitness_improves_across_generations(cfg) -> None:

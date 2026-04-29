@@ -200,6 +200,13 @@ async def test_generation_event_carries_mutation_attribution(
     assert payload["gen_index"] == 0
     assert len(payload["population_scores"]) == 4
     assert len(payload["survivor_indices"]) == 2  # top half of size-4 pop
+    assert isinstance(payload["selected_lineage_id"], str)
+    individuals = payload["individuals"]
+    assert len(individuals) == 4
+    assert all(isinstance(item["lineage_id"], str) for item in individuals)
+    assert all(item["parent_lineage_id"] is None for item in individuals)
+    assert sum(1 for item in individuals if item["selected"]) == 2
+    assert any(item["parameter_deltas"] for item in individuals)
     muts = payload["mutations"]
     assert len(muts) == 4
     valid_ops = {"append_rule", "tweak_role", "identity"}
@@ -232,6 +239,11 @@ async def test_generation_events_across_multiple_steps(
     # Every generation emits one event with a populated mutations list.
     for g in gens:
         assert len(g.payload["mutations"]) == 4
+        assert len(g.payload["individuals"]) == 4
+    assert any(
+        item["parent_lineage_id"] is not None
+        for item in gens[1].payload["individuals"]
+    )
 
 
 async def test_mutation_entry_soft_cap(cfg, _algo_collector: _AlgoCollector) -> None:

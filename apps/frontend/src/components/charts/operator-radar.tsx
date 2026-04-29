@@ -48,8 +48,13 @@ export function OperatorRadar({ runs, height = 260 }: OperatorRadarProps) {
   });
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <RadarChart data={data}>
+    <div className="flex h-full w-full items-center justify-center" style={{ minHeight: height }}>
+      <ResponsiveContainer width="100%" height={height}>
+      <RadarChart
+        data={data}
+        outerRadius="68%"
+        margin={{ top: 18, right: 54, bottom: 18, left: 54 }}
+      >
         <PolarGrid stroke="var(--color-border)" />
         <PolarAngleAxis dataKey="operator" tick={{ fill: "var(--color-muted)", fontSize: 10 }} />
         <Tooltip
@@ -60,7 +65,7 @@ export function OperatorRadar({ runs, height = 260 }: OperatorRadarProps) {
           }}
           formatter={(v: number) => `${(v * 100).toFixed(0)}%`}
         />
-        <Legend />
+        <Legend verticalAlign="bottom" height={24} />
         {withOps.map((run, i) => (
           <Radar
             key={run.runId}
@@ -72,6 +77,7 @@ export function OperatorRadar({ runs, height = 260 }: OperatorRadarProps) {
           />
         ))}
       </RadarChart>
-    </ResponsiveContainer>
+      </ResponsiveContainer>
+    </div>
   );
 }

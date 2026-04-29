@@ -57,16 +57,16 @@
         }
       },
       "parameters": {
-        "type": "ParametersTab",
-        "props": { "runId": "$context.runId", "scope": "run" }
+        "type": "EvoParametersTab",
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceFitness": "$queries.fitness",
+          "sourceEvents": "$queries.events"
+        }
       },
       "agents": {
-        "type": "AgentsTab",
-        "props": {
-          "runId": "$context.runId",
-          "groupBy": "hash",
-          "extraColumns": ["gen", "individual_id"]
-        }
+        "type": "EvoAgentInvocationsTab",
+        "props": { "runId": "$context.runId" }
       },
       "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } }
     }

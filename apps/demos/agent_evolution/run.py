@@ -27,7 +27,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from operad.optim.optimizers.evo import EvoGradient  # noqa: E402
 from operad.runtime.observers.base import registry  # noqa: E402
-from operad.utils.ops import default_mutations  # noqa: E402
+from operad.utils.ops import (  # noqa: E402
+    AppendRule,
+    EditTask,
+    ReplaceRule,
+    SetTemperature,
+    TweakRole,
+)
 
 from metric import RuleCountMetric  # noqa: E402
 from population import GENERATIONS, POPULATION_SIZE, diversity  # noqa: E402
@@ -87,9 +93,18 @@ async def main(args: argparse.Namespace) -> None:
     seed = build_seed()
     await seed.abuild()
 
-    dataset = [(Q(text=str(i)), R(value=3)) for i in range(5)]
-    metric = RuleCountMetric(target=3)
-    ops = default_mutations(seed)
+    metric = RuleCountMetric(target=7)
+    dataset = [(Q(text=str(i)), R(value=metric.target)) for i in range(6)]
+    ops = [
+        AppendRule(path="", rule="State the main reason before caveats."),
+        AppendRule(path="", rule="Cite one concrete clue from the input."),
+        AppendRule(path="", rule="Flag uncertainty explicitly."),
+        TweakRole(path="", role="You are a precise evaluator."),
+        EditTask(path="", task="Rank answer quality and return the best concise response."),
+        SetTemperature(path="", temperature=0.3),
+        SetTemperature(path="", temperature=0.7),
+        ReplaceRule(path="", index=0, rule="Prefer grounded, checkable claims."),
+    ]
 
     optimizer = EvoGradient(
         list(seed.parameters()),
@@ -127,7 +142,7 @@ async def main(args: argparse.Namespace) -> None:
                 trace_file.flush()
 
     print("=" * 34)
-    print(f"seed rules  : {0}")
+    print(f"seed rules  : {2}")
     print(f"evolved rules: {len(seed.rules)}")
     print(f"fitness trace → {TRACE_PATH}")
     if attached:

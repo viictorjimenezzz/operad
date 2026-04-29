@@ -9,12 +9,13 @@ A seed agent is evolved over several generations using an explicit
 3. **Select** — keep the top half; discard the rest.
 4. **Refill** — mutate survivors to restore population size.
 
-The fitness curve climbs as the metric rewards longer rule lists. Diversity
-(unique `hash_content` values in the population) collapses as the gene pool
-converges. Both are printed each generation and written to a JSONL trace.
+The fitness curve climbs as the metric rewards accumulated rule, role,
+task, and temperature changes. Diversity (unique `hash_content` values in
+the population) collapses as the gene pool converges. Both are printed each
+generation and written to a JSONL trace.
 
 The whole thing runs offline — the seed's output is a deterministic function
-of its rule count, so no model server is required.
+of its mutation state, so no model server is required.
 
 ## Run it
 
@@ -24,8 +25,8 @@ uv run python apps/demos/agent_evolution/run.py --offline
 
 Flags:
 
-- `--generations N` (default 5) — how many rounds of mutate/score/select.
-- `--population M` (default 8) — individuals per generation.
+- `--generations N` (default 7) — how many rounds of mutate/score/select.
+- `--population M` (default 10) — individuals per generation.
 - `--seed N` (default 0) — deterministic RNG. Same seed → same result.
 - `--dashboard [HOST:PORT]` — attach to a running `operad-dashboard`
   server (default `127.0.0.1:7860`). If no server is reachable the
@@ -58,10 +59,10 @@ fitness curve rise and the mutation heatmap concentrate on
 
 ## What to look for
 
-- **Fitness curve** rises each generation as the best individual accumulates
-  rules toward the target count.
+- **Fitness curve** rises as the best lineage accumulates rule, role, task,
+  and config changes toward the target score.
 - **Mutation heatmap** (mutations tab): by gen 3 the successful ops are
-  almost exclusively `append_rule` — that's selection pressure at work.
+  concentrated around useful prompt/config edits — that's selection pressure at work.
 - **Diversity** (printed each generation): starts at the population size,
   then collapses to 1–2 unique variants once the top genotype dominates.
 

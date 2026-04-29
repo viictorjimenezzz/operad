@@ -1,7 +1,8 @@
 """Deterministic offline metric for the agent_evolution showcase.
 
-Scores a prediction's `.value` against a target count. Fitness rises
-monotonically as the seed accumulates rules up to `target`.
+Scores a prediction's `.value` against a target mutation quality count.
+Fitness rises as the seed accumulates useful rule, role, task, and config
+changes up to `target`.
 """
 
 from __future__ import annotations
