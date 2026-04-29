@@ -9,7 +9,9 @@ module.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any, AsyncIterator, TYPE_CHECKING
+import warnings
 
 import strands
 from strands.types.agent import ConcurrentInvocationMode
@@ -67,6 +69,14 @@ class StrandsRunner:
     ) -> Any:
         if structured_output_model is None:
             return await self._agent.invoke_async(user_msg)
+        if getattr(self.model, "_operad_native_structured_output", False):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                structured = await self._agent.structured_output_async(
+                    structured_output_model,
+                    user_msg,
+                )
+            return SimpleNamespace(structured_output=structured)
         return await self._agent.invoke_async(
             user_msg, structured_output_model=structured_output_model
         )

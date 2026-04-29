@@ -76,3 +76,48 @@ async def test_runner_invokes_strands_with_system_prompt(
     # The transient strands.Agent constructed inside StrandsRunner
     # carries the per-call composed system prompt.
     assert any(sp for sp in spy.system_prompts)
+
+
+async def test_runner_uses_native_structured_output_for_marked_models(
+    cfg, monkeypatch
+) -> None:
+    """Marked providers bypass Strands' structured-output tool loop."""
+
+    class Leaf(Agent[A, B]):
+        input = A
+        output = B
+        role = "r"
+        task = "t"
+
+    leaf = await Leaf(config=cfg).abuild()
+    assert leaf._runner is not None
+    monkeypatch.setattr(
+        type(leaf._runner.model),
+        "_operad_native_structured_output",
+        True,
+        raising=False,
+    )
+    calls: list[tuple[type[B], str]] = []
+
+    async def _fake_structured_output_async(
+        self: object,
+        output_model: type[B],
+        prompt: str,
+    ) -> B:
+        calls.append((output_model, prompt))
+        return B(value=7)
+
+    async def _fail_invoke_async(*args: object, **kwargs: object) -> object:
+        raise AssertionError("native path should not call invoke_async")
+
+    monkeypatch.setattr(
+        strands.Agent,
+        "structured_output_async",
+        _fake_structured_output_async,
+    )
+    monkeypatch.setattr(strands.Agent, "invoke_async", _fail_invoke_async)
+
+    result = await leaf._runner.invoke_async("hello", structured_output_model=B)
+
+    assert result.structured_output == B(value=7)
+    assert calls == [(B, "hello")]
