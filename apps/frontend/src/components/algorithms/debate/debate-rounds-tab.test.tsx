@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 import { DebateRoundsTab } from "./debate-rounds-tab";
@@ -43,6 +43,31 @@ describe("<DebateRoundsTab />", () => {
     expect(screen.getByText("Round 3")).toBeTruthy();
   });
 
+  it("keeps proposal cells compact without visible per-cell proposer chrome", () => {
+    renderWithRouter();
+
+    expect(screen.queryByText("Proposer A")).toBeNull();
+    expect(screen.queryByText("proposal")).toBeNull();
+    expect(screen.getByText("A round 1")).toBeTruthy();
+    expect(
+      screen.getAllByRole("button", { name: "show critic reasoning for Proposal 1" }),
+    ).toHaveLength(3);
+  });
+
+  it("uses one focused proposal column across the table", () => {
+    renderWithRouter();
+
+    const firstCell = screen.getByRole("cell", { name: "Round 1 Proposal 1" });
+    const secondCell = screen.getByRole("cell", { name: "Round 2 Proposal 2" });
+
+    fireEvent.click(firstCell);
+    expect(firstCell.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(secondCell);
+    expect(firstCell.getAttribute("aria-expanded")).toBe("false");
+    expect(secondCell.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("does not render pinned round controls from the query param", () => {
     renderWithRouter("/?round=2");
 
@@ -52,9 +77,12 @@ describe("<DebateRoundsTab />", () => {
   });
 
   it("deduplicates repeated streamed rounds by round_index", () => {
+    const repeated = rounds[1];
+    if (!repeated) throw new Error("expected repeated round fixture");
+
     render(
       <MemoryRouter>
-        <DebateRoundsTab data={[...rounds, rounds[1]!]} />
+        <DebateRoundsTab data={[...rounds, repeated]} />
       </MemoryRouter>,
     );
 

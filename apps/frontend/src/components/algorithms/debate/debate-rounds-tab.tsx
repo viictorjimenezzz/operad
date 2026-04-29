@@ -1,10 +1,10 @@
-import { RoundCard } from "@/components/algorithms/debate/round-card";
+import { RoundCard, buildRoundGridTemplate } from "@/components/algorithms/debate/round-card";
 import { DebateConsensusTracker } from "@/components/charts/debate-consensus-tracker";
 import { EmptyState } from "@/components/ui/empty-state";
 import { hashColor } from "@/lib/hash-color";
 import { type DebateRound, DebateRoundsResponse } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -17,6 +17,11 @@ import {
 
 export function DebateRoundsTab({ data }: { data: unknown }) {
   const parsed = DebateRoundsResponse.safeParse(data);
+  const [expandedRoundKey, setExpandedRoundKey] = useState<string | null>(null);
+  const [activeCell, setActiveCell] = useState<{
+    roundKey: string;
+    proposalIndex: number;
+  } | null>(null);
 
   if (!parsed.success || parsed.data.length === 0) {
     return <EmptyState title="no debate rounds" description="round events have not arrived yet" />;
@@ -27,43 +32,70 @@ export function DebateRoundsTab({ data }: { data: unknown }) {
     return <EmptyState title="no debate rounds" description="round events have not arrived yet" />;
   }
   const proposerCount = maxProposalSlots(rounds);
-  const gridTemplateColumns = `112px repeat(${proposerCount}, minmax(300px, 360px))`;
+  const gridTemplateColumns = buildRoundGridTemplate(
+    proposerCount,
+    activeCell?.proposalIndex ?? null,
+  );
 
   return (
     <div className="h-full overflow-auto p-4">
-      <div
-        className="min-w-max overflow-hidden rounded-lg border border-border bg-bg-1"
-        role="table"
-      >
-        <div
-          role="row"
-          className="sticky top-0 z-10 grid min-w-max border-b border-border bg-bg-2/95 text-[10px] font-medium uppercase tracking-[0.06em] text-muted-2 backdrop-blur"
-          style={{ gridTemplateColumns }}
-        >
-          <div className="px-3 py-2" role="columnheader">
-            Round
-          </div>
-          {Array.from({ length: proposerCount }, (_, index) => (
-            <div key={index} className="border-l border-border px-3 py-2" role="columnheader">
-              Proposal {index + 1}
-            </div>
-          ))}
-        </div>
-        {rounds.map((round, index) => {
-          const n = roundNumber(round, index);
-          return (
-            <RoundCard
-              key={round.round_index ?? index}
-              round={round}
-              roundNumber={n}
-              proposerCount={proposerCount}
-              gridTemplateColumns={gridTemplateColumns}
-            />
-          );
-        })}
-      </div>
+      <table className="w-max min-w-full overflow-hidden rounded-lg border border-border bg-bg-1">
+        <thead className="contents">
+          <tr
+            className="sticky top-0 z-10 grid min-w-max border-b border-border bg-bg-2/95 text-[10px] font-medium uppercase tracking-[0.06em] text-muted-2 backdrop-blur"
+            style={{ gridTemplateColumns }}
+          >
+            <th className="px-3 py-2 text-left font-medium" scope="col">
+              Round
+            </th>
+            {Array.from({ length: proposerCount }, (_, index) => (
+              <th
+                key={index}
+                className="border-l border-border px-3 py-2 text-left font-medium"
+                scope="col"
+              >
+                Proposal {index + 1}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="contents">
+          {rounds.map((round, index) => {
+            const n = roundNumber(round, index);
+            const key = debateRoundKey(round, index);
+            const isExpanded = expandedRoundKey === key || activeCell?.roundKey === key;
+            return (
+              <RoundCard
+                key={key}
+                round={round}
+                roundNumber={n}
+                proposerCount={proposerCount}
+                gridTemplateColumns={gridTemplateColumns}
+                isExpanded={isExpanded}
+                activeCellIndex={activeCell?.roundKey === key ? activeCell.proposalIndex : null}
+                onToggleRound={() => {
+                  setActiveCell(null);
+                  setExpandedRoundKey((current) => (current === key ? null : key));
+                }}
+                onSelectCell={(proposalIndex) => {
+                  setExpandedRoundKey(null);
+                  setActiveCell((current) =>
+                    current?.roundKey === key && current.proposalIndex === proposalIndex
+                      ? null
+                      : { roundKey: key, proposalIndex },
+                  );
+                }}
+              />
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
+}
+
+function debateRoundKey(round: DebateRound, index: number): string {
+  return round.round_index == null ? `round-pos-${index}` : `round-${round.round_index}`;
 }
 
 export function DebateConsensusTab({ data }: { data: unknown }) {
