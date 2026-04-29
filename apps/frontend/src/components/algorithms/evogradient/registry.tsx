@@ -1,8 +1,10 @@
+import { EvoAgentInvocationsTab } from "@/components/algorithms/evogradient/evo-agent-invocations-tab";
 import { EvoBestDiffTab } from "@/components/algorithms/evogradient/evo-bestdiff-tab";
 import { EvoDetailOverview } from "@/components/algorithms/evogradient/evo-detail-overview";
 import { EvoEvolutionTab } from "@/components/algorithms/evogradient/evo-evolution-tab";
 import { EvoLineageTab } from "@/components/algorithms/evogradient/evo-lineage-tab";
 import { EvoOperatorsTab } from "@/components/algorithms/evogradient/evo-operators-tab";
+import { EvoParametersTab } from "@/components/algorithms/evogradient/evo-parameters-tab";
 import { EvoPopulationTab } from "@/components/algorithms/evogradient/evo-population-tab";
 import { FitnessCurve } from "@/components/charts/fitness-curve";
 import { GradientLog } from "@/components/charts/gradient-log";
@@ -73,6 +75,20 @@ export const evoGradientRegistry: ComponentRegistry = {
       dataEvents?: unknown;
     };
     return <EvoBestDiffTab summary={p.dataSummary} fitness={p.dataFitness} events={p.dataEvents} />;
+  },
+  EvoParametersTab: ({ element }) => {
+    const p = element.props as {
+      dataSummary?: unknown;
+      dataFitness?: unknown;
+      dataEvents?: unknown;
+    };
+    return (
+      <EvoParametersTab summary={p.dataSummary} fitness={p.dataFitness} events={p.dataEvents} />
+    );
+  },
+  EvoAgentInvocationsTab: ({ element }) => {
+    const p = element.props as { runId?: string };
+    return <EvoAgentInvocationsTab runId={p.runId ?? ""} />;
   },
   FitnessCurve: ({ element }) => {
     const p = element.props as { data?: unknown; height?: number };

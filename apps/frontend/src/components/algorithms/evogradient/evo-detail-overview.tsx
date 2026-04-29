@@ -5,9 +5,30 @@ import { formatCost, formatDurationMs, formatNumber, formatTokens } from "@/lib/
 
 export interface EvoMutation {
   individualId: number;
+  lineageId: string | null;
   op: string;
   path: string;
   improved: boolean;
+}
+
+export interface EvoParameterDelta {
+  agentPath: string;
+  path: string;
+  type: string;
+  before: unknown;
+  after: unknown;
+}
+
+export interface EvoIndividual {
+  individualId: number;
+  lineageId: string;
+  parentLineageId: string | null;
+  score: number | null;
+  selected: boolean;
+  op: string;
+  path: string;
+  improved: boolean;
+  parameterDeltas: EvoParameterDelta[];
 }
 
 export interface EvoGeneration {
@@ -17,6 +38,8 @@ export interface EvoGeneration {
   mean: number | null;
   worst: number | null;
   survivorIndices: number[];
+  selectedLineageId: string | null;
+  individuals: EvoIndividual[];
   mutations: EvoMutation[];
   opAttempts: Record<string, number>;
   opSuccess: Record<string, number>;
@@ -148,6 +171,8 @@ export function buildEvoGenerations(
       mean: numberValue(record?.mean),
       worst: scores.length > 0 ? Math.min(...scores) : null,
       survivorIndices: numberArray(record?.survivor_indices),
+      selectedLineageId: stringValue(record?.selected_lineage_id),
+      individuals: individualArray(record?.individuals),
       opAttempts: numberRecord(record?.op_attempt_counts),
       opSuccess: numberRecord(record?.op_success_counts),
       timestamp: numberValue(record?.timestamp),
@@ -158,13 +183,19 @@ export function buildEvoGenerations(
     const genIndex = numberValue(payload.gen_index);
     if (genIndex == null) continue;
     const scores = numberArray(payload.population_scores);
+    const survivorIndices = numberArray(payload.survivor_indices);
+    const mutations = mutationArray(payload.mutations);
+    const individuals = individualArray(payload.individuals);
     upsertGeneration(byGen, genIndex, {
       scores,
       best: scores.length > 0 ? Math.max(...scores) : null,
       mean: scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null,
       worst: scores.length > 0 ? Math.min(...scores) : null,
-      survivorIndices: numberArray(payload.survivor_indices),
-      mutations: mutationArray(payload.mutations),
+      survivorIndices,
+      selectedLineageId: stringValue(payload.selected_lineage_id),
+      individuals:
+        individuals.length > 0 ? individuals : fallbackIndividuals(scores, survivorIndices, mutations),
+      mutations,
       opAttempts: numberRecord(payload.op_attempt_counts),
       opSuccess: numberRecord(payload.op_success_counts),
     });
@@ -259,6 +290,8 @@ function upsertGeneration(
     mean: patch.mean ?? existing?.mean ?? null,
     worst: patch.worst ?? existing?.worst ?? null,
     survivorIndices: patch.survivorIndices ?? existing?.survivorIndices ?? [],
+    selectedLineageId: patch.selectedLineageId ?? existing?.selectedLineageId ?? null,
+    individuals: patch.individuals ?? existing?.individuals ?? [],
     mutations: patch.mutations ?? existing?.mutations ?? [],
     opAttempts: patch.opAttempts ?? existing?.opAttempts ?? {},
     opSuccess: patch.opSuccess ?? existing?.opSuccess ?? {},
@@ -277,12 +310,77 @@ function mutationArray(value: unknown): EvoMutation[] {
       return [
         {
           individualId,
+          lineageId: stringValue(record?.lineage_id),
           op,
           path: stringValue(record?.path) ?? "",
           improved: Boolean(record?.improved),
         },
       ];
     });
+}
+
+function individualArray(value: unknown): EvoIndividual[] {
+  return arrayValue(value)
+    .map(asRecord)
+    .flatMap((record) => {
+      const individualId = numberValue(record?.individual_id);
+      const lineageId = stringValue(record?.lineage_id);
+      if (individualId == null || lineageId == null) return [];
+      return [
+        {
+          individualId,
+          lineageId,
+          parentLineageId: stringValue(record?.parent_lineage_id),
+          score: numberValue(record?.score),
+          selected: Boolean(record?.selected),
+          op: stringValue(record?.op) ?? "identity",
+          path: stringValue(record?.path) ?? "",
+          improved: Boolean(record?.improved),
+          parameterDeltas: parameterDeltaArray(record?.parameter_deltas),
+        },
+      ];
+    });
+}
+
+function parameterDeltaArray(value: unknown): EvoParameterDelta[] {
+  return arrayValue(value)
+    .map(asRecord)
+    .flatMap((record) => {
+      const agentPath = stringValue(record?.agent_path);
+      const path = stringValue(record?.path);
+      if (agentPath == null || path == null) return [];
+      return [
+        {
+          agentPath,
+          path,
+          type: stringValue(record?.type) ?? "Parameter",
+          before: record?.before,
+          after: record?.after,
+        },
+      ];
+    });
+}
+
+function fallbackIndividuals(
+  scores: number[],
+  survivorIndices: number[],
+  mutations: EvoMutation[],
+): EvoIndividual[] {
+  const survivorSet = new Set(survivorIndices);
+  return scores.map((score, individualId) => {
+    const mutation = mutations.find((item) => item.individualId === individualId);
+    return {
+      individualId,
+      lineageId: mutation?.lineageId ?? `legacy-${individualId}`,
+      parentLineageId: null,
+      score,
+      selected: survivorSet.has(individualId),
+      op: mutation?.op ?? "identity",
+      path: mutation?.path ?? "",
+      improved: mutation?.improved ?? false,
+      parameterDeltas: [],
+    };
+  });
 }
 
 function matrixArray(value: unknown): number[][] {

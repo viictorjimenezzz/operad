@@ -350,6 +350,89 @@ def test_live_io_graph_invocations_meta_prompts_values_events(app_and_obs) -> No
         assert len(body["changes"]) > 0
 
 
+def test_agent_invocations_flat_includes_evo_metadata(app_and_obs) -> None:
+    app, _ = app_and_obs
+    envelopes = _run_envelopes("evo-run")
+    envelopes.insert(
+        0,
+        {
+            "type": "algo_event",
+            "run_id": "evo-run",
+            "algorithm_path": "EvoGradient",
+            "kind": "generation",
+            "payload": {
+                "gen_index": 0,
+                "population_scores": [0.4, 0.9],
+                "survivor_indices": [1],
+                "selected_lineage_id": "l1",
+                "individuals": [
+                    {
+                        "individual_id": 0,
+                        "lineage_id": "l0",
+                        "parent_lineage_id": None,
+                        "score": 0.4,
+                        "selected": False,
+                        "op": "append_rule",
+                        "path": "rules",
+                        "improved": False,
+                        "parameter_deltas": [],
+                    },
+                    {
+                        "individual_id": 1,
+                        "lineage_id": "l1",
+                        "parent_lineage_id": None,
+                        "score": 0.9,
+                        "selected": True,
+                        "op": "replace_rule",
+                        "path": "rules",
+                        "improved": True,
+                        "parameter_deltas": [],
+                    },
+                ],
+                "mutations": [],
+                "op_attempt_counts": {"append_rule": 1, "replace_rule": 1},
+                "op_success_counts": {"replace_rule": 1},
+            },
+            "started_at": 9.0,
+            "finished_at": None,
+            "metadata": {},
+        },
+    )
+    for env in envelopes:
+        if env.get("agent_path") != "Sequential.stage_0":
+            continue
+        metadata = env.setdefault("metadata", {})
+        if isinstance(metadata, dict):
+            metadata.update(
+                {
+                    "invoke_id": "candidate-1",
+                    "gen_index": 0,
+                    "individual_id": 1,
+                    "lineage_id": "l1",
+                    "operator": "replace_rule",
+                    "mutation_path": "rules",
+                }
+            )
+
+    with TestClient(app) as client:
+        assert client.post("/_ingest", json=envelopes).status_code == 200
+        response = client.get("/runs/evo-run/agent-invocations")
+        assert response.status_code == 200
+        rows = [
+            row
+            for row in response.json()["invocations"]
+            if row["agent_path"] == "Sequential.stage_0"
+        ]
+        assert rows
+        row = rows[0]
+        assert row["gen_index"] == 0.0
+        assert row["individual_id"] == 1.0
+        assert row["lineage_id"] == "l1"
+        assert row["operator"] == "replace_rule"
+        assert row["score"] == 0.9
+        assert row["selected"] is True
+
+
 def test_parameters_and_parameter_evolution_include_gradient_context(app_and_obs) -> None:
     app, _ = app_and_obs
     with TestClient(app) as client:

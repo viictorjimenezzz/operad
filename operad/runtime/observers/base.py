@@ -121,6 +121,12 @@ _MUTE_NOTIFICATIONS: ContextVar[bool] = ContextVar(
 # AgentEvents can carry parent_run_id in metadata.
 _ALGO_RUN_ID: ContextVar[str | None] = ContextVar("_ALGO_RUN_ID", default=None)
 
+# Algorithm-local metadata to attach to nested AgentEvents. Optimizers use
+# this to tag child invocations with candidate/generation provenance.
+_ALGO_METADATA: ContextVar[dict[str, Any] | None] = ContextVar(
+    "_ALGO_METADATA", default=None
+)
+
 
 @contextmanager
 def _enter_algorithm_run(
@@ -148,6 +154,16 @@ def _enter_algorithm_run(
     finally:
         _RUN_ID.reset(tok_r)
         _ALGO_RUN_ID.reset(tok_a)
+
+
+@contextmanager
+def _enter_algorithm_metadata(metadata: dict[str, Any]) -> Iterator[None]:
+    existing = _ALGO_METADATA.get() or {}
+    tok = _ALGO_METADATA.set({**existing, **metadata})
+    try:
+        yield
+    finally:
+        _ALGO_METADATA.reset(tok)
 
 
 @contextmanager

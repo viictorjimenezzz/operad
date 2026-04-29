@@ -386,6 +386,9 @@ class RunRegistry:
             mermaid = payload.get("graph_mermaid")
             if isinstance(mermaid, str) and info.mermaid is None:
                 info.mermaid = mermaid
+            graph_json = payload.get("graph_json")
+            if isinstance(graph_json, dict) and info.graph_json is None:
+                info.graph_json = graph_json
             root_path = payload.get("root_path")
             if isinstance(root_path, str) and info.root_agent_path is None:
                 info.root_agent_path = root_path
@@ -400,6 +403,8 @@ class RunRegistry:
                     "mean": mean,
                     "scores": list(scores),
                     "survivor_indices": list(payload.get("survivor_indices") or []),
+                    "selected_lineage_id": payload.get("selected_lineage_id"),
+                    "individuals": list(payload.get("individuals") or []),
                     "op_attempt_counts": dict(payload.get("op_attempt_counts") or {}),
                     "op_success_counts": dict(payload.get("op_success_counts") or {}),
                     "timestamp": ts,

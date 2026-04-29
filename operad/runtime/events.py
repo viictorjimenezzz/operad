@@ -13,7 +13,7 @@ must tolerate unknown keys):
 | `algo_start`  | algorithm-specific init params (e.g. `n`, `generations`)                                                                            | all          |
 | `algo_end`    | terminal info (e.g. `score`, `best_index`)                                                                                          | all          |
 | `algo_error`  | `{"type": str, "message": str}`                                                                                                     | all          |
-| `generation`  | `gen_index:int, population_scores:list[float], survivor_indices:list[int], mutations:list[dict], op_success_counts:dict, op_attempt_counts:dict` | Evolutionary |
+| `generation`  | `gen_index:int, population_scores:list[float], survivor_indices:list[int], selected_lineage_id:str, individuals:list[dict], mutations:list[dict], op_success_counts:dict, op_attempt_counts:dict` | Evolutionary |
 | `round`       | `round_index:int, proposals:list[dict], critiques:list[dict], scores:list[float]`                                                   | Debate (aggregated per round) |
 | `cell`        | `cell_index:int, parameters:dict, score: None`                                                                                      | Sweep (score is a None placeholder; SweepCell has no native score) |
 | `candidate`   | `candidate_index:int, score:float`                                                                                                  | BestOfN      |
@@ -24,12 +24,17 @@ must tolerate unknown keys):
 | `plan`        | `attempt_index:int, plan:dict`                                                                                                      | AutoResearcher |
 
 The `mutations` entries in `generation` payloads have shape
-`{"individual_id": int, "op": str | None, "improved": bool}`, where
+`{"individual_id": int, "lineage_id": str, "op": str | None, "improved": bool}`, where
 `op` is `None` when the individual is a surviving unmutated clone and
 `improved` is `True` iff that individual's score exceeds the previous
 generation's median (or the seed's score on generation 0). The
 `mutations` list is capped at `EvoGradient._max_mutation_entries` (200
 by default); aggregate counts remain accurate past the cap.
+
+The richer `individuals` entries include lineage and parameter-change
+data for dashboard drilldowns:
+`individual_id`, `lineage_id`, `parent_lineage_id`, `score`, `selected`,
+`op`, `path`, `improved`, and `parameter_deltas`.
 """
 
 from __future__ import annotations

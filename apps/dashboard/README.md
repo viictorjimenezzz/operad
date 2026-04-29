@@ -117,6 +117,7 @@ consumer:
 - `GET /runs/{id}/summary` — `RunSummary` (with `cost`)
 - `GET /runs/{id}/events?limit=N` — buffered envelopes
 - `GET /graph/{id}` — `{mermaid: string}`
+- `GET /runs/{id}/agent-invocations` — flat nested agent invocation rows
 - `GET /runs/{id}/{fitness,mutations,drift,progress}.json` and `.sse`
 - `GET /stats`, `GET /evolution`
 - `GET /stream` — multiplexed SSE (`agent_event`, `algo_event`,

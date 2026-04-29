@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from operad.core.agent import Agent
 
-POPULATION_SIZE = 8
-GENERATIONS = 5
+POPULATION_SIZE = 10
+GENERATIONS = 7
 
 
 def diversity(population: list[Agent]) -> int:  # type: ignore[type-arg]
