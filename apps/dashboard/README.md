@@ -85,7 +85,7 @@ Open http://localhost:5173/index.dashboard.html.
   chosen from `apps/frontend/src/layouts/`:
   - `Sweep` — Overview, Heatmap, Cells, Parallel coords, Cost, Agents,
     Events.
-  - `Beam` — Leaderboard, Candidates, Score distribution, Agents,
+  - `Beam` — Leaderboard, Candidates, Metrics, Agents,
     Events.
   - `Debate` — Rounds, Transcript, Consensus, Agents, Events.
   - `EvoGradient` — Lineage, Population, Operators, Parameters,

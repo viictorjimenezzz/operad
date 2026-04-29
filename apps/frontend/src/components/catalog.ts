@@ -218,14 +218,17 @@ export const catalog = createCatalog({
         source: sourceExpr,
         sourceIterations: sourceExpr,
         sourceChildren: sourceExpr,
+        sourceAgentsSummary: sourceExpr.optional(),
         runId: z.string().optional(),
       }),
     },
-    BeamHistogramTab: {
+    BeamMetricsTab: {
       props: z.object({
         source: sourceExpr,
         sourceIterations: sourceExpr,
-        bins: z.number().optional(),
+        sourceEvents: sourceExpr,
+        sourceChildren: sourceExpr,
+        sourceAgentsSummary: sourceExpr,
       }),
     },
     VerifierDetailOverview: {
@@ -296,6 +299,9 @@ export const catalog = createCatalog({
     AgentsTab: {
       props: z.object({
         runId: z.string().optional(),
+        mode: z.enum(["summary", "invocations"]).optional(),
+        sourceEvents: sourceExpr.optional(),
+        sourceAgentsSummary: sourceExpr.optional(),
         groupBy: z.enum(["hash", "none"]).optional(),
         extraColumns: z.array(z.string()).optional(),
         emptyTitle: z.string().optional(),

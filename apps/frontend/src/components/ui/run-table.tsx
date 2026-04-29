@@ -115,6 +115,7 @@ export function RunTable({
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
+  const [expandedDiffCells, setExpandedDiffCells] = useState<Set<string>>(() => new Set());
 
   const invocationsRunId = useMemo(() => parseInvocationRunId(storageKey), [storageKey]);
   const rowsWithDrift = useMemo(
@@ -201,6 +202,15 @@ export function RunTable({
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleDiffCell = (key: string) => {
+    setExpandedDiffCells((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -417,7 +427,7 @@ export function RunTable({
                               column.align === "right" && "text-right",
                             )}
                           >
-                            {renderCell(row, column)}
+                            {renderCell(row, column, { expandedDiffCells, toggleDiffCell })}
                           </div>
                         ))}
                       </div>
@@ -514,7 +524,14 @@ function RunTableFooter({
   );
 }
 
-function renderCell(row: RunRow, column: RunTableColumn): ReactNode {
+function renderCell(
+  row: RunRow,
+  column: RunTableColumn,
+  options: {
+    expandedDiffCells: Set<string>;
+    toggleDiffCell: (key: string) => void;
+  },
+): ReactNode {
   const value = readSource(row, column.source);
   if (value == null) return <span className="text-muted-2">-</span>;
   if (typeof value === "string" || typeof value === "number") {
@@ -548,7 +565,8 @@ function renderCell(row: RunRow, column: RunTableColumn): ReactNode {
           {changed ? (
             numericDelta != null ? (
               <span className="text-[11px] text-muted">
-                {numericDelta > 0 ? "↑" : numericDelta < 0 ? "↓" : "•"} {formatSignedDelta(numericDelta)}
+                {numericDelta > 0 ? "↑" : numericDelta < 0 ? "↓" : "•"}{" "}
+                {formatSignedDelta(numericDelta)}
               </span>
             ) : (
               <span
@@ -569,7 +587,13 @@ function renderCell(row: RunRow, column: RunTableColumn): ReactNode {
         scoreValue != null && Number.isFinite(scoreValue) ? (scoreValue - min) / span : null;
       const width = normalized == null ? 0 : Math.max(0, Math.min(1, normalized)) * 100;
       const tone =
-        scoreValue == null ? "var(--color-muted-2)" : scoreValue > 0 ? "var(--color-ok)" : scoreValue < 0 ? "var(--color-err)" : "var(--color-warn)";
+        scoreValue == null
+          ? "var(--color-muted-2)"
+          : scoreValue > 0
+            ? "var(--color-ok)"
+            : scoreValue < 0
+              ? "var(--color-err)"
+              : "var(--color-warn)";
       return (
         <span className="inline-flex w-full min-w-0 items-center gap-2">
           <span className="w-12 flex-shrink-0 text-right font-mono tabular-nums">
@@ -586,13 +610,38 @@ function renderCell(row: RunRow, column: RunTableColumn): ReactNode {
       );
     }
     case "diff": {
+      const key = `${row.id}:${column.id}`;
+      const expanded = options.expandedDiffCells.has(key);
       const next = truncateText(value.value, 80);
       const prev = value.previous != null ? truncateText(value.previous, 80) : null;
       const hasOverflow =
         next.truncated || (value.previous != null ? value.previous.length > 80 : false);
+      const toggle = () => {
+        if (hasOverflow) options.toggleDiffCell(key);
+      };
       return (
         <div className="max-w-full">
-          <span className="inline-flex min-w-0 items-center gap-1">
+          <div
+            role={hasOverflow ? "button" : undefined}
+            tabIndex={hasOverflow ? 0 : undefined}
+            aria-expanded={hasOverflow ? expanded : undefined}
+            onClick={(event) => {
+              if (!hasOverflow) return;
+              event.stopPropagation();
+              toggle();
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              event.stopPropagation();
+              toggle();
+            }}
+            className={cn(
+              "inline-flex max-w-full min-w-0 items-center gap-1",
+              hasOverflow &&
+                "cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-[--color-accent-dim]",
+            )}
+          >
             {prev ? (
               <>
                 <span className="truncate text-muted-2 line-through" title={value.previous}>
@@ -604,14 +653,11 @@ function renderCell(row: RunRow, column: RunTableColumn): ReactNode {
             <span className="truncate text-[--color-ok]" title={value.value}>
               {next.text}
             </span>
-          </span>
-          {hasOverflow ? (
-            <details className="mt-1 text-[11px] text-muted">
-              <summary className="cursor-pointer select-none">full diff</summary>
-              <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap rounded border border-border bg-bg-inset p-1.5 text-[10px] leading-relaxed text-text">
-                {value.previous != null ? `- ${value.previous}\n+ ${value.value}` : value.value}
-              </pre>
-            </details>
+          </div>
+          {hasOverflow && expanded ? (
+            <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap rounded border border-border bg-bg-inset p-1.5 text-[10px] leading-relaxed text-text">
+              {value.previous != null ? `- ${value.previous}\n+ ${value.value}` : value.value}
+            </pre>
           ) : null}
         </div>
       );
@@ -729,7 +775,9 @@ function comparable(value: RunFieldValue | string | number | null): string | num
     case "image":
       return null;
     case "hashDriftStrip":
-      return Object.values(value.current).filter((item) => typeof item === "string").join("|");
+      return Object.values(value.current)
+        .filter((item) => typeof item === "string")
+        .join("|");
     case "sparkline":
       for (let i = value.values.length - 1; i >= 0; i -= 1) {
         const item = value.values[i];
@@ -806,10 +854,7 @@ function toRowHashes(row: RunRow): Partial<Record<HashKey, string | null>> {
   };
 }
 
-function attachDriftFields(
-  rows: RunRow[],
-  enabled: boolean,
-): RunRow[] {
+function attachDriftFields(rows: RunRow[], enabled: boolean): RunRow[] {
   if (!enabled) return rows;
   return rows.map((row, index) => {
     const current = toRowHashes(row);
