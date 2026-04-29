@@ -50,7 +50,7 @@ describe("TextEvolution", () => {
     fireEvent.click(screen.getByLabelText("select step 3"));
     expect(onSelectStep).toHaveBeenCalledWith(2);
 
-    const thirdSummary = screen.getAllByText("expand full text")[2];
+    const thirdSummary = screen.getAllByText("View full value")[2];
     if (!thirdSummary) throw new Error("missing third full-text summary");
     fireEvent.click(thirdSummary);
     expect(screen.getAllByText(/citations/).length).toBeGreaterThan(0);

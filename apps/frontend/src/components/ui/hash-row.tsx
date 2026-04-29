@@ -14,13 +14,17 @@ export const HASH_KEYS = [
   "hash_content",
 ] as const;
 
-export type HashKey = (typeof HASH_KEYS)[number];
+export type HashKey =
+  | (typeof HASH_KEYS)[number]
+  | "hash_prompt_template"
+  | "hash_input_schema";
 
 export interface HashRowProps {
   current: Partial<Record<HashKey, string | null>>;
   previous?: Partial<Record<HashKey, string | null>>;
   size?: "sm" | "md";
   variant?: "full" | "compact" | "strip";
+  keys?: readonly HashKey[];
   onCopy?: (key: HashKey, value: string) => void;
 }
 
@@ -29,6 +33,7 @@ export function HashRow({
   previous,
   size = "sm",
   variant = "full",
+  keys = HASH_KEYS,
   onCopy,
 }: HashRowProps) {
   if (variant === "compact") {
@@ -52,7 +57,7 @@ export function HashRow({
   return (
     <Tooltip.Provider delayDuration={0}>
       <div role="list" className="flex flex-wrap gap-1.5">
-        {HASH_KEYS.map((key) => {
+        {keys.map((key) => {
           const value = current[key] ?? null;
           const previousValue = previous?.[key];
           const changed = previous != null && previousValue !== value;

@@ -112,6 +112,139 @@ def _range_limited_runs(
     return runs[start_idx:end_idx]
 
 
+def _cost_totals(request: Request) -> dict[str, Any]:
+    cost = getattr(request.app.state, "cost_observer", None)
+    if cost is None:
+        return {}
+    try:
+        totals = cost.totals()
+    except Exception:
+        return {}
+    return totals if isinstance(totals, dict) else {}
+
+
+def _root_terminal_event(info: RunInfo) -> dict[str, Any] | None:
+    root = info.root_agent_path
+    if not isinstance(root, str) or not root:
+        return None
+    for env in reversed(list(info.events)):
+        if env.get("type") != "agent_event":
+            continue
+        if env.get("kind") not in {"end", "error"}:
+            continue
+        if env.get("agent_path") == root:
+            return env
+    return None
+
+
+def _root_terminal_output(info: RunInfo) -> dict[str, Any]:
+    env = _root_terminal_event(info)
+    output = env.get("output") if isinstance(env, dict) else None
+    return output if isinstance(output, dict) else {}
+
+
+def _root_terminal_metadata(info: RunInfo) -> dict[str, Any]:
+    env = _root_terminal_event(info)
+    metadata = env.get("metadata") if isinstance(env, dict) else None
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _summary_with_runtime(info: RunInfo, cost_totals: dict[str, Any]) -> dict[str, Any]:
+    summary = info.summary()
+    output = _root_terminal_output(info)
+    metadata = _root_terminal_metadata(info)
+    config = metadata.get("config")
+    config = config if isinstance(config, dict) else {}
+    sampling = config.get("sampling") if isinstance(config.get("sampling"), dict) else {}
+    total = cost_totals.get(info.run_id)
+    if isinstance(total, dict):
+        summary["cost"] = total
+    summary["backend"] = _string_or_none(output.get("backend")) or _string_or_none(config.get("backend"))
+    summary["model"] = _string_or_none(output.get("model")) or _string_or_none(config.get("model"))
+    summary["sampling"] = dict(sampling)
+    summary["hash_content"] = _string_or_none(metadata.get("hash_content")) or _latest_root_hash_content(info)
+    summary["hash_model"] = _string_or_none(output.get("hash_model"))
+    summary["hash_prompt"] = _string_or_none(output.get("hash_prompt"))
+    summary["hash_graph"] = _string_or_none(output.get("hash_graph"))
+    summary["hash_input"] = _string_or_none(output.get("hash_input"))
+    summary["hash_output_schema"] = _string_or_none(output.get("hash_output_schema"))
+    summary["hash_config"] = _string_or_none(output.get("hash_config")) or (
+        _short_hash(repr(config)) if config else None
+    )
+    return summary
+
+
+def _string_or_none(value: Any) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def _common_hashes(runs: list[RunInfo]) -> dict[str, str | None]:
+    keys = [
+        "hash_content",
+        "hash_model",
+        "hash_prompt_template",
+        "hash_input_schema",
+        "hash_output_schema",
+        "hash_graph",
+        "hash_config",
+    ]
+    values: dict[str, list[str | None]] = {key: [] for key in keys}
+    for info in runs:
+        output = _root_terminal_output(info)
+        metadata = _root_terminal_metadata(info)
+        values["hash_content"].append(
+            _string_or_none(metadata.get("hash_content")) or _latest_root_hash_content(info)
+        )
+        values["hash_model"].append(_string_or_none(output.get("hash_model")))
+        values["hash_prompt_template"].append(_prompt_template_hash(metadata))
+        values["hash_input_schema"].append(_input_schema_hash(metadata))
+        values["hash_output_schema"].append(_string_or_none(output.get("hash_output_schema")))
+        values["hash_graph"].append(_string_or_none(output.get("hash_graph")))
+        config = metadata.get("config")
+        config = config if isinstance(config, dict) else {}
+        values["hash_config"].append(
+            _string_or_none(output.get("hash_config")) or (_short_hash(repr(config)) if config else None)
+        )
+    return {key: _same_non_empty(vals) for key, vals in values.items()}
+
+
+def _same_non_empty(values: list[str | None]) -> str | None:
+    concrete = [value for value in values if value]
+    if not concrete or len(concrete) != len(values):
+        return None
+    first = concrete[0]
+    return first if all(value == first for value in concrete) else None
+
+
+def _prompt_template_hash(metadata: dict[str, Any]) -> str | None:
+    prompt = metadata.get("prompt_system")
+    if isinstance(prompt, str) and prompt:
+        return _short_hash(prompt)
+    snapshot = metadata.get("state_snapshot")
+    if isinstance(snapshot, dict):
+        payload = {
+            key: snapshot.get(key)
+            for key in ("role", "task", "style", "rules", "examples")
+        }
+        return _short_hash(repr(payload))
+    return None
+
+
+def _input_schema_hash(metadata: dict[str, Any]) -> str | None:
+    schema = metadata.get("input_schema")
+    if schema is not None:
+        return _short_hash(repr(schema))
+    type_name = metadata.get("input_type_name")
+    if isinstance(type_name, str) and type_name:
+        return _short_hash(type_name)
+    snapshot = metadata.get("state_snapshot")
+    if isinstance(snapshot, dict):
+        type_name = snapshot.get("input_type_name")
+        if isinstance(type_name, str) and type_name:
+            return _short_hash(type_name)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # /agents — agent instances (groups by hash_content)
 # ---------------------------------------------------------------------------
@@ -168,6 +301,8 @@ async def list_agent_groups(request: Request) -> JSONResponse:
                 "completion_tokens": 0,
                 "cost_usd": 0.0,
                 "run_ids": [],
+                "backends": [],
+                "models": [],
                 "is_trainer": False,
                 "notes_markdown_count": 0,
             },
@@ -184,6 +319,13 @@ async def list_agent_groups(request: Request) -> JSONResponse:
         bucket["prompt_tokens"] += info.total_prompt_tokens
         bucket["completion_tokens"] += info.total_completion_tokens
         bucket["run_ids"].append(info.run_id)
+        runtime = _summary_with_runtime(info, {})
+        backend = runtime.get("backend")
+        model = runtime.get("model")
+        if isinstance(backend, str) and backend and backend not in bucket["backends"]:
+            bucket["backends"].append(backend)
+        if isinstance(model, str) and model and model not in bucket["models"]:
+            bucket["models"].append(model)
         if info.notes_markdown.strip():
             bucket["notes_markdown_count"] += 1
         if not bucket["class_name"] and info.root_agent_path:
@@ -192,19 +334,14 @@ async def list_agent_groups(request: Request) -> JSONResponse:
             bucket["is_trainer"] = True
 
     # cost is observed elsewhere; pull from cost observer if available.
-    cost = getattr(request.app.state, "cost_observer", None)
-    if cost is not None:
-        try:
-            totals = cost.totals()
-        except Exception:
-            totals = {}
-        for bucket in groups.values():
-            for run_id in bucket["run_ids"]:
-                t = totals.get(run_id) or {}
-                if isinstance(t, dict):
-                    c = t.get("cost_usd") or 0.0
-                    if isinstance(c, (int, float)):
-                        bucket["cost_usd"] += float(c)
+    totals = _cost_totals(request)
+    for bucket in groups.values():
+        for run_id in bucket["run_ids"]:
+            t = totals.get(run_id) or {}
+            if isinstance(t, dict):
+                c = t.get("cost_usd") or 0.0
+                if isinstance(c, (int, float)):
+                    bucket["cost_usd"] += float(c)
 
     out: list[dict[str, Any]] = []
     for bucket in groups.values():
@@ -297,13 +434,7 @@ async def list_agent_classes(request: Request) -> JSONResponse:
         if not instance_bucket["root_agent_path"] and info.root_agent_path:
             instance_bucket["root_agent_path"] = info.root_agent_path
 
-    cost = getattr(request.app.state, "cost_observer", None)
-    totals: dict[str, Any] = {}
-    if cost is not None:
-        try:
-            totals = cost.totals()
-        except Exception:
-            totals = {}
+    totals = _cost_totals(request)
     for class_bucket in classes.values():
         instances = class_bucket["instances"]
         for instance_bucket in instances.values():
@@ -385,18 +516,13 @@ async def get_agent_group(request: Request, hash_content: str) -> JSONResponse:
     prompt_tokens = sum(info.total_prompt_tokens for info in group_runs)
     completion_tokens = sum(info.total_completion_tokens for info in group_runs)
     cost_usd = 0.0
-    cost = getattr(request.app.state, "cost_observer", None)
-    if cost is not None:
-        try:
-            totals = cost.totals()
-        except Exception:
-            totals = {}
-        for info in group_runs:
-            t = totals.get(info.run_id) or {}
-            if isinstance(t, dict):
-                c = t.get("cost_usd") or 0.0
-                if isinstance(c, (int, float)):
-                    cost_usd += float(c)
+    totals = _cost_totals(request)
+    for info in group_runs:
+        t = totals.get(info.run_id) or {}
+        if isinstance(t, dict):
+            c = t.get("cost_usd") or 0.0
+            if isinstance(c, (int, float)):
+                cost_usd += float(c)
 
     running = sum(1 for r in group_runs if r.state == "running")
     errors = sum(1 for r in group_runs if r.state == "error")
@@ -419,7 +545,10 @@ async def get_agent_group(request: Request, hash_content: str) -> JSONResponse:
             "notes_markdown_count": sum(
                 1 for r in group_runs if r.notes_markdown.strip()
             ),
-            "runs": [r.summary() for r in sorted(group_runs, key=lambda r: r.started_at)],
+            "runs": [
+                _summary_with_runtime(r, totals)
+                for r in sorted(group_runs, key=lambda r: r.started_at)
+            ],
         }
     )
 
@@ -439,7 +568,33 @@ async def list_agent_group_runs(request: Request, hash_content: str) -> JSONResp
         if hc and hc == target:
             matches.append(info)
     matches.sort(key=lambda r: r.started_at)
-    return JSONResponse([r.summary() for r in matches])
+    return JSONResponse([_summary_with_runtime(r, _cost_totals(request)) for r in matches])
+
+
+@router.get("/api/agents/{hash_content}/reproducibility")
+async def agent_group_reproducibility(request: Request, hash_content: str) -> JSONResponse:
+    """Return hashes shared by every invocation in this agent group."""
+    runs = _all_runs(request)
+    target = _resolve_agent_hash(runs, hash_content)
+    if target is None:
+        raise HTTPException(status_code=404, detail="no runs match this hash_content")
+    matches: list[RunInfo] = []
+    for info in runs:
+        if info.is_algorithm and not _is_trainer(info):
+            continue
+        if info.synthetic:
+            continue
+        hc = _latest_root_hash_content(info)
+        if hc and hc == target:
+            matches.append(info)
+    matches.sort(key=lambda r: r.started_at)
+    return JSONResponse(
+        {
+            "hash_content": target,
+            "count": len(matches),
+            "hashes": _common_hashes(matches),
+        }
+    )
 
 
 @router.get("/api/agents/{hash_content}/metrics")
@@ -454,13 +609,7 @@ async def agent_group_metrics(
     target = _resolve_agent_hash(_all_runs(request), hash_content) or hash_content
     runs = obs.registry.runs_by_hash_full(target)
     runs = _range_limited_runs(runs, range)
-    cost_totals: dict[str, Any] = {}
-    cost = getattr(request.app.state, "cost_observer", None)
-    if cost is not None:
-        try:
-            cost_totals = cost.totals()
-        except Exception:
-            cost_totals = {}
+    cost_totals = _cost_totals(request)
 
     units = {
         "latency_ms": "ms",
@@ -598,13 +747,7 @@ def _algorithm_groups(
     match: Any,
 ) -> list[dict[str, Any]]:
     runs = _all_runs(request)
-    cost_totals: dict[str, Any] = {}
-    cost = getattr(request.app.state, "cost_observer", None)
-    if cost is not None:
-        try:
-            cost_totals = cost.totals()
-        except Exception:
-            cost_totals = {}
+    cost_totals = _cost_totals(request)
     groups: dict[str, list[RunInfo]] = {}
     for info in runs:
         if not info.is_algorithm:
@@ -646,19 +789,11 @@ def _algorithm_groups(
                 "errors": sum(1 for r in members if r.state == "error"),
                 "last_seen": max(r.last_event_at for r in members),
                 "first_seen": min(r.started_at for r in members),
-                "runs": [_summary_with_cost(r, cost_totals) for r in members],
+                "runs": [_summary_with_runtime(r, cost_totals) for r in members],
             }
         )
     out.sort(key=lambda g: g["last_seen"], reverse=True)
     return out
-
-
-def _summary_with_cost(info: RunInfo, cost_totals: dict[str, Any]) -> dict[str, Any]:
-    summary = info.summary()
-    total = cost_totals.get(info.run_id)
-    if isinstance(total, dict):
-        summary["cost"] = total
-    return summary
 
 
 # ---------------------------------------------------------------------------
@@ -720,7 +855,7 @@ async def list_training_runs(request: Request) -> JSONResponse:
         members.sort(key=lambda r: r.started_at)
         head = members[-1]
         is_real_hash = is_hash_key.get(key, False)
-        run_summaries = _training_run_summaries(members)
+        run_summaries = _training_run_summaries(members, _cost_totals(request))
         out.append(
             {
                 "hash_content": key if is_real_hash else None,
@@ -739,10 +874,16 @@ async def list_training_runs(request: Request) -> JSONResponse:
     return JSONResponse(out)
 
 
-def _training_run_summaries(members: list[RunInfo]) -> list[dict[str, Any]]:
+def _training_run_summaries(
+    members: list[RunInfo],
+    cost_totals: dict[str, Any],
+) -> list[dict[str, Any]]:
     opro_members = [run for run in members if run.algorithm_path in _OPRO_PATHS]
     other_members = [run for run in members if run.algorithm_path not in _OPRO_PATHS]
-    summaries = [run.summary() for run in other_members]
-    summaries.extend(merged_opro_summary(session) for session in build_opro_sessions(opro_members))
+    summaries = [_summary_with_runtime(run, cost_totals) for run in other_members]
+    summaries.extend(
+        merged_opro_summary(session, cost_totals=cost_totals)
+        for session in build_opro_sessions(opro_members)
+    )
     summaries.sort(key=lambda row: float(row["started_at"]))
     return summaries

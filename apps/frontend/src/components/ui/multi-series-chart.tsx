@@ -29,6 +29,9 @@ export interface MultiSeries {
    */
   color?: string;
   points: MultiSeriesPoint[];
+  showPoints?: boolean;
+  pointRadius?: number;
+  strokeDasharray?: string;
 }
 
 export interface MultiSeriesChartProps {
@@ -236,17 +239,19 @@ export function MultiSeriesChart({
             )
             .join(" ");
           const onlyPoint = pts[0];
+          const showPoints = s.showPoints !== false;
+          const pointRadius = s.pointRadius ?? 2.75;
           return (
             <g key={s.id}>
-              {pts.length === 1 && onlyPoint ? (
+              {pts.length === 1 && onlyPoint && showPoints ? (
                 <circle
                   cx={xToPx(onlyPoint.x).toFixed(2)}
                   cy={yToPx(onlyPoint.y as number).toFixed(2)}
-                  r={2.5}
+                  r={pointRadius}
                   fill={color}
                   opacity={0.92}
                 />
-              ) : (
+              ) : pts.length > 1 ? (
                 <path
                   d={path}
                   fill="none"
@@ -254,9 +259,24 @@ export function MultiSeriesChart({
                   strokeWidth={1.5}
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  strokeDasharray={s.strokeDasharray}
                   opacity={hoverX == null ? 0.92 : 0.8}
                 />
-              )}
+              ) : null}
+              {showPoints && pts.length > 1 ? (
+                pts.map((p) => (
+                  <circle
+                    key={`${p.x}:${p.y}`}
+                    cx={xToPx(p.x).toFixed(2)}
+                    cy={yToPx(p.y as number).toFixed(2)}
+                    r={pointRadius}
+                    fill={color}
+                    stroke="var(--color-bg-1)"
+                    strokeWidth={1}
+                    opacity={0.95}
+                  />
+                ))
+              ) : null}
             </g>
           );
         })}

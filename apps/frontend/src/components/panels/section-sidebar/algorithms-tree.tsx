@@ -4,10 +4,17 @@ import type { RunSummary } from "@/lib/types";
 import { formatRelativeTime, truncateMiddle } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import type { SidebarFilters } from "./types";
 
 const PAGE_SIZE = 25;
 
-export function AlgorithmsTree({ search }: { search: string }) {
+export function AlgorithmsTree({
+  search,
+  filters,
+}: {
+  search: string;
+  filters: SidebarFilters;
+}) {
   const { runId: activeRunId } = useParams();
   const navigate = useNavigate();
   const groups = useAlgorithmGroups();
@@ -22,12 +29,19 @@ export function AlgorithmsTree({ search }: { search: string }) {
         algorithm_class: run.algorithm_class ?? group.class_name ?? run.algorithm_class,
       })),
     );
-    if (!q) return runs;
-    return runs.filter((run) => {
-      const hay = [run.algorithm_class ?? "", run.run_id, run.script ?? ""].join(" ").toLowerCase();
-      return hay.includes(q);
-    });
-  }, [groups.data, search]);
+    return runs
+      .filter((run) => withinTime(run.last_event_at, filters.timeRange))
+      .filter((run) => filters.state === "all" || run.state === filters.state)
+      .filter((run) => filters.className === "all" || run.algorithm_class === filters.className)
+      .filter((run) => filters.script === "all" || run.script === filters.script)
+      .filter((run) => {
+        if (!q) return true;
+        const hay = [run.algorithm_class ?? "", run.run_id, run.script ?? ""]
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(q);
+      });
+  }, [groups.data, search, filters]);
 
   const paged = useMemo(() => {
     const start = page * PAGE_SIZE;
@@ -55,6 +69,7 @@ export function AlgorithmsTree({ search }: { search: string }) {
             rows={rows}
             onSelect={onSelect}
             empty="no algorithm runs"
+            hideHeader
           />
         )}
       </div>
@@ -68,6 +83,12 @@ export function AlgorithmsTree({ search }: { search: string }) {
       ) : null}
     </div>
   );
+}
+
+function withinTime(epochSeconds: number, range: SidebarFilters["timeRange"]): boolean {
+  if (range === "all") return true;
+  const seconds = range === "1h" ? 3600 : 86_400;
+  return Date.now() / 1000 - epochSeconds <= seconds;
 }
 
 function buildAlgorithmRow(r: RunSummary, activeRunId: string | null): GroupTreeRow {

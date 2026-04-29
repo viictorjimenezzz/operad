@@ -34,6 +34,9 @@ export function MetricSeriesChart({
           {
             id: `${identity}:reference`,
             label: reference.label,
+            color: "var(--color-muted-2)",
+            showPoints: false,
+            strokeDasharray: "4 4",
             points: [
               { x: Math.min(...xs), y: reference.y },
               { x: Math.max(...xs), y: reference.y },
@@ -50,10 +53,17 @@ export function MetricSeriesChart({
     <div className="relative">
       <MultiSeriesChart
         series={[
-          { id: identity, label: identity, points: seriesPoints },
+          { id: identity, label: identity, points: seriesPoints, showPoints: true },
           ...referenceSeries,
           ...(highlightPoint
-            ? [{ id: `${identity}:highlight`, label: "selected", points: [highlightPoint] }]
+            ? [
+                {
+                  id: `${identity}:highlight`,
+                  label: "selected",
+                  points: [highlightPoint],
+                  pointRadius: 4,
+                },
+              ]
             : []),
         ]}
         height={height}

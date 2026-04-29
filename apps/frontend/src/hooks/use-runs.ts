@@ -429,6 +429,8 @@ function parseInstances(items: unknown[]): AgentGroupSummary[] | null {
       completion_tokens: asNumber(record.completion_tokens) ?? 0,
       cost_usd: asNumber(record.cost_usd) ?? 0,
       run_ids: runIds,
+      backends: stringList(record.backends),
+      models: stringList(record.models),
       is_trainer: Boolean(record.is_trainer),
       notes_markdown_count: asNumber(record.notes_markdown_count) ?? 0,
     });
@@ -473,6 +475,12 @@ function groupAgentClasses(groups: AgentGroupSummary[]): AgentClassSummary[] {
 
 function asNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.length > 0)
+    : [];
 }
 
 export function useArchivedRun(runId: string | null | undefined) {

@@ -3,7 +3,6 @@ import {
   Eyebrow,
   Metric,
   MultiSeriesChart,
-  PanelCard,
   PanelGrid,
   PanelGridItem,
   Pill,
@@ -11,10 +10,10 @@ import {
 import { type HashKey, HashRow } from "@/components/ui/hash-row";
 import { useAgentGroup, useAgentMeta } from "@/hooks/use-runs";
 import { dashboardApi } from "@/lib/api/dashboard";
-import type { AgentMetaResponse, RunSummary } from "@/lib/types";
+import type { AgentMetaResponse, RunInvocation, RunSummary } from "@/lib/types";
 import { cn, formatCost, formatDurationMs, formatTokens } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useParams } from "react-router-dom";
 
 type ToggleKey = "latency" | "cost" | "tokens";
@@ -42,6 +41,16 @@ const SERIES_COLORS: Record<ToggleKey, string> = {
   tokens: "var(--qual-5)",
 };
 
+const REPRO_KEYS: HashKey[] = [
+  "hash_prompt_template",
+  "hash_input_schema",
+  "hash_output_schema",
+  "hash_config",
+  "hash_graph",
+  "hash_model",
+  "hash_content",
+];
+
 export function AgentGroupOverviewTab() {
   const { hashContent } = useParams<{ hashContent: string }>();
   const group = useAgentGroup(hashContent);
@@ -59,6 +68,26 @@ export function AgentGroupOverviewTab() {
     staleTime: 30_000,
     retry: false,
   });
+  const invocations = useQuery({
+    queryKey: ["run", "invocations", latestRun?.run_id] as const,
+    queryFn: () => {
+      if (!latestRun?.run_id) throw new Error("invocations need a run id");
+      return dashboardApi.runInvocations(latestRun.run_id);
+    },
+    enabled: !!latestRun?.run_id,
+    staleTime: 30_000,
+    retry: false,
+  });
+  const reproducibility = useQuery({
+    queryKey: ["agents", hashContent, "reproducibility"] as const,
+    queryFn: () => {
+      if (!hashContent) throw new Error("reproducibility needs an agent hash");
+      return dashboardApi.agentGroupReproducibility(hashContent);
+    },
+    enabled: !!hashContent,
+    staleTime: 30_000,
+    retry: false,
+  });
   const [visible, setVisible] = useState<Set<ToggleKey>>(new Set(["latency", "cost", "tokens"]));
 
   if (!hashContent || !group.data) return null;
@@ -70,6 +99,7 @@ export function AgentGroupOverviewTab() {
   const systemPrompt =
     prompts.data?.entries.at(-1)?.system ?? fallbackSystemPrompt(meta.data ?? null);
   const renderer = prompts.data?.renderer ?? stringValue(meta.data?.config?.io?.renderer) ?? "xml";
+  const latestInvocation = invocations.data?.invocations.at(-1) ?? null;
 
   function toggleMetric(key: ToggleKey) {
     setVisible((prev) => {
@@ -102,23 +132,57 @@ export function AgentGroupOverviewTab() {
           <ConfigCard meta={meta.data ?? null} latestRun={latestRun} />
           <PanelGridItem colSpan={2}>
             <PromptTemplateCard
+              meta={meta.data ?? null}
               systemPrompt={systemPrompt}
               inputSchema={parseTypeSchema(meta.data?.input_schema)}
+              latestInvocation={latestInvocation}
               renderer={renderer}
               loading={prompts.isLoading}
             />
           </PanelGridItem>
           <InvocationTrendCard runs={runs} visible={visible} onToggleMetric={toggleMetric} />
-          {latestRun ? (
-            <PanelGridItem colSpan={3}>
-              <PanelCard title="Reproducibility" eyebrow="latest invocation">
-                <HashRow current={hashesForRun(latestRun)} />
-              </PanelCard>
-            </PanelGridItem>
-          ) : null}
+          <PanelGridItem colSpan={3}>
+            <OverviewTile title="REPRODUCIBILITY">
+              {reproducibility.isLoading ? (
+                <div className="text-[12px] text-muted-2">loading hashes...</div>
+              ) : (
+                <HashRow
+                  current={reproducibility.data?.hashes ?? {}}
+                  keys={REPRO_KEYS}
+                  size="md"
+                />
+              )}
+            </OverviewTile>
+          </PanelGridItem>
         </PanelGrid>
       </div>
     </div>
+  );
+}
+
+function OverviewTile({
+  title,
+  toolbar,
+  minHeight,
+  children,
+}: {
+  title: ReactNode;
+  toolbar?: ReactNode;
+  minHeight?: number;
+  children: ReactNode;
+}) {
+  return (
+    <section className="flex h-full flex-col rounded-lg border border-border bg-bg-1 shadow-[var(--shadow-card-soft)]">
+      <div className="flex items-center gap-3 px-3 py-3">
+        <div className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+          {title}
+        </div>
+        {toolbar ? <div className="flex shrink-0 items-center gap-2">{toolbar}</div> : null}
+      </div>
+      <div className="min-h-0 flex-1 p-3 pt-0" style={minHeight ? { minHeight } : undefined}>
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -126,12 +190,12 @@ function ContractCard({ meta }: { meta: AgentMetaResponse | null }) {
   const input = parseTypeSchema(meta?.input_schema);
   const output = parseTypeSchema(meta?.output_schema);
   return (
-    <PanelCard title="Contract" eyebrow={meta?.kind ?? "agent"} bodyMinHeight={260}>
-      <div className="grid gap-3 md:grid-cols-2">
+    <OverviewTile title="CONTRACT" minHeight={280}>
+      <div className="grid max-h-[270px] gap-3 overflow-auto md:grid-cols-2">
         <SchemaPane label="input" schema={input} />
         <SchemaPane label="output" schema={output} />
       </div>
-    </PanelCard>
+    </OverviewTile>
   );
 }
 
@@ -218,12 +282,8 @@ function ConfigCard({
   ];
   const trainable = meta?.trainable_paths ?? [];
   return (
-    <PanelCard
-      title="Configuration"
-      eyebrow={meta?.agent_path ?? latestRun?.root_agent_path ?? "root"}
-      bodyMinHeight={260}
-    >
-      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2">
+    <OverviewTile title="CONFIGURATION" minHeight={280}>
+      <div className="grid max-h-[270px] grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 overflow-auto">
         {rows.map(([label, value]) => (
           <div key={label} className="contents">
             <span className="text-[10px] uppercase tracking-[0.06em] text-muted-2">{label}</span>
@@ -233,66 +293,122 @@ function ConfigCard({
           </div>
         ))}
       </div>
-      <div className="mt-4 border-t border-border pt-3">
-        <Eyebrow>trainable paths</Eyebrow>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {trainable.length > 0 ? (
-            trainable.slice(0, 10).map((path) => (
-              <span
-                key={path}
-                className="rounded border border-border bg-bg-inset px-1.5 py-0.5 font-mono text-[10px] text-muted"
-              >
-                {path}
-              </span>
-            ))
-          ) : (
-            <span className="text-[12px] text-muted-2">none declared</span>
-          )}
-          {trainable.length > 10 ? (
-            <span className="rounded border border-border bg-bg-inset px-1.5 py-0.5 font-mono text-[10px] text-muted-2">
-              +{trainable.length - 10}
-            </span>
-          ) : null}
+      {trainable.length > 0 ? (
+        <div className="mt-3 text-[11px] text-muted-2">
+          {trainable.length} trainable path{trainable.length === 1 ? "" : "s"}
         </div>
-      </div>
-    </PanelCard>
+      ) : null}
+    </OverviewTile>
   );
 }
 
 function PromptTemplateCard({
+  meta,
   systemPrompt,
   inputSchema,
+  latestInvocation,
   renderer,
   loading,
 }: {
+  meta: AgentMetaResponse | null;
   systemPrompt: string | null;
   inputSchema: TypeSchema | null;
+  latestInvocation: RunInvocation | null;
   renderer: string;
   loading: boolean;
 }) {
-  const inputTemplate = buildInputTemplate(inputSchema, renderer);
+  const rows = promptRows(meta, inputSchema, latestInvocation);
   return (
-    <PanelCard title="Prompt template" eyebrow={`renderer · ${renderer}`} bodyMinHeight={320}>
+    <OverviewTile title={`SYSTEM PROMPT · ${renderer.toUpperCase()}`} minHeight={340}>
       {loading ? (
         <div className="mb-3 text-[12px] text-muted-2">loading prompt template...</div>
       ) : null}
-      <div className="grid gap-3 lg:grid-cols-2">
-        <PromptBlock label="system" value={systemPrompt ?? "—"} />
-        <PromptBlock label="input template" value={inputTemplate} />
+      <div className="max-h-[380px] overflow-auto rounded-md border border-border bg-bg-inset">
+        {rows.length > 0 ? (
+          rows.map((row) => <PromptFieldRow key={`${row.scope}:${row.name}`} row={row} />)
+        ) : (
+          <pre className="whitespace-pre-wrap p-3 font-mono text-[11px] leading-5 text-text">
+            {systemPrompt ?? "—"}
+          </pre>
+        )}
       </div>
-    </PanelCard>
+    </OverviewTile>
   );
 }
 
-function PromptBlock({ label, value }: { label: string; value: string }) {
+type PromptRow = {
+  scope: string;
+  name: string;
+  type: string;
+  description: string;
+  value: string;
+};
+
+function PromptFieldRow({ row }: { row: PromptRow }) {
   return (
-    <div className="min-w-0">
-      <Eyebrow>{label}</Eyebrow>
-      <pre className="mt-2 max-h-[420px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-bg-inset p-3 font-mono text-[11px] leading-5 text-text">
-        {value}
+    <div className="grid gap-3 border-b border-border p-3 last:border-b-0 md:grid-cols-[180px_minmax(0,1fr)]">
+      <div className="min-w-0">
+        <div className="text-[10px] uppercase tracking-[0.06em] text-muted-2">{row.scope}</div>
+        <div className="mt-1 flex flex-wrap items-baseline gap-2">
+          <span className="font-mono text-[12px] text-text">{row.name}</span>
+          <span className="font-mono text-[11px] text-muted-2">{row.type}</span>
+        </div>
+        {row.description ? (
+          <div className="mt-1 text-[12px] leading-5 text-muted">{row.description}</div>
+        ) : null}
+      </div>
+      <pre className="min-w-0 whitespace-pre-wrap font-mono text-[11px] leading-5 text-text">
+        {row.value || "—"}
       </pre>
     </div>
   );
+}
+
+function promptRows(
+  meta: AgentMetaResponse | null,
+  inputSchema: TypeSchema | null,
+  latestInvocation: RunInvocation | null,
+): PromptRow[] {
+  const rows: PromptRow[] = [];
+  if (meta?.role?.trim()) {
+    rows.push({
+      scope: "system",
+      name: "role",
+      type: "str",
+      description: "Persona the agent adopts for every call.",
+      value: meta.role.trim(),
+    });
+  }
+  if (meta?.task?.trim()) {
+    rows.push({
+      scope: "system",
+      name: "task",
+      type: "str",
+      description: "Objective accomplished on each invocation.",
+      value: meta.task.trim(),
+    });
+  }
+  if (meta && meta.rules.length > 0) {
+    rows.push({
+      scope: "system",
+      name: "rules",
+      type: "list[str]",
+      description: "Hard constraints the agent must obey.",
+      value: meta.rules.map((rule) => `- ${rule}`).join("\n"),
+    });
+  }
+  const input = isRecord(latestInvocation?.input) ? latestInvocation.input : {};
+  for (const field of inputSchema?.fields ?? []) {
+    if (field.system) continue;
+    rows.push({
+      scope: "input",
+      name: field.name,
+      type: field.type,
+      description: field.description,
+      value: formatPromptValue(input[field.name]),
+    });
+  }
+  return rows;
 }
 
 function InvocationTrendCard({
@@ -307,10 +423,9 @@ function InvocationTrendCard({
   const series = buildSeries(runs, visible);
   const showChart = runs.length >= 2 && series.length > 0;
   return (
-    <PanelCard
-      title="Invocation trend"
-      eyebrow={`${runs.length} invocation${runs.length === 1 ? "" : "s"}`}
-      bodyMinHeight={320}
+    <OverviewTile
+      title={`${runs.length} INVOCATION${runs.length === 1 ? "" : "S"}`}
+      minHeight={320}
       toolbar={
         <div className="flex gap-1">
           {(["latency", "cost", "tokens"] as ToggleKey[]).map((key) => {
@@ -345,20 +460,8 @@ function InvocationTrendCard({
           </div>
         </div>
       )}
-    </PanelCard>
+    </OverviewTile>
   );
-}
-
-function hashesForRun(run: RunSummary): Partial<Record<HashKey, string | null>> {
-  return {
-    hash_content: run.hash_content ?? null,
-    hash_model: run.hash_model ?? null,
-    hash_prompt: run.hash_prompt ?? null,
-    hash_input: run.hash_input ?? null,
-    hash_output_schema: run.hash_output_schema ?? null,
-    hash_graph: run.hash_graph ?? null,
-    hash_config: run.hash_config ?? null,
-  };
 }
 
 function buildSeries(runs: RunSummary[], visible: Set<ToggleKey>) {
@@ -407,25 +510,6 @@ function parseTypeSchema(raw: unknown): TypeSchema | null {
   };
 }
 
-function buildInputTemplate(schema: TypeSchema | null, renderer: string): string {
-  if (!schema) return "—";
-  if (renderer.toLowerCase().includes("json")) {
-    const obj = Object.fromEntries(
-      schema.fields
-        .filter((field) => !field.system)
-        .map((field) => [field.name, `<${field.type}>`]),
-    );
-    return JSON.stringify(obj, null, 2);
-  }
-  const lines = schema.fields
-    .filter((field) => !field.system)
-    .map((field) => {
-      const desc = field.description ? ` desc="${escapeXml(field.description)}"` : "";
-      return `    <${field.name}${desc}>{${field.type}}</${field.name}>`;
-    });
-  return `<input>\n${lines.join("\n")}\n</input>`;
-}
-
 function fallbackSystemPrompt(meta: AgentMetaResponse | null): string | null {
   if (!meta) return null;
   const chunks: string[] = [];
@@ -470,10 +554,9 @@ function formatDefault(value: unknown): string {
   return Array.isArray(value) ? `[${value.length}]` : "{...}";
 }
 
-function escapeXml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+function formatPromptValue(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value, null, 2);
 }

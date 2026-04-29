@@ -1,4 +1,5 @@
 import { AlgorithmsTree } from "@/components/panels/section-sidebar/algorithms-tree";
+import { DEFAULT_SIDEBAR_FILTERS } from "@/components/panels/section-sidebar/types";
 import type { AlgorithmGroup, RunSummary } from "@/lib/types";
 import { render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -53,7 +54,7 @@ function renderTree(initialPath = "/algorithms") {
           path="/algorithms"
           element={
             <>
-              <AlgorithmsTree search="" />
+              <AlgorithmsTree search="" filters={DEFAULT_SIDEBAR_FILTERS} />
               <LocationProbe />
             </>
           }
@@ -62,7 +63,7 @@ function renderTree(initialPath = "/algorithms") {
           path="/algorithms/:runId"
           element={
             <>
-              <AlgorithmsTree search="" />
+              <AlgorithmsTree search="" filters={DEFAULT_SIDEBAR_FILTERS} />
               <LocationProbe />
             </>
           }

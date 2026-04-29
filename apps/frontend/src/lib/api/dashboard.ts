@@ -4,6 +4,7 @@ import {
   AgentGroupDetail,
   AgentGroupMetricsResponse,
   AgentGroupParametersResponse,
+  AgentGroupReproducibilityResponse,
   AgentGroupSummary,
   AgentInvocationDiffResponse,
   AgentInvocationsResponse,
@@ -135,6 +136,11 @@ export const dashboardApi = {
     getJson(`/api/agents/${encodeURIComponent(hashContent)}/runs`, z.array(RunSummary)),
   agentGroupMetrics: (hashContent: string) =>
     getJson(`/api/agents/${encodeURIComponent(hashContent)}/metrics`, AgentGroupMetricsResponse),
+  agentGroupReproducibility: (hashContent: string) =>
+    getJson(
+      `/api/agents/${encodeURIComponent(hashContent)}/reproducibility`,
+      AgentGroupReproducibilityResponse,
+    ),
   agentGroupParameters: (hashContent: string) =>
     getJson(
       `/api/agents/${encodeURIComponent(hashContent)}/parameters`,

@@ -1,4 +1,5 @@
 import { AgentsTree } from "@/components/panels/section-sidebar/agents-tree";
+import { DEFAULT_SIDEBAR_FILTERS } from "@/components/panels/section-sidebar/types";
 import type { AgentGroupSummary } from "@/lib/types";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
@@ -23,7 +24,7 @@ function renderTree(initialPath = "/agents") {
           path="/agents"
           element={
             <>
-              <AgentsTree search="" />
+              <AgentsTree search="" filters={DEFAULT_SIDEBAR_FILTERS} />
               <LocationProbe />
             </>
           }
@@ -32,7 +33,7 @@ function renderTree(initialPath = "/agents") {
           path="/agents/:hashContent"
           element={
             <>
-              <AgentsTree search="" />
+              <AgentsTree search="" filters={DEFAULT_SIDEBAR_FILTERS} />
               <LocationProbe />
             </>
           }
@@ -41,7 +42,7 @@ function renderTree(initialPath = "/agents") {
           path="/agents/:hashContent/runs/:runId"
           element={
             <>
-              <AgentsTree search="" />
+              <AgentsTree search="" filters={DEFAULT_SIDEBAR_FILTERS} />
               <LocationProbe />
             </>
           }
@@ -66,6 +67,8 @@ function sampleGroup(overrides: Partial<AgentGroupSummary> = {}): AgentGroupSumm
     completion_tokens: 20,
     cost_usd: 0.03,
     run_ids: ["run-001"],
+    backends: ["openai"],
+    models: ["gpt-4o-mini"],
     is_trainer: false,
     notes_markdown_count: 0,
     ...overrides,

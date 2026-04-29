@@ -4,10 +4,17 @@ import type { AgentGroupSummary } from "@/lib/types";
 import { truncateMiddle } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import type { SidebarFilters } from "./types";
 
 const PAGE_SIZE = 30;
 
-export function AgentsTree({ search }: { search: string }) {
+export function AgentsTree({
+  search,
+  filters,
+}: {
+  search: string;
+  filters: SidebarFilters;
+}) {
   const { hashContent: activeHash, runId: activeRunId } = useParams<{
     hashContent?: string;
     runId?: string;
@@ -19,20 +26,35 @@ export function AgentsTree({ search }: { search: string }) {
   const filtered = useMemo(() => {
     if (!groups.data) return [] as AgentGroupSummary[];
     const q = search.trim().toLowerCase();
-    const sorted = groups.data.slice().sort((a, b) => b.last_seen - a.last_seen);
-    if (!q) return sorted;
-    return sorted.filter((instance) => {
-      const hay = [
-        instance.class_name ?? "",
-        instance.root_agent_path ?? "",
-        instance.hash_content,
-        ...instance.run_ids,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(q);
-    });
-  }, [groups.data, search]);
+    return groups.data
+      .filter((instance) => withinTime(instance.last_seen, filters.timeRange))
+      .filter((instance) => filters.state === "all" || groupState(instance) === filters.state)
+      .filter((instance) => filters.className === "all" || instance.class_name === filters.className)
+      .filter((instance) => filters.backend === "all" || instance.backends.includes(filters.backend))
+      .filter((instance) => filters.model === "all" || instance.models.includes(filters.model))
+      .filter((instance) =>
+        filters.invocationCount === "single"
+          ? instance.count === 1
+          : filters.invocationCount === "multi"
+            ? instance.count > 1
+            : true,
+      )
+      .filter((instance) => {
+        if (!q) return true;
+        const hay = [
+          instance.class_name ?? "",
+          instance.root_agent_path ?? "",
+          instance.hash_content,
+          ...instance.run_ids,
+          ...instance.backends,
+          ...instance.models,
+        ]
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(q);
+      })
+      .sort((a, b) => b.last_seen - a.last_seen);
+  }, [groups.data, search, filters]);
 
   const paged = useMemo(() => {
     const start = page * PAGE_SIZE;
@@ -72,6 +94,7 @@ export function AgentsTree({ search }: { search: string }) {
             rows={rows}
             onSelect={onSelect}
             empty="no agents yet"
+            hideHeader
           />
         )}
       </div>
@@ -80,6 +103,18 @@ export function AgentsTree({ search }: { search: string }) {
       ) : null}
     </div>
   );
+}
+
+function withinTime(epochSeconds: number, range: SidebarFilters["timeRange"]): boolean {
+  if (range === "all") return true;
+  const seconds = range === "1h" ? 3600 : 86_400;
+  return Date.now() / 1000 - epochSeconds <= seconds;
+}
+
+function groupState(group: AgentGroupSummary): SidebarFilters["state"] {
+  if (group.running > 0) return "running";
+  if (group.errors > 0) return "error";
+  return "ended";
 }
 
 function buildInstanceRow(

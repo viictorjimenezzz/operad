@@ -116,10 +116,8 @@ describe("ParametersTab", () => {
     );
 
     await waitFor(() => expect(screen.getByText("trainable params")).toBeTruthy());
-    fireEvent.click(screen.getByRole("button", { name: /Leaf leaf/ }));
-    fireEvent.click(screen.getByRole("button", { name: /role old role/ }));
-
-    expect(await screen.findByRole("dialog")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /role old role/ })).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(await screen.findByText("open a run for gradient context")).toBeTruthy();
     expect(screen.getByText(/aggregates across 2 invocations/)).toBeTruthy();
   });

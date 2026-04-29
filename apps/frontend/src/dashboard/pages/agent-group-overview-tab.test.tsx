@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mockUseAgentGroup = vi.fn();
 const mockUseAgentMeta = vi.fn();
 const mockAgentPrompts = vi.mocked(dashboardApi.agentPrompts);
+const mockRunInvocations = vi.mocked(dashboardApi.runInvocations);
+const mockAgentGroupReproducibility = vi.mocked(dashboardApi.agentGroupReproducibility);
 
 vi.mock("@/hooks/use-runs", () => ({
   useAgentGroup: () => mockUseAgentGroup(),
@@ -17,6 +19,8 @@ vi.mock("@/hooks/use-runs", () => ({
 vi.mock("@/lib/api/dashboard", () => ({
   dashboardApi: {
     agentPrompts: vi.fn(),
+    runInvocations: vi.fn(),
+    agentGroupReproducibility: vi.fn(),
   },
 }));
 
@@ -74,6 +78,8 @@ const baseGroup = {
   prompt_tokens: 100,
   completion_tokens: 50,
   cost_usd: 0.001,
+  backends: ["gemini"],
+  models: ["gemini-2.5-flash"],
   is_trainer: false,
   notes_markdown_count: 0,
 };
@@ -170,6 +176,52 @@ describe("AgentGroupOverviewTab", () => {
         },
       ],
     });
+    mockRunInvocations.mockResolvedValue({
+      agent_path: "research_analyst",
+      invocations: [
+        {
+          id: "research_analyst:0",
+          started_at: 1000,
+          finished_at: null,
+          latency_ms: null,
+          prompt_tokens: null,
+          completion_tokens: null,
+          cost_usd: null,
+          hash_model: null,
+          hash_prompt: null,
+          hash_graph: null,
+          hash_input: null,
+          hash_output_schema: null,
+          hash_config: null,
+          hash_content: null,
+          status: "ok",
+          error: null,
+          langfuse_url: null,
+          script: null,
+          backend: null,
+          model: null,
+          renderer: null,
+          config: null,
+          prompt_system: null,
+          prompt_user: null,
+          input: { question: "latest invocation secret" },
+          output: { answer: "final answer" },
+        },
+      ],
+    });
+    mockAgentGroupReproducibility.mockResolvedValue({
+      hash_content: "abc123def456",
+      count: 1,
+      hashes: {
+        hash_content: "abc123def456",
+        hash_model: null,
+        hash_prompt_template: "prompt-template-hash",
+        hash_input_schema: "input-schema-hash",
+        hash_output_schema: "output-schema-hash",
+        hash_graph: null,
+        hash_config: null,
+      },
+    });
   });
 
   it("multi-run overview renders identity and KPI content", () => {
@@ -187,11 +239,12 @@ describe("AgentGroupOverviewTab", () => {
     expect(screen.getByText("ResearchAnalyst")).toBeTruthy();
     expect(screen.getAllByText("runs").length).toBeGreaterThan(0);
     expect(screen.getAllByText("ok").length).toBeGreaterThan(0);
-    expect(screen.getByText("Contract")).toBeTruthy();
-    expect(screen.getByText("Prompt template")).toBeTruthy();
+    expect(screen.getByText("CONTRACT")).toBeTruthy();
+    expect(screen.getByText("SYSTEM PROMPT · XML")).toBeTruthy();
+    expect(screen.getByText("REPRODUCIBILITY")).toBeTruthy();
   });
 
-  it("renders input and output schema fields without invocation values", () => {
+  it("renders input/output schema fields and latest invocation values", async () => {
     mockUseAgentGroup.mockReturnValue({
       data: { ...baseGroup, runs: [baseRun] },
     });
@@ -199,15 +252,15 @@ describe("AgentGroupOverviewTab", () => {
     renderTab();
 
     expect(screen.getByText("Question")).toBeTruthy();
-    expect(screen.getByText("question")).toBeTruthy();
-    expect(screen.getByText("Question text to answer.")).toBeTruthy();
+    expect(screen.getAllByText("question").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Question text to answer.").length).toBeGreaterThan(0);
     expect(screen.getByText("Answer")).toBeTruthy();
     expect(screen.getByText("answer")).toBeTruthy();
     expect(screen.getByText("Final answer body.")).toBeTruthy();
-    expect(screen.queryByText("latest invocation secret")).toBeNull();
+    await waitFor(() => expect(screen.getByText("latest invocation secret")).toBeTruthy());
   });
 
-  it("renders a schema-derived prompt template instead of latest input values", async () => {
+  it("renders a field/value prompt view instead of raw prompt XML", async () => {
     mockUseAgentGroup.mockReturnValue({
       data: { ...baseGroup, runs: [baseRun] },
     });
@@ -215,9 +268,10 @@ describe("AgentGroupOverviewTab", () => {
     renderTab();
 
     await waitFor(() => expect(mockAgentPrompts).toHaveBeenCalled());
+    await waitFor(() => expect(mockRunInvocations).toHaveBeenCalled());
     const text = document.body.textContent ?? "";
     expect(text).toContain("Invariant system prompt.");
-    expect(text).toContain('<question desc="Question text to answer.">{str}</question>');
-    expect(text).not.toContain("latest invocation secret");
+    expect(text).toContain("latest invocation secret");
+    expect(text).not.toContain("<input><question>");
   });
 });

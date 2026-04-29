@@ -109,7 +109,6 @@ describe("StructureTree", () => {
 
     render(<StructureTree root={root} onSelectParameter={onSelectParameter} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Actor actor/ }));
     expect(screen.getByLabelText("trainable parameters")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /role Act on the plan/ }));
@@ -135,19 +134,10 @@ describe("StructureTree", () => {
     );
   });
 
-  it("expands collapsed rows from the keyboard", () => {
+  it("shows trainable parameter rows on entry", () => {
     const root = buildStructureTree(graph, params);
 
     render(<StructureTree root={root} />);
-    const tree = screen.getByRole("tree", { name: "agent structure" });
-
-    tree.focus();
-    fireEvent.keyDown(tree, { key: "ArrowDown" });
-    fireEvent.keyDown(tree, { key: "ArrowDown" });
-    fireEvent.keyDown(tree, { key: "ArrowDown" });
-    fireEvent.keyDown(tree, { key: "ArrowDown" });
-    fireEvent.keyDown(tree, { key: "ArrowDown" });
-    fireEvent.keyDown(tree, { key: "ArrowRight" });
 
     expect(screen.getByRole("button", { name: /role Act on the plan/ })).toBeTruthy();
   });

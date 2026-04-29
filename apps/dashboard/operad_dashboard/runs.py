@@ -301,7 +301,9 @@ class RunRegistry:
         run_id = envelope.get("run_id") or ""
         if not run_id:
             return
-        ts_raw = envelope.get("started_at")
+        ts_raw = envelope.get("finished_at")
+        if not isinstance(ts_raw, (int, float)):
+            ts_raw = envelope.get("started_at")
         ts = float(ts_raw) if isinstance(ts_raw, (int, float)) else time.time()
         is_new = run_id not in self._runs
         info = self._ensure(run_id, ts)

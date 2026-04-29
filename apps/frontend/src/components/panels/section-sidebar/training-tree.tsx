@@ -4,13 +4,20 @@ import type { RunSummary, TrainingGroup as TrainingGroupT } from "@/lib/types";
 import { formatRelativeTime, truncateMiddle } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import type { SidebarFilters } from "./types";
 
 /**
  * Sidebar tree for the Training rail.
  *   group  — trained agent identity (root hash_content)
  *   row    — Trainer.fit() invocation under that identity
  */
-export function TrainingTree({ search }: { search: string }) {
+export function TrainingTree({
+  search,
+  filters,
+}: {
+  search: string;
+  filters: SidebarFilters;
+}) {
   const { runId: activeRunId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -29,17 +36,24 @@ export function TrainingTree({ search }: { search: string }) {
   const filtered = useMemo(() => {
     if (!groups.data) return [] as TrainingGroupT[];
     const q = search.trim().toLowerCase();
-    if (!q) return groups.data;
     return groups.data
       .map((g) => ({
         ...g,
         runs: g.runs.filter((r) => {
-          const hay = [g.class_name ?? "", g.hash_content ?? "", r.run_id].join(" ").toLowerCase();
+          if (!withinTime(r.last_event_at, filters.timeRange)) return false;
+          if (filters.state !== "all" && r.state !== filters.state) return false;
+          if (filters.algorithm !== "all" && g.algorithm_path !== filters.algorithm) return false;
+          const trainee = g.class_name ?? g.root_agent_path ?? "";
+          if (filters.trainee !== "all" && trainee !== filters.trainee) return false;
+          if (!q) return true;
+          const hay = [trainee, g.hash_content ?? "", r.run_id, g.algorithm_path ?? ""]
+            .join(" ")
+            .toLowerCase();
           return hay.includes(q);
         }),
       }))
       .filter((g) => g.runs.length > 0);
-  }, [groups.data, search]);
+  }, [groups.data, search, filters]);
 
   const onSelect = (row: GroupTreeRow) => {
     if (compareMode) {
@@ -105,6 +119,12 @@ export function TrainingTree({ search }: { search: string }) {
       </div>
     </div>
   );
+}
+
+function withinTime(epochSeconds: number, range: SidebarFilters["timeRange"]): boolean {
+  if (range === "all") return true;
+  const seconds = range === "1h" ? 3600 : 86_400;
+  return Date.now() / 1000 - epochSeconds <= seconds;
 }
 
 function TrainingGroupSection({

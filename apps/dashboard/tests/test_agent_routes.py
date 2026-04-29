@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
 from operad import Agent, Configuration
+from operad_dashboard import agent_routes
 from operad_dashboard.app import create_app
 from operad_dashboard.observer import WebDashboardObserver
 
@@ -352,6 +353,59 @@ def test_live_io_graph_invocations_meta_prompts_values_events(app_and_obs) -> No
         assert len(body["changes"]) > 0
 
 
+def test_group_summaries_are_runtime_enriched_and_duration_uses_finished_at(app_and_obs) -> None:
+    app, _ = app_and_obs
+    with TestClient(app) as client:
+        _seed_live(client)
+
+        summary = client.get("/runs/run-live/summary")
+        assert summary.status_code == 200
+        assert summary.json()["duration_ms"] == pytest.approx(21_000.0)
+
+        group = client.get("/api/agents/deadbeefcafefeed")
+        assert group.status_code == 200
+        body = group.json()
+        assert body["latencies"] == [pytest.approx(21_000.0)]
+        run = body["runs"][0]
+        assert run["backend"] == "llamacpp"
+        assert run["model"] == "test"
+        assert run["sampling"] == {"temperature": 0.0}
+        assert run["hash_content"] == "deadbeefcafefeed"
+        assert run["hash_prompt"] == "pr"
+        assert run["hash_input"] == "ir"
+        assert run["hash_config"]
+
+
+def test_agent_group_reproducibility_returns_common_hashes_only(app_and_obs) -> None:
+    app, _ = app_and_obs
+    first = _run_envelopes("run-a")
+    second = _run_envelopes("run-b")
+    for env in second:
+        if env.get("agent_path") != "Sequential" or env.get("kind") != "end":
+            continue
+        output = env.get("output")
+        if isinstance(output, dict):
+            output["hash_prompt"] = "prompt-varies"
+            output["hash_input"] = "input-varies"
+
+    with TestClient(app) as client:
+        assert client.post("/_ingest", json=first).status_code == 200
+        assert client.post("/_ingest", json=second).status_code == 200
+
+        response = client.get("/api/agents/deadbeefcafefeed/reproducibility")
+
+    assert response.status_code == 200
+    body = response.json()
+    hashes = body["hashes"]
+    assert body["count"] == 2
+    assert hashes["hash_content"] == "deadbeefcafefeed"
+    assert hashes["hash_prompt_template"]
+    assert hashes["hash_input_schema"]
+    assert hashes["hash_config"]
+    assert "hash_prompt" not in hashes
+    assert "hash_input" not in hashes
+
+
 def test_agent_invocations_flat_includes_evo_metadata(app_and_obs) -> None:
     app, _ = app_and_obs
     envelopes = _run_envelopes("evo-run")
@@ -494,6 +548,50 @@ def test_algorithm_agent_graph_falls_back_to_terminal_agents(app_and_obs) -> Non
     assert paths == ["SelfRefine", "Reasoner", "Reflector"]
     assert body["nodes"][1]["parent_path"] == "SelfRefine"
     assert {edge["callee"] for edge in body["edges"]} == {"Reasoner", "Reflector"}
+
+
+def test_agent_graph_falls_back_when_graph_json_is_malformed(app_and_obs, monkeypatch) -> None:
+    app, _ = app_and_obs
+    monkeypatch.setattr(
+        agent_routes,
+        "to_agent_graph_from_json",
+        lambda _graph: (_ for _ in ()).throw(ValueError("bad graph")),
+    )
+    events = [
+        {
+            "type": "agent_event",
+            "run_id": "bad-graph",
+            "agent_path": "Root",
+            "kind": "start",
+            "input": None,
+            "output": None,
+            "started_at": 1.0,
+            "finished_at": None,
+            "metadata": {"is_root": True, "graph": {"root": "Root", "nodes": [], "edges": []}},
+            "error": None,
+        },
+        {
+            "type": "agent_event",
+            "run_id": "bad-graph",
+            "agent_path": "Leaf",
+            "kind": "end",
+            "input": None,
+            "output": {"response": {}},
+            "started_at": 2.0,
+            "finished_at": 3.0,
+            "metadata": {"class_name": "Leaf", "kind": "leaf"},
+            "error": None,
+        },
+    ]
+
+    with TestClient(app) as client:
+        assert client.post("/_ingest", json=events).status_code == 200
+        response = client.get("/runs/bad-graph/agent_graph")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["root"] == "Root"
+    assert [node["path"] for node in body["nodes"]] == ["Root", "Leaf"]
 
 
 def test_parameters_and_parameter_evolution_include_gradient_context(app_and_obs) -> None:

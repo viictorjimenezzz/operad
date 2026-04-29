@@ -110,7 +110,7 @@ export function StructureTree({
 
   const selectRow = (row: FlatRow) => {
     if (row.type === "node") {
-      if (row.node.kind === "leaf") toggle(row.node.path);
+      if (row.node.kind === "leaf" && !expanded.has(row.node.path)) toggle(row.node.path);
       onSelectAgent?.(row.node);
       return;
     }
@@ -361,6 +361,9 @@ function flattenTree(root: StructureTreeNode, expanded: Set<string>): FlatRow[] 
 function defaultExpanded(root: StructureTreeNode): Set<string> {
   const out = new Set<string>();
   function visit(node: StructureTreeNode) {
+    if (node.kind === "leaf" && node.parameters.length > 0) {
+      out.add(node.path);
+    }
     if (node.kind === "composite" && node.children.length <= 5) {
       out.add(node.path);
       node.children.forEach(visit);
