@@ -1,5 +1,8 @@
-import { MultiPromptDiff } from "@/components/charts/multi-prompt-diff";
-import { EmptyState, MarkdownView } from "@/components/ui";
+import {
+  AdjacentPromptDiff,
+  FullValueToggle,
+} from "@/components/algorithms/opro/prompt-adjacent-diff";
+import { EmptyState } from "@/components/ui";
 import { hashColorDim } from "@/lib/hash-color";
 import { truncateMiddle } from "@/lib/utils";
 import { useEffect, useRef } from "react";
@@ -90,29 +93,24 @@ export function TextEvolution({ points, selectedStep, onSelectStep }: TextEvolut
             </div>
 
             {previous == null ? (
-              <div className="rounded border border-border bg-bg-2 px-2 py-1.5 text-[12px] text-muted">
-                initial value
+              <div className="space-y-2">
+                <div className="rounded border border-border bg-bg-2 px-2 py-1.5 text-[12px] text-muted">
+                  initial value
+                </div>
+                <FullValueToggle value={value} />
               </div>
             ) : (
               <div className="space-y-1">
                 <div className="text-[11px] text-muted">diff vs step {index}</div>
-                <MultiPromptDiff
-                  prompts={[
-                    { runId: `${point.runId}-previous`, label: `step ${index}`, text: previous },
-                    { runId: point.runId, label: `step ${index + 1}`, text: value },
-                  ]}
+                <AdjacentPromptDiff
+                  before={previous}
+                  after={value}
+                  beforeLabel={`step ${index}`}
+                  afterLabel={`step ${index + 1}`}
                 />
+                <FullValueToggle value={value} />
               </div>
             )}
-
-            <details className="mt-2">
-              <summary className="cursor-pointer text-[12px] text-muted hover:text-text">
-                expand full text
-              </summary>
-              <div className="mt-2 border-t border-border pt-2">
-                <MarkdownView value={value} />
-              </div>
-            </details>
           </div>
         );
       })}

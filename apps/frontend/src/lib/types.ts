@@ -674,6 +674,23 @@ export const AgentGroupMetricsResponse = z.object({
 });
 export type AgentGroupMetricsResponse = z.infer<typeof AgentGroupMetricsResponse>;
 
+export const AgentGroupReproducibilityResponse = z.object({
+  hash_content: z.string(),
+  count: z.number().default(0),
+  hashes: z.object({
+    hash_content: stringOrNull.default(null),
+    hash_model: stringOrNull.default(null),
+    hash_prompt_template: stringOrNull.default(null),
+    hash_input_schema: stringOrNull.default(null),
+    hash_output_schema: stringOrNull.default(null),
+    hash_graph: stringOrNull.default(null),
+    hash_config: stringOrNull.default(null),
+  }),
+});
+export type AgentGroupReproducibilityResponse = z.infer<
+  typeof AgentGroupReproducibilityResponse
+>;
+
 export const AgentGroupParametersResponse = z.object({
   hash_content: z.string(),
   paths: z.array(z.string()).default([]),
@@ -924,6 +941,8 @@ export const AgentGroupSummary = z.object({
   completion_tokens: z.number().default(0),
   cost_usd: z.number().default(0),
   run_ids: z.array(z.string()).default([]),
+  backends: z.array(z.string()).default([]),
+  models: z.array(z.string()).default([]),
   is_trainer: z.boolean().default(false),
   notes_markdown_count: z.number().default(0),
 });

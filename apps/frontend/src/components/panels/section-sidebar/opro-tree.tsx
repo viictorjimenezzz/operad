@@ -4,8 +4,15 @@ import type { AlgorithmGroup, RunSummary } from "@/lib/types";
 import { formatRelativeTime, truncateMiddle } from "@/lib/utils";
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import type { SidebarFilters } from "./types";
 
-export function OPROTree({ search }: { search: string }) {
+export function OPROTree({
+  search,
+  filters,
+}: {
+  search: string;
+  filters: SidebarFilters;
+}) {
   const { runId: activeRunId } = useParams();
   const navigate = useNavigate();
   const groups = useOPRORuns();
@@ -13,11 +20,16 @@ export function OPROTree({ search }: { search: string }) {
   const filtered = useMemo(() => {
     if (!groups.data) return [] as AlgorithmGroup[];
     const q = search.trim().toLowerCase();
-    if (!q) return groups.data;
     return groups.data
       .map((group) => ({
         ...group,
         runs: group.runs.filter((run) => {
+          if (!withinTime(run.last_event_at, filters.timeRange)) return false;
+          if (filters.state !== "all" && run.state !== filters.state) return false;
+          const algorithmClass = run.algorithm_class ?? group.class_name ?? null;
+          if (filters.className !== "all" && algorithmClass !== filters.className) return false;
+          if (filters.script !== "all" && run.script !== filters.script) return false;
+          if (!q) return true;
           const hay = [
             group.class_name ?? "",
             run.run_id,
@@ -30,7 +42,7 @@ export function OPROTree({ search }: { search: string }) {
         }),
       }))
       .filter((group) => group.runs.length > 0);
-  }, [groups.data, search]);
+  }, [groups.data, search, filters]);
 
   const onSelect = (row: GroupTreeRow) => {
     navigate(`/opro/${row.id}`);
@@ -50,6 +62,7 @@ export function OPROTree({ search }: { search: string }) {
                 count={group.count}
                 rows={group.runs.map((run) => buildOPRORow(run, activeRunId ?? null))}
                 onSelect={onSelect}
+                hideHeader
               />
             ))}
             {filtered.length === 0 ? (
@@ -60,6 +73,12 @@ export function OPROTree({ search }: { search: string }) {
       </div>
     </div>
   );
+}
+
+function withinTime(epochSeconds: number, range: SidebarFilters["timeRange"]): boolean {
+  if (range === "all") return true;
+  const seconds = range === "1h" ? 3600 : 86_400;
+  return Date.now() / 1000 - epochSeconds <= seconds;
 }
 
 function buildOPRORow(run: RunSummary, activeRunId: string | null): GroupTreeRow {

@@ -10,7 +10,7 @@ import { type ParameterDescriptor, buildStructureTree } from "@/lib/structure-tr
 import type { AgentGraphResponse, AgentGroupParametersResponse } from "@/lib/types";
 import { truncateMiddle } from "@/lib/utils";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { z } from "zod";
 
 export interface ParametersTabProps {
@@ -101,6 +101,11 @@ export function ParametersTab({ runId, hashContent, scope }: ParametersTabProps)
     () => (root && drawer.paramPath ? findParameter(root, drawer.paramPath) : null),
     [root, drawer.paramPath],
   );
+  const firstTrainable = useMemo(() => (root ? firstTrainableParameter(root) : null), [root]);
+  useEffect(() => {
+    if (scope !== "group" || drawer.paramPath || !firstTrainable) return;
+    drawer.open(firstTrainable.fullPath);
+  }, [scope, drawer, firstTrainable]);
   const runEvolution = useQuery({
     queryKey: ["run", "parameter-evolution", sourceRunId, drawer.paramPath] as const,
     queryFn: () => {
@@ -166,6 +171,67 @@ export function ParametersTab({ runId, hashContent, scope }: ParametersTabProps)
   const previousPoint =
     selectedStep != null && selectedStep > 0 ? (evolution?.points[selectedStep - 1] ?? null) : null;
   const subtitle = drawerSubtitle(selected);
+  const detail = evolutionLoading ? (
+    <LoadingPanel />
+  ) : evolution ? (
+    <div className="min-h-full">
+      <ParameterEvolutionView
+        path={evolution.path}
+        type={evolution.type}
+        points={evolution.points}
+        selectedStep={selectedStep}
+        onSelectStep={drawer.selectStep}
+      />
+      {scope === "run" ? (
+        <WhyPane point={point} previous={previousPoint} />
+      ) : (
+        <EmptyState
+          title="open a run for gradient context"
+          description={`this view aggregates across ${evolution.points.length} invocations; open a run for full gradient context`}
+          className="min-h-32 border-t border-border"
+        />
+      )}
+    </div>
+  ) : (
+    <EmptyState
+      title="parameter history unavailable"
+      description="this parameter has not emitted evolution points yet"
+    />
+  );
+
+  if (scope === "group") {
+    return (
+      <div className="grid h-full min-h-0 grid-cols-1 overflow-hidden border border-border bg-bg-1 lg:grid-cols-[minmax(320px,0.45fr)_minmax(0,1fr)]">
+        <div className="flex min-h-0 flex-col">
+          <header className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-border px-3 py-2">
+            <Metric label="trainable params" value={trainableCount} />
+            <Metric label="leaf agents" value={leafPaths.length} />
+            <Metric label="group" value={truncateMiddle(hashContent ?? "", 14)} />
+          </header>
+          <div className="min-h-0 flex-1">
+            <StructureTree
+              root={root}
+              selectedParamPath={drawer.paramPath}
+              onSelectParameter={(param) => drawer.open(param.fullPath)}
+            />
+          </div>
+        </div>
+        <section className="flex min-h-0 flex-col border-t border-border bg-bg lg:border-l lg:border-t-0">
+          <header className="flex items-start gap-3 border-b border-border px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[16px] font-medium text-text">
+                {selected?.param.path ?? drawer.paramPath ?? "parameter"}
+              </div>
+              {subtitle ? (
+                <div className="mt-1 truncate font-mono text-[11px] text-muted-2">{subtitle}</div>
+              ) : null}
+            </div>
+          </header>
+          <div className="min-h-0 flex-1 overflow-auto">{detail}</div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full min-h-0 overflow-hidden">
@@ -194,33 +260,7 @@ export function ParametersTab({ runId, hashContent, scope }: ParametersTabProps)
         {...(subtitle ? { subtitle } : {})}
         onClose={drawer.close}
       >
-        {evolutionLoading ? (
-          <LoadingPanel />
-        ) : evolution ? (
-          <div className="min-h-full">
-            <ParameterEvolutionView
-              path={evolution.path}
-              type={evolution.type}
-              points={evolution.points}
-              selectedStep={selectedStep}
-              onSelectStep={drawer.selectStep}
-            />
-            {scope === "run" ? (
-              <WhyPane point={point} previous={previousPoint} />
-            ) : (
-              <EmptyState
-                title="open a run for gradient context"
-                description={`this view aggregates across ${evolution.points.length} invocations; open a run for full gradient context`}
-                className="min-h-32 border-t border-border"
-              />
-            )}
-          </div>
-        ) : (
-          <EmptyState
-            title="parameter history unavailable"
-            description="this parameter has not emitted evolution points yet"
-          />
-        )}
+        {detail}
       </ParameterDrawer>
     </div>
   );
@@ -251,6 +291,18 @@ function countTrainableParameters(root: ReturnType<typeof buildStructureTree>): 
   let total = root.parameters.filter((param) => param.requiresGrad).length;
   for (const child of root.children) total += countTrainableParameters(child);
   return total;
+}
+
+function firstTrainableParameter(
+  root: ReturnType<typeof buildStructureTree>,
+): ParameterDescriptor | null {
+  const direct = root.parameters.find((param) => param.requiresGrad);
+  if (direct) return direct;
+  for (const child of root.children) {
+    const match = firstTrainableParameter(child);
+    if (match) return match;
+  }
+  return null;
 }
 
 function findParameter(

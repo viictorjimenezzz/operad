@@ -53,6 +53,8 @@ export interface GroupTreeGroupProps {
   onSelect: (row: GroupTreeRow) => void;
   /** Render an empty-state when rows is []. */
   empty?: ReactNode;
+  /** Hide the section header when the surrounding panel already supplies it. */
+  hideHeader?: boolean;
 }
 
 export function GroupTreeSection({
@@ -62,29 +64,32 @@ export function GroupTreeSection({
   rows,
   onSelect,
   empty,
+  hideHeader,
 }: GroupTreeGroupProps) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 border-b border-border px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted transition-colors hover:text-text"
-        aria-expanded={open}
-      >
-        {open ? (
-          <ChevronDown size={11} className="flex-shrink-0" />
-        ) : (
-          <ChevronRight size={11} className="flex-shrink-0" />
-        )}
-        <span className="flex-1 truncate text-left">{label}</span>
-        {count != null ? (
-          <span className="rounded-full bg-bg-3 px-2 py-0.5 text-[10px] tabular-nums text-muted-2">
-            {count}
-          </span>
-        ) : null}
-      </button>
-      {open ? (
+      {hideHeader ? null : (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-center gap-1.5 border-b border-border px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted transition-colors hover:text-text"
+          aria-expanded={open}
+        >
+          {open ? (
+            <ChevronDown size={11} className="flex-shrink-0" />
+          ) : (
+            <ChevronRight size={11} className="flex-shrink-0" />
+          )}
+          <span className="flex-1 truncate text-left">{label}</span>
+          {count != null ? (
+            <span className="rounded-full bg-bg-3 px-2 py-0.5 text-[10px] tabular-nums text-muted-2">
+              {count}
+            </span>
+          ) : null}
+        </button>
+      )}
+      {open || hideHeader ? (
         rows.length > 0 ? (
           <ul className="py-0.5">
             {rows.map((row) => (
@@ -176,4 +181,3 @@ function GroupTreeRowView({
     </li>
   );
 }
-

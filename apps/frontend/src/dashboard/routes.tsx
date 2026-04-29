@@ -119,10 +119,10 @@ function GraphRouteErrorBoundary() {
   return (
     <div className="flex h-full items-center justify-center p-6">
       <div className="max-w-md rounded-lg border border-[--color-err-dim] bg-bg-1 p-5">
-        <div className="text-[14px] font-medium text-text">Graph failed to render</div>
+        <div className="text-[14px] font-medium text-text">Graph unavailable</div>
         <div className="mt-2 text-[12px] leading-5 text-muted">
-          The rest of the run is still available. Collapse the graph or reload after fixing the
-          graph payload.
+          The rest of the run is still available. The graph view will recover when a valid payload
+          is available.
         </div>
         <pre className="mt-3 max-h-32 overflow-auto rounded-md bg-bg-inset p-2 font-mono text-[11px] text-[--color-err]">
           {message}

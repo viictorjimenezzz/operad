@@ -77,6 +77,19 @@ export function AgentGroupMetricsTab() {
   return (
     <div className="h-full overflow-auto p-4">
       <div className="mx-auto max-w-[1280px] space-y-4">
+        <PanelSection label="Metrics" count={metricDefs.length}>
+          <PanelGrid cols={3}>
+            {metricDefs.map((metric) => (
+              <MetricCard
+                key={metric.key}
+                metric={metric}
+                runs={runs}
+                endpoint={endpoint.data as EndpointMetrics | undefined}
+                hashContent={hashContent}
+              />
+            ))}
+          </PanelGrid>
+        </PanelSection>
         {runs.length >= 2 ? (
           <PanelSection label="Relationships">
             <PanelGrid cols={2}>
@@ -103,19 +116,6 @@ export function AgentGroupMetricsTab() {
             </PanelGrid>
           </PanelSection>
         ) : null}
-        <PanelSection label="Metrics" count={metricDefs.length}>
-          <PanelGrid cols={3}>
-            {metricDefs.map((metric) => (
-              <MetricCard
-                key={metric.key}
-                metric={metric}
-                runs={runs}
-                endpoint={endpoint.data as EndpointMetrics | undefined}
-                hashContent={hashContent}
-              />
-            ))}
-          </PanelGrid>
-        </PanelSection>
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import { TypedEdge } from "@/components/agent-view/graph/typed-edge";
 import { useActiveAgents } from "@/components/agent-view/graph/use-active-agents";
 import { Button, EmptyState, IconButton } from "@/components/ui";
 import { dashboardApi } from "@/lib/api/dashboard";
-import type { AgentGraphResponse } from "@/lib/types";
+import type { AgentFlowEdge, AgentFlowNode, AgentGraphResponse } from "@/lib/types";
 import { useUIStore } from "@/stores";
 import { useQueries } from "@tanstack/react-query";
 import {
@@ -35,6 +35,91 @@ const MINIMAP_STYLE = {
   border: "1px solid var(--color-border)",
   borderRadius: 6,
 } as const;
+
+function normalizeAgentGraph(agentGraph: AgentGraphResponse): AgentGraphResponse {
+  const seen = new Set<string>();
+  const nodes: AgentFlowNode[] = [];
+
+  for (const raw of agentGraph.nodes) {
+    const path = raw.path.trim();
+    if (!path || seen.has(path)) continue;
+    seen.add(path);
+    nodes.push({
+      ...raw,
+      path,
+      class_name: raw.class_name.trim() || fallbackClassName(path, raw.kind),
+      input_label: raw.input_label.trim() || raw.input.trim() || "input",
+      output_label: raw.output_label.trim() || raw.output.trim() || "output",
+      parent_path: raw.parent_path?.trim() || null,
+    });
+  }
+
+  const root = agentGraph.root?.trim() || null;
+  const paths = new Set(nodes.map((node) => node.path));
+  const fixedNodes = nodes.map((node) => ({
+    ...node,
+    parent_path:
+      node.parent_path && (paths.has(node.parent_path) || node.parent_path === root)
+        ? node.parent_path
+        : null,
+  }));
+
+  if (fixedNodes.length === 0) {
+    return { root: null, nodes: [], edges: [] };
+  }
+
+  const visibleNodes = fixedNodes.filter((node) => node.path !== root);
+  if (visibleNodes.length === 0) {
+    const fallback = fixedNodes[0];
+    if (!fallback) return { root: null, nodes: [], edges: [] };
+    const fallbackNode: AgentFlowNode = {
+      path: fallback.path,
+      kind: "leaf",
+      parent_path: null,
+      input: fallback.input,
+      output: fallback.output,
+      class_name: fallback.class_name,
+      input_label: fallback.input_label || "input",
+      output_label: fallback.output_label || "output",
+    };
+    return {
+      root: null,
+      nodes: [fallbackNode],
+      edges: [],
+    };
+  }
+
+  const edges: AgentFlowEdge[] = [];
+  const edgeKeys = new Set<string>();
+  for (const raw of agentGraph.edges) {
+    const caller = raw.caller.trim();
+    const callee = raw.callee.trim();
+    if (!caller || !callee || caller === callee) continue;
+    if (caller === root || callee === root) continue;
+    if (!paths.has(caller) || !paths.has(callee)) continue;
+    const key = `${caller}::${callee}::${raw.type}`;
+    if (edgeKeys.has(key)) continue;
+    edgeKeys.add(key);
+    edges.push({ ...raw, caller, callee, type: raw.type || "call" });
+  }
+
+  return { root, nodes: fixedNodes, edges };
+}
+
+function fallbackClassName(path: string, kind: AgentFlowNode["kind"]): string {
+  const last = path.split(/[./]/).filter(Boolean).pop();
+  return last || (kind === "composite" ? "Composite" : "Agent");
+}
+
+function graphSignature(agentGraph: AgentGraphResponse): string {
+  return [
+    agentGraph.root ?? "",
+    agentGraph.nodes
+      .map((node) => `${node.path}:${node.kind}:${node.parent_path ?? ""}:${node.class_name}`)
+      .join("|"),
+    agentGraph.edges.map((edge) => `${edge.caller}>${edge.callee}:${edge.type}`).join("|"),
+  ].join("::");
+}
 
 function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
   const selection = useUIStore((s) => s.graphSelection);
@@ -309,8 +394,11 @@ function GraphCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
         </Button>
       </div>
       <ReactFlow
-        defaultNodes={nodes}
-        defaultEdges={edges}
+        key={`${runId}-${nodes.map((node) => node.id).join("|")}-${edges
+          .map((edge) => edge.id)
+          .join("|")}`}
+        nodes={nodes}
+        edges={edges}
         onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClick}
         nodeTypes={nodeTypes}
@@ -441,8 +529,9 @@ function SingleLeafCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
   return (
     <div className="relative h-full w-full">
       <ReactFlow
-        defaultNodes={nodes}
-        defaultEdges={[]}
+        key={`${runId}-${singlePath}`}
+        nodes={nodes}
+        edges={[]}
         onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
         fitView
@@ -467,27 +556,30 @@ function SingleLeafCanvas({ agentGraph, runId }: AgentFlowGraphProps) {
 }
 
 export function AgentFlowGraph({ agentGraph, runId }: AgentFlowGraphProps) {
-  if (!agentGraph || agentGraph.nodes.length === 0) {
+  const normalizedGraph = useMemo(() => normalizeAgentGraph(agentGraph), [agentGraph]);
+  const signature = useMemo(() => graphSignature(normalizedGraph), [normalizedGraph]);
+
+  if (!normalizedGraph || normalizedGraph.nodes.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
         <EmptyState title="waiting for first invocation" description="graph not ready yet" />
       </div>
     );
   }
-  const [singleNode] = agentGraph.nodes;
-  if (agentGraph.nodes.length === 1 && agentGraph.edges.length === 0 && singleNode) {
+  const [singleNode] = normalizedGraph.nodes;
+  if (normalizedGraph.nodes.length === 1 && normalizedGraph.edges.length === 0 && singleNode) {
     // Re-key on the (run + path) so a different run gets a clean
     // ReactFlow instance instead of trying to diff into a stale store —
     // and make sure we never reuse internal state across runs.
     return (
-      <ReactFlowProvider key={`single-${runId}-${singleNode.path}`}>
-        <SingleLeafCanvas agentGraph={agentGraph} runId={runId} />
+      <ReactFlowProvider key={`single-${runId}-${signature}`}>
+        <SingleLeafCanvas agentGraph={normalizedGraph} runId={runId} />
       </ReactFlowProvider>
     );
   }
   return (
-    <ReactFlowProvider key={`group-${runId}`}>
-      <GraphCanvas agentGraph={agentGraph} runId={runId} />
+    <ReactFlowProvider key={`group-${runId}-${signature}`}>
+      <GraphCanvas agentGraph={normalizedGraph} runId={runId} />
     </ReactFlowProvider>
   );
 }

@@ -270,7 +270,8 @@ def _build_invocations(
                     "hash_model": output.get("hash_model"),
                     "hash_graph": output.get("hash_graph"),
                     "hash_output_schema": output.get("hash_output_schema"),
-                    "hash_config": output.get("hash_config"),
+                    "hash_config": output.get("hash_config")
+                    or (_short_hash(repr(config)) if config else None),
                     "status": "ok" if kind == "end" else "error",
                     "error": None if kind == "end" else _error_repr(env),
                     "langfuse_url": (
@@ -598,7 +599,10 @@ async def agent_graph(request: Request, run_id: str) -> JSONResponse:
                     break
     if graph_json is None:
         return JSONResponse(_synthetic_agent_graph_payload(ctx))
-    payload = to_agent_graph_from_json(graph_json)
+    try:
+        payload = to_agent_graph_from_json(graph_json)
+    except Exception:
+        return JSONResponse(_synthetic_agent_graph_payload(ctx))
 
     # Backfill class_name on agents using runtime metadata from end events,
     # mirroring _enrich_io_graph_with_events.

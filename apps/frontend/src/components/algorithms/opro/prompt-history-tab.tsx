@@ -1,6 +1,9 @@
-import { buildOPROSteps, shortText } from "@/components/algorithms/opro/opro-history-tab";
+import {
+  AdjacentPromptDiff,
+  FullValueToggle,
+} from "@/components/algorithms/opro/prompt-adjacent-diff";
+import { buildOPROSteps } from "@/components/algorithms/opro/opro-history-tab";
 import { OPROScorePanel } from "@/components/algorithms/opro/score-curve-tab";
-import { MarkdownView } from "@/components/ui";
 import { EmptyState, Pill } from "@/components/ui";
 import { useUrlState } from "@/hooks/use-url-state";
 import { RunEventsResponse } from "@/lib/types";
@@ -76,88 +79,19 @@ export function OPROPromptHistoryTab({
                     )}
                   </button>
                   <div className="p-3">
-                    {expanded ? (
-                      <ExpandedPromptPair
-                        before={before}
-                        beforeLabel={beforeLabel}
-                        after={step.candidateValue}
-                        afterLabel={`step ${step.stepIndex}`}
-                      />
-                    ) : (
-                      <DiffPreview before={before} after={step.candidateValue} />
-                    )}
+                    <AdjacentPromptDiff
+                      before={before}
+                      after={step.candidateValue}
+                      beforeLabel={beforeLabel}
+                      afterLabel={`step ${step.stepIndex}`}
+                    />
+                    {expanded ? <FullValueToggle value={step.candidateValue} /> : null}
                   </div>
                 </section>
               </li>
             );
           })}
         </ol>
-      </div>
-    </div>
-  );
-}
-
-function DiffPreview({ before, after }: { before: string; after: string }) {
-  const beforeText = before.trim();
-  const afterText = after.trim();
-  return (
-    <div className="space-y-2 rounded border border-border bg-bg-inset p-2 text-[12px]">
-      <div className="rounded border border-[--color-err-dim] bg-[--color-err-dim]/30 px-2 py-1.5 text-[--color-err]">
-        <span className="font-mono text-[10px] uppercase text-muted-2">- </span>
-        {beforeText ? shortText(beforeText, 220) : "(no prior prompt)"}
-      </div>
-      <div className="rounded border border-[--color-ok-dim] bg-[--color-ok-dim]/30 px-2 py-1.5 text-[--color-ok]">
-        <span className="font-mono text-[10px] uppercase text-muted-2">+ </span>
-        {afterText ? shortText(afterText, 220) : "(no candidate prompt)"}
-      </div>
-    </div>
-  );
-}
-
-function ExpandedPromptPair({
-  before,
-  beforeLabel,
-  after,
-  afterLabel,
-}: {
-  before: string;
-  beforeLabel: string;
-  after: string;
-  afterLabel: string;
-}) {
-  return (
-    <div className="space-y-3">
-      <PromptPane label={beforeLabel} value={before || "No prior prompt recorded."} tone="before" />
-      <PromptPane
-        label={afterLabel}
-        value={after || "No candidate prompt recorded."}
-        tone="after"
-      />
-    </div>
-  );
-}
-
-function PromptPane({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "before" | "after";
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded border bg-bg-2",
-        tone === "before" ? "border-[--color-err-dim]" : "border-[--color-ok-dim]",
-      )}
-    >
-      <div className="border-b border-border px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-muted">
-        {label}
-      </div>
-      <div className="max-h-72 overflow-auto p-3 text-[12px] leading-5">
-        <MarkdownView value={value} />
       </div>
     </div>
   );
