@@ -5,12 +5,11 @@ from __future__ import annotations
 import pytest
 
 from operad import Configuration, OperadOutput
-from operad.utils.hashing import hash_config, hash_json, hash_schema, hash_str
+from operad.core.agent import _extract_token_usage
 from operad.runtime.observers import base as _obs
+from operad.utils.hashing import hash_config, hash_json, hash_schema, hash_str
 
 from tests.conftest import A, B, FakeLeaf
-
-
 
 
 def test_hash_str_deterministic_and_16_hex() -> None:
@@ -46,6 +45,20 @@ def test_hash_schema_is_stable() -> None:
 
 def test_hash_json_is_key_order_insensitive() -> None:
     assert hash_json({"a": 1, "b": 2}) == hash_json({"b": 2, "a": 1})
+
+
+def test_extract_token_usage_from_strands_metrics_shape() -> None:
+    class _Metrics:
+        accumulated_usage = {
+            "inputTokens": 123,
+            "outputTokens": 45,
+            "totalTokens": 168,
+        }
+
+    class _Result:
+        metrics = _Metrics()
+
+    assert _extract_token_usage(_Result()) == (123, 45)
 
 
 def test_envelope_roundtrips_via_pydantic() -> None:

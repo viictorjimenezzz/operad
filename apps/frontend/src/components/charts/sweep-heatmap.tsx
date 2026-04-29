@@ -90,8 +90,7 @@ function BarView({
   const scored = bars.some((bar) => bar.score != null);
 
   return (
-    <div className="relative">
-      {!scored ? <ScorelessOverlay /> : null}
+    <div className="relative min-h-[260px]">
       <ResponsiveContainer width="100%" height={260}>
         <BarChart data={bars} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
@@ -136,26 +135,34 @@ function MatrixView({
   const scored = grouped.some((cell) => cell.score != null);
 
   return (
-    <div className="relative overflow-auto">
-      {!scored ? <ScorelessOverlay /> : null}
-      <table className="border-collapse text-[11px]">
+    <div className="overflow-auto rounded-lg border border-border bg-bg-1">
+      <table className="w-full min-w-[620px] border-collapse text-[11px]">
         <thead>
-          <tr>
-            <th className="sticky left-0 bg-bg-1 px-2 py-1 text-left font-medium text-muted">
-              {ax0.name} / {ax1.name}
+          <tr className="border-b border-border bg-bg-2/80">
+            <th className="sticky left-0 z-10 w-64 bg-bg-2/95 px-3 py-2 text-left font-medium text-muted">
+              <span className="block truncate" title={`${ax0.name} / ${ax1.name}`}>
+                {axisLabel(ax0.name)} / {axisLabel(ax1.name)}
+              </span>
             </th>
             {ax1.values.map((value) => (
-              <th key={String(value)} className="px-2 py-1 text-right font-medium text-muted">
-                {String(value)}
+              <th
+                key={String(value)}
+                className="min-w-24 px-3 py-2 text-center font-medium text-muted"
+              >
+                <span className="block truncate" title={String(value)}>
+                  {valueLabel(value)}
+                </span>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {ax0.values.map((xValue) => (
-            <tr key={String(xValue)}>
-              <td className="sticky left-0 bg-bg-1 px-2 py-1 font-mono text-text">
-                {String(xValue)}
+            <tr key={String(xValue)} className="border-b border-border/70 last:border-b-0">
+              <td className="sticky left-0 z-10 w-64 bg-bg-1 px-3 py-2 font-mono text-text">
+                <span className="block truncate" title={String(xValue)}>
+                  {valueLabel(xValue)}
+                </span>
               </td>
               {ax1.values.map((yValue) => {
                 const entry = map.get(`${String(xValue)}||${String(yValue)}`) ?? null;
@@ -202,19 +209,26 @@ function HeatmapCell({
   const background = scored
     ? scoreColor(score, scoreMin, scoreMax)
     : entry && entry.cells.length > 0
-      ? "var(--color-ok-dim)"
+      ? "color-mix(in srgb, var(--color-accent) 24%, transparent)"
       : "transparent";
   return (
     <div
-      className="group min-w-20 px-2 py-1 text-right font-mono tabular-nums"
+      className="group relative flex min-h-16 min-w-24 items-center justify-center border-l border-border/70 px-3 py-2 text-center font-mono tabular-nums"
       style={{ background }}
     >
-      {score != null ? score.toFixed(3) : ""}
-      <div className="absolute left-1/2 top-full z-30 hidden w-72 -translate-x-1/2 rounded border border-border-strong bg-bg-1 p-2 text-left font-sans text-[11px] shadow-[var(--shadow-popover)] group-hover:block">
+      <div className="flex flex-col items-center gap-1">
+        <span className="text-[14px] text-text">
+          {score != null ? score.toFixed(3) : entry ? `${entry.cells.length}` : "—"}
+        </span>
+        <span className="text-[10px] uppercase tracking-[0.06em] text-muted-2">
+          {score != null ? "score" : entry ? "cells" : "pending"}
+        </span>
+      </div>
+      <div className="absolute left-1/2 top-full z-30 hidden w-80 -translate-x-1/2 rounded border border-border-strong bg-bg-1 p-2 text-left font-sans text-[11px] shadow-[var(--shadow-popover)] group-hover:block">
         {entry ? (
           <div className="flex flex-col gap-1">
             <div className="font-mono text-text">
-              {xAxis}={String(entry.x)}, {yAxis}={String(entry.y)}
+              {axisLabel(xAxis)}={String(entry.x)}, {axisLabel(yAxis)}={String(entry.y)}
             </div>
             <div className="text-muted">
               score:{" "}
@@ -243,14 +257,6 @@ function HeatmapCell({
           <div className="text-muted">pending cell</div>
         )}
       </div>
-    </div>
-  );
-}
-
-function ScorelessOverlay() {
-  return (
-    <div className="pointer-events-none absolute inset-x-4 top-4 z-20 rounded border border-[--color-warn-dim] bg-bg-1/95 p-3 text-center text-[12px] text-muted shadow-[var(--shadow-card-soft)]">
-      this sweep did not define a score function - open individual cell runs for results
     </div>
   );
 }
@@ -315,6 +321,15 @@ function parametersLabel(parameters: Record<string, unknown>): string {
   return Object.entries(parameters)
     .map(([key, value]) => `${key}=${String(value)}`)
     .join(", ");
+}
+
+function axisLabel(value: string): string {
+  return value.replace(/^config\.sampling\./, "");
+}
+
+function valueLabel(value: unknown): string {
+  const raw = String(value);
+  return raw.length > 42 ? `${raw.slice(0, 39)}...` : raw;
 }
 
 function BarTooltip({

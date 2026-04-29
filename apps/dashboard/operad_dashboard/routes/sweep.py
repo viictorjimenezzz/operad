@@ -74,10 +74,13 @@ def _compute_snapshot(events: Iterable[dict[str, Any]]) -> dict[str, Any]:
         if kind == "cell":
             idx = payload.get("cell_index")
             if isinstance(idx, int):
+                cell = dict(payload)
+                cell["cell_index"] = idx
+                cell["parameters"] = payload.get("parameters") or {}
+                cell["score"] = payload.get("score")
                 cells_by_index[idx] = {
                     "cell_index": idx,
-                    "parameters": payload.get("parameters") or {},
-                    "score": payload.get("score"),
+                    **cell,
                 }
         elif kind == "algo_end":
             total_cells = int(payload.get("cells", 0))

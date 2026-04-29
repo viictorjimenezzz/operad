@@ -17,6 +17,7 @@ PRICE_TABLE: dict[str, tuple[float, float]] = {
     "anthropic:claude-haiku-4-5": (0.001, 0.005),
     "anthropic:claude-sonnet-4-6": (0.003, 0.015),
     "anthropic:claude-opus-4-7": (0.015, 0.075),
+    "gemini:gemini-2.5-flash": (0.0003, 0.0025),
     "openai:gpt-4o-mini": (0.00015, 0.0006),
     "openai:gpt-4o": (0.0025, 0.01),
 }

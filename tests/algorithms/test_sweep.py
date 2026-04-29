@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from operad import Agent
+from operad.agents.reasoning.schemas import Candidate, Score
 from operad.algorithms import Sweep, SweepReport
 
 from ..conftest import A, B, FakeLeaf
@@ -26,6 +27,15 @@ class _EchoTask(Agent[A, B]):
 
     async def forward(self, x: A) -> B:  # type: ignore[override]
         return B.model_construct(value=len(self.task))
+
+
+class _ScoreByValue(Agent[Candidate[A, B], Score]):
+    input = Candidate
+    output = Score
+
+    async def forward(self, x: Candidate[A, B]) -> Score:  # type: ignore[override]
+        value = getattr(x.output, "value", 0)
+        return Score(score=float(value) / 10.0, rationale=f"value={value}")
 
 
 async def _make_sweep(seed: Agent, params: dict, **kwargs) -> Sweep:
@@ -112,3 +122,18 @@ async def test_sweep_report_round_trips_via_json(cfg) -> None:
 
     assert len(restored.cells) == 2
     assert {c.parameters["task"] for c in restored.cells} == {"a", "bbb"}
+
+
+async def test_sweep_judge_scores_cells_and_records_child_refs(cfg) -> None:
+    seed = _EchoTask(config=cfg, task="x")
+    await seed.abuild()
+
+    sweep = await _make_sweep(seed, {"task": ["a", "bbb"]})
+    sweep.judge = _ScoreByValue(config=cfg)
+
+    report = await sweep.run(A(text="go"))
+
+    assert [cell.score for cell in report.cells] == [0.1, 0.3]
+    assert [cell.judge_rationale for cell in report.cells] == ["value=1", "value=3"]
+    assert all(cell.child_run_id for cell in report.cells)
+    assert all(cell.judge_run_id for cell in report.cells)

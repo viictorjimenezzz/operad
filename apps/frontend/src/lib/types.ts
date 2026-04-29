@@ -348,6 +348,13 @@ export const SweepCell = z.object({
   cell_index: z.number(),
   parameters: z.record(z.unknown()),
   score: z.number().nullable(),
+  judge_rationale: z.string().nullable().optional(),
+  child_run_id: z.string().nullable().optional(),
+  judge_run_id: z.string().nullable().optional(),
+  latency_ms: z.number().nullable().optional(),
+  prompt_tokens: z.number().nullable().optional(),
+  completion_tokens: z.number().nullable().optional(),
+  cost_usd: z.number().nullable().optional(),
 });
 export type SweepCell = z.infer<typeof SweepCell>;
 

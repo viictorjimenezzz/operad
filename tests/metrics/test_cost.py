@@ -130,6 +130,19 @@ async def test_cost_tracker_unknown_model_is_free() -> None:
     assert tracker.totals()["x"]["cost_usd"] == 0.0
 
 
+async def test_cost_tracker_prices_gemini_25_flash() -> None:
+    tracker = CostTracker()
+    tracker.add(
+        run_id="gemini-run",
+        backend="gemini",
+        model="gemini-2.5-flash",
+        prompt_tokens=1000,
+        completion_tokens=1000,
+    )
+    expected = (1000 * 0.0003 + 1000 * 0.0025) / 1000.0
+    assert tracker.totals()["gemini-run"]["cost_usd"] == pytest.approx(expected)
+
+
 async def test_cost_tracker_empty_before_events() -> None:
     assert CostTracker().totals() == {}
 
