@@ -1,12 +1,12 @@
 import { BeamLeaderboardTab } from "@/components/algorithms/beam/leaderboard-tab";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
 afterEach(cleanup);
 
 describe("BeamLeaderboardTab", () => {
-  it("shows top-k candidates by default and expands to all candidates", () => {
+  it("shows all ranked candidates with adjacent diffs and langfuse fallback", () => {
     render(
       <MemoryRouter>
         <BeamLeaderboardTab
@@ -19,16 +19,21 @@ describe("BeamLeaderboardTab", () => {
             iterations: [{ iter_index: 0, phase: "prune", metadata: { top_indices: [1] } }],
           }}
           dataChildren={[]}
+          dataAgentsSummary={{
+            run_id: "beam-1",
+            agents: [{ agent_path: "Critic", langfuse_url: "https://langfuse.test/trace/beam-1" }],
+          }}
         />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("K = 1 of 2")).toBeTruthy();
-    expect(screen.getByText("high")).toBeTruthy();
-    expect(screen.queryByText("low")).toBeNull();
-
-    fireEvent.click(screen.getByText("show all candidates"));
+    expect(screen.getAllByText("high").length).toBeGreaterThan(0);
     expect(screen.getByText("low")).toBeTruthy();
+    expect(screen.queryByText(/K =/)).toBeNull();
+    expect(screen.getByText("Diff preview")).toBeTruthy();
+    expect(screen.getAllByRole("link", { name: "open" })[0]?.getAttribute("href")).toBe(
+      "https://langfuse.test/trace/beam-1",
+    );
   });
 
   it("shows an empty state when candidate data is missing", () => {

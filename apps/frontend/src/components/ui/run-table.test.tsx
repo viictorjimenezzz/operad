@@ -228,7 +228,12 @@ describe("RunTable", () => {
     ];
     render(
       <MemoryRouter>
-        <RunTable rows={rows} columns={diffImageColumns} storageKey="diff-image-test" pageSize={50} />
+        <RunTable
+          rows={rows}
+          columns={diffImageColumns}
+          storageKey="diff-image-test"
+          pageSize={50}
+        />
       </MemoryRouter>,
     );
 
@@ -240,6 +245,40 @@ describe("RunTable", () => {
     expect(text.indexOf("run-1")).toBeLessThan(text.indexOf("run-0"));
     const imageHeader = screen.getByRole("button", { name: /Image/ });
     expect(imageHeader.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("expands long diff cells directly without a full-diff toggle", () => {
+    const previous = `previous value ${"old ".repeat(40)}tail`;
+    const next = `next value ${"new ".repeat(40)}tail`;
+    const rows: RunRow[] = [
+      {
+        id: "run-diff",
+        identity: "identity-diff",
+        state: "ended",
+        startedAt: 1,
+        endedAt: 2,
+        durationMs: 10,
+        fields: {
+          diffValue: { kind: "diff", value: next, previous },
+        },
+      },
+    ];
+    const diffColumns: RunTableColumn[] = [
+      { id: "run", label: "Run", source: "_id", sortable: true, width: 100 },
+      { id: "diff", label: "Diff", source: "diffValue", sortable: true, width: 240 },
+    ];
+    render(
+      <MemoryRouter>
+        <RunTable rows={rows} columns={diffColumns} storageKey="diff-expand-test" pageSize={50} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText("full diff")).toBeNull();
+    expect(document.body.textContent ?? "").not.toContain("- previous value");
+    fireEvent.click(screen.getByRole("button", { name: /next value/ }));
+    expect(screen.queryByText("full diff")).toBeNull();
+    expect(document.body.textContent ?? "").toContain("- previous value");
+    expect(document.body.textContent ?? "").toContain("+ next value");
   });
 
   it("renders link cells as safe external links", () => {

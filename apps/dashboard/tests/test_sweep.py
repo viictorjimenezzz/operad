@@ -7,6 +7,7 @@ from collections import deque
 import pytest
 from fastapi.testclient import TestClient
 
+from operad.metrics.cost import CostObserver
 from operad.runtime.events import AlgorithmEvent
 from operad_dashboard.app import create_app
 from operad_dashboard.observer import WebDashboardObserver
@@ -72,7 +73,16 @@ def _env(kind: str, payload: dict, algorithm_path: str = "Sweep") -> dict:
 
 def test_compute_snapshot_2d_axes() -> None:
     events = [
-        _env("cell", {"cell_index": 0, "parameters": {"temp": 0.5, "tok": 100}, "score": 0.7}),
+        _env(
+            "cell",
+            {
+                "cell_index": 0,
+                "parameters": {"temp": 0.5, "tok": 100},
+                "score": 0.7,
+                "child_run_id": "child-0",
+                "latency_ms": 120.0,
+            },
+        ),
         _env("cell", {"cell_index": 1, "parameters": {"temp": 0.5, "tok": 200}, "score": 0.8}),
         _env("cell", {"cell_index": 2, "parameters": {"temp": 1.0, "tok": 100}, "score": 0.5}),
         _env("cell", {"cell_index": 3, "parameters": {"temp": 1.0, "tok": 200}, "score": 0.9}),
@@ -89,6 +99,8 @@ def test_compute_snapshot_2d_axes() -> None:
     assert snap["score_range"] == [0.5, 0.9]
     assert snap["finished"] is True
     assert snap["total_cells"] == 4
+    assert snap["cells"][0]["child_run_id"] == "child-0"
+    assert snap["cells"][0]["latency_ms"] == 120.0
 
 
 def test_compute_snapshot_none_scores() -> None:
@@ -164,3 +176,88 @@ async def test_sweep_json_null_scores(app_and_obs) -> None:
 
     assert data["score_range"] is None
     assert data["best_cell_index"] is None
+
+
+def test_sweep_children_include_cell_metadata_and_cost() -> None:
+    obs = WebDashboardObserver()
+    cost = CostObserver()
+    cost.tracker.add(
+        run_id="child-cell",
+        backend="gemini",
+        model="gemini-2.5-flash",
+        prompt_tokens=1000,
+        completion_tokens=100,
+    )
+    app = create_app(observer=obs, cost_observer=cost, auto_register=False)
+    obs.registry.record_envelope(
+        {
+            "type": "algo_event",
+            "run_id": "parent",
+            "algorithm_path": "Sweep",
+            "kind": "algo_start",
+            "payload": {},
+            "started_at": 1.0,
+            "finished_at": None,
+            "metadata": {},
+        }
+    )
+    obs.registry.record_envelope(
+        {
+            "type": "agent_event",
+            "run_id": "child-cell",
+            "agent_path": "Reasoner",
+            "kind": "start",
+            "input": None,
+            "output": None,
+            "started_at": 1.1,
+            "finished_at": None,
+            "metadata": {"parent_run_id": "parent", "is_root": True},
+            "error": None,
+        }
+    )
+    obs.registry.record_envelope(
+        {
+            "type": "agent_event",
+            "run_id": "child-cell",
+            "agent_path": "Reasoner",
+            "kind": "end",
+            "input": None,
+            "output": None,
+            "started_at": 1.1,
+            "finished_at": 1.3,
+            "metadata": {"parent_run_id": "parent", "is_root": True},
+            "error": None,
+        }
+    )
+    obs.registry.record_envelope(
+        {
+            "type": "algo_event",
+            "run_id": "parent",
+            "algorithm_path": "Sweep",
+            "kind": "cell",
+            "payload": {
+                "cell_index": 0,
+                "parameters": {"task": "short", "config.sampling.temperature": 0.0},
+                "score": 0.82,
+                "judge_rationale": "clear",
+                "child_run_id": "child-cell",
+            },
+            "started_at": 1.4,
+            "finished_at": None,
+            "metadata": {},
+        }
+    )
+
+    with TestClient(app) as client:
+        children = client.get("/runs/parent/children").json()
+        summary = client.get("/runs/parent/summary").json()
+
+    assert children[0]["metadata"]["cell_index"] == 0
+    assert children[0]["metadata"]["algorithm_role"] == "sweep_cell"
+    assert children[0]["metadata"]["axis_values"]["task"] == "short"
+    assert children[0]["metrics"]["score"] == 0.82
+    assert children[0]["cost"]["prompt_tokens"] == 1000
+    assert children[0]["cost"]["completion_tokens"] == 100
+    assert children[0]["cost"]["cost_usd"] > 0
+    assert summary["cost"]["prompt_tokens"] == 1000
+    assert summary["cost"]["completion_tokens"] == 100

@@ -50,8 +50,12 @@ export function SweepDetailOverview({ data, dataSummary }: SweepDetailOverviewPr
   const failed = snap.finished ? Math.max(0, snap.total_cells - snap.cells.length) : 0;
   const pending = snap.finished ? 0 : Math.max(0, snap.total_cells - snap.cells.length);
 
+  const costLabel = hasUsage(summary?.cost)
+    ? formatCost(summary?.cost?.cost_usd ?? null)
+    : "unavailable";
+
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 p-4">
       <PanelGrid cols={4} gap="sm">
         <Kpi label="axes" value={snap.axes.length.toString()} />
         <Kpi label="cells" value={`${snap.cells.length}/${snap.total_cells}`} />
@@ -64,7 +68,7 @@ export function SweepDetailOverview({ data, dataSummary }: SweepDetailOverviewPr
           label="best score"
           value={best?.score != null ? formatNumber(best.score) : scored.length ? "-" : "unscored"}
         />
-        <Kpi label="cost" value={formatCost(summary?.cost?.cost_usd ?? null)} />
+        <Kpi label="cost" value={costLabel} />
         <Kpi label="runtime" value={formatDurationMs(summary?.duration_ms ?? null)} />
         <Kpi label="events" value={formatNumber(summary?.event_total ?? 0)} />
       </PanelGrid>
@@ -95,100 +99,118 @@ export function SweepCostTab({ data, dataChildren }: SweepDetailOverviewProps) {
   const frontier = paretoFrontier(snap, costByCell);
 
   return (
-    <PanelGrid cols={2}>
-      <PanelGridItem colSpan={2}>
-        <PanelCard title="cost vs best score" bodyMinHeight={220}>
-          {cumulative.length > 0 ? (
+    <div className="p-4">
+      <PanelGrid cols={2}>
+        <PanelGridItem colSpan={2}>
+          <PanelCard title="cost vs best score" bodyMinHeight={220}>
+            {cumulative.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={cumulative} margin={{ top: 8, right: 18, bottom: 8, left: 0 }}>
+                  <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="cost"
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(value) => formatCost(Number(value))}
+                  />
+                  <YAxis dataKey="best" tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    formatter={(value, name) =>
+                      name === "cost" ? formatCost(Number(value)) : formatNumber(Number(value))
+                    }
+                    contentStyle={{
+                      background: "var(--color-bg-2)",
+                      border: "1px solid var(--color-border)",
+                      fontSize: 11,
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="best"
+                    stroke="var(--color-accent)"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: "var(--color-accent)" }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <EmptyState
+                title="no scored costs"
+                description="cost frontier needs scored cells with provider usage"
+              />
+            )}
+          </PanelCard>
+        </PanelGridItem>
+        <PanelCard title="cost by axis" bodyMinHeight={220}>
+          {axisCosts.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={cumulative} margin={{ top: 8, right: 18, bottom: 8, left: 0 }}>
-                <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="cost"
+              <BarChart data={axisCosts} margin={{ top: 8, right: 18, bottom: 8, left: 0 }}>
+                <CartesianGrid
+                  stroke="var(--color-border)"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} />
+                <YAxis
                   tick={{ fontSize: 11 }}
                   tickFormatter={(value) => formatCost(Number(value))}
                 />
-                <YAxis dataKey="best" tick={{ fontSize: 11 }} />
                 <Tooltip
-                  formatter={(value, name) =>
-                    name === "cost" ? formatCost(Number(value)) : formatNumber(Number(value))
-                  }
+                  formatter={(value) => formatCost(Number(value))}
                   contentStyle={{
                     background: "var(--color-bg-2)",
                     border: "1px solid var(--color-border)",
                     fontSize: 11,
                   }}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="best"
-                  stroke="var(--color-accent)"
-                  strokeWidth={2}
-                  dot={{ r: 3, fill: "var(--color-accent)" }}
+                <Bar
+                  dataKey="cost"
+                  fill="var(--color-accent)"
+                  fillOpacity={0.78}
+                  radius={[2, 2, 0, 0]}
                 />
-              </LineChart>
+              </BarChart>
             </ResponsiveContainer>
           ) : (
-            <EmptyState title="no scored cells" description="cost frontier needs cell scores" />
+            <EmptyState
+              title="no cell costs"
+              description="provider usage is unavailable for these cells"
+            />
           )}
         </PanelCard>
-      </PanelGridItem>
-      <PanelCard title="cost by axis" bodyMinHeight={220}>
-        {axisCosts.length > 0 ? (
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={axisCosts} margin={{ top: 8, right: 18, bottom: 8, left: 0 }}>
-              <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(value) => formatCost(Number(value))} />
-              <Tooltip
-                formatter={(value) => formatCost(Number(value))}
-                contentStyle={{
-                  background: "var(--color-bg-2)",
-                  border: "1px solid var(--color-border)",
-                  fontSize: 11,
-                }}
-              />
-              <Bar
-                dataKey="cost"
-                fill="var(--color-accent)"
-                fillOpacity={0.78}
-                radius={[2, 2, 0, 0]}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <EmptyState
-            title="no cell costs"
-            description="synthetic child runs have not reported cost"
-          />
-        )}
-      </PanelCard>
-      <PanelCard title="pareto frontier">
-        {frontier.length > 0 ? (
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr className="border-b border-border text-muted">
-                <th className="px-2 py-1 text-left font-medium">cell</th>
-                <th className="px-2 py-1 text-right font-medium">score</th>
-                <th className="px-2 py-1 text-right font-medium">cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {frontier.map((row) => (
-                <tr key={row.cell.cell_index} className="border-b border-border/70 last:border-b-0">
-                  <td className="px-2 py-1 font-mono">#{row.cell.cell_index}</td>
-                  <td className="px-2 py-1 text-right font-mono">
-                    {row.cell.score != null ? row.cell.score.toFixed(3) : "-"}
-                  </td>
-                  <td className="px-2 py-1 text-right font-mono">{formatCost(row.cost)}</td>
+        <PanelCard title="pareto frontier">
+          {frontier.length > 0 ? (
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="border-b border-border text-muted">
+                  <th className="px-2 py-1 text-left font-medium">cell</th>
+                  <th className="px-2 py-1 text-right font-medium">score</th>
+                  <th className="px-2 py-1 text-right font-medium">cost</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <EmptyState title="no frontier yet" description="frontier needs scored cells" />
-        )}
-      </PanelCard>
-    </PanelGrid>
+              </thead>
+              <tbody>
+                {frontier.map((row) => (
+                  <tr
+                    key={row.cell.cell_index}
+                    className="border-b border-border/70 last:border-b-0"
+                  >
+                    <td className="px-2 py-1 font-mono">#{row.cell.cell_index}</td>
+                    <td className="px-2 py-1 text-right font-mono">
+                      {row.cell.score != null ? row.cell.score.toFixed(3) : "-"}
+                    </td>
+                    <td className="px-2 py-1 text-right font-mono">{formatCost(row.cost)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <EmptyState
+              title="no frontier yet"
+              description="frontier needs scored cells with provider usage"
+            />
+          )}
+        </PanelCard>
+      </PanelGrid>
+    </div>
   );
 }
 
@@ -217,7 +239,10 @@ function parseChildren(data: unknown): ChildRunSummary[] {
 function childCostByCell(children: ChildRunSummary[]): Map<number, number> {
   const out = new Map<number, number>();
   children.forEach((child, index) => {
-    out.set(index, child.cost?.cost_usd ?? 0);
+    const cellIndex = metadataNumber(child, "cell_index") ?? index;
+    if (hasUsage(child.cost)) {
+      out.set(cellIndex, (out.get(cellIndex) ?? 0) + (child.cost?.cost_usd ?? 0));
+    }
   });
   return out;
 }
@@ -227,7 +252,9 @@ function buildCumulativeCost(snap: SweepSnapshot, costByCell: Map<number, number
   let best: number | null = null;
   const rows: Array<{ cell: number; cost: number; best: number }> = [];
   for (const cell of [...snap.cells].sort((a, b) => a.cell_index - b.cell_index)) {
-    cost += costByCell.get(cell.cell_index) ?? 0;
+    const cellCost = costByCell.get(cell.cell_index);
+    if (cellCost == null) continue;
+    cost += cellCost;
     if (cell.score == null) continue;
     best = best == null ? cell.score : Math.max(best, cell.score);
     rows.push({ cell: cell.cell_index, cost, best });
@@ -238,7 +265,8 @@ function buildCumulativeCost(snap: SweepSnapshot, costByCell: Map<number, number
 function buildAxisCosts(snap: SweepSnapshot, costByCell: Map<number, number>) {
   const totals = new Map<string, number>();
   for (const cell of snap.cells) {
-    const cost = costByCell.get(cell.cell_index) ?? 0;
+    const cost = costByCell.get(cell.cell_index);
+    if (cost == null) continue;
     for (const axis of snap.axes) {
       const key = `${axis.name}=${String(cell.parameters[axis.name])}`;
       totals.set(key, (totals.get(key) ?? 0) + cost);
@@ -253,7 +281,7 @@ function buildAxisCosts(snap: SweepSnapshot, costByCell: Map<number, number>) {
 
 function paretoFrontier(snap: SweepSnapshot, costByCell: Map<number, number>) {
   const rows = snap.cells
-    .filter((cell) => cell.score != null)
+    .filter((cell) => cell.score != null && costByCell.has(cell.cell_index))
     .map((cell) => ({ cell, cost: costByCell.get(cell.cell_index) ?? 0 }));
   return rows
     .filter(
@@ -270,4 +298,14 @@ function paretoFrontier(snap: SweepSnapshot, costByCell: Map<number, number>) {
         ),
     )
     .sort((a, b) => (b.cell.score ?? 0) - (a.cell.score ?? 0));
+}
+
+function hasUsage(cost: ChildRunSummary["cost"] | undefined): boolean {
+  return (cost?.prompt_tokens ?? 0) + (cost?.completion_tokens ?? 0) > 0;
+}
+
+function metadataNumber(child: ChildRunSummary, key: string): number | null {
+  const metadata = (child as { metadata?: Record<string, unknown> }).metadata;
+  const value = metadata?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }

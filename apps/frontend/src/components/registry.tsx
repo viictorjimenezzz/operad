@@ -16,6 +16,9 @@ export const registry: ComponentRegistry = {
   AgentsTab: ({ element }) => {
     const props = element.props as {
       runId?: string;
+      mode?: "summary" | "invocations";
+      dataEvents?: unknown;
+      dataAgentsSummary?: unknown;
       groupBy?: "hash" | "none";
       extraColumns?: string[];
       emptyTitle?: string;
@@ -24,6 +27,9 @@ export const registry: ComponentRegistry = {
     return (
       <AgentsTab
         runId={props.runId ?? ""}
+        {...(props.mode ? { mode: props.mode } : {})}
+        {...(props.dataEvents ? { dataEvents: props.dataEvents } : {})}
+        {...(props.dataAgentsSummary ? { dataAgentsSummary: props.dataAgentsSummary } : {})}
         {...(props.groupBy ? { groupBy: props.groupBy } : {})}
         {...(props.extraColumns ? { extraColumns: props.extraColumns } : {})}
         {...(props.emptyTitle ? { emptyTitle: props.emptyTitle } : {})}

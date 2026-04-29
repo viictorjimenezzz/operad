@@ -167,6 +167,16 @@ def _enter_algorithm_metadata(metadata: dict[str, Any]) -> Iterator[None]:
 
 
 @contextmanager
+def _enter_synthetic_child_run() -> Iterator[None]:
+    """Temporarily let an algorithm child invocation mint its own run id."""
+    tok_r = _RUN_ID.set(None)
+    try:
+        yield
+    finally:
+        _RUN_ID.reset(tok_r)
+
+
+@contextmanager
 def suppress_notifications() -> Iterator[None]:
     tok = _MUTE_NOTIFICATIONS.set(True)
     try:

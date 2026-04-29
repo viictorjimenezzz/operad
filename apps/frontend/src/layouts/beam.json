@@ -19,12 +19,16 @@
           "tabs": [
             { "id": "leaderboard", "label": "Leaderboard" },
             { "id": "candidates", "label": "Candidates" },
-            { "id": "histogram", "label": "Score distribution" },
-            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.agentsSummary.agents)", "condition": "$expr:count($queries.agentsSummary.agents)" },
+            { "id": "metrics", "label": "Metrics" },
+            {
+              "id": "agents",
+              "label": "Agents",
+              "badge": "$expr:count($queries.agentsSummary.agents)"
+            },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
-        "children": ["leaderboard", "candidates", "histogram", "agents", "events"]
+        "children": ["leaderboard", "candidates", "metrics", "agents", "events"]
       },
       "leaderboard": {
         "type": "BeamLeaderboardTab",
@@ -32,6 +36,7 @@
           "source": "$queries.summary.candidates",
           "sourceIterations": "$queries.iterations",
           "sourceChildren": "$queries.children",
+          "sourceAgentsSummary": "$queries.agentsSummary",
           "runId": "$context.runId"
         }
       },
@@ -40,18 +45,33 @@
         "props": {
           "source": "$queries.summary.candidates",
           "sourceIterations": "$queries.iterations",
+          "sourceEvents": "$run.events",
+          "sourceChildren": "$queries.children",
+          "sourceAgentsSummary": "$queries.agentsSummary",
+          "runId": "$context.runId",
           "height": 320
         }
       },
-      "histogram": {
-        "type": "BeamHistogramTab",
+      "metrics": {
+        "type": "BeamMetricsTab",
         "props": {
           "source": "$queries.summary.candidates",
           "sourceIterations": "$queries.iterations",
-          "bins": 10
+          "sourceEvents": "$run.events",
+          "sourceChildren": "$queries.children",
+          "sourceAgentsSummary": "$queries.agentsSummary"
         }
       },
-      "agents": { "type": "AgentsTab", "props": { "runId": "$context.runId" } },
+      "agents": {
+        "type": "AgentsTab",
+        "props": {
+          "runId": "$context.runId",
+          "mode": "invocations",
+          "sourceEvents": "$run.events",
+          "sourceAgentsSummary": "$queries.agentsSummary",
+          "groupBy": "none"
+        }
+      },
       "events": { "type": "EventsTab", "props": { "runId": "$context.runId" } }
     }
   }

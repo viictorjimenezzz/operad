@@ -84,6 +84,70 @@ def _cassette_stale(path_value: str | None) -> bool:
     return False
 
 
+def _sweep_child_metadata(
+    obs: WebDashboardObserver,
+    run_id: str,
+) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    events = obs.registry.iter_events(
+        run_id,
+        event_type="algo_event",
+        kind="cell",
+        algorithm_path="Sweep",
+    )
+    for env in events:
+        payload = env.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        cell_index = payload.get("cell_index")
+        parameters = payload.get("parameters")
+        score = payload.get("score")
+        base = {
+            "cell_index": cell_index,
+            "axis_values": parameters if isinstance(parameters, dict) else {},
+        }
+        if isinstance(score, (int, float)) and not isinstance(score, bool):
+            base["score"] = float(score)
+        rationale = payload.get("judge_rationale")
+        if isinstance(rationale, str) and rationale:
+            base["judge_rationale"] = rationale
+        child_run_id = payload.get("child_run_id")
+        if isinstance(child_run_id, str) and child_run_id:
+            out[child_run_id] = {**base, "algorithm_role": "sweep_cell"}
+        judge_run_id = payload.get("judge_run_id")
+        if isinstance(judge_run_id, str) and judge_run_id:
+            out[judge_run_id] = {**base, "algorithm_role": "sweep_judge"}
+    return out
+
+
+def _aggregate_child_cost(
+    base: dict[str, Any],
+    cost_totals: dict[str, dict[str, float]],
+    children: list[Any],
+) -> dict[str, float | int]:
+    prompt_tokens = int(base.get("prompt_tokens") or 0)
+    completion_tokens = int(base.get("completion_tokens") or 0)
+    cost_usd = float(base.get("cost_usd") or 0.0)
+    for child in children:
+        total = cost_totals.get(child.run_id)
+        if not isinstance(total, dict):
+            continue
+        prompt = total.get("prompt_tokens")
+        completion = total.get("completion_tokens")
+        cost = total.get("cost_usd")
+        if isinstance(prompt, (int, float)) and not isinstance(prompt, bool):
+            prompt_tokens += int(prompt)
+        if isinstance(completion, (int, float)) and not isinstance(completion, bool):
+            completion_tokens += int(completion)
+        if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+            cost_usd += float(cost)
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "cost_usd": cost_usd,
+    }
+
+
 def create_app(
     *,
     observer: WebDashboardObserver | None = None,
@@ -250,7 +314,10 @@ def create_app(
             data = summary
         else:
             raise HTTPException(status_code=404, detail="unknown run_id")
-        totals = cost.totals().get(run_id, {})
+        cost_totals = cost.totals()
+        totals = dict(cost_totals.get(run_id, {}) or {})
+        if info is not None and info.is_algorithm:
+            totals = _aggregate_child_cost(totals, cost_totals, obs.registry.list_children(run_id))
         data["cost"] = totals
         return JSONResponse(data)
 
@@ -314,8 +381,28 @@ def create_app(
     async def run_children(run_id: str) -> JSONResponse:
         if obs.registry.get(run_id) is None:
             raise HTTPException(status_code=404, detail="unknown run_id")
+        cost_totals = cost.totals()
+        child_metadata = _sweep_child_metadata(obs, run_id)
+        langfuse_url = app.state.langfuse_url
         children = obs.registry.list_children(run_id)
-        return JSONResponse([c.summary() for c in children])
+        rows: list[dict[str, Any]] = []
+        for child in children:
+            summary = child.summary()
+            total = cost_totals.get(child.run_id)
+            if isinstance(total, dict):
+                summary["cost"] = total
+            meta = child_metadata.get(child.run_id)
+            if meta:
+                summary["metadata"] = meta
+                summary["algorithm_metadata"] = meta
+                if isinstance(meta.get("score"), (int, float)):
+                    metrics = dict(summary.get("metrics") or {})
+                    metrics["score"] = float(meta["score"])
+                    summary["metrics"] = metrics
+            if langfuse_url is not None:
+                summary["langfuse_url"] = f"{langfuse_url}/trace/{child.run_id}"
+            rows.append(summary)
+        return JSONResponse(rows)
 
     @app.get("/runs/{run_id}/parent")
     async def run_parent(run_id: str) -> JSONResponse:

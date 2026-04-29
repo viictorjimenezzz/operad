@@ -26,7 +26,7 @@ import sys
 from collections import defaultdict
 from typing import Any
 
-from operad import Configuration
+from operad import Configuration, Example
 from operad.agents import (
     Critic,
     DebateCritic,
@@ -38,7 +38,14 @@ from operad.agents import (
     VerifierAgent,
 )
 from operad.agents.debate.schemas import DebateTopic
-from operad.agents.reasoning.schemas import Answer, Hit, Query, Task
+from operad.agents.reasoning.schemas import (
+    Answer,
+    Candidate as JudgeCandidate,
+    Hit,
+    Query,
+    Score,
+    Task,
+)
 from operad.algorithms import (
     AutoResearcher,
     Beam,
@@ -126,17 +133,94 @@ async def _run_beam(cfg: Configuration) -> None:
         top_k=2,
     )
     beam.generator = Reasoner(
-        config=_cfg_for(cfg, temperature=0.8),
+        config=_cfg_for(cfg, temperature=0.95),
         input=Task,
         output=Answer,
-        role="You propose concise engineering implementation options.",
-        task="Answer the task with one concrete option and its rationale.",
+        role="You propose distinct engineering rollout strategies.",
+        task=(
+            "Answer with one concrete rollout option and its rationale. "
+            "Prefer a specific release mechanic such as feature flags, "
+            "canary cohorts, opt-in beta, shadow mode, or phased team rollout."
+        ),
         rules=(
             "Keep the final answer under 120 words.",
             "Name one tradeoff explicitly.",
+            "Include one concrete inspection or rollback mechanism.",
+            "Avoid generic 'roll out gradually' wording unless the rollout stages are explicit.",
         ),
     )
-    beam.judge = Critic(config=_cfg_for(cfg, temperature=0.0))
+    beam.judge = Critic(
+        config=_cfg_for(cfg, temperature=0.0),
+        task=(
+            "Score the rollout answer from 0.0 to 1.0. Reward concrete mechanics, "
+            "inspection, rollback, and a named tradeoff. Penalize generic or incomplete plans."
+        ),
+        rules=(
+            "Use the full scoring range; do not assign 1.0 unless the answer "
+            "is specific, complete, and directly inspectable.",
+            "0.85-0.95: concrete rollout with inspection or rollback and a tradeoff.",
+            "0.55-0.75: plausible rollout but missing a key operational detail.",
+            "0.0-0.45: vague, risky, or not aligned with an internal dashboard feature.",
+            "Keep the rationale under two sentences.",
+        ),
+        examples=(
+            Example[JudgeCandidate, Score](
+                input=JudgeCandidate(
+                    input=Task(
+                        goal="Choose a rollout strategy for a small dashboard feature.",
+                        context=(
+                            "The feature is internal, low risk, "
+                            "and should be easy to inspect."
+                        ),
+                    ),
+                    output=Answer(
+                        reasoning=(
+                            "Feature flags allow a small group to try the page "
+                            "while the team watches traces."
+                        ),
+                        answer=(
+                            "Ship behind a feature flag to five maintainers, "
+                            "inspect Langfuse traces and dashboard errors daily, "
+                            "then raise exposure after two clean days. "
+                            "Tradeoff: needs flag cleanup."
+                        ),
+                    ),
+                ),
+                output=Score(
+                    score=0.92,
+                    rationale=(
+                        "Specific rollout mechanics, inspection, rollback control, "
+                        "and a concrete tradeoff."
+                    ),
+                ),
+            ),
+            Example[JudgeCandidate, Score](
+                input=JudgeCandidate(
+                    input=Task(
+                        goal="Choose a rollout strategy for a small dashboard feature.",
+                        context=(
+                            "The feature is internal, low risk, "
+                            "and should be easy to inspect."
+                        ),
+                    ),
+                    output=Answer(
+                        reasoning="Gradual release is generally safe.",
+                        answer=(
+                            "Roll it out slowly to internal users and gather feedback. "
+                            "Tradeoff: slower adoption."
+                        ),
+                    ),
+                ),
+                output=Score(
+                    score=0.58,
+                    rationale=(
+                        "Plausible but generic; it lacks concrete inspection "
+                        "and rollback details."
+                    ),
+                ),
+            ),
+        ),
+    )
 
     top = await beam.run(
         Task(
@@ -170,10 +254,11 @@ async def _run_sweep(cfg: Configuration) -> None:
             ],
             "config.sampling.temperature": [0.0, 0.6],
         },
-        context="Dashboard example: scoreless grid for cells, axes, and child runs.",
+        context="Dashboard example: scored grid for cells, axes, child runs, and cost.",
         concurrency=2,
     )
     sweep.seed = seed
+    sweep.judge = Critic(config=_cfg_for(cfg, temperature=0.0))
     report = await sweep.run(
         Task(
             goal="Summarize a new dashboard tab for algorithm runs.",
@@ -183,7 +268,8 @@ async def _run_sweep(cfg: Configuration) -> None:
     print_panel(
         "Sweep cells",
         "\n".join(
-            f"#{i}: {cell.parameters} -> {_answer_text(cell.output)[:120]}"
+            f"#{i}: score={cell.score if cell.score is not None else '-'} "
+            f"{cell.parameters} -> {_answer_text(cell.output)[:120]}"
             for i, cell in enumerate(report.cells)
         ),
     )
