@@ -12,7 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from operad import Configuration
-from operad.core.config import Runtime, Sampling
+from operad.core.config import Sampling
 from operad.core.models import BatchHandle, resolve_model
 from operad.utils.hashing import hash_config
 
@@ -77,111 +77,7 @@ def test_gemini_resolver_returns_gemini_model(
     assert params["temperature"] == 0.2
     assert params["max_output_tokens"] == 64
     assert params["top_p"] == 0.9
-
-
-def test_gemini_forced_any_tool_choice_sets_native_tool_config(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    pytest.importorskip("strands.models")
-    _install_fake_google_genai(monkeypatch)
-
-    cfg = Configuration(
-        backend="gemini",
-        model="gemini-2.5-flash",
-        api_key="sk-fake",
-    )
-    model = resolve_model(cfg)
-
-    params = model._params_for_tool_choice(
-        [{"name": "RewriteResponse"}, {"name": "OtherTool"}],
-        {"any": {}},
-    )
-
-    assert params["tool_config"]["function_calling_config"] == {
-        "mode": "ANY",
-        "allowed_function_names": ["RewriteResponse", "OtherTool"],
-    }
-
-
-def test_gemini_forced_specific_tool_choice_limits_allowed_names(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    pytest.importorskip("strands.models")
-    _install_fake_google_genai(monkeypatch)
-
-    cfg = Configuration(
-        backend="gemini",
-        model="gemini-2.5-flash",
-        api_key="sk-fake",
-    )
-    model = resolve_model(cfg)
-
-    params = model._params_for_tool_choice(
-        [{"name": "RewriteResponse"}, {"name": "OtherTool"}],
-        {"tool": {"name": "RewriteResponse"}},
-    )
-
-    assert params["tool_config"]["function_calling_config"] == {
-        "mode": "ANY",
-        "allowed_function_names": ["RewriteResponse"],
-    }
-
-
-def test_gemini_auto_tool_choice_leaves_params_unchanged(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    pytest.importorskip("strands.models")
-    _install_fake_google_genai(monkeypatch)
-
-    cfg = Configuration(
-        backend="gemini",
-        model="gemini-2.5-flash",
-        api_key="sk-fake",
-        runtime=Runtime(
-            extra={"tool_config": {"function_calling_config": {"mode": "AUTO"}}}
-        ),
-    )
-    model = resolve_model(cfg)
-
-    params = model._params_for_tool_choice(
-        [{"name": "RewriteResponse"}],
-        {"auto": {}},
-    )
-
-    assert params == model.config["params"]
-
-
-def test_gemini_forced_tool_choice_preserves_existing_tool_config(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    pytest.importorskip("strands.models")
-    _install_fake_google_genai(monkeypatch)
-
-    cfg = Configuration(
-        backend="gemini",
-        model="gemini-2.5-flash",
-        api_key="sk-fake",
-        runtime=Runtime(
-            extra={
-                "tool_config": {
-                    "include_server_side_tool_invocations": True,
-                    "function_calling_config": {"mode": "AUTO"},
-                }
-            }
-        ),
-    )
-    model = resolve_model(cfg)
-
-    params = model._params_for_tool_choice(
-        [{"name": "RewriteResponse"}],
-        {"any": {}},
-    )
-
-    assert params["tool_config"]["include_server_side_tool_invocations"] is True
-    assert params["tool_config"]["function_calling_config"] == {
-        "mode": "ANY",
-        "allowed_function_names": ["RewriteResponse"],
-    }
+    assert model._operad_native_structured_output is True
 
 
 def test_gemini_missing_extra_raises_clear_hint(

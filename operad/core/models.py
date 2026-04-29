@@ -30,7 +30,6 @@ import json
 import os
 import time
 import warnings
-from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
@@ -266,113 +265,9 @@ def _build_gemini(cfg: Configuration) -> "GeminiModel":
         ) from e
 
     class _OperadGeminiModel(GeminiModel):  # type: ignore[misc, valid-type]
-        """Gemini adapter that honors Strands forced tool choice."""
+        """Gemini adapter that uses Gemini's native response-schema path."""
 
-        @staticmethod
-        def _tool_names(tool_specs: list[Any] | None) -> list[str]:
-            return [
-                name
-                for spec in tool_specs or []
-                if isinstance(spec, dict)
-                for name in (spec.get("name"),)
-                if isinstance(name, str) and name
-            ]
-
-        @staticmethod
-        def _tool_config_dict(value: Any) -> dict[str, Any]:
-            if value is None:
-                return {}
-            if isinstance(value, dict):
-                return dict(value)
-            if hasattr(value, "model_dump"):
-                dumped = value.model_dump(exclude_none=True)
-                return dict(dumped) if isinstance(dumped, dict) else {}
-            if hasattr(value, "to_json_dict"):
-                dumped = value.to_json_dict()
-                return dict(dumped) if isinstance(dumped, dict) else {}
-            return {}
-
-        @classmethod
-        def _forced_tool_config(
-            cls,
-            existing: Any,
-            tool_specs: list[Any] | None,
-            tool_choice: Any,
-        ) -> dict[str, Any] | None:
-            if not tool_choice or "auto" in tool_choice:
-                return None
-
-            if "tool" in tool_choice:
-                name = tool_choice.get("tool", {}).get("name")
-                allowed = [name] if isinstance(name, str) and name else []
-            elif "any" in tool_choice:
-                allowed = cls._tool_names(tool_specs)
-            else:
-                return None
-
-            config = cls._tool_config_dict(existing)
-            function_calling_config: dict[str, Any] = {"mode": "ANY"}
-            if allowed:
-                function_calling_config["allowed_function_names"] = allowed
-            config["function_calling_config"] = function_calling_config
-            return config
-
-        def _params_for_tool_choice(
-            self,
-            tool_specs: list[Any] | None,
-            tool_choice: Any,
-        ) -> dict[str, Any]:
-            params = dict(self.config.get("params") or {})
-            tool_config = self._forced_tool_config(
-                params.get("tool_config"),
-                tool_specs,
-                tool_choice,
-            )
-            if tool_config is not None:
-                params["tool_config"] = tool_config
-            return params
-
-        async def stream(
-            self,
-            messages: Any,
-            tool_specs: list[Any] | None = None,
-            system_prompt: str | None = None,
-            tool_choice: Any = None,
-            **kwargs: Any,
-        ) -> AsyncGenerator[Any, None]:
-            params = self._params_for_tool_choice(tool_specs, tool_choice)
-            if params == dict(self.config.get("params") or {}):
-                async for event in super().stream(
-                    messages,
-                    tool_specs,
-                    system_prompt,
-                    tool_choice=tool_choice,
-                    **kwargs,
-                ):
-                    yield event
-                return
-
-            model_config = dict(self.config)
-            model_config["params"] = params
-            if getattr(self, "_custom_client", None) is not None:
-                delegate = GeminiModel(
-                    client=self._custom_client,
-                    **model_config,
-                )
-            else:
-                delegate = GeminiModel(
-                    client_args=self.client_args,
-                    **model_config,
-                )
-
-            async for event in delegate.stream(
-                messages,
-                tool_specs,
-                system_prompt,
-                tool_choice=None,
-                **kwargs,
-            ):
-                yield event
+        _operad_native_structured_output = True
 
     params: dict[str, Any] = {
         "temperature": cfg.sampling.temperature,
