@@ -49,6 +49,7 @@ export function TrainingDetailLayout() {
   }
 
   const run = summary.data;
+  const layout = resolveLayout(run.algorithm_path);
   const totalTokens = run.prompt_tokens + run.completion_tokens;
 
   return (
@@ -89,7 +90,11 @@ export function TrainingDetailLayout() {
         }
       />
       <div className="flex-1 overflow-hidden">
-        <DashboardRenderer layout={resolveLayout("Trainer")} context={{ runId }} />
+        <DashboardRenderer
+          key={`${runId}:${layout.algorithm}`}
+          layout={layout}
+          context={{ runId }}
+        />
       </div>
     </div>
   );
