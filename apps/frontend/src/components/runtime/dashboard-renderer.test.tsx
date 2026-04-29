@@ -353,6 +353,49 @@ describe("DashboardRenderer", () => {
     expect(tree?.elements.page?.children).toEqual(["events"]);
   });
 
+  it("falls back to the first tab when ?tab is not in the current layout", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+
+    const qc = makeQC();
+    const layout: LayoutSpec = {
+      algorithm: "Test",
+      version: 1,
+      dataSources: {},
+      spec: {
+        root: "page",
+        elements: {
+          page: {
+            type: "Tabs",
+            props: {
+              tabs: [
+                { id: "lineage", label: "Lineage" },
+                { id: "events", label: "Events" },
+              ],
+            },
+            children: ["lineage", "events"],
+          },
+          lineage: { type: "Card", props: { title: "Lineage" } },
+          events: { type: "Card", props: { title: "Events" } },
+        },
+      },
+    };
+
+    render(
+      <Wrapper qc={qc} initialEntries={["/?tab=schedule"]}>
+        <DashboardRenderer layout={layout} context={{ runId: "r1" }} />
+      </Wrapper>,
+    );
+
+    await waitFor(() =>
+      expect(renderedTrees.some((tree) => tree.elements.page?.props?.activeTab === "lineage")).toBe(
+        true,
+      ),
+    );
+    const tree = renderedTrees.find((item) => item.elements.page?.props?.activeTab === "lineage");
+    expect(tree?.elements.page?.props?.activeTab).toBe("lineage");
+    expect(tree?.elements.page?.children).toEqual(["lineage"]);
+  });
+
   it("passes trailing content to the root tabs element only", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
 
