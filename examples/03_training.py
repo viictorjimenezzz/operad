@@ -224,10 +224,20 @@ async def main(args: argparse.Namespace) -> None:
                     len(str((row.get("predicted") or {}).get("text", "")))
                     for row in report.rows
                 ]
+                length_mean = sum(lengths) / len(lengths) if lengths else 0.0
+                length_hits = sum(_TARGET_LO <= n <= _TARGET_HI for n in lengths)
                 candidate_records.append(
                     {"task": candidate_text, "score": score, "lengths": lengths}
                 )
-                return score
+                return score, {
+                    metric.name: score,
+                    "answer_length_mean": length_mean,
+                    "answer_length_min": min(lengths) if lengths else 0,
+                    "answer_length_max": max(lengths) if lengths else 0,
+                    "answer_length_hit_rate": (
+                        length_hits / len(lengths) if lengths else 0.0
+                    ),
+                }
             finally:
                 param.write(old)
                 await seed.abuild()
@@ -262,24 +272,25 @@ async def main(args: argparse.Namespace) -> None:
     registry.register(cost_obs)
 
     print_rule("Stage 3 - fit (live per-step candidate detail)")
-    for step in range(args.epochs):
-        before_task = str(task_param.value)
-        start = len(candidate_records)
-        await optimizer.step()
-        await seed.abuild()
-        after_task = str(task_param.value)
-        records = candidate_records[start:]
-        history = task_param.momentum_state.get("opro", [])
-        print_panel(
-            f"OPRO step {step}",
-            _candidate_body(
-                step=step,
-                before_task=before_task,
-                after_task=after_task,
-                records=records,
-                history_size=len(history),
-            ),
-        )
+    async with optimizer.session():
+        for step in range(args.epochs):
+            before_task = str(task_param.value)
+            start = len(candidate_records)
+            await optimizer.step()
+            await seed.abuild()
+            after_task = str(task_param.value)
+            records = candidate_records[start:]
+            history = task_param.momentum_state.get("opro", [])
+            print_panel(
+                f"OPRO step {step}",
+                _candidate_body(
+                    step=step,
+                    before_task=before_task,
+                    after_task=after_task,
+                    records=records,
+                    history_size=len(history),
+                ),
+            )
 
     registry.unregister(cost_obs)
 

@@ -140,7 +140,10 @@ class OPROAgent(Agent[OPROInput, OPROOutput]):
     default_sampling = {"temperature": 0.7}
 
 
-Evaluator = Callable[[Parameter[Any], Any], Awaitable[float]]
+Evaluator = Callable[
+    [Parameter[Any], Any],
+    Awaitable[float | tuple[float, dict[str, float]]],
+]
 OPROFactory = Callable[[], OPROAgent | Awaitable[OPROAgent]]
 
 
@@ -177,6 +180,9 @@ class OPROOptimizer(Optimizer):
         self._max_retries = int(max_retries)
         self._opro: OPROAgent | None = None
         self._algo_run_id: str | None = None
+        self._algo_started = False
+        self._algo_ended = False
+        self._session_depth = 0
         self._step_index = 0
         self._best_score: float | None = None
 
@@ -203,17 +209,36 @@ class OPROOptimizer(Optimizer):
                 items.append((p, group))
         if not items:
             return
-        if self._algo_run_id is None:
-            async with self.session():
-                await self._step_with_context(items)
-            return
-        await self._step_with_context(items)
+        await self._ensure_algo_started()
+        try:
+            await self._step_with_context(items)
+        except Exception as e:
+            if self._session_depth == 0:
+                await self._emit_algo_error(e)
+            raise
 
     @contextlib.asynccontextmanager
     async def session(self) -> AsyncIterator["OPROOptimizer"]:
-        owns_session = self._algo_run_id is None
-        if owns_session:
+        owns_session = self._session_depth == 0
+        self._session_depth += 1
+        try:
+            yield self
+            if owns_session:
+                await self._emit_algo_end()
+        except Exception as e:
+            if owns_session:
+                await self._emit_algo_error(e)
+            raise
+        finally:
+            self._session_depth -= 1
+
+    async def _ensure_algo_started(self) -> None:
+        if self._algo_run_id is None or self._algo_ended:
             self._algo_run_id = uuid.uuid4().hex
+            self._algo_started = False
+            self._algo_ended = False
+        if self._algo_started:
+            return
         run_id = self._algo_run_id or uuid.uuid4().hex
         parent_run_id = _obs._RUN_ID.get()
         metadata = (
@@ -221,50 +246,55 @@ class OPROOptimizer(Optimizer):
             if parent_run_id is not None and parent_run_id != run_id
             else {}
         )
-        if owns_session:
-            with _enter_algorithm_run(run_id, reuse_existing=False):
-                await emit_algorithm_event(
-                    "algo_start",
-                    algorithm_path=type(self).__name__,
-                    payload={
-                        "params": [p.path for p in self._all_params()],
-                        "history_window": self._history_k,
-                        "max_retries": self._max_retries,
+        with _enter_algorithm_run(run_id, reuse_existing=False):
+            await emit_algorithm_event(
+                "algo_start",
+                algorithm_path=type(self).__name__,
+                payload={
+                    "params": [p.path for p in self._all_params()],
+                    "history_window": self._history_k,
+                    "max_retries": self._max_retries,
+                },
+                started_at=time.time(),
+                metadata=metadata,
+            )
+        self._algo_started = True
+
+    async def _emit_algo_end(self) -> None:
+        if not self._algo_started or self._algo_ended or self._algo_run_id is None:
+            return
+        now = time.time()
+        with _enter_algorithm_run(self._algo_run_id, reuse_existing=False):
+            await emit_algorithm_event(
+                "algo_end",
+                algorithm_path=type(self).__name__,
+                payload={
+                    "steps": self._step_index,
+                    "best_score": self._best_score,
+                    "final_values": {
+                        p.path: str(p.read()) for p in self._all_params()
                     },
-                    started_at=time.time(),
-                    metadata=metadata,
-                )
-        try:
-            yield self
-            if owns_session:
-                with _enter_algorithm_run(run_id, reuse_existing=False):
-                    await emit_algorithm_event(
-                        "algo_end",
-                        algorithm_path=type(self).__name__,
-                        payload={
-                            "steps": self._step_index,
-                            "best_score": self._best_score,
-                            "final_values": {
-                                p.path: str(p.read()) for p in self._all_params()
-                            },
-                        },
-                        started_at=time.time(),
-                        finished_at=time.time(),
-                    )
-        except Exception as e:
-            if owns_session:
-                with _enter_algorithm_run(run_id, reuse_existing=False):
-                    await emit_algorithm_event(
-                        "algo_error",
-                        algorithm_path=type(self).__name__,
-                        payload={"type": type(e).__name__, "message": str(e)},
-                        started_at=time.time(),
-                        finished_at=time.time(),
-                    )
-            raise
-        finally:
-            if owns_session:
-                self._algo_run_id = None
+                },
+                started_at=now,
+                finished_at=now,
+            )
+        self._algo_ended = True
+        self._algo_run_id = None
+
+    async def _emit_algo_error(self, exc: Exception) -> None:
+        if not self._algo_started or self._algo_ended or self._algo_run_id is None:
+            return
+        now = time.time()
+        with _enter_algorithm_run(self._algo_run_id, reuse_existing=False):
+            await emit_algorithm_event(
+                "algo_error",
+                algorithm_path=type(self).__name__,
+                payload={"type": type(exc).__name__, "message": str(exc)},
+                started_at=now,
+                finished_at=now,
+            )
+        self._algo_ended = True
+        self._algo_run_id = None
 
     async def _step_with_context(
         self,
@@ -316,6 +346,7 @@ class OPROOptimizer(Optimizer):
                     "step_index": step_index,
                     "phase": "propose",
                     "param_path": param.path,
+                    "current_value": payload.current_value,
                     "candidate_value": raw_new,
                     "history_size": len(history),
                 },
@@ -331,22 +362,25 @@ class OPROOptimizer(Optimizer):
             except Exception:
                 continue
 
-            score = float(await self._evaluator(param, parsed))
+            score, metrics = _coerce_evaluation(await self._evaluator(param, parsed))
             history.append((raw_new, score))
             self._truncate_history(history)
             accepted = score > best_score
+            event_payload: dict[str, Any] = {
+                "iter_index": step_index,
+                "step_index": step_index,
+                "phase": "evaluate",
+                "param_path": param.path,
+                "candidate_value": raw_new,
+                "score": score,
+                "accepted": accepted,
+            }
+            if metrics:
+                event_payload["metrics"] = metrics
             await emit_algorithm_event(
                 "iteration",
                 algorithm_path=type(self).__name__,
-                payload={
-                    "iter_index": step_index,
-                    "step_index": step_index,
-                    "phase": "evaluate",
-                    "param_path": param.path,
-                    "candidate_value": raw_new,
-                    "score": score,
-                    "accepted": accepted,
-                },
+                payload=event_payload,
             )
             if self._best_score is None or score > self._best_score:
                 self._best_score = score
@@ -359,6 +393,18 @@ class OPROOptimizer(Optimizer):
         overflow = len(history) - self._history_k
         if overflow > 0:
             del history[:overflow]
+
+
+def _coerce_evaluation(raw: float | tuple[float, dict[str, float]]) -> tuple[float, dict[str, float]]:
+    if not isinstance(raw, tuple):
+        return float(raw), {}
+    score, metrics = raw
+    clean_metrics = {
+        str(key): float(value)
+        for key, value in metrics.items()
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+    }
+    return float(score), clean_metrics
 
 
 __all__ = [

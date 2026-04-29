@@ -22,6 +22,12 @@ from operad.runtime.slots import registry as slot_registry
 
 from .benchmark_store import BenchmarkStore
 from .observer import WebDashboardObserver, serialize_event
+from .opro_sessions import (
+    find_opro_session,
+    merged_opro_children,
+    merged_opro_events,
+    merged_opro_summary,
+)
 from .persistence import SQLiteRunArchive
 from .routes import archive as archive_routes
 from .routes import benchmarks as benchmark_routes
@@ -237,6 +243,11 @@ def create_app(
 
     @app.get("/runs/{run_id}/summary")
     async def run_summary(run_id: str) -> JSONResponse:
+        session = find_opro_session(obs.registry, run_id)
+        if session is not None:
+            data = merged_opro_summary(session, cost_totals=cost.totals())
+            return JSONResponse(data)
+
         info = obs.registry.get(run_id)
         if info is not None:
             data = info.summary()
@@ -312,6 +323,9 @@ def create_app(
 
     @app.get("/runs/{run_id}/children")
     async def run_children(run_id: str) -> JSONResponse:
+        session = find_opro_session(obs.registry, run_id)
+        if session is not None:
+            return JSONResponse(merged_opro_children(obs.registry, session))
         if obs.registry.get(run_id) is None:
             raise HTTPException(status_code=404, detail="unknown run_id")
         children = obs.registry.list_children(run_id)
@@ -339,20 +353,24 @@ def create_app(
 
     @app.get("/runs/{run_id}/events")
     async def run_events(run_id: str, limit: int = 200) -> JSONResponse:
-        info = obs.registry.get(run_id)
         limit = max(1, min(limit, _MAX_EVENTS_PER_REQUEST))
-        if info is not None:
-            events = list(info.events)[-limit:]
-        elif archive_store is not None:
-            archived = archive_store.get_run(run_id)
-            if archived is None:
-                raise HTTPException(status_code=404, detail="unknown run_id")
-            events_raw = archived.get("events")
-            if not isinstance(events_raw, list):
-                raise HTTPException(status_code=500, detail="corrupt archive record")
-            events = events_raw[-limit:]
+        session = find_opro_session(obs.registry, run_id)
+        if session is not None:
+            events = merged_opro_events(session)[-limit:]
         else:
-            raise HTTPException(status_code=404, detail="unknown run_id")
+            info = obs.registry.get(run_id)
+            if info is not None:
+                events = list(info.events)[-limit:]
+            elif archive_store is not None:
+                archived = archive_store.get_run(run_id)
+                if archived is None:
+                    raise HTTPException(status_code=404, detail="unknown run_id")
+                events_raw = archived.get("events")
+                if not isinstance(events_raw, list):
+                    raise HTTPException(status_code=500, detail="corrupt archive record")
+                events = events_raw[-limit:]
+            else:
+                raise HTTPException(status_code=404, detail="unknown run_id")
         return JSONResponse({"run_id": run_id, "events": events})
 
     @app.post("/_ingest")

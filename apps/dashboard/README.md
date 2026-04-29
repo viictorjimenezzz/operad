@@ -90,7 +90,7 @@ Open http://localhost:5173/index.dashboard.html.
     Agents, Events.
   - `Trainer` — Loss, Schedule, Drift, Tape, Parameters, Traceback,
     Agents, Events.
-  - `OPRO` — Prompt history, Score curve, Parameters, Agents, Events.
+  - `OPRO` — History, Metrics, Parameters, Agents, Events.
   - `SelfRefine` — Refine ladder, Iterations, Parameters, Agents,
     Events.
   - `AutoResearcher` — Plan, Attempts, Best, Agents, Events.
@@ -101,7 +101,7 @@ Open http://localhost:5173/index.dashboard.html.
   with parameter snapshots, textual gradients, tape entries, and
   traceback artifacts when present.
 - **OPRO rail** — prompt-optimization runs grouped separately for quick
-  comparison of prompt history, score curves, and parent/child agent
+  comparison of prompt history, metrics, and parent/child agent
   context.
 - **Shared tabs** — Agents and Events are monitor-only drilldowns; the
   dashboard never invokes, replays, or edits an operad run from the SPA.

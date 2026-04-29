@@ -1,7 +1,4 @@
-import {
-  OPROScoreCurveTab,
-  _oproScoreCurve,
-} from "@/components/algorithms/opro/score-curve-tab";
+import { OPROScoreCurveTab, _oproScoreCurve } from "@/components/algorithms/opro/score-curve-tab";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -19,6 +16,22 @@ describe("OPROScoreCurveTab", () => {
     expect(screen.queryByText("none")).toBeNull();
     expect(document.querySelector(".recharts-responsive-container")).toBeTruthy();
   });
+
+  it("builds tracking metrics from OPROOptimizer iteration payloads", () => {
+    const metrics = _oproScoreCurve.buildMetricSeries(undefined, metricEvents);
+    expect(metrics.map((metric) => metric.key)).toEqual(["length_max", "length_mean"]);
+    expect(metrics.find((metric) => metric.key === "length_mean")?.points).toEqual([
+      { x: 1, y: 240, runId: "opro-run" },
+      { x: 2, y: 260, runId: "opro-run" },
+    ]);
+  });
+
+  it("renders tracking metric cards", () => {
+    render(<OPROScoreCurveTab dataEvents={metricEvents} />);
+    expect(screen.getByText("Tracking metrics")).toBeTruthy();
+    expect(screen.getByText("length_mean")).toBeTruthy();
+    expect(screen.getByText("length_max")).toBeTruthy();
+  });
 });
 
 const iterations = {
@@ -32,3 +45,38 @@ const iterations = {
   threshold: null,
   converged: null,
 };
+
+const metricEvents = {
+  run_id: "opro-run",
+  events: [
+    iterationEvent(1, 0.4, { length_mean: 240 }, { length_max: 301 }),
+    iterationEvent(2, 0.6, { length_mean: 260 }, { length_max: 318 }),
+  ],
+};
+
+function iterationEvent(
+  stepIndex: number,
+  score: number,
+  metrics: Record<string, number>,
+  extra: Record<string, number>,
+) {
+  return {
+    type: "algo_event",
+    run_id: "opro-run",
+    algorithm_path: "OPROOptimizer",
+    kind: "iteration",
+    payload: {
+      iter_index: stepIndex,
+      step_index: stepIndex,
+      phase: "evaluate",
+      param_path: "task",
+      candidate_value: `candidate ${stepIndex}`,
+      score,
+      metrics,
+      ...extra,
+    },
+    started_at: stepIndex,
+    finished_at: stepIndex,
+    metadata: {},
+  };
+}

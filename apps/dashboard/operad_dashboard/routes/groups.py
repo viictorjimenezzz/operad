@@ -28,6 +28,11 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from ..runs import RunInfo
+from ..opro_sessions import (
+    OPRO_PATHS,
+    build_opro_sessions,
+    merged_opro_summary,
+)
 
 
 router = APIRouter(tags=["groups"])
@@ -546,7 +551,7 @@ async def agent_group_parameters(
 # ---------------------------------------------------------------------------
 
 
-_OPRO_PATHS = {"OPROOptimizer", "OPRO"}
+_OPRO_PATHS = OPRO_PATHS
 _OPTIMIZER_PATHS = {
     "OPROOptimizer",
     "OPRO",
@@ -612,6 +617,26 @@ def _algorithm_groups(
     out: list[dict[str, Any]] = []
     for key, members in groups.items():
         members.sort(key=lambda r: r.started_at)
+        if key in _OPRO_PATHS:
+            summaries = [
+                merged_opro_summary(session, cost_totals=cost_totals)
+                for session in build_opro_sessions(members)
+            ]
+            if not summaries:
+                continue
+            out.append(
+                {
+                    "algorithm_path": key,
+                    "class_name": _class_name_from_path(key),
+                    "count": len(summaries),
+                    "running": sum(1 for r in summaries if r["state"] == "running"),
+                    "errors": sum(1 for r in summaries if r["state"] == "error"),
+                    "last_seen": max(float(r["last_event_at"]) for r in summaries),
+                    "first_seen": min(float(r["started_at"]) for r in summaries),
+                    "runs": summaries,
+                }
+            )
+            continue
         out.append(
             {
                 "algorithm_path": key,
@@ -695,19 +720,29 @@ async def list_training_runs(request: Request) -> JSONResponse:
         members.sort(key=lambda r: r.started_at)
         head = members[-1]
         is_real_hash = is_hash_key.get(key, False)
+        run_summaries = _training_run_summaries(members)
         out.append(
             {
                 "hash_content": key if is_real_hash else None,
                 "class_name": _class_name_from_path(head.root_agent_path) or head.algorithm_class,
                 "root_agent_path": head.root_agent_path,
                 "algorithm_path": head.algorithm_path,
-                "count": len(members),
-                "running": sum(1 for r in members if r.state == "running"),
-                "errors": sum(1 for r in members if r.state == "error"),
-                "last_seen": max(r.last_event_at for r in members),
-                "first_seen": min(r.started_at for r in members),
-                "runs": [r.summary() for r in members],
+                "count": len(run_summaries),
+                "running": sum(1 for r in run_summaries if r["state"] == "running"),
+                "errors": sum(1 for r in run_summaries if r["state"] == "error"),
+                "last_seen": max(float(r["last_event_at"]) for r in run_summaries),
+                "first_seen": min(float(r["started_at"]) for r in run_summaries),
+                "runs": run_summaries,
             }
         )
     out.sort(key=lambda g: g["last_seen"], reverse=True)
     return JSONResponse(out)
+
+
+def _training_run_summaries(members: list[RunInfo]) -> list[dict[str, Any]]:
+    opro_members = [run for run in members if run.algorithm_path in _OPRO_PATHS]
+    other_members = [run for run in members if run.algorithm_path not in _OPRO_PATHS]
+    summaries = [run.summary() for run in other_members]
+    summaries.extend(merged_opro_summary(session) for session in build_opro_sessions(opro_members))
+    summaries.sort(key=lambda row: float(row["started_at"]))
+    return summaries

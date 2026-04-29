@@ -39,7 +39,7 @@ function iteration(stepIndex: number, candidateValue: string, score: number, acc
   return {
     type: "algo_event",
     run_id: "opro-run",
-    algorithm_path: "OPRO",
+    algorithm_path: "OPROOptimizer",
     kind: "iteration",
     payload: {
       iter_index: stepIndex,
@@ -67,6 +67,7 @@ function step(
     iterIndex: stepIndex,
     stepIndex,
     paramPath,
+    currentValue: null,
     candidateValue,
     historySize: null,
     score,

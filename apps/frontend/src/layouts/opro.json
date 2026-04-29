@@ -15,10 +15,15 @@
         "type": "Tabs",
         "props": {
           "tabs": [
-            { "id": "history", "label": "Prompt history" },
-            { "id": "score", "label": "Score curve" },
+            { "id": "history", "label": "History" },
+            { "id": "score", "label": "Metrics" },
             { "id": "parameters", "label": "Parameters" },
-            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.agentsSummary.agents)", "condition": "$expr:count($queries.agentsSummary.agents)" },
+            {
+              "id": "agents",
+              "label": "Agents",
+              "badge": "$expr:count($queries.agentsSummary.agents)",
+              "condition": "$expr:count($queries.agentsSummary.agents)"
+            },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
@@ -39,8 +44,12 @@
         }
       },
       "parameters": {
-        "type": "ParametersTab",
-        "props": { "runId": "$context.runId", "scope": "run" }
+        "type": "OPROParameterTab",
+        "props": {
+          "sourceIterations": "$queries.iterations",
+          "sourceEvents": "$queries.events",
+          "sourceChildren": "$queries.children"
+        }
       },
       "agents": {
         "type": "AgentsTab",

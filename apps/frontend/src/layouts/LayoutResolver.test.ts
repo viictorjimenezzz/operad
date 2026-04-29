@@ -105,6 +105,11 @@ describe("resolveLayout integration (real layouts/)", () => {
     expect(resolveLayout("AutoResearcher").algorithm).toBe("AutoResearcher");
     expect(resolveLayout("OPRO").algorithm).toBe("OPRO");
     expect(resolveLayout("OPROOptimizer").algorithm).toBe("OPRO");
+    const oproTabs = (
+      (resolveLayout("OPRO").spec.elements.page?.props as { tabs?: Array<{ label: string }> })
+        .tabs ?? []
+    ).map((tab) => tab.label);
+    expect(oproTabs).toEqual(["History", "Metrics", "Parameters", "Agents", "Events"]);
   });
 
   it("beam/verifier/selfrefine layouts reference iteration sources/components", async () => {

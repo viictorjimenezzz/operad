@@ -15,6 +15,7 @@ from typing import Any, AsyncIterator, Callable, Iterable
 from fastapi import HTTPException, Request
 
 from ..observer import WebDashboardObserver
+from ..opro_sessions import find_opro_session, merged_opro_events
 
 
 _HEARTBEAT_TIMEOUT_SECONDS = 15.0
@@ -105,6 +106,16 @@ def iter_run_events(
     kind: str | tuple[str, ...] | None = None,
     algorithm_path: str | tuple[str, ...] | None = None,
 ) -> Iterable[dict[str, Any]]:
+    session = find_opro_session(obs.registry, run_id)
+    if session is not None:
+        kinds = _as_tuple(kind)
+        paths = _as_tuple(algorithm_path)
+        return [
+            env
+            for env in merged_opro_events(session)
+            if _matches(env, event_type, kinds, paths)
+        ]
+
     info = obs.registry.get(run_id)
     if info is not None:
         return obs.registry.iter_events(
