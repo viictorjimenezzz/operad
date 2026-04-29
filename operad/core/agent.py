@@ -113,6 +113,9 @@ def _json_safe(value: Any) -> Any:
 # instead of validating and running `forward`. This is how `build()` performs
 # symbolic tracing without touching an LLM.
 _TRACER: ContextVar["Tracer | None"] = ContextVar("_TRACER", default=None)
+_LAST_MODEL_USAGE: ContextVar[tuple[int | None, int | None] | None] = ContextVar(
+    "_LAST_MODEL_USAGE", default=None
+)
 
 
 _LOCAL_FIELD_TO_PATH: dict[str, str] = {
@@ -212,14 +215,72 @@ def _extract_tokens(result: Any) -> int:
     integer fields it exposes into the slot's TPM settle without
     guessing a schema we don't own.
     """
+    p, c = _extract_token_usage(result)
+    return (p or 0) + (c or 0)
+
+
+def _extract_token_usage(result: Any) -> tuple[int | None, int | None]:
+    """Best-effort prompt/completion usage from strands AgentResult shapes."""
     if result is None:
-        return 0
+        return None, None
+
+    direct = (
+        _int_or_none(getattr(result, "prompt_tokens", None)),
+        _int_or_none(getattr(result, "completion_tokens", None)),
+    )
+    if direct[0] is not None or direct[1] is not None:
+        return direct
+
+    metrics = getattr(result, "metrics", None)
+    usage = getattr(metrics, "accumulated_usage", None)
+    parsed = _usage_pair(usage)
+    if parsed[0] is not None or parsed[1] is not None:
+        return parsed
+
+    invocation = getattr(metrics, "latest_agent_invocation", None)
+    parsed = _usage_pair(getattr(invocation, "usage", None))
+    if parsed[0] is not None or parsed[1] is not None:
+        return parsed
+
+    invocations = getattr(metrics, "agent_invocations", None)
+    if isinstance(invocations, list) and invocations:
+        total_prompt = 0
+        total_completion = 0
+        seen = False
+        for item in invocations:
+            prompt, completion = _usage_pair(getattr(item, "usage", None))
+            if prompt is not None:
+                total_prompt += prompt
+                seen = True
+            if completion is not None:
+                total_completion += completion
+                seen = True
+        if seen:
+            return total_prompt, total_completion
+
+    return None, None
+
+
+def _usage_pair(usage: Any) -> tuple[int | None, int | None]:
+    if usage is None:
+        return None, None
+    if isinstance(usage, dict):
+        return _int_or_none(usage.get("inputTokens")), _int_or_none(
+            usage.get("outputTokens")
+        )
+    return (
+        _int_or_none(getattr(usage, "inputTokens", None)),
+        _int_or_none(getattr(usage, "outputTokens", None)),
+    )
+
+
+def _int_or_none(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
     try:
-        p = int(getattr(result, "prompt_tokens", 0) or 0)
-        c = int(getattr(result, "completion_tokens", 0) or 0)
+        return int(value)
     except (TypeError, ValueError):
-        return 0
-    return p + c
+        return None
 
 
 class Agent(Generic[In, Out]):
@@ -1221,6 +1282,7 @@ class Agent(Generic[In, Out]):
                     timeout=self.config.resilience.timeout,
                     on_attempt=_record,
                 )
+                _LAST_MODEL_USAGE.set(_extract_token_usage(result))
             finally:
                 slot.settle(tokens=_extract_tokens(result))
         if structuredio:
@@ -1318,6 +1380,7 @@ class Agent(Generic[In, Out]):
                         maybe = getattr(result, "structured_output", None)
                         if maybe is not None:
                             structured = maybe
+                _LAST_MODEL_USAGE.set(_extract_token_usage(final_result))
             finally:
                 slot.settle(tokens=_extract_tokens(final_result))
         if structured is not None:
@@ -1468,8 +1531,9 @@ class Agent(Generic[In, Out]):
         ) = self._enter_run(path, track_retry=True)
         algo_parent = _obs._ALGO_RUN_ID.get()
         invoke_id = _obs._INVOKE_ID.get() or ""
-        if algo_parent is not None and not is_root:
+        if algo_parent is not None and algo_parent != run_id:
             start_meta["parent_run_id"] = algo_parent
+        usage_token = _LAST_MODEL_USAGE.set(None)
         try:
             await _obs.registry.notify(
                 _obs.AgentEvent(
@@ -1506,7 +1570,11 @@ class Agent(Generic[In, Out]):
                 end_meta["output_type"] = _qualified(self.output)  # type: ignore[arg-type]
             end_meta.update(self._dashboard_end_metadata(x))
             end_meta.update(retry_meta)
-            if algo_parent is not None and not is_root:
+            usage = _LAST_MODEL_USAGE.get()
+            if usage is not None:
+                envelope.prompt_tokens = usage[0]
+                envelope.completion_tokens = usage[1]
+            if algo_parent is not None and algo_parent != run_id:
                 end_meta["parent_run_id"] = algo_parent
             await _obs.registry.notify(
                 _obs.AgentEvent(
@@ -1519,7 +1587,7 @@ class Agent(Generic[In, Out]):
             if invoke_id:
                 err_meta["invoke_id"] = invoke_id
             err_meta.update(retry_meta)
-            if algo_parent is not None and not is_root:
+            if algo_parent is not None and algo_parent != run_id:
                 err_meta["parent_run_id"] = algo_parent
             await _obs.registry.notify(
                 _obs.AgentEvent(
@@ -1528,6 +1596,7 @@ class Agent(Generic[In, Out]):
             )
             raise
         finally:
+            _LAST_MODEL_USAGE.reset(usage_token)
             self._exit_run(tokens)
 
     async def __call__(self, x: In) -> OperadOutput[Out]:  # type: ignore[override]
@@ -1639,8 +1708,9 @@ class Agent(Generic[In, Out]):
         ) = self._enter_run(path, track_retry=False)
         algo_parent_s = _obs._ALGO_RUN_ID.get()
         invoke_id_s = _obs._INVOKE_ID.get() or ""
-        if algo_parent_s is not None and not is_root:
+        if algo_parent_s is not None and algo_parent_s != run_id:
             start_meta["parent_run_id"] = algo_parent_s
+        usage_token = _LAST_MODEL_USAGE.set(None)
 
         # Bounded so a slow consumer applies backpressure to the producer
         # instead of letting the queue grow without bound on a long stream.
@@ -1681,6 +1751,10 @@ class Agent(Generic[In, Out]):
                         x, y, run_id, path, graph_hash,
                         started, started_wall, finished, finished_wall,
                     )
+                    usage = _LAST_MODEL_USAGE.get()
+                    if usage is not None:
+                        envelope.prompt_tokens = usage[0]
+                        envelope.completion_tokens = usage[1]
                     await queue.put(envelope)
                 except BaseException as e:  # noqa: BLE001
                     await queue.put(e)
@@ -1724,7 +1798,7 @@ class Agent(Generic[In, Out]):
                 end_meta["is_root"] = True
                 end_meta["output_type"] = _qualified(self.output)  # type: ignore[arg-type]
             end_meta.update(self._dashboard_end_metadata(x))
-            if algo_parent_s is not None and not is_root:
+            if algo_parent_s is not None and algo_parent_s != run_id:
                 end_meta["parent_run_id"] = algo_parent_s
             finished_wall = time.time()
             await _obs.registry.notify(
@@ -1737,7 +1811,7 @@ class Agent(Generic[In, Out]):
             err_meta: dict[str, Any] = {"is_root": True} if is_root else {}
             if invoke_id_s:
                 err_meta["invoke_id"] = invoke_id_s
-            if algo_parent_s is not None and not is_root:
+            if algo_parent_s is not None and algo_parent_s != run_id:
                 err_meta["parent_run_id"] = algo_parent_s
             await _obs.registry.notify(
                 _obs.AgentEvent(
@@ -1746,6 +1820,7 @@ class Agent(Generic[In, Out]):
             )
             raise
         finally:
+            _LAST_MODEL_USAGE.reset(usage_token)
             self._exit_run(tokens)
 
     # --- build --------------------------------------------------------------

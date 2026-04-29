@@ -1,5 +1,5 @@
-import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { type RunRow, RunTable, type RunTableColumn } from "@/components/ui/run-table";
 import { RunSummary as RunSummarySchema, SweepSnapshot } from "@/lib/types";
 import { useMemo, useState } from "react";
@@ -9,6 +9,7 @@ import { z } from "zod";
 const ChildRunSummary = RunSummarySchema.passthrough().extend({
   hash_content: z.string().nullable().optional(),
   langfuse_url: z.string().nullable().optional(),
+  metadata: z.record(z.unknown()).optional(),
 });
 
 type ChildRunSummary = z.infer<typeof ChildRunSummary>;
@@ -29,23 +30,34 @@ export function SweepCellsTab({ data, dataChildren, runId }: SweepCellsTabProps)
   }
   const snap = parsed.data;
   const children = parseChildren(dataChildren);
+  const childrenByRun = new Map(children.map((child) => [child.run_id, child]));
+  const childrenByCell = buildChildByCell(children);
   const previousByCell = buildPreviousByCell(snap.cells);
   const [scoreMin, scoreMax] = scoreRange(snap);
   const rows = snap.cells.map((cell): RunRow => {
-    const child = children[cell.cell_index];
-    const href = child ? childHref(child) : null;
+    const child =
+      (cell.child_run_id ? childrenByRun.get(cell.child_run_id) : null) ??
+      childrenByCell.get(cell.cell_index) ??
+      null;
+    const href = child
+      ? childHref(child)
+      : cell.child_run_id
+        ? childHrefFromRunId(cell.child_run_id)
+        : null;
     const previousCell = previousByCell.get(cell.cell_index);
+    const latencyMs = cell.latency_ms ?? child?.duration_ms ?? null;
     return {
       id: `cell-${cell.cell_index}`,
       identity:
         child?.hash_content ??
         child?.root_agent_path ??
         child?.run_id ??
+        cell.child_run_id ??
         `${runId}:${cell.cell_index}`,
       state: child?.state ?? "ended",
       startedAt: child?.started_at ?? null,
       endedAt: child ? child.started_at + child.duration_ms / 1000 : null,
-      durationMs: child?.duration_ms ?? null,
+      durationMs: latencyMs,
       fields: {
         cell: { kind: "num", value: cell.cell_index, format: "int" },
         ...Object.fromEntries(
@@ -60,8 +72,8 @@ export function SweepCellsTab({ data, dataChildren, runId }: SweepCellsTabProps)
           ]),
         ),
         score: { kind: "score", value: cell.score, min: scoreMin, max: scoreMax },
-        cost: { kind: "num", value: child?.cost?.cost_usd ?? null, format: "cost" },
-        latency: { kind: "num", value: child?.duration_ms ?? null, format: "ms" },
+        cost: { kind: "num", value: cellCost(cell, child), format: "cost" },
+        latency: { kind: "num", value: latencyMs, format: "ms" },
         run: href
           ? { kind: "link", label: "open", to: href }
           : { kind: "text", value: "-", mono: true },
@@ -129,7 +141,7 @@ export function SweepCellsTab({ data, dataChildren, runId }: SweepCellsTabProps)
         key={tableVersion}
         rows={rows}
         columns={columns}
-        storageKey={`sweep-cells:${runId}`}
+        storageKey={`sweep-cells:v2:${runId}`}
         rowHref={(row) => {
           const link = row.fields.run;
           return link?.kind === "link" ? link.to : null;
@@ -158,9 +170,10 @@ function selectedRunIds(selected: string[], rows: RunRow[]): string[] {
 
 function parseChildren(data: unknown): ChildRunSummary[] {
   const parsed = z.array(ChildRunSummary).safeParse(data);
-  return parsed.success
-    ? [...parsed.data].sort((a, b) => (a.started_at ?? 0) - (b.started_at ?? 0))
-    : [];
+  if (!parsed.success) return [];
+  return [...parsed.data]
+    .filter((child) => metadataString(child, "algorithm_role") !== "sweep_judge")
+    .sort((a, b) => (a.started_at ?? 0) - (b.started_at ?? 0));
 }
 
 function childHref(child: ChildRunSummary): string {
@@ -168,7 +181,44 @@ function childHref(child: ChildRunSummary): string {
   return `/agents/${encodeURIComponent(identity)}/runs/${encodeURIComponent(child.run_id)}`;
 }
 
-function buildPreviousByCell(cells: SweepSnapshot["cells"]): Map<number, SweepSnapshot["cells"][number]> {
+function childHrefFromRunId(runId: string): string {
+  return `/agents/${encodeURIComponent(runId)}/runs/${encodeURIComponent(runId)}`;
+}
+
+function buildChildByCell(children: ChildRunSummary[]): Map<number, ChildRunSummary> {
+  const out = new Map<number, ChildRunSummary>();
+  children.forEach((child, index) => {
+    out.set(metadataNumber(child, "cell_index") ?? index, child);
+  });
+  return out;
+}
+
+function cellCost(
+  cell: SweepSnapshot["cells"][number],
+  child: ChildRunSummary | null,
+): number | null {
+  if ((cell.prompt_tokens ?? 0) + (cell.completion_tokens ?? 0) > 0) {
+    return cell.cost_usd ?? null;
+  }
+  if ((child?.cost?.prompt_tokens ?? 0) + (child?.cost?.completion_tokens ?? 0) > 0) {
+    return child?.cost?.cost_usd ?? 0;
+  }
+  return null;
+}
+
+function metadataNumber(child: ChildRunSummary, key: string): number | null {
+  const value = child.metadata?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function metadataString(child: ChildRunSummary, key: string): string | null {
+  const value = child.metadata?.[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function buildPreviousByCell(
+  cells: SweepSnapshot["cells"],
+): Map<number, SweepSnapshot["cells"][number]> {
   const out = new Map<number, SweepSnapshot["cells"][number]>();
   const sorted = [...cells].sort((a, b) => a.cell_index - b.cell_index);
   for (let index = 1; index < sorted.length; index += 1) {

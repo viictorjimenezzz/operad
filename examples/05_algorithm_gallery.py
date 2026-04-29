@@ -170,10 +170,11 @@ async def _run_sweep(cfg: Configuration) -> None:
             ],
             "config.sampling.temperature": [0.0, 0.6],
         },
-        context="Dashboard example: scoreless grid for cells, axes, and child runs.",
+        context="Dashboard example: scored grid for cells, axes, child runs, and cost.",
         concurrency=2,
     )
     sweep.seed = seed
+    sweep.judge = Critic(config=_cfg_for(cfg, temperature=0.0))
     report = await sweep.run(
         Task(
             goal="Summarize a new dashboard tab for algorithm runs.",
@@ -183,7 +184,8 @@ async def _run_sweep(cfg: Configuration) -> None:
     print_panel(
         "Sweep cells",
         "\n".join(
-            f"#{i}: {cell.parameters} -> {_answer_text(cell.output)[:120]}"
+            f"#{i}: score={cell.score if cell.score is not None else '-'} "
+            f"{cell.parameters} -> {_answer_text(cell.output)[:120]}"
             for i, cell in enumerate(report.cells)
         ),
     )

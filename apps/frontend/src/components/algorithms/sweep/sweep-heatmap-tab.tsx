@@ -11,6 +11,7 @@ import { z } from "zod";
 
 const ChildRunSummary = RunSummarySchema.passthrough().extend({
   hash_content: z.string().nullable().optional(),
+  metadata: z.record(z.unknown()).optional(),
 });
 
 interface SweepHeatmapTabProps {
@@ -61,7 +62,7 @@ export function SweepHeatmapTab({ data, dataChildren }: SweepHeatmapTabProps) {
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 p-4">
       {snap.axes.length >= 3 ? (
         <SweepDimensionPicker
           axes={snap.axes.map((axis) => ({
@@ -94,18 +95,37 @@ function childHrefsByCell(data: unknown): Record<number, string> {
   if (!parsed.success) return {};
   const out: Record<number, string> = {};
   [...parsed.data]
+    .filter((child) => metadataString(child, "algorithm_role") !== "sweep_judge")
     .sort((a, b) => (a.started_at ?? 0) - (b.started_at ?? 0))
     .forEach((child, index) => {
+      const cellIndex = metadataNumber(child, "cell_index") ?? index;
       const identity = child.hash_content ?? child.root_agent_path ?? child.run_id;
-      out[index] =
+      out[cellIndex] =
         `/agents/${encodeURIComponent(identity)}/runs/${encodeURIComponent(child.run_id)}`;
     });
   return out;
 }
 
+function metadataNumber(child: z.infer<typeof ChildRunSummary>, key: string): number | null {
+  const value = child.metadata?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function metadataString(child: z.infer<typeof ChildRunSummary>, key: string): string | null {
+  const value = child.metadata?.[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
 function defaultSelection(axes: { name: string; values: unknown[] }[]): [string, string | null] {
   if (axes.length === 0) return ["", null];
   if (axes.length === 1) return [axes[0]?.name ?? "", null];
+  if (axes.length === 2) {
+    const longText = axes.find((axis) =>
+      axis.values.some((value) => typeof value === "string" && value.length > 24),
+    );
+    const other = axes.find((axis) => axis.name !== longText?.name);
+    if (longText && other) return [longText.name, other.name];
+  }
   const numeric = axes.filter((axis) => axis.values.some((value) => typeof value === "number"));
   const first = numeric[0]?.name ?? axes[0]?.name ?? "";
   const second =

@@ -20,9 +20,13 @@ from typing import Any, ClassVar, Generic
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..agents.reasoning.components import Reasoner
-from ..agents.reasoning.schemas import Answer, Task
+from ..agents.reasoning.schemas import Answer, Candidate, Score, Task
 from ..core.agent import Agent, In, Out
-from ..runtime.observers.base import _enter_algorithm_run, emit_algorithm_event
+from ..runtime.observers.base import (
+    _enter_algorithm_run,
+    _enter_synthetic_child_run,
+    emit_algorithm_event,
+)
 from ..utils.paths import set_path
 
 
@@ -36,6 +40,26 @@ class SweepCell(BaseModel, Generic[In, Out]):
     output: Out = Field(
         description="Typed output of the built agent on the sweep input.",
     )
+    score: float | None = Field(
+        default=None,
+        description="Optional higher-is-better score assigned to this cell.",
+    )
+    judge_rationale: str | None = Field(
+        default=None,
+        description="Optional natural-language rationale from the judge.",
+    )
+    child_run_id: str | None = Field(
+        default=None,
+        description="Dashboard run id for the cell agent invocation.",
+    )
+    judge_run_id: str | None = Field(
+        default=None,
+        description="Dashboard run id for the judge invocation, if any.",
+    )
+    latency_ms: float | None = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    cost_usd: float | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -64,6 +88,7 @@ class Sweep(Generic[In, Out]):
     """
 
     seed: ClassVar[Agent] = Reasoner(input=Task, output=Answer)
+    judge: ClassVar[Agent[Any, Any] | None] = None
 
     def __init__(
         self,
@@ -91,6 +116,7 @@ class Sweep(Generic[In, Out]):
 
         cls = type(self)
         self.seed = cls.seed.clone(context=context)
+        self.judge = cls.judge.clone(context=context) if cls.judge is not None else None
 
         self.context = context
         self.parameters = parameters
@@ -126,31 +152,61 @@ class Sweep(Generic[In, Out]):
                         set_path(agent, dotted, value)
                     agents.append(agent)
 
-                await asyncio.gather(*(a.abuild() for a in agents))
+                build_targets: list[Agent[Any, Any]] = [*agents]
+                if self.judge is not None:
+                    build_targets.append(self.judge)
+                await asyncio.gather(
+                    *(a.abuild() for a in build_targets if not a._built)
+                )
 
                 sem = asyncio.Semaphore(self.concurrency)
                 outputs = await asyncio.gather(
-                    *(_bounded(sem, a(x)) for a in agents)
+                    *(_bounded(sem, _invoke_child(a, x)) for a in agents)
+                )
+                judge_outputs = (
+                    await asyncio.gather(
+                        *(
+                            _bounded(
+                                sem,
+                                _invoke_child(
+                                    self.judge,
+                                    Candidate(input=x, output=out.response),
+                                ),
+                            )
+                            for out in outputs
+                        )
+                    )
+                    if self.judge is not None
+                    else [None] * len(outputs)
                 )
 
                 cells = [
-                    SweepCell[In, Out](parameters=combo, output=out.response)
-                    for combo, out in zip(combos, outputs)
+                    _cell_from_output(combo, out, judge_out)
+                    for combo, out, judge_out in zip(combos, outputs, judge_outputs)
                 ]
-                for i, combo in enumerate(combos):
+                for i, cell in enumerate(cells):
                     await emit_algorithm_event(
                         "cell",
                         algorithm_path=algo_path,
-                        payload={
-                            "cell_index": i,
-                            "parameters": combo,
-                            "score": None,
-                        },
+                        payload=_cell_payload(i, cell),
                     )
+                scored = [
+                    (i, cell.score)
+                    for i, cell in enumerate(cells)
+                    if cell.score is not None
+                ]
+                best_cell_index = None
+                best_score = None
+                if scored:
+                    best_cell_index, best_score = max(scored, key=lambda item: item[1])
                 await emit_algorithm_event(
                     "algo_end",
                     algorithm_path=algo_path,
-                    payload={"cells": len(cells)},
+                    payload={
+                        "cells": len(cells),
+                        "best_cell_index": best_cell_index,
+                        "score": best_score,
+                    },
                     started_at=started,
                     finished_at=time.time(),
                 )
@@ -177,6 +233,51 @@ def _cartesian(parameters: dict[str, list[Any]]) -> list[dict[str, Any]]:
 async def _bounded(sem: asyncio.Semaphore, coro: Any) -> Any:
     async with sem:
         return await coro
+
+
+async def _invoke_child(agent: Agent[Any, Any], x: Any) -> Any:
+    with _enter_synthetic_child_run():
+        return await agent(x)
+
+
+def _cell_from_output(
+    parameters: dict[str, Any],
+    out: Any,
+    judge_out: Any | None,
+) -> SweepCell[Any, Any]:
+    score: float | None = None
+    rationale: str | None = None
+    judge_run_id: str | None = None
+    if judge_out is not None:
+        score_obj = judge_out.response
+        raw_score = getattr(score_obj, "score", None)
+        if isinstance(raw_score, (int, float)):
+            score = float(raw_score)
+        raw_rationale = getattr(score_obj, "rationale", None)
+        if isinstance(raw_rationale, str):
+            rationale = raw_rationale
+        judge_run_id = getattr(judge_out, "run_id", None) or None
+    return SweepCell[Any, Any](
+        parameters=parameters,
+        output=out.response,
+        score=score,
+        judge_rationale=rationale,
+        child_run_id=getattr(out, "run_id", None) or None,
+        judge_run_id=judge_run_id,
+        latency_ms=getattr(out, "latency_ms", None),
+        prompt_tokens=getattr(out, "prompt_tokens", None),
+        completion_tokens=getattr(out, "completion_tokens", None),
+        cost_usd=getattr(out, "cost_usd", None),
+    )
+
+
+def _cell_payload(index: int, cell: SweepCell[Any, Any]) -> dict[str, Any]:
+    payload = cell.model_dump(
+        mode="json",
+        exclude={"output"},
+    )
+    payload["cell_index"] = index
+    return payload
 
 
 __all__ = ["Sweep", "SweepCell", "SweepReport"]
