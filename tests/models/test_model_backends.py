@@ -9,7 +9,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from operad import Configuration
 from operad.core.config import Sampling
@@ -78,6 +78,75 @@ def test_gemini_resolver_returns_gemini_model(
     assert params["max_output_tokens"] == 64
     assert params["top_p"] == 0.9
     assert model._operad_native_structured_output is True
+    assert model._format_request_tools(None) == []
+    assert model._format_request_tools([]) == []
+
+
+async def test_gemini_native_structured_output_parses_text_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("strands.models")
+    _install_fake_google_genai(monkeypatch)
+
+    class Out(BaseModel):
+        value: int
+
+    cfg = Configuration(
+        backend="gemini",
+        model="gemini-2.5-flash",
+        api_key="sk-fake",
+    )
+    model = resolve_model(cfg)
+    seen: dict[str, Any] = {}
+
+    def _fake_request(
+        prompt: Any,
+        tool_specs: Any,
+        system_prompt: str | None,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        seen.update(
+            {
+                "prompt": prompt,
+                "tool_specs": tool_specs,
+                "system_prompt": system_prompt,
+                "params": params,
+            }
+        )
+        return {"request": True}
+
+    class _Response:
+        parsed = None
+        text = '{"value": 7}'
+
+    class _Models:
+        async def generate_content(self, **request: Any) -> _Response:
+            seen["request"] = request
+            return _Response()
+
+    class _Aio:
+        models = _Models()
+
+    class _Client:
+        aio = _Aio()
+
+    monkeypatch.setattr(model, "_format_request", _fake_request)
+    monkeypatch.setattr(model, "_get_client", lambda: _Client())
+
+    events = [
+        event
+        async for event in model.structured_output(
+            Out,
+            [{"role": "user", "content": [{"text": "hi"}]}],
+            system_prompt="system",
+        )
+    ]
+
+    assert events == [{"output": Out(value=7)}]
+    assert seen["tool_specs"] is None
+    assert seen["params"]["response_mime_type"] == "application/json"
+    assert seen["params"]["response_schema"] == Out.model_json_schema()
+    assert seen["params"]["max_output_tokens"] == 4096
 
 
 def test_gemini_missing_extra_raises_clear_hint(
