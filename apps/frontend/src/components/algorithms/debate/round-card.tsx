@@ -1,14 +1,17 @@
-import { MarkdownView } from "@/components/ui/markdown";
 import type { DebateCritique, DebateProposal, DebateRound } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
-import { useState } from "react";
+import { type KeyboardEvent, type MouseEvent, useState } from "react";
 
 export interface RoundCardProps {
   round: DebateRound;
   roundNumber: number;
   proposerCount?: number;
   gridTemplateColumns?: string;
+  isExpanded?: boolean;
+  activeCellIndex?: number | null;
+  onToggleRound?: () => void;
+  onSelectCell?: (proposalIndex: number) => void;
 }
 
 export function RoundCard({
@@ -16,8 +19,14 @@ export function RoundCard({
   roundNumber,
   proposerCount = round.proposals.length,
   gridTemplateColumns,
+  isExpanded,
+  activeCellIndex,
+  onToggleRound,
+  onSelectCell,
 }: RoundCardProps) {
   const [reasoningOpen, setReasoningOpen] = useState<Record<number, boolean>>({});
+  const [localExpanded, setLocalExpanded] = useState(false);
+  const [localActiveCellIndex, setLocalActiveCellIndex] = useState<number | null>(null);
   const scores = round.scores;
   const maxScore = scores.length > 0 ? Math.max(...scores) : null;
   const columnCount = Math.max(
@@ -27,19 +36,54 @@ export function RoundCard({
     round.critiques.length,
     scores.length,
   );
-  const template = gridTemplateColumns ?? `112px repeat(${columnCount}, minmax(300px, 360px))`;
+  const focusedCellIndex = activeCellIndex ?? localActiveCellIndex;
+  const expanded = isExpanded ?? (localExpanded || focusedCellIndex != null);
+  const template = gridTemplateColumns ?? buildRoundGridTemplate(columnCount, focusedCellIndex);
+  const rowHeight =
+    focusedCellIndex != null ? "min-h-[320px]" : expanded ? "min-h-[188px]" : "min-h-[92px]";
+
+  const toggleRound = () => {
+    if (onToggleRound) {
+      onToggleRound();
+      return;
+    }
+    setLocalActiveCellIndex(null);
+    setLocalExpanded((current) => !current);
+  };
+
+  const selectCell = (index: number) => {
+    if (onSelectCell) {
+      onSelectCell(index);
+      return;
+    }
+    setLocalExpanded(false);
+    setLocalActiveCellIndex((current) => (current === index ? null : index));
+  };
+
+  const onRowKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    toggleRound();
+  };
 
   return (
-    <div
-      role="row"
-      className="grid min-w-max border-b border-border last:border-b-0"
+    <tr
+      aria-expanded={expanded}
+      tabIndex={0}
+      className={cn(
+        "grid min-w-max items-stretch border-b border-border last:border-b-0",
+        rowHeight,
+      )}
       style={{ gridTemplateColumns: template }}
+      onClick={toggleRound}
+      onKeyDown={onRowKeyDown}
     >
-      <div className="flex h-[280px] flex-col justify-between bg-bg-2/50 p-3">
+      <td className="flex min-w-0 flex-col justify-between bg-bg-2/50 p-3">
         <div>
           <div className="text-[12px] font-medium text-text">Round {roundNumber}</div>
           <div className="mt-1 text-[11px] text-muted">
-            {round.proposals.length} proposals
+            {round.proposals.length} props
             <br />
             mean {formatScore(mean(scores))}
           </div>
@@ -47,19 +91,18 @@ export function RoundCard({
         <div className="font-mono text-[11px] text-muted-2">
           {round.timestamp == null ? "no timestamp" : formatTime(round.timestamp)}
         </div>
-      </div>
+      </td>
 
       {Array.from({ length: columnCount }, (_, index) => {
         const proposal = round.proposals[index] ?? null;
         if (!proposal) {
           return (
-            <div
+            <td
               key={`empty-${index}`}
-              role="cell"
-              className="flex h-[280px] items-center justify-center border-l border-border bg-bg-1 p-3 text-[12px] text-muted-2"
+              className="flex min-w-0 items-center justify-center border-l border-border bg-bg-1 p-3 text-[12px] text-muted-2"
             >
               No proposal recorded.
-            </div>
+            </td>
           );
         }
 
@@ -67,60 +110,88 @@ export function RoundCard({
         const score = scores[index] ?? critique?.score ?? null;
         const isBest = maxScore != null && score === maxScore;
         const showReasoning = Boolean(reasoningOpen[index]);
+        const focused = focusedCellIndex === index;
+        const text = showReasoning
+          ? critique?.comments || "No critique recorded for this proposal."
+          : proposal.content || "No proposal text recorded.";
+        const proposalLabel = `Proposal ${index + 1}`;
         return (
-          <article
+          <td
             key={`${proposal.author || "proposer"}-${index}`}
-            role="cell"
-            className="flex h-[280px] min-w-0 flex-col border-l border-border bg-bg-1"
+            aria-label={`Round ${roundNumber} ${proposalLabel}`}
+            aria-expanded={focused}
+            className={cn(
+              "relative min-w-0 border-l border-border bg-bg-1 px-3 py-2 text-left transition-colors hover:bg-bg-2/30",
+              focused && "bg-bg-2/35 shadow-[inset_0_0_0_1px_var(--color-border-strong)]",
+            )}
+            onClick={(event: MouseEvent<HTMLElement>) => {
+              event.stopPropagation();
+              selectCell(index);
+            }}
+            onKeyDown={(event: KeyboardEvent<HTMLElement>) => {
+              if (event.target !== event.currentTarget) return;
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              event.stopPropagation();
+              selectCell(index);
+            }}
           >
-            <div className="flex min-h-12 items-start justify-between gap-2 border-b border-border px-3 py-2">
-              <div className="min-w-0">
-                <div className="truncate text-[12px] font-medium text-text">
-                  {proposal.author || `Proposer ${index + 1}`}
-                </div>
-                <div className="text-[11px] text-muted">
-                  {showReasoning ? "critic reasoning" : "proposal"}
-                </div>
-              </div>
-              {score != null ? (
-                <button
-                  type="button"
-                  className={cn(
-                    "inline-flex h-6 min-w-9 items-center justify-center rounded px-1.5 font-mono text-[11px] tabular-nums transition-colors",
-                    isBest
-                      ? "bg-[var(--color-ok)]/15 text-[var(--color-ok)] hover:bg-[var(--color-ok)]/25"
-                      : "bg-bg-3 text-text hover:bg-bg-2",
-                  )}
-                  aria-label={
-                    showReasoning
-                      ? `show proposal for ${proposal.author || `Proposer ${index + 1}`}`
-                      : `show critic reasoning for ${proposal.author || `Proposer ${index + 1}`}`
-                  }
-                  onClick={() =>
-                    setReasoningOpen((current) => ({
-                      ...current,
-                      [index]: !current[index],
-                    }))
-                  }
-                >
-                  {showReasoning ? <X size={13} /> : formatScore(score)}
-                </button>
-              ) : null}
-            </div>
+            {score != null ? (
+              <button
+                type="button"
+                className={scoreButtonClass(isBest)}
+                aria-label={
+                  showReasoning
+                    ? `show proposal for ${proposalLabel}`
+                    : `show critic reasoning for ${proposalLabel}`
+                }
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setReasoningOpen((current) => ({
+                    ...current,
+                    [index]: !current[index],
+                  }));
+                }}
+              >
+                {showReasoning ? <X size={13} /> : formatScore(score)}
+              </button>
+            ) : null}
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
-              {showReasoning ? (
-                <p className="m-0 whitespace-pre-wrap break-words text-[12px] leading-5 text-text/80">
-                  {critique?.comments || "No critique recorded for this proposal."}
-                </p>
-              ) : (
-                <MarkdownView value={proposal.content || "No proposal text recorded."} />
+            <p
+              className={cn(
+                "m-0 whitespace-pre-wrap break-words pr-14 text-[12px] leading-5 text-text/80",
+                focused
+                  ? "max-h-[280px] overflow-y-auto"
+                  : expanded
+                    ? "line-clamp-6"
+                    : "line-clamp-3",
               )}
-            </div>
-          </article>
+            >
+              {text}
+            </p>
+          </td>
         );
       })}
-    </div>
+    </tr>
+  );
+}
+
+export function buildRoundGridTemplate(
+  proposerCount: number,
+  activeProposalIndex: number | null = null,
+): string {
+  const columns = Array.from({ length: proposerCount }, (_, index) =>
+    activeProposalIndex === index ? "minmax(420px, 560px)" : "minmax(220px, 260px)",
+  );
+  return ["104px", ...columns].join(" ");
+}
+
+function scoreButtonClass(isBest: boolean): string {
+  return cn(
+    "absolute right-2 top-2 z-[1] inline-flex h-7 min-w-11 items-center justify-center rounded px-2 font-mono text-[11px] tabular-nums transition-colors",
+    isBest
+      ? "bg-[var(--color-ok)]/15 text-[var(--color-ok)] hover:bg-[var(--color-ok)]/25"
+      : "bg-bg-3 text-text hover:bg-bg-2",
   );
 }
 
