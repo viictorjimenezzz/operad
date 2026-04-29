@@ -1,148 +1,111 @@
-import { EmptyState } from "@/components/ui/empty-state";
+import {
+  buildAutoResearcherAttempts,
+  readTerminalScore,
+  selectBestAttempt,
+} from "@/components/algorithms/auto_researcher/events";
+import { PlanCard } from "@/components/algorithms/auto_researcher/plan-card";
+import { EmptyState, Metric, Pill } from "@/components/ui";
+import { RunSummary as RunSummarySchema } from "@/lib/types";
+import { formatDurationMs, formatRelativeTime } from "@/lib/utils";
+import { ExternalLink } from "lucide-react";
+import { useMemo } from "react";
 
-interface PlanStep {
-  text: string;
-  status: "planned" | "in-progress" | "done";
-}
-
-export function AutoResearcherPlanTab({ dataEvents }: { dataEvents?: unknown }) {
-  const plan = firstPlanPayload(parseEvents(dataEvents));
-  const steps = buildPlanSteps(plan);
-
-  if (steps.length === 0) {
-    return (
-      <EmptyState
-        title="plan steps unavailable"
-        description="no plan event has been emitted for this run yet"
-      />
-    );
-  }
+export function AutoResearcherPlanTab({
+  dataSummary,
+  dataIterations,
+  dataEvents,
+  dataLangfuseUrl,
+}: {
+  dataSummary?: unknown;
+  dataIterations?: unknown;
+  dataEvents?: unknown;
+  dataLangfuseUrl?: unknown;
+}) {
+  const attempts = useMemo(
+    () => buildAutoResearcherAttempts(dataEvents, dataIterations),
+    [dataEvents, dataIterations],
+  );
+  const plans = attempts.filter((attempt) => attempt.plan != null);
+  const langfuseUrl = typeof dataLangfuseUrl === "string" ? dataLangfuseUrl : "";
 
   return (
-    <div className="h-full overflow-auto p-4">
-      <section className="rounded-lg border border-border bg-bg-1">
-        <header className="border-b border-border px-4 py-3">
-          <h2 className="m-0 text-[14px] font-semibold text-text">Research plan</h2>
-          <p className="m-0 mt-1 text-[11px] text-muted">
-            Planner steps from the first plan event in this run.
-          </p>
-        </header>
-        <ol className="m-0 list-decimal space-y-2 px-8 py-4 text-[12px] text-text">
-          {steps.map((step, index) => (
-            <li key={`${index}-${step.text}`} className="leading-5">
-              <span className="inline-flex items-center gap-2">
-                <StepStatus status={step.status} />
-                <span>{step.text}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-      </section>
+    <div className="flex h-full flex-col gap-4 overflow-auto p-4">
+      {plans.length > 0 ? (
+        plans.map((attempt, index) => (
+          <PlanCard
+            key={`${attempt.attemptIndex ?? "unknown"}-${index}`}
+            attemptIndex={attempt.attemptIndex}
+            plan={attempt.plan}
+            evidence={attempt.evidence}
+          />
+        ))
+      ) : (
+        <EmptyState
+          title="plans not available"
+          description="no AutoResearcher plan event has been emitted for this run yet"
+          className="min-h-40 rounded-lg border border-border bg-bg-1"
+        />
+      )}
+      <RunDetailsStrip dataSummary={dataSummary} attempts={attempts} langfuseUrl={langfuseUrl} />
     </div>
   );
 }
 
-function StepStatus({ status }: { status: PlanStep["status"] }) {
-  if (status === "done") {
-    return <span className="inline-block h-2.5 w-2.5 rounded-full bg-[var(--color-ok)]" aria-label="done" />;
-  }
-  if (status === "in-progress") {
-    return (
-      <span
-        className="inline-block h-2.5 w-2.5 rounded-full bg-[var(--color-warn)]"
-        aria-label="in-progress"
-      />
-    );
-  }
-  return <span className="inline-block h-2.5 w-2.5 rounded-full bg-muted" aria-label="planned" />;
+function RunDetailsStrip({
+  dataSummary,
+  attempts,
+  langfuseUrl,
+}: {
+  dataSummary?: unknown;
+  attempts: ReturnType<typeof buildAutoResearcherAttempts>;
+  langfuseUrl: string;
+}) {
+  const parsed = RunSummarySchema.safeParse(dataSummary);
+  if (!parsed.success) return null;
+
+  const run = parsed.data;
+  const terminalScore = readTerminalScore(run);
+  const best = selectBestAttempt(attempts, terminalScore);
+  const count = attemptCount(attempts);
+
+  return (
+    <section className="rounded-lg border border-border bg-bg-1 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Pill
+          tone={run.state === "running" ? "live" : run.state === "error" ? "error" : "ok"}
+          pulse={run.state === "running"}
+        >
+          {run.state === "running" ? "running" : run.state === "error" ? "error" : "ended"}
+        </Pill>
+        <Pill tone="algo">algo</Pill>
+        <Metric label="ago" value={formatRelativeTime(run.started_at)} />
+        <Metric label="dur" value={formatDurationMs(run.duration_ms)} />
+        <Metric label="attempts" value={count} />
+        <Metric label="best" value={formatScore(terminalScore ?? best?.bestScore ?? null)} />
+        <Metric label="events" value={run.event_total} />
+        {langfuseUrl ? (
+          <a
+            href={langfuseUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[12px] text-accent transition-colors hover:text-accent-strong"
+            title="Open in Langfuse"
+          >
+            langfuse
+            <ExternalLink size={11} />
+          </a>
+        ) : null}
+      </div>
+    </section>
+  );
 }
 
-function parseEvents(data: unknown): unknown[] {
-  if (Array.isArray(data)) return data;
-  if (data && typeof data === "object" && Array.isArray((data as Record<string, unknown>).events)) {
-    return (data as Record<string, unknown>).events as unknown[];
-  }
-  return [];
+function attemptCount(attempts: ReturnType<typeof buildAutoResearcherAttempts>): string {
+  const indexed = attempts.filter((attempt) => attempt.attemptIndex != null).length;
+  const count = indexed > 0 ? indexed : attempts.length;
+  return count > 0 ? String(count) : "n/a";
 }
 
-function firstPlanPayload(events: unknown[]): unknown {
-  for (const event of events) {
-    if (!event || typeof event !== "object") continue;
-    const record = event as Record<string, unknown>;
-    if (record.type !== "algo_event") continue;
-    const kind = record.kind;
-    const payload =
-      record.payload && typeof record.payload === "object"
-        ? (record.payload as Record<string, unknown>)
-        : null;
-    if (!payload) continue;
-    if (kind === "plan") return payload.plan ?? payload;
-    if (kind === "iteration" && payload.phase === "plan") return payload.plan ?? payload;
-  }
-  return null;
-}
-
-function buildPlanSteps(plan: unknown): PlanStep[] {
-  if (plan == null) return [];
-
-  if (typeof plan === "string") {
-    return [{ text: plan, status: "planned" }];
-  }
-
-  if (Array.isArray(plan)) {
-    return plan
-      .map((item) => toPlanStep(item))
-      .filter((item): item is PlanStep => item !== null);
-  }
-
-  if (typeof plan !== "object") {
-    return [{ text: String(plan), status: "planned" }];
-  }
-
-  const record = plan as Record<string, unknown>;
-  const structured = record.steps ?? record.plan ?? record.items;
-  if (Array.isArray(structured)) {
-    const steps = structured
-      .map((item) => toPlanStep(item))
-      .filter((item): item is PlanStep => item !== null);
-    if (steps.length > 0) return steps;
-  }
-
-  return Object.entries(record)
-    .filter(([key]) => key !== "status")
-    .map(([key, value]) => ({
-      text: `${key}: ${formatValue(value)}`,
-      status: "planned" as const,
-    }));
-}
-
-function toPlanStep(value: unknown): PlanStep | null {
-  if (typeof value === "string") {
-    return { text: value, status: "planned" };
-  }
-  if (!value || typeof value !== "object") {
-    return value == null ? null : { text: String(value), status: "planned" };
-  }
-
-  const record = value as Record<string, unknown>;
-  const textValue = record.text ?? record.step ?? record.title ?? record.query ?? record.description;
-  const text = textValue == null ? null : String(textValue);
-  if (!text) return null;
-  return {
-    text,
-    status: parseStatus(record.status ?? record.state ?? record.phase),
-  };
-}
-
-function parseStatus(raw: unknown): PlanStep["status"] {
-  const value = typeof raw === "string" ? raw.toLowerCase() : "";
-  if (value === "done" || value === "complete" || value === "completed") return "done";
-  if (value === "in-progress" || value === "running" || value === "active") return "in-progress";
-  return "planned";
-}
-
-function formatValue(value: unknown): string {
-  if (value == null) return "n/a";
-  if (typeof value === "string") return value;
-  return JSON.stringify(value);
+function formatScore(value: number | null): string {
+  return typeof value === "number" ? value.toFixed(3) : "n/a";
 }

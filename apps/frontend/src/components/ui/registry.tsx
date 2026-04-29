@@ -27,7 +27,7 @@ import {
   TabsTrigger,
 } from "@/components/ui";
 import type { ComponentRegistry } from "@json-render/react";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 /** Strip undefined keys; resulting type drops `undefined` from value unions. */
 function defined<T extends Record<string, unknown>>(
@@ -97,6 +97,7 @@ export const uiRegistry: ComponentRegistry = {
       tabs: Array<{ id: string; label: string; badge?: string | number }>;
       activeTab?: string;
       onTabChange?: (tabId: string) => void;
+      trailing?: ReactNode;
     };
     const tabs = props.tabs;
     const firstTab = tabs[0]?.id ?? "tab-0";
@@ -108,7 +109,7 @@ export const uiRegistry: ComponentRegistry = {
       : { defaultValue: activeTab };
     return (
       <Tabs {...tabsRootProps} className="flex h-full flex-col">
-        <TabsList>
+        <TabsList className="min-h-9 bg-bg-1 px-3">
           {tabs.map((t) => (
             <TabsTrigger key={t.id} value={t.id}>
               {t.label}
@@ -119,6 +120,9 @@ export const uiRegistry: ComponentRegistry = {
               ) : null}
             </TabsTrigger>
           ))}
+          {props.trailing ? (
+            <div className="ml-auto flex min-w-0 items-center">{props.trailing}</div>
+          ) : null}
         </TabsList>
         {singleActiveChild ? (
           <TabsContent value={activeTab} className="flex-1 overflow-auto">

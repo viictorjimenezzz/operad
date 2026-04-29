@@ -75,8 +75,6 @@ Open http://localhost:5173/index.dashboard.html.
 
 ## What you see
 
-- **Topbar** — global stats (runs, live, ended, errors, events,
-  tokens, cost) and connection status badge.
 - **Agents rail** — three levels: class, agent instance
   (`hash_content`), then invocation. Instance pages expose Overview,
   Runs, Metrics, Training, and Graph tabs when the underlying run data

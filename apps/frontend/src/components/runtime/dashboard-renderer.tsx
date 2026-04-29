@@ -2,13 +2,13 @@ import { ParametersTab } from "@/components/agent-view/parameter-evolution/param
 import { TrainerTapeView } from "@/components/algorithms/trainer/tape-view";
 import { registry as baseRegistry } from "@/components/registry";
 import { InvocationsTab } from "@/components/runtime/invocations-tab";
-import { HashRow, type HashKey } from "@/components/ui/hash-row";
 import {
   type ResolveContext,
   resolveProps,
   resolveSource,
 } from "@/components/runtime/source-resolver";
 import { SSEDispatcher } from "@/components/runtime/sse-dispatcher";
+import { type HashKey, HashRow } from "@/components/ui/hash-row";
 import { autoMerge } from "@/lib/data-source";
 import {
   type ElementSpec,
@@ -37,13 +37,14 @@ import type { UITree } from "@json-render/core";
 import { JSONUIProvider, Renderer } from "@json-render/react";
 import type { ComponentRegistry } from "@json-render/react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { z } from "zod";
 
 interface DashboardRendererProps {
   layout: LayoutSpec;
   context: Record<string, string>;
+  tabsTrailing?: ReactNode;
 }
 
 const passThrough = z.unknown();
@@ -102,15 +103,12 @@ const registry: ComponentRegistry = {
       dataTape?: unknown;
     };
     return (
-      <TrainerTapeView
-        {...(props.runId ? { runId: props.runId } : {})}
-        dataTape={props.dataTape}
-      />
+      <TrainerTapeView {...(props.runId ? { runId: props.runId } : {})} dataTape={props.dataTape} />
     );
   },
 };
 
-export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
+export function DashboardRenderer({ layout, context, tabsTrailing }: DashboardRendererProps) {
   const entries = useMemo(() => Object.entries(layout.dataSources), [layout]);
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -217,6 +215,7 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
             tabs: tabs.map(({ childId: _childId, ...tab }) => tab),
             activeTab,
             onTabChange: setActiveTab,
+            ...(id === layout.spec.root && tabsTrailing ? { trailing: tabsTrailing } : {}),
           },
           children: activeChildId ? [activeChildId] : [],
         };
@@ -231,7 +230,17 @@ export function DashboardRenderer({ layout, context }: DashboardRendererProps) {
       elements[id] = node;
     }
     return { root: layout.spec.root, elements };
-  }, [entries, layout, runEvents, context, queryDatas, tabParam, knownTabIds, setActiveTab]);
+  }, [
+    entries,
+    layout,
+    runEvents,
+    context,
+    queryDatas,
+    tabParam,
+    knownTabIds,
+    setActiveTab,
+    tabsTrailing,
+  ]);
 
   return (
     <JSONUIProvider registry={registry}>

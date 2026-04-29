@@ -1,5 +1,5 @@
 import { EmptyState } from "@/components/ui/empty-state";
-import { DebateRoundsResponse } from "@/lib/types";
+import { type DebateRound, DebateRoundsResponse } from "@/lib/types";
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 function _agreement(scores: number[]): number {
@@ -17,8 +17,9 @@ export function DebateConsensusTracker({
   height?: number;
 }) {
   const parsed = DebateRoundsResponse.safeParse(data);
+  const rounds = parsed.success ? uniqueRounds(parsed.data) : [];
 
-  if (!parsed.success || parsed.data.length < 2) {
+  if (rounds.length < 2) {
     return (
       <EmptyState
         title="not enough rounds"
@@ -27,8 +28,8 @@ export function DebateConsensusTracker({
     );
   }
 
-  const chartData = parsed.data.map((round, i) => ({
-    round: round.round_index ?? i,
+  const chartData = rounds.map((round, i) => ({
+    round: roundNumber(round, i),
     agreement: Number.parseFloat(_agreement(round.scores).toFixed(3)),
   }));
 
@@ -37,9 +38,11 @@ export function DebateConsensusTracker({
       <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 4, left: 0 }}>
         <XAxis
           dataKey="round"
+          allowDecimals={false}
           tick={{ fontSize: 10, fill: "var(--color-muted)" }}
           tickLine={false}
           axisLine={false}
+          tickFormatter={formatRoundTick}
           label={{
             value: "round",
             position: "insideBottomRight",
@@ -64,7 +67,7 @@ export function DebateConsensusTracker({
             fontSize: 11,
           }}
           formatter={(v: number) => [`${(v * 100).toFixed(1)}%`, "agreement"]}
-          labelFormatter={(l) => `round ${l}`}
+          labelFormatter={(l) => formatRoundTick(Number(l))}
         />
         <Line
           type="monotone"
@@ -77,4 +80,30 @@ export function DebateConsensusTracker({
       </LineChart>
     </ResponsiveContainer>
   );
+}
+
+function roundNumber(round: DebateRound, index: number): number {
+  return (round.round_index ?? index) + 1;
+}
+
+function uniqueRounds(rounds: DebateRound[]): DebateRound[] {
+  const seen = new Set<number>();
+  const unique: DebateRound[] = [];
+  for (const round of rounds) {
+    if (round.round_index != null) {
+      if (seen.has(round.round_index)) continue;
+      seen.add(round.round_index);
+    }
+    unique.push(round);
+  }
+  return unique.sort((a, b) => {
+    if (a.round_index == null && b.round_index == null) return 0;
+    if (a.round_index == null) return 1;
+    if (b.round_index == null) return -1;
+    return a.round_index - b.round_index;
+  });
+}
+
+export function formatRoundTick(value: number): string {
+  return Number.isFinite(value) ? `Round ${Math.round(value)}` : "";
 }

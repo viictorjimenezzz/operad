@@ -21,7 +21,12 @@
             { "id": "plan", "label": "Plan" },
             { "id": "attempts", "label": "Attempts" },
             { "id": "best", "label": "Best" },
-            { "id": "agents", "label": "Agents", "badge": "$expr:count($queries.agentsSummary.agents)", "condition": "$expr:count($queries.agentsSummary.agents)" },
+            {
+              "id": "agents",
+              "label": "Agents",
+              "badge": "$expr:count($queries.agentsSummary.agents)",
+              "condition": "$expr:count($queries.agentsSummary.agents)"
+            },
             { "id": "events", "label": "Events", "badge": "$queries.summary.event_total" }
           ]
         },
@@ -30,11 +35,19 @@
 
       "plan": {
         "type": "AutoResearcherPlanTab",
-        "props": { "sourceEvents": "$queries.runEvents" }
+        "props": {
+          "sourceSummary": "$queries.summary",
+          "sourceIterations": "$queries.iterations",
+          "sourceEvents": "$queries.runEvents",
+          "sourceLangfuseUrl": "$context.langfuseUrl"
+        }
       },
       "attempts": {
         "type": "AutoResearcherAttemptsTab",
-        "props": { "sourceIterations": "$queries.iterations" }
+        "props": {
+          "sourceIterations": "$queries.iterations",
+          "sourceEvents": "$queries.runEvents"
+        }
       },
       "best": {
         "type": "AutoResearcherBestTab",

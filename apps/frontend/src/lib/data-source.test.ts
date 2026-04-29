@@ -14,6 +14,10 @@ describe("findPrimaryKey", () => {
     expect(findPrimaryKey({ iter_index: 1, score: 0.7 })).toBe("iter_index");
   });
 
+  it("returns round_index for debate round deltas", () => {
+    expect(findPrimaryKey({ round_index: 1, scores: [0.7, 0.8] })).toBe("round_index");
+  });
+
   it("returns null when no known key present", () => {
     expect(findPrimaryKey({ foo: "bar" })).toBeNull();
   });
@@ -39,6 +43,24 @@ describe("appendDedupe", () => {
     expect(appendDedupe(arr, { epoch: 2, loss: 0.4 })).toHaveLength(2);
   });
 
+  it("deduplicates debate rounds by round_index", () => {
+    const arr = [{ round_index: 0, scores: [0.7, 0.8] }];
+    expect(appendDedupe(arr, { round_index: 0, scores: [0.7, 0.8] })).toHaveLength(1);
+    expect(appendDedupe(arr, { round_index: 1, scores: [0.8, 0.75] })).toHaveLength(2);
+  });
+
+  it("keeps distinct phases for the same iter_index", () => {
+    const arr = [{ iter_index: 1, phase: "refine", text: "draft" }];
+    const result = appendDedupe(arr, { iter_index: 1, phase: "reflect", score: 0.9 });
+    expect(result).toHaveLength(2);
+  });
+
+  it("deduplicates iteration rows by iter_index and phase", () => {
+    const arr = [{ iter_index: 1, phase: "reflect", score: 0.8 }];
+    const result = appendDedupe(arr, { iter_index: 1, phase: "reflect", score: 0.9 });
+    expect(result).toHaveLength(1);
+  });
+
   it("appends when no primary key (no dedup possible)", () => {
     const arr = [{ foo: "a" }];
     const result = appendDedupe(arr, { foo: "b" });
@@ -59,6 +81,27 @@ describe("autoMerge", () => {
     const delta = { gen_index: 0, best: 0.85 };
     const result = autoMerge(current, delta) as unknown[];
     expect(result).toHaveLength(1);
+  });
+
+  it("deduplicates streamed debate rounds by round_index", () => {
+    const current = [{ round_index: 0, scores: [0.7, 0.8] }];
+    const delta = { round_index: 0, scores: [0.7, 0.8] };
+    const result = autoMerge(current, delta) as unknown[];
+    expect(result).toHaveLength(1);
+  });
+
+  it("appends debate round deltas into a Debate snapshot", () => {
+    const current = {
+      rounds: [],
+      final_answer: null,
+    };
+    const result = autoMerge(current, { round_index: 0, scores: [0.7, 0.8] }) as {
+      rounds: unknown[];
+      final_answer: null;
+    };
+
+    expect(result.rounds).toHaveLength(1);
+    expect(result.final_answer).toBeNull();
   });
 
   it("replaces when delta is an array (full snapshot from server)", () => {
@@ -104,6 +147,62 @@ describe("autoMerge", () => {
 
     expect(result.iterations).toHaveLength(1);
     expect(result).toBe(current);
+  });
+
+  it("merges an iteration row into an IterationsResponse snapshot", () => {
+    const current = {
+      iterations: [{ iter_index: 0, phase: "reflect", score: 0.5 }],
+      max_iter: 2,
+      threshold: null,
+      converged: false,
+    };
+    const result = autoMerge(current, {
+      iter_index: 1,
+      phase: "refine",
+      score: null,
+      text: "draft",
+      metadata: {},
+    }) as typeof current;
+
+    expect(result.iterations).toHaveLength(2);
+    expect(result.max_iter).toBe(2);
+    expect(result.converged).toBe(false);
+  });
+
+  it("preserves multiple iteration phases while merging into a snapshot", () => {
+    const current = {
+      iterations: [{ iter_index: 1, phase: "refine", score: null }],
+      max_iter: 2,
+      threshold: null,
+      converged: false,
+    };
+    const result = autoMerge(current, {
+      iter_index: 1,
+      phase: "reflect",
+      score: 1,
+      text: "accepted",
+      metadata: {},
+    }) as typeof current;
+
+    expect(result.iterations.map((row) => row.phase)).toEqual(["refine", "reflect"]);
+  });
+
+  it("does not let SSE history replay replace the snapshot object", () => {
+    const current = {
+      iterations: [{ iter_index: 0, phase: "reflect", score: 1 }],
+      max_iter: 2,
+      threshold: null,
+      converged: false,
+    };
+    const result = autoMerge(current, {
+      iter_index: 0,
+      phase: "reflect",
+      score: 1,
+      text: "same event",
+      metadata: {},
+    });
+
+    expect(result).toEqual(current);
   });
 
   it("replaces when current is undefined (first delta before JSON resolves)", () => {

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 import { DebateRoundsTab } from "./debate-rounds-tab";
@@ -30,19 +30,34 @@ function renderWithRouter(initialEntry = "/") {
 }
 
 describe("<DebateRoundsTab />", () => {
-  it("renders one round card per round", () => {
+  it("renders one table row per unique round", () => {
     renderWithRouter();
 
-    expect(screen.getAllByText("Round 1").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Round 2").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Round 3").length).toBeGreaterThan(0);
+    expect(screen.getByRole("table")).toBeTruthy();
+    expect(screen.getByText("Proposal 1")).toBeTruthy();
+    expect(screen.getByText("Proposal 2")).toBeTruthy();
+    expect(screen.getByText("Proposal 3")).toBeTruthy();
+    expect(screen.getAllByRole("row")).toHaveLength(4);
+    expect(screen.getByText("Round 1")).toBeTruthy();
+    expect(screen.getByText("Round 2")).toBeTruthy();
+    expect(screen.getByText("Round 3")).toBeTruthy();
   });
 
-  it("reads and updates the round query param", () => {
+  it("does not render pinned round controls from the query param", () => {
     renderWithRouter("/?round=2");
 
-    expect(screen.getByText("?round=2")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "Round 3" }));
-    expect(screen.getByText("?round=3")).toBeDefined();
+    expect(screen.queryByText("Pinned round")).toBeNull();
+    expect(screen.queryByText("?round=2")).toBeNull();
+    expect(screen.getByText("Round 2")).toBeTruthy();
+  });
+
+  it("deduplicates repeated streamed rounds by round_index", () => {
+    render(
+      <MemoryRouter>
+        <DebateRoundsTab data={[...rounds, rounds[1]!]} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getAllByText("Round 2")).toHaveLength(1);
   });
 });

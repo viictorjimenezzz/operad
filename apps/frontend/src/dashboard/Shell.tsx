@@ -1,7 +1,6 @@
 import { CassetteRibbon } from "@/components/panels/cassette-ribbon";
 import { CompareBasket } from "@/components/panels/compare-basket";
 import { GlobalRail } from "@/components/panels/global-rail";
-import { GlobalStatsBar } from "@/components/panels/global-stats-bar";
 import { SectionSidebar } from "@/components/panels/section-sidebar/section-sidebar";
 import { useDashboardStream } from "@/hooks/use-event-stream";
 import { useUIStore } from "@/stores";
@@ -23,7 +22,6 @@ export function Shell() {
   useDashboardStream("/stream");
 
   const path = location.pathname;
-  const isAgentsPage = path.startsWith("/agents");
   const showSectionSidebar =
     path === "/" ||
     path.startsWith("/agents") ||
@@ -34,7 +32,6 @@ export function Shell() {
 
   return (
     <div className="flex h-screen flex-col bg-bg">
-      {isAgentsPage ? null : <GlobalStatsBar subtitle="dashboard" />}
       <CassetteRibbon />
       <div className="flex flex-1 overflow-hidden">
         <GlobalRail />

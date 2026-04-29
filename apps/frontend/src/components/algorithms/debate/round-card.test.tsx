@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { RoundCard } from "./round-card";
 
@@ -22,12 +22,39 @@ const round = {
 
 describe("<RoundCard />", () => {
   it("renders proposer proposals, critic scores, and critique excerpts", () => {
-    render(<RoundCard round={round} roundNumber={1} expanded />);
+    render(<RoundCard round={round} roundNumber={1} proposerCount={3} />);
 
     expect(screen.getByText("Round 1")).toBeDefined();
     expect(screen.getByText("Proposer A")).toBeDefined();
     expect(screen.getByText("Alpha answer")).toBeDefined();
-    expect(screen.getByText("Critic score: 0.61")).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "show critic reasoning for Proposer A" }),
+    ).toBeDefined();
+  });
+
+  it("toggles a proposal cell between proposal text and critic reasoning", () => {
+    render(<RoundCard round={round} roundNumber={1} proposerCount={3} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "show critic reasoning for Proposer A" }));
+
     expect(screen.getByText("needs more detail")).toBeDefined();
+    expect(screen.queryByText("Alpha answer")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "show proposal for Proposer A" }));
+
+    expect(screen.getByText("Alpha answer")).toBeDefined();
+    expect(screen.queryByText("needs more detail")).toBeNull();
+  });
+
+  it("preserves empty columns for missing proposals", () => {
+    render(
+      <RoundCard
+        round={{ ...round, proposals: round.proposals.slice(0, 2) }}
+        roundNumber={1}
+        proposerCount={3}
+      />,
+    );
+
+    expect(screen.getByText("No proposal recorded.")).toBeDefined();
   });
 });

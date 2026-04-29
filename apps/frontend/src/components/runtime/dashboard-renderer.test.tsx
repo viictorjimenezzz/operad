@@ -353,6 +353,47 @@ describe("DashboardRenderer", () => {
     expect(tree?.elements.page?.children).toEqual(["events"]);
   });
 
+  it("passes trailing content to the root tabs element only", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+
+    const qc = makeQC();
+    const layout: LayoutSpec = {
+      algorithm: "Test",
+      version: 1,
+      dataSources: {},
+      spec: {
+        root: "page",
+        elements: {
+          page: {
+            type: "Tabs",
+            props: {
+              tabs: [{ id: "overview", label: "Overview" }],
+            },
+            children: ["overview"],
+          },
+          overview: { type: "Card", props: { title: "Overview" } },
+        },
+      },
+    };
+
+    render(
+      <Wrapper qc={qc}>
+        <DashboardRenderer
+          layout={layout}
+          context={{ runId: "r1" }}
+          tabsTrailing={<span>Algorithms / AutoResearcher / r1</span>}
+        />
+      </Wrapper>,
+    );
+
+    await waitFor(() =>
+      expect(renderedTrees.some((tree) => tree.elements.page?.props?.trailing)).toBe(true),
+    );
+    const tree = renderedTrees.find((item) => item.elements.page?.props?.trailing);
+    expect(tree?.elements.page?.props?.trailing).toBeDefined();
+    expect(tree?.elements.overview?.props?.trailing).toBeUndefined();
+  });
+
   it("hides tabs whose condition resolves falsy", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
 
