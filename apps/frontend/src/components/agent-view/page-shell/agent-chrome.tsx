@@ -1,104 +1,80 @@
-import {
-  AgentTabs,
-  type AgentTabSpec,
-} from "@/components/agent-view/page-shell/agent-tabs";
-import { Breadcrumb, HashTag, Metric, Pill, type BreadcrumbItem } from "@/components/ui";
+import { type AgentTabSpec, AgentTabs } from "@/components/agent-view/page-shell/agent-tabs";
+import type { BreadcrumbItem } from "@/components/ui";
 import type { RunSummary } from "@/lib/types";
-import {
-  formatCostOrUnavailable,
-  formatTokenPairOrUnavailable,
-  formatTokensOrUnavailable,
-  hasTokenUsage,
-} from "@/lib/usage";
-import { formatDurationMs, formatRelativeTime } from "@/lib/utils";
-import { ExternalLink } from "lucide-react";
-import type { ReactNode } from "react";
+import { cn, truncateMiddle } from "@/lib/utils";
+import { ChevronRight } from "lucide-react";
+import { Fragment } from "react";
+import { Link } from "react-router-dom";
 
 /**
- * Slim W&B-style chrome: a breadcrumb row + a tab strip. The hero is
- * gone; KPIs live inside the canvas now.
+ * Slim invocation chrome: tabs on the left, path context on the right.
+ * Runtime KPIs live inside the overview canvas.
  */
 export interface AgentChromeProps {
   run: RunSummary;
-  langfuseUrl?: string | null;
-  hashContent?: string | null;
   basePath: string;
   tabs: AgentTabSpec[];
-  rightActions?: ReactNode;
   /** Optional preceding breadcrumb crumbs (e.g. group > run). */
   breadcrumbs?: BreadcrumbItem[];
 }
 
-export function AgentChrome({
-  run,
-  langfuseUrl,
-  hashContent,
-  basePath,
-  tabs,
-  rightActions,
-  breadcrumbs,
-}: AgentChromeProps) {
+export function AgentChrome({ run, basePath, tabs, breadcrumbs }: AgentChromeProps) {
   const className = run.algorithm_class ?? run.root_agent_path?.split(".").at(-1) ?? "Agent";
-  const totalTokens = run.prompt_tokens + run.completion_tokens;
-  const cost = run.cost?.cost_usd;
-  const idHash = hashContent ?? run.run_id;
+  const agentPath = run.root_agent_path ?? className;
+  const runLabel = truncateMiddle(run.run_id, 24);
 
   const items: BreadcrumbItem[] = [
-    ...(breadcrumbs ?? [{ label: "Runs", to: "/agents" }]),
-    { label: className },
-    { label: run.run_id, mono: true },
+    ...(breadcrumbs ?? [{ label: "Agents", to: "/agents" }]),
+    { label: agentPath },
+    { label: runLabel, mono: true },
   ];
 
   return (
     <header className="flex-shrink-0">
-      <Breadcrumb
-        items={items}
-        trailing={
-          <>
-            <HashTag hash={idHash} dotOnly size="sm" />
-            {run.state === "running" ? (
-              <Pill tone="live" pulse size="sm">
-                live
-              </Pill>
-            ) : run.state === "error" ? (
-              <Pill tone="error" size="sm">
-                error
-              </Pill>
-            ) : (
-              <Pill tone="ok" size="sm">
-                ended
-              </Pill>
-            )}
-            {run.is_algorithm ? <Pill tone="algo" size="sm">algo</Pill> : null}
-            <Metric label="ago" value={formatRelativeTime(run.started_at)} />
-            <Metric label="dur" value={formatDurationMs(run.duration_ms)} />
-            {hasTokenUsage(run.prompt_tokens, run.completion_tokens) ? (
-              <Metric
-                label="tok"
-                value={formatTokensOrUnavailable(totalTokens)}
-                sub={formatTokenPairOrUnavailable(run.prompt_tokens, run.completion_tokens)}
-              />
-            ) : null}
-            {typeof cost === "number" && Number.isFinite(cost) && cost > 0 ? (
-              <Metric label="$" value={formatCostOrUnavailable(cost)} />
-            ) : null}
-            {langfuseUrl ? (
-              <a
-                href={langfuseUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[12px] text-accent transition-colors hover:text-[--color-accent-strong]"
-                title="Open in Langfuse"
-              >
-                langfuse
-                <ExternalLink size={11} />
-              </a>
-            ) : null}
-            {rightActions}
-          </>
-        }
-      />
-      <AgentTabs base={basePath} tabs={tabs} />
+      <AgentTabs base={basePath} tabs={tabs} right={<AgentBreadcrumb items={items} />} />
     </header>
+  );
+}
+
+function AgentBreadcrumb({ items }: { items: BreadcrumbItem[] }) {
+  return (
+    <nav
+      aria-label="agent invocation path"
+      className="flex min-w-0 items-center gap-1.5 text-[12px]"
+    >
+      {items.map((item, index) => {
+        const last = index === items.length - 1;
+        const text = (
+          <span
+            className={cn(
+              item.mono ? "font-mono text-[11px]" : "",
+              "min-w-0 truncate",
+              last ? "text-text" : "text-muted",
+            )}
+            title={typeof item.label === "string" ? item.label : undefined}
+          >
+            {item.label}
+          </span>
+        );
+        return (
+          <Fragment key={`${index}-${String(item.label)}`}>
+            {item.to ? (
+              <Link
+                to={item.to}
+                aria-current={last ? "page" : undefined}
+                className="min-w-0 truncate text-muted transition-colors hover:text-text"
+              >
+                {text}
+              </Link>
+            ) : (
+              text
+            )}
+            {!last ? (
+              <ChevronRight aria-hidden size={12} className="flex-shrink-0 text-muted-2" />
+            ) : null}
+          </Fragment>
+        );
+      })}
+    </nav>
   );
 }

@@ -44,7 +44,7 @@ export function AgentRunDetailLayout() {
   const tabs = useMemo<AgentTabSpec[]>(() => {
     const next: AgentTabSpec[] = [
       { to: "", label: "Overview", end: true },
-      { to: "/graph", label: "Graph" },
+      { to: "/history", label: "History" },
       { to: "/metrics", label: "Metrics" },
     ];
     if (showDrift) next.push({ to: "/drift", label: "Drift" });
@@ -96,14 +96,7 @@ export function AgentRunDetailLayout() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <AgentChrome
-        run={run}
-        langfuseUrl={latest?.langfuse_url ?? null}
-        hashContent={resolvedHash}
-        basePath={basePath}
-        tabs={tabs}
-        breadcrumbs={breadcrumbs}
-      />
+      <AgentChrome run={run} basePath={basePath} tabs={tabs} breadcrumbs={breadcrumbs} />
       <div className="flex-1 overflow-hidden">
         <Outlet />
       </div>

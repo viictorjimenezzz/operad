@@ -1,4 +1,5 @@
 import { AgentGroupIdentityCard } from "@/components/agent-view/group/identity-card";
+import { InvocationPromptBlock } from "@/components/agent-view/overview/invocation-detail-blocks";
 import {
   Eyebrow,
   Metric,
@@ -277,21 +278,10 @@ function PromptTemplateCard({
         <div className="mb-3 text-[12px] text-muted-2">loading prompt template...</div>
       ) : null}
       <div className="grid gap-3 lg:grid-cols-2">
-        <PromptBlock label="system" value={systemPrompt ?? "—"} />
-        <PromptBlock label="input template" value={inputTemplate} />
+        <InvocationPromptBlock label="system" value={systemPrompt ?? "—"} />
+        <InvocationPromptBlock label="input template" value={inputTemplate} />
       </div>
     </PanelCard>
-  );
-}
-
-function PromptBlock({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <Eyebrow>{label}</Eyebrow>
-      <pre className="mt-2 max-h-[420px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-bg-inset p-3 font-mono text-[11px] leading-5 text-text">
-        {value}
-      </pre>
-    </div>
   );
 }
 

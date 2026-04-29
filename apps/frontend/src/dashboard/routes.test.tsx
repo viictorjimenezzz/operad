@@ -15,6 +15,7 @@ describe("dashboardRouter", () => {
     }
     const tabs = runDetail.children.map((c) => c.path ?? (c.index ? "(index)" : ""));
     expect(tabs).toContain("(index)");
+    expect(tabs).toContain("history");
     expect(tabs).toContain("graph");
     expect(tabs).toContain("metrics");
     expect(tabs).toContain("drift");
@@ -22,7 +23,8 @@ describe("dashboardRouter", () => {
     expect(tabs).not.toContain("cost");
     expect(tabs).not.toContain("train");
     const graph = runDetail.children.find((c) => c.path === "graph");
-    expect(graph && "errorElement" in graph ? graph.errorElement : undefined).toBeDefined();
+    expect(graph && "errorElement" in graph ? graph.errorElement : undefined).toBeUndefined();
+    expect(graph && "element" in graph ? graph.element : undefined).toBeDefined();
   });
 
   it("registers the agent class route between the index and instance routes", () => {

@@ -1,3 +1,4 @@
+import { InvocationPromptBlock } from "@/components/agent-view/overview/invocation-detail-blocks";
 import { IOHero } from "@/components/agent-view/overview/io-hero";
 import { ActivityStrip } from "@/components/agent-view/overview/run-status-strip";
 import { EmptyState, Eyebrow, FieldTree } from "@/components/ui";
@@ -97,8 +98,8 @@ function PromptPanel({ invocation }: { invocation: RunInvocation | null }) {
       </div>
       {system || user ? (
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-          <PromptTextBlock label="system" value={system} />
-          <PromptTextBlock label="user" value={user} />
+          <InvocationPromptBlock label="system" value={system} />
+          <InvocationPromptBlock label="user" value={user} />
         </div>
       ) : (
         <div className="rounded-md border border-border bg-bg-2 px-3 py-2 text-[12px] text-muted-2">
@@ -106,19 +107,6 @@ function PromptPanel({ invocation }: { invocation: RunInvocation | null }) {
         </div>
       )}
     </section>
-  );
-}
-
-function PromptTextBlock({ label, value }: { label: string; value: string | null }) {
-  return (
-    <div className="flex h-[260px] flex-col rounded-md border border-border bg-bg-2">
-      <div className="border-b border-border/60 px-3 py-2">
-        <Eyebrow>{label}</Eyebrow>
-      </div>
-      <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap px-3 py-2 font-mono text-[11px] leading-5 text-text">
-        {value ?? "—"}
-      </pre>
-    </div>
   );
 }
 
