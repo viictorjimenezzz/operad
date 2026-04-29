@@ -269,6 +269,43 @@ def _build_gemini(cfg: Configuration) -> "GeminiModel":
 
         _operad_native_structured_output = True
 
+        def _format_request_tools(self, tool_specs: list[Any] | None) -> list[Any]:
+            if not tool_specs and not self.config.get("gemini_tools"):
+                return []
+            return super()._format_request_tools(tool_specs)
+
+        async def structured_output(
+            self,
+            output_model: type[Any],
+            prompt: Any,
+            system_prompt: str | None = None,
+            **kwargs: Any,
+        ) -> Any:
+            params = {
+                **(self.config.get("params") or {}),
+                "response_mime_type": "application/json",
+                "response_schema": output_model.model_json_schema(),
+            }
+            max_tokens = int(params.get("max_output_tokens") or 0)
+            if max_tokens < 4096:
+                params["max_output_tokens"] = 4096
+            request = self._format_request(prompt, None, system_prompt, params)
+            response = await self._get_client().aio.models.generate_content(**request)
+
+            parsed = getattr(response, "parsed", None)
+            if parsed is not None:
+                yield {"output": output_model.model_validate(parsed)}
+                return
+
+            text = getattr(response, "text", None)
+            if isinstance(text, str) and text.strip():
+                yield {"output": output_model.model_validate_json(text)}
+                return
+
+            raise ValueError(
+                f"Gemini returned no parsed or textual JSON for {output_model.__name__}"
+            )
+
     params: dict[str, Any] = {
         "temperature": cfg.sampling.temperature,
         "max_output_tokens": cfg.sampling.max_tokens,
