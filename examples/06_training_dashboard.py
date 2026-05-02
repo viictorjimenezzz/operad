@@ -217,11 +217,18 @@ async def _make_seed(cfg: Configuration) -> Reasoner:
     return seed
 
 
-def _param_snapshot(agent: Reasoner) -> dict[str, str]:
+def _prompt_optimizer_params(agent: Reasoner) -> list[tuple[str, Parameter[Any]]]:
+    return [
+        (path, param)
+        for path, param in agent.named_parameters()
+        if path in {"task", "rules"}
+    ]
+
+
+def _param_snapshot(params: list[tuple[str, Parameter[Any]]]) -> dict[str, str]:
     return {
         path: repr(param.read())
-        for path, param in agent.named_parameters()
-        if param.requires_grad
+        for path, param in params
     }
 
 
@@ -262,12 +269,13 @@ async def _run_optimizer(
 ) -> None:
     print_rule(f"Trainer - {name}")
     seed = await _make_seed(cfg)
-    before_params = _param_snapshot(seed)
+    named_params = _prompt_optimizer_params(seed)
+    before_params = _param_snapshot(named_params)
     seed_hash = seed.hash_content
     seed_report = await evaluate(seed, dataset, [metric])
     seed_score = float(seed_report.summary[metric.name])
 
-    params = list(seed.parameters())
+    params = [param for _, param in named_params]
     if name == "textgrad":
         optimizer = TextualGradientDescent(params, lr=0.7, config=optimizer_cfg)
     elif name == "momentum":
@@ -314,7 +322,7 @@ async def _run_optimizer(
     report = await trainer.fit(loader, val_ds=dataset, epochs=epochs)
     final_report = await trainer.evaluate(dataset)
     final_score = float(final_report.summary[metric.name])
-    after_params = _param_snapshot(seed)
+    after_params = _param_snapshot(named_params)
     changed = _changed_paths(before_params, after_params)
     final_hash = seed.hash_content
     sample = (await trainer.predict(Question(text="What should I inspect after a Beam run?"))).response.text
